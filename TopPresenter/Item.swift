@@ -4,15 +4,7 @@
 //
 //  Created by Cosmin Calin on 14/03/2026.
 //
-
-import Foundation
-import SwiftData
-
-@Model
-final class Item {
-    var timestamp: Date
-    
-    init(timestamp: Date) {
-        self.timestamp = timestamp
-    }
-}
+//  This file is no longer used.
+//  Models are now in the Models/ directory.
+//  Kept to avoid Xcode build issues during migration.
+//
