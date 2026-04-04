@@ -28,6 +28,11 @@ final class PresentationManager {
     var useBackgroundImage: Bool {
         didSet { UserDefaults.standard.set(useBackgroundImage, forKey: "pm_useBackgroundImage") }
     }
+    /// When false (default), the output window is fully transparent — no solid background.
+    /// Enable this to show the background color behind content.
+    var backgroundEnabled: Bool {
+        didSet { UserDefaults.standard.set(backgroundEnabled, forKey: "pm_backgroundEnabled") }
+    }
 
     // MARK: - Display Settings
     var fontSize: Double {
@@ -64,6 +69,22 @@ final class PresentationManager {
     var presentationScreenIndex: Int? = nil
     var isPresentationWindowOpen: Bool = false
 
+    /// Window level for the presentation output window.
+    /// Options: "normal", "floating", "alwaysOnTop", "behindDesktop"
+    var windowLevel: String {
+        didSet { UserDefaults.standard.set(windowLevel, forKey: "pm_windowLevel") }
+    }
+
+    /// Maps the windowLevel string to an NSWindow.Level.
+    var resolvedWindowLevel: NSWindow.Level {
+        switch windowLevel {
+        case "floating": return .floating
+        case "alwaysOnTop": return .statusBar
+        case "behindDesktop": return NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.desktopWindow)) - 1)
+        default: return .normal
+        }
+    }
+
     // MARK: - Presentation State
     var isBlackScreen: Bool = false
     var isFrozen: Bool = false
@@ -83,6 +104,7 @@ final class PresentationManager {
     private(set) var frozenUseBackgroundImage: Bool = false
     private(set) var frozenBackgroundImage: NSImage?
     private(set) var frozenTextAlignment: TextAlignment = .center
+    private(set) var frozenBackgroundEnabled: Bool = false
 
     // MARK: - Output Accessors (used by PresentationOutputView)
     // Return frozen values when frozen, live values otherwise.
@@ -98,6 +120,7 @@ final class PresentationManager {
     var outputUseBackgroundImage: Bool { isFrozen ? frozenUseBackgroundImage : useBackgroundImage }
     var outputBackgroundImage: NSImage? { isFrozen ? frozenBackgroundImage : backgroundImage }
     var outputTextAlignment: TextAlignment { isFrozen ? frozenTextAlignment : textAlignment }
+    var outputBackgroundEnabled: Bool { isFrozen ? frozenBackgroundEnabled : backgroundEnabled }
     var outputTextColor: Color { Color(hex: outputTextColorHex) ?? .white }
     var outputBackgroundColor: Color { Color(hex: outputBackgroundColorHex) ?? .black }
 
@@ -115,6 +138,8 @@ final class PresentationManager {
         self.transitionDuration = d.object(forKey: "pm_transitionDuration") as? Double ?? PresentationDefaults.transitionDuration
         self.backgroundOpacity = d.object(forKey: "pm_backgroundOpacity") as? Double ?? PresentationDefaults.backgroundOpacity
         self.useBackgroundImage = d.bool(forKey: "pm_useBackgroundImage")
+        self.backgroundEnabled = d.bool(forKey: "pm_backgroundEnabled") // defaults to false = transparent
+        self.windowLevel = d.string(forKey: "pm_windowLevel") ?? "alwaysOnTop"
 
         // Restore background image from saved path
         if let path = d.string(forKey: "pm_backgroundImagePath"),
@@ -177,6 +202,7 @@ final class PresentationManager {
         frozenUseBackgroundImage = useBackgroundImage
         frozenBackgroundImage = backgroundImage
         frozenTextAlignment = textAlignment
+        frozenBackgroundEnabled = backgroundEnabled
     }
 
     func clearOutput() {
@@ -254,7 +280,32 @@ final class PresentationManager {
 
     /// Positions the presentation window on the specified screen
     func positionOnScreen(_ screen: NSScreen) {
-        // This will be handled by the window management system
         presentationScreenIndex = NSScreen.screens.firstIndex(of: screen)
+        movePresentationWindow(to: screen)
+    }
+
+    /// Moves the presentation window to fill the given screen.
+    func movePresentationWindow(to screen: NSScreen) {
+        // Find the presentation window by its identifier
+        guard let window = NSApplication.shared.windows.first(where: {
+            $0.identifier?.rawValue == WindowIdentifiers.presentation
+        }) else { return }
+
+        let frame = screen.frame
+        window.setFrame(frame, display: true, animate: false)
+        window.level = .statusBar  // Keep above other windows during presentation
+    }
+
+    /// Moves the presentation window to the currently selected screen.
+    func applyScreenPosition() {
+        let screens = NSScreen.screens
+        guard let idx = presentationScreenIndex, idx < screens.count else {
+            // Default: use last screen (external display) or main screen
+            if let lastScreen = screens.last, screens.count > 1 {
+                movePresentationWindow(to: lastScreen)
+            }
+            return
+        }
+        movePresentationWindow(to: screens[idx])
     }
 }

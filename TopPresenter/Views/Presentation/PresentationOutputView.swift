@@ -6,20 +6,22 @@
 //
 
 import SwiftUI
+import AppKit
 
-/// The presentation output window — displayed on the external screen/projector.
-/// Shows the current live content with configured styling.
+/// The presentation output window — displayed fullscreen on the target screen/projector.
+/// Transparent by default: when nothing is being shown, the projector sees through it.
+/// The NSWindow is configured as borderless, transparent, and always-on-top.
 struct PresentationOutputView: View {
     @Environment(PresentationManager.self) private var pm
 
     var body: some View {
         ZStack {
-            // Black screen mode
+            // Black screen mode — full opaque black overlay
             if pm.isBlackScreen {
                 Color.black
                     .ignoresSafeArea()
             } else {
-                // Background layer
+                // Background layer (only rendered when explicitly enabled)
                 backgroundLayer
 
                 // Content layer
@@ -32,16 +34,27 @@ struct PresentationOutputView: View {
         }
         .ignoresSafeArea()
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(.black)
+        // NO .background(.black) — the window is transparent by default
+        .background(TransparentWindowConfigurator())
+        .onAppear {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                pm.applyScreenPosition()
+            }
+        }
+        .onChange(of: pm.presentationScreenIndex) { _, _ in
+            pm.applyScreenPosition()
+        }
     }
 
     // MARK: - Background Layer
     @ViewBuilder
     private var backgroundLayer: some View {
         ZStack {
-            // Solid background color
-            pm.outputBackgroundColor
-                .ignoresSafeArea()
+            // Solid background color — only when user has enabled it
+            if pm.outputBackgroundEnabled {
+                pm.outputBackgroundColor
+                    .ignoresSafeArea()
+            }
 
             // Background image
             if pm.outputUseBackgroundImage, let bgImage = pm.outputBackgroundImage {
@@ -108,6 +121,40 @@ struct PresentationOutputView: View {
             return .system(size: pm.outputFontSize, weight: .regular)
         } else {
             return .custom(pm.outputFontName, size: pm.outputFontSize)
+        }
+    }
+}
+
+// MARK: - Transparent Window Configurator
+/// An invisible NSView that configures its parent NSWindow to be truly transparent,
+/// borderless, and always-on-top — ideal for a projector/external display overlay.
+struct TransparentWindowConfigurator: NSViewRepresentable {
+    @Environment(PresentationManager.self) private var pm
+
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView()
+        DispatchQueue.main.async {
+            guard let window = view.window else { return }
+            window.isOpaque = false
+            window.backgroundColor = .clear
+            window.hasShadow = false
+            window.level = pm.resolvedWindowLevel
+            window.styleMask = [.borderless]
+            window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
+            window.ignoresMouseEvents = true
+            window.identifier = NSUserInterfaceItemIdentifier(WindowIdentifiers.presentation)
+        }
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        // Update window level when the user changes it
+        DispatchQueue.main.async {
+            guard let window = nsView.window else { return }
+            let newLevel = pm.resolvedWindowLevel
+            if window.level != newLevel {
+                window.level = newLevel
+            }
         }
     }
 }

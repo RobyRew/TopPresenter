@@ -132,6 +132,9 @@ struct CustomSlidesView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .addSlide)) { _ in
+            addSlide()
+        }
     }
 
     private func addSlide() {
@@ -151,6 +154,7 @@ struct CustomSlidesView: View {
         editingTitle = slide.title
         editingContent = slide.content
         editingSubtitle = slide.subtitle
+        NotificationCenter.default.post(name: .slideSelected, object: slide.id)
     }
 
     private func deleteSlide(_ slide: PresentationSlide) {

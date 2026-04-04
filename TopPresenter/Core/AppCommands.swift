@@ -146,7 +146,7 @@ struct HelpCommands: Commands {
     var body: some Commands {
         CommandGroup(replacing: .help) {
             Button(String(localized: "TopPresenter Help", comment: "Menu item")) {
-                NSWorkspace.shared.open(URL(string: "https://github.com/user/TopPresenter")!)
+                NSWorkspace.shared.open(URL(string: "https://github.com/RobyRew/TopPresenter")!)
             }
 
             Divider()
@@ -207,6 +207,20 @@ extension Notification.Name {
     // Batch operations
     static let batchExport = Notification.Name("TopPresenter.batchExport")
     static let batchImportFiles = Notification.Name("TopPresenter.batchImportFiles")
+
+    // Bible module actions
+    static let deleteBibleModule = Notification.Name("TopPresenter.deleteBibleModule")
+    static let deleteSongCollection = Notification.Name("TopPresenter.deleteSongCollection")
+
+    // Panel communication (content area → preview panel)
+    static let mediaItemSelected = Notification.Name("TopPresenter.mediaItemSelected")
+    static let scheduleSelected = Notification.Name("TopPresenter.scheduleSelected")
+    static let slideSelected = Notification.Name("TopPresenter.slideSelected")
+
+    // Content area toolbar actions
+    static let importMedia = Notification.Name("TopPresenter.importMedia")
+    static let addScheduleItem = Notification.Name("TopPresenter.addScheduleItem")
+    static let addSlide = Notification.Name("TopPresenter.addSlide")
 
     // Help
     static let showKeyboardShortcuts = Notification.Name("TopPresenter.showKeyboardShortcuts")

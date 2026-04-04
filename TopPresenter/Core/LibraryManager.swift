@@ -14,13 +14,22 @@ final class LibraryManager {
     // MARK: - Bible State
     var selectedBibleModule: BibleModule?
     var selectedBook: BibleBook?
-    var selectedChapter: BibleChapter?
+    var selectedChapter: BibleChapter? {
+        didSet { refreshCachedVerses() }
+    }
     var selectedVerses: [BibleVerse] = []
     var bibleSearchQuery: String = ""
     var bibleSearchResults: [BibleSearchResult] = []
     var isBibleSearching: Bool = false
     /// When true, verse selection auto-updates when presentation settings change.
     var isAutoFillActive: Bool = false
+
+    /// Cached sorted verses for the current chapter — avoids re-sorting on every access.
+    private(set) var cachedSortedVerses: [BibleVerse] = []
+
+    private func refreshCachedVerses() {
+        cachedSortedVerses = selectedChapter?.verses.sorted { $0.verseNumber < $1.verseNumber } ?? []
+    }
 
     // MARK: - Song State
     var selectedSongCollection: SongCollection?
@@ -85,8 +94,8 @@ final class LibraryManager {
     /// Navigate to previous/next verse in the current chapter.
     /// When auto-fill is active, jumps by the full block size (number of selected verses).
     func navigateVerse(direction: Int) {
-        guard let chapter = selectedChapter else { return }
-        let sorted = chapter.sortedVerses
+        guard selectedChapter != nil else { return }
+        let sorted = cachedSortedVerses
         guard !sorted.isEmpty else { return }
 
         if isAutoFillActive {
@@ -127,8 +136,8 @@ final class LibraryManager {
     }
 
     func canNavigateVerse(direction: Int) -> Bool {
-        guard let chapter = selectedChapter else { return false }
-        let sorted = chapter.sortedVerses
+        guard selectedChapter != nil else { return false }
+        let sorted = cachedSortedVerses
         guard !sorted.isEmpty else { return false }
 
         if isAutoFillActive {
@@ -197,7 +206,7 @@ final class LibraryManager {
         if let idx = chapters.firstIndex(where: { $0.id == chapter.id }), idx + 1 < chapters.count {
             let next = chapters[idx + 1]
             selectedChapter = next
-            selectedVerses = next.sortedVerses.first.map { [$0] } ?? []
+            selectedVerses = cachedSortedVerses.first.map { [$0] } ?? []
             // Keep isAutoFillActive — view will re-run autoFill
             return
         }
@@ -210,7 +219,7 @@ final class LibraryManager {
                 selectedBook = nextBook
                 if let firstChapter = nextBook.sortedChapters.first {
                     selectedChapter = firstChapter
-                    selectedVerses = firstChapter.sortedVerses.first.map { [$0] } ?? []
+                    selectedVerses = cachedSortedVerses.first.map { [$0] } ?? []
                 }
             }
         }
@@ -225,8 +234,7 @@ final class LibraryManager {
         if let idx = chapters.firstIndex(where: { $0.id == chapter.id }), idx - 1 >= 0 {
             let prev = chapters[idx - 1]
             selectedChapter = prev
-            let sorted = prev.sortedVerses
-            selectedVerses = sorted.last.map { [$0] } ?? []
+            selectedVerses = cachedSortedVerses.last.map { [$0] } ?? []
             return
         }
         // Previous book's last chapter
@@ -238,8 +246,7 @@ final class LibraryManager {
                 selectedBook = prevBook
                 if let lastChapter = prevBook.sortedChapters.last {
                     selectedChapter = lastChapter
-                    let sorted = lastChapter.sortedVerses
-                    selectedVerses = sorted.last.map { [$0] } ?? []
+                    selectedVerses = cachedSortedVerses.last.map { [$0] } ?? []
                 }
             }
         }
@@ -257,8 +264,8 @@ final class LibraryManager {
         layout: String = "inline",
         showPrefix: Bool = false
     ) {
-        guard let chapter = selectedChapter else { return }
-        let sorted = chapter.sortedVerses
+        guard selectedChapter != nil else { return }
+        let sorted = cachedSortedVerses
         guard !sorted.isEmpty else { return }
 
         // Determine start index
@@ -298,8 +305,8 @@ final class LibraryManager {
         layout: String = "inline",
         showPrefix: Bool = false
     ) -> Int {
-        guard let chapter = selectedChapter else { return 0 }
-        let sorted = chapter.sortedVerses
+        guard selectedChapter != nil else { return 0 }
+        let sorted = cachedSortedVerses
         guard !sorted.isEmpty else { return 0 }
 
         let startIndex: Int

@@ -146,6 +146,7 @@ enum BibleBookNumbers {
 enum SupportedSongFormat: String, CaseIterable, Identifiable {
     case openSongXML = "opensong"
     case openLyricsXML = "openlyrics"
+    case powerPoint = "powerpoint"
 
     var id: String { rawValue }
 
@@ -153,6 +154,7 @@ enum SupportedSongFormat: String, CaseIterable, Identifiable {
         switch self {
         case .openSongXML: return String(localized: "OpenSong XML", comment: "Song format name")
         case .openLyricsXML: return String(localized: "OpenLyrics XML", comment: "Song format name")
+        case .powerPoint: return String(localized: "PowerPoint", comment: "Song format name")
         }
     }
 
@@ -160,6 +162,41 @@ enum SupportedSongFormat: String, CaseIterable, Identifiable {
         switch self {
         case .openSongXML: return ["xml"]
         case .openLyricsXML: return ["xml"]
+        case .powerPoint: return ["pptx", "ppt"]
+        }
+    }
+}
+
+// MARK: - Supported Song Export Formats
+enum SupportedSongExportFormat: String, CaseIterable, Identifiable {
+    case topPresenter = "toppresenter"
+    case openLyricsXML = "openlyrics"
+    case plainText = "plaintext"
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .topPresenter: return String(localized: "TopPresenter JSON", comment: "Song export format")
+        case .openLyricsXML: return String(localized: "OpenLyrics XML", comment: "Song export format")
+        case .plainText: return String(localized: "Plain Text", comment: "Song export format")
+        }
+    }
+
+    var fileExtension: String {
+        switch self {
+        case .topPresenter: return "json"
+        case .openLyricsXML: return "xml"
+        case .plainText: return "txt"
+        }
+    }
+
+    /// The format identifier stored at the top of the export file
+    var formatIdentifier: String {
+        switch self {
+        case .topPresenter: return "TopPresenter Songs"
+        case .openLyricsXML: return "OpenLyrics"
+        case .plainText: return "Plain Text"
         }
     }
 }
@@ -201,6 +238,123 @@ enum BibleBookNames {
     ]
 
     static let all: [String] = oldTestament + newTestament
+}
+
+// MARK: - Bible Book Categories (for color-coding like BibleShow)
+import SwiftUI
+
+enum BibleBookCategory: String, CaseIterable {
+    case law            // Genesis–Deuteronomy (1–5)
+    case history        // Joshua–Esther (6–17)
+    case wisdom         // Job–Song of Solomon (18–22)
+    case majorProphets  // Isaiah–Daniel (23–27)
+    case minorProphets  // Hosea–Malachi (28–39)
+    case gospels        // Matthew–John (40–43)
+    case acts           // Acts (44)
+    case paulineEpistles // Romans–Philemon (45–57)
+    case generalEpistles // Hebrews–Jude (58–65)
+    case prophecy       // Revelation (66)
+
+    /// Color for this category — matches BibleShow-style palette.
+    var color: Color {
+        switch self {
+        case .law:              return Color(red: 0.60, green: 0.85, blue: 0.60) // green
+        case .history:          return Color(red: 0.55, green: 0.75, blue: 0.95) // blue
+        case .wisdom:           return Color(red: 0.95, green: 0.85, blue: 0.45) // gold/yellow
+        case .majorProphets:    return Color(red: 0.95, green: 0.65, blue: 0.35) // deep orange
+        case .minorProphets:    return Color(red: 0.75, green: 0.30, blue: 0.30) // deep red/crimson
+        case .gospels:          return Color(red: 0.65, green: 0.45, blue: 0.90) // deep purple
+        case .acts:             return Color(red: 0.45, green: 0.85, blue: 0.85) // teal
+        case .paulineEpistles:  return Color(red: 0.55, green: 0.75, blue: 0.95) // sky blue
+        case .generalEpistles:  return Color(red: 0.70, green: 0.85, blue: 0.75) // mint
+        case .prophecy:         return Color(red: 0.95, green: 0.55, blue: 0.70) // pink
+        }
+    }
+
+    /// Darker text-friendly version for labels on light backgrounds.
+    var darkColor: Color {
+        switch self {
+        case .law:              return Color(red: 0.20, green: 0.50, blue: 0.20)
+        case .history:          return Color(red: 0.15, green: 0.35, blue: 0.65)
+        case .wisdom:           return Color(red: 0.60, green: 0.50, blue: 0.10)
+        case .majorProphets:    return Color(red: 0.70, green: 0.35, blue: 0.05)
+        case .minorProphets:    return Color(red: 0.55, green: 0.10, blue: 0.10)
+        case .gospels:          return Color(red: 0.35, green: 0.20, blue: 0.60)
+        case .acts:             return Color(red: 0.10, green: 0.50, blue: 0.50)
+        case .paulineEpistles:  return Color(red: 0.25, green: 0.45, blue: 0.70)
+        case .generalEpistles:  return Color(red: 0.25, green: 0.50, blue: 0.35)
+        case .prophecy:         return Color(red: 0.65, green: 0.20, blue: 0.35)
+        }
+    }
+
+    /// Romanian name for the category.
+    var romanianName: String {
+        switch self {
+        case .law:              return "Legea / Pentateuhul"
+        case .history:          return "Cărți Istorice"
+        case .wisdom:           return "Poezie și Înțelepciune"
+        case .majorProphets:    return "Profeți Mari"
+        case .minorProphets:    return "Profeți Mici"
+        case .gospels:          return "Evanghelii"
+        case .acts:             return "Faptele Apostolilor"
+        case .paulineEpistles:  return "Epistolele lui Pavel"
+        case .generalEpistles:  return "Epistole Generale"
+        case .prophecy:         return "Profeție / Apocalipsa"
+        }
+    }
+
+    /// English name for the category (fallback for export/import).
+    var englishName: String {
+        switch self {
+        case .law:              return "Law / Pentateuch"
+        case .history:          return "History"
+        case .wisdom:           return "Poetry & Wisdom"
+        case .majorProphets:    return "Major Prophets"
+        case .minorProphets:    return "Minor Prophets"
+        case .gospels:          return "Gospels"
+        case .acts:             return "Acts"
+        case .paulineEpistles:  return "Pauline Epistles"
+        case .generalEpistles:  return "General Epistles"
+        case .prophecy:         return "Prophecy"
+        }
+    }
+
+    var localizedName: String {
+        // Prefer Romanian, but fall back to localized English
+        let locale = Locale.current.language.languageCode?.identifier ?? "en"
+        if locale == "ro" {
+            return romanianName
+        }
+        switch self {
+        case .law:              return String(localized: "Legea / Pentateuhul", comment: "Bible category")
+        case .history:          return String(localized: "Cărți Istorice", comment: "Bible category")
+        case .wisdom:           return String(localized: "Poezie și Înțelepciune", comment: "Bible category")
+        case .majorProphets:    return String(localized: "Profeți Mari", comment: "Bible category")
+        case .minorProphets:    return String(localized: "Profeți Mici", comment: "Bible category")
+        case .gospels:          return String(localized: "Evanghelii", comment: "Bible category")
+        case .acts:             return String(localized: "Faptele Apostolilor", comment: "Bible category")
+        case .paulineEpistles:  return String(localized: "Epistolele lui Pavel", comment: "Bible category")
+        case .generalEpistles:  return String(localized: "Epistole Generale", comment: "Bible category")
+        case .prophecy:         return String(localized: "Profeție / Apocalipsa", comment: "Bible category")
+        }
+    }
+
+    /// Determine category from 1-based book number (works regardless of language).
+    static func from(bookNumber: Int) -> BibleBookCategory {
+        switch bookNumber {
+        case 1...5:   return .law
+        case 6...17:  return .history
+        case 18...22: return .wisdom
+        case 23...27: return .majorProphets
+        case 28...39: return .minorProphets
+        case 40...43: return .gospels
+        case 44:      return .acts
+        case 45...57: return .paulineEpistles
+        case 58...65: return .generalEpistles
+        case 66:      return .prophecy
+        default:      return .history // fallback
+        }
+    }
 }
 
 // MARK: - OSIS Book ID Mapping

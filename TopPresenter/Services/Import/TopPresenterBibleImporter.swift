@@ -80,6 +80,8 @@ final class TopPresenterBibleImporter: BibleImporter {
             }
 
             let testament = (bookJSON["testament"] as? String) ?? (bookNumber <= 39 ? "OT" : "NT")
+            // Category from export — used for display; falls back to computed from bookNumber
+            _ = bookJSON["category"] as? String
 
             var importChapters: [BibleImportChapter] = []
 

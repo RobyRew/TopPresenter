@@ -27,12 +27,16 @@ struct BatchImportSheet: View {
         pendingFiles.filter { if case .song = $0.category { return true }; return false }
     }
 
+    private var mediaFiles: [PendingImportFile] {
+        pendingFiles.filter { if case .media = $0.category { return true }; return false }
+    }
+
     private var unknownFiles: [PendingImportFile] {
         pendingFiles.filter { if case .unknown = $0.category { return true }; return false }
     }
 
     private var totalKnown: Int {
-        bibleFiles.count + songFiles.count
+        bibleFiles.count + songFiles.count + mediaFiles.count
     }
 
     var body: some View {
@@ -72,6 +76,15 @@ struct BatchImportSheet: View {
                             icon: "music.note",
                             color: .purple,
                             files: songFiles
+                        )
+                    }
+
+                    if !mediaFiles.isEmpty {
+                        fileSection(
+                            title: String(localized: "Media", comment: "Section"),
+                            icon: "photo.on.rectangle",
+                            color: .green,
+                            files: mediaFiles
                         )
                     }
 
@@ -220,6 +233,20 @@ struct BatchImportSheet: View {
                 modelContext: modelContext
             ) { fileID, status in
                 Task { @MainActor in
+                    if let idx = pendingFiles.firstIndex(where: { $0.id == fileID }) {
+                        pendingFiles[idx].status = status
+                    }
+                    if case .success = status { completedCount += 1 }
+                    if case .failed = status { completedCount += 1 }
+                }
+            }
+
+            // Import Media
+            await MainActor.run {
+                let _ = DragDropImportHandler.importMedia(
+                    files: mediaFiles,
+                    modelContext: modelContext
+                ) { fileID, status in
                     if let idx = pendingFiles.firstIndex(where: { $0.id == fileID }) {
                         pendingFiles[idx].status = status
                     }

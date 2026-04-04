@@ -14,6 +14,7 @@ struct MainControlView: View {
     @Environment(AppState.self) private var appState
     @Environment(PresentationManager.self) private var presentationManager
     @Environment(LibraryManager.self) private var libraryManager
+    @Environment(\.modelContext) private var modelContext
     @Environment(\.openWindow) private var openWindow
 
     @State private var showExportSheet = false
@@ -82,6 +83,13 @@ struct MainControlView: View {
             }
         }
         .animation(.easeInOut(duration: 0.15), value: showQuickSearch)
+        .onAppear {
+            // Auto-open the presentation output window on app launch
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                openWindow(id: WindowIdentifiers.presentation, value: "main")
+                presentationManager.isPresentationWindowOpen = true
+            }
+        }
     }
 
     private var mainContent: some View {
@@ -99,11 +107,15 @@ struct MainControlView: View {
             }
         }
         .navigationTitle("")
-        .toolbar {
-            ToolbarItemGroup(placement: .primaryAction) {
-                toolbarContent
-            }
+        .toolbar(id: "mainToolbar") {
+            bibleToolbarContent
+            songToolbarContent
+            mediaToolbarContent
+            scheduleToolbarContent
+            customSlidesToolbarContent
+            presentationToolbarContent
         }
+        .toolbarRole(.editor)
     }
 
     // MARK: - Drag & Drop
@@ -120,7 +132,7 @@ struct MainControlView: View {
                 Text(String(localized: "Drop files to import", comment: "Drag overlay"))
                     .font(.title3.weight(.semibold))
                     .foregroundStyle(.primary)
-                Text(String(localized: "Bible modules and song files", comment: "Drag overlay subtitle"))
+                Text(String(localized: "Bible, Songs, PowerPoint, Images, Audio, Video", comment: "Drag overlay subtitle"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -151,31 +163,395 @@ struct MainControlView: View {
             }
         }
 
-        group.notify(queue: .main) {
+        group.notify(queue: .main) { [self] in
             guard !urls.isEmpty else { return }
             let classified = DragDropImportHandler.classify(urls)
-            let known = classified.filter { if case .unknown = $0.category { return false }; return true }
 
-            if known.isEmpty {
+            // Separate by category
+            let bibleFiles = classified.filter { if case .bible = $0.category { return true }; return false }
+            let songFiles = classified.filter { if case .song = $0.category { return true }; return false }
+            let mediaFiles = classified.filter { if case .media = $0.category { return true }; return false }
+            let unknownFiles = classified.filter { if case .unknown = $0.category { return true }; return false }
+
+            // Auto-import media files immediately (no dialog needed)
+            if !mediaFiles.isEmpty {
+                let _ = DragDropImportHandler.importMedia(
+                    files: mediaFiles,
+                    modelContext: modelContext,
+                    onUpdate: { _, _ in }
+                )
+                let count = mediaFiles.count
+                appState.showSuccess(
+                    String(localized: "Media Imported", comment: "Alert"),
+                    message: String(localized: "\(count) media file(s) imported.", comment: "Alert")
+                )
+                // Switch to media tab if only media was dropped
+                if bibleFiles.isEmpty && songFiles.isEmpty {
+                    appState.selectedSidebarItem = .media
+                }
+            }
+
+            // Process Bible and Song files through batch import
+            let importableFiles = bibleFiles + songFiles
+            if !importableFiles.isEmpty {
+                if importableFiles.count == 1, let single = importableFiles.first {
+                    droppedFiles = [single]
+                    showBatchImport = true
+                } else {
+                    droppedFiles = importableFiles
+                    showBatchImport = true
+                }
+            }
+
+            // Show error only if everything was unknown
+            if bibleFiles.isEmpty && songFiles.isEmpty && mediaFiles.isEmpty && !unknownFiles.isEmpty {
                 appState.showError(
                     String(localized: "Unrecognized Files", comment: "Alert"),
-                    message: String(localized: "None of the dropped files were recognized as Bible or Song files.", comment: "Alert")
+                    message: String(localized: "None of the dropped files were recognized. Supported: Bible modules (.json, .xml, .mybible, .usfm), Songs (.xml, .pptx, .ppt), Media (images, audio, video).", comment: "Alert")
                 )
-            } else if known.count == 1, let single = known.first {
-                // Single file: go straight to import
-                droppedFiles = [single]
-                showBatchImport = true
-            } else {
-                // Multiple files: show batch import
-                droppedFiles = classified
-                showBatchImport = true
             }
         }
     }
 
+    // MARK: - Bible Toolbar Helpers
+
+    @ToolbarContentBuilder
+    private var bibleToolbarContent: some CustomizableToolbarContent {
+        ToolbarItem(id: "bibleModule", placement: .navigation) {
+            if appState.selectedSidebarItem == .bible {
+                bibleModulePicker
+            }
+        }
+
+        ToolbarItem(id: "bibleSearch", placement: .automatic) {
+            if appState.selectedSidebarItem == .bible {
+                bibleSearchField
+            }
+        }
+
+        ToolbarItem(id: "bibleViewMode", placement: .automatic) {
+            if appState.selectedSidebarItem == .bible {
+                bibleViewModeToggle
+            }
+        }
+
+        ToolbarItem(id: "bibleImport", placement: .automatic) {
+            if appState.selectedSidebarItem == .bible {
+                Button {
+                    appState.triggerBibleImport = true
+                } label: {
+                    Label(String(localized: "Import", comment: "Toolbar button"), systemImage: "square.and.arrow.down")
+                }
+                .help(String(localized: "Import Bible Module", comment: "Toolbar tooltip"))
+            }
+        }
+
+        ToolbarItem(id: "bibleDelete", placement: .automatic) {
+            if appState.selectedSidebarItem == .bible && libraryManager.selectedBibleModule != nil {
+                Button {
+                    NotificationCenter.default.post(name: .deleteBibleModule, object: nil)
+                } label: {
+                    Label(String(localized: "Delete", comment: "Toolbar button"), systemImage: "trash")
+                }
+                .help(String(localized: "Delete Selected Module", comment: "Toolbar tooltip"))
+            }
+        }
+    }
+
+    // MARK: - Songs Toolbar Content
+
+    @ToolbarContentBuilder
+    private var songToolbarContent: some CustomizableToolbarContent {
+        ToolbarItem(id: "songCollection", placement: .navigation) {
+            if appState.selectedSidebarItem == .songs {
+                songCollectionPicker
+            }
+        }
+
+        ToolbarItem(id: "songSearch", placement: .automatic) {
+            if appState.selectedSidebarItem == .songs {
+                songSearchField
+            }
+        }
+
+        ToolbarItem(id: "songImport", placement: .automatic) {
+            if appState.selectedSidebarItem == .songs {
+                Button {
+                    appState.triggerSongImport = true
+                } label: {
+                    Label(String(localized: "Import", comment: "Toolbar button"), systemImage: "square.and.arrow.down")
+                }
+                .help(String(localized: "Import Songs", comment: "Toolbar tooltip"))
+            }
+        }
+
+        ToolbarItem(id: "songDelete", placement: .automatic) {
+            if appState.selectedSidebarItem == .songs && libraryManager.selectedSongCollection != nil {
+                Button {
+                    NotificationCenter.default.post(name: .deleteSongCollection, object: nil)
+                } label: {
+                    Label(String(localized: "Delete", comment: "Toolbar button"), systemImage: "trash")
+                }
+                .help(String(localized: "Delete Selected Collection", comment: "Toolbar tooltip"))
+            }
+        }
+    }
+
+    // MARK: - Media Toolbar Content
+
+    @ToolbarContentBuilder
+    private var mediaToolbarContent: some CustomizableToolbarContent {
+        ToolbarItem(id: "mediaFilter", placement: .navigation) {
+            if appState.selectedSidebarItem == .media {
+                Picker(
+                    String(localized: "Filter", comment: "Toolbar picker"),
+                    selection: Binding(
+                        get: { UserDefaults.standard.string(forKey: "mediaTypeFilter") ?? "all" },
+                        set: { UserDefaults.standard.set($0, forKey: "mediaTypeFilter") }
+                    )
+                ) {
+                    Text(String(localized: "All", comment: "Filter option")).tag("all")
+                    Text(String(localized: "Images", comment: "Filter option")).tag("image")
+                    Text(String(localized: "Audio", comment: "Filter option")).tag("audio")
+                    Text(String(localized: "Video", comment: "Filter option")).tag("video")
+                }
+                .frame(minWidth: 100, maxWidth: 180)
+            }
+        }
+
+        ToolbarItem(id: "mediaImport", placement: .automatic) {
+            if appState.selectedSidebarItem == .media {
+                Button {
+                    NotificationCenter.default.post(name: .importMedia, object: nil)
+                } label: {
+                    Label(String(localized: "Add Media", comment: "Toolbar button"), systemImage: "plus")
+                }
+                .help(String(localized: "Import media files", comment: "Toolbar tooltip"))
+            }
+        }
+    }
+
+    // MARK: - Schedule Toolbar Content
+
+    @ToolbarContentBuilder
+    private var scheduleToolbarContent: some CustomizableToolbarContent {
+        ToolbarItem(id: "scheduleNew", placement: .navigation) {
+            if appState.selectedSidebarItem == .schedule {
+                Button {
+                    NotificationCenter.default.post(name: .newSchedule, object: nil)
+                } label: {
+                    Label(String(localized: "New Schedule", comment: "Toolbar button"), systemImage: "plus.rectangle")
+                }
+                .help(String(localized: "Create new schedule", comment: "Toolbar tooltip"))
+            }
+        }
+
+        ToolbarItem(id: "scheduleAddItem", placement: .automatic) {
+            if appState.selectedSidebarItem == .schedule {
+                Button {
+                    NotificationCenter.default.post(name: .addScheduleItem, object: nil)
+                } label: {
+                    Label(String(localized: "Add Item", comment: "Toolbar button"), systemImage: "plus")
+                }
+                .help(String(localized: "Add item to schedule", comment: "Toolbar tooltip"))
+            }
+        }
+    }
+
+    // MARK: - Custom Slides Toolbar Content
+
+    @ToolbarContentBuilder
+    private var customSlidesToolbarContent: some CustomizableToolbarContent {
+        ToolbarItem(id: "slideNew", placement: .navigation) {
+            if appState.selectedSidebarItem == .customSlides {
+                Button {
+                    NotificationCenter.default.post(name: .addSlide, object: nil)
+                } label: {
+                    Label(String(localized: "New Slide", comment: "Toolbar button"), systemImage: "plus.rectangle")
+                }
+                .help(String(localized: "Create new slide", comment: "Toolbar tooltip"))
+            }
+        }
+    }
+
+    // MARK: - Presentation Toolbar Content
+
+    @ToolbarContentBuilder
+    private var presentationToolbarContent: some CustomizableToolbarContent {
+        ToolbarItem(id: "screenSelector", placement: .primaryAction) {
+            screenSelectorMenu
+        }
+
+        ToolbarItem(id: "blackScreen", placement: .primaryAction) {
+            Button {
+                presentationManager.toggleBlack()
+            } label: {
+                Label(
+                    String(localized: "Black Screen", comment: "Toolbar button"),
+                    systemImage: presentationManager.isBlackScreen ? "rectangle.fill" : "rectangle"
+                )
+            }
+            .keyboardShortcut("b", modifiers: [.command])
+            .help(String(localized: "Toggle Black Screen", comment: "Toolbar tooltip"))
+        }
+
+        ToolbarItem(id: "clearOutput", placement: .primaryAction) {
+            Button {
+                presentationManager.clearOutput()
+            } label: {
+                Label(
+                    String(localized: "Clear", comment: "Toolbar button"),
+                    systemImage: "xmark.rectangle"
+                )
+            }
+            .keyboardShortcut(.escape, modifiers: [])
+            .help(String(localized: "Clear Output", comment: "Toolbar tooltip"))
+        }
+    }
+
+    // MARK: - Bible Toolbar View Helpers
+
+    @Query(sort: \BibleModule.name) private var modules: [BibleModule]
+    @Query(sort: \SongCollection.name) private var songCollections: [SongCollection]
+    @AppStorage("bibleViewMode") private var bibleViewMode: String = "list"
+
     @ViewBuilder
-    private var toolbarContent: some View {
-        // Screen selector
+    private var bibleModulePicker: some View {
+        Picker(
+            String(localized: "Module", comment: "Toolbar picker label"),
+            selection: Binding(
+                get: { libraryManager.selectedBibleModule?.id },
+                set: { newID in
+                    if let id = newID, let module = modules.first(where: { $0.id == id }) {
+                        libraryManager.selectModule(module)
+                    }
+                }
+            )
+        ) {
+            Text(String(localized: "Select Module", comment: "Picker placeholder"))
+                .tag(nil as UUID?)
+            ForEach(modules) { module in
+                Text(module.abbreviation.isEmpty ? module.name : "\(module.abbreviation) - \(module.name)")
+                    .tag(module.id as UUID?)
+            }
+        }
+        .frame(minWidth: 140, maxWidth: 280)
+    }
+
+    @ViewBuilder
+    private var bibleSearchField: some View {
+        let library = Bindable(libraryManager)
+        HStack(spacing: 4) {
+            Image(systemName: "magnifyingglass")
+                .foregroundStyle(.secondary)
+            TextField(
+                String(localized: "Search (e.g., John 3:16)", comment: "Search placeholder"),
+                text: library.bibleSearchQuery
+            )
+            .textFieldStyle(.plain)
+            .frame(minWidth: 140, maxWidth: 260)
+            .onSubmit {
+                libraryManager.searchBible(query: libraryManager.bibleSearchQuery, in: modules)
+            }
+
+            if !libraryManager.bibleSearchQuery.isEmpty {
+                Button {
+                    libraryManager.bibleSearchQuery = ""
+                    libraryManager.bibleSearchResults = []
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.borderless)
+            }
+        }
+        .padding(.horizontal, 6)
+        .padding(.vertical, 4)
+        .background(.quaternary, in: RoundedRectangle(cornerRadius: 6))
+    }
+
+    @ViewBuilder
+    private var bibleViewModeToggle: some View {
+        Button {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                bibleViewMode = bibleViewMode == "list" ? "grid" : "list"
+            }
+        } label: {
+            Label(
+                bibleViewMode == "grid"
+                    ? String(localized: "List View", comment: "Toolbar button")
+                    : String(localized: "Grid View", comment: "Toolbar button"),
+                systemImage: bibleViewMode == "grid" ? "list.bullet" : "square.grid.2x2"
+            )
+        }
+        .help(bibleViewMode == "grid"
+            ? String(localized: "Switch to list view", comment: "Toolbar tooltip")
+            : String(localized: "Switch to grid view", comment: "Toolbar tooltip")
+        )
+    }
+
+    // MARK: - Songs Toolbar Helpers
+
+    @ViewBuilder
+    private var songCollectionPicker: some View {
+        Picker(
+            String(localized: "Collection", comment: "Toolbar picker label"),
+            selection: Binding(
+                get: { libraryManager.selectedSongCollection?.id },
+                set: { newID in
+                    if let id = newID, let coll = songCollections.first(where: { $0.id == id }) {
+                        libraryManager.selectCollection(coll)
+                    }
+                }
+            )
+        ) {
+            Text(String(localized: "All Collections", comment: "Picker option"))
+                .tag(nil as UUID?)
+            ForEach(songCollections) { coll in
+                Text(coll.name).tag(coll.id as UUID?)
+            }
+        }
+        .frame(minWidth: 140, maxWidth: 280)
+    }
+
+    @ViewBuilder
+    private var songSearchField: some View {
+        let library = Bindable(libraryManager)
+        HStack(spacing: 4) {
+            Image(systemName: "magnifyingglass")
+                .foregroundStyle(.secondary)
+            TextField(
+                String(localized: "Search songs...", comment: "Search placeholder"),
+                text: library.songSearchQuery
+            )
+            .textFieldStyle(.plain)
+            .frame(minWidth: 140, maxWidth: 260)
+            .onSubmit {
+                libraryManager.searchSongs(
+                    query: libraryManager.songSearchQuery,
+                    in: songCollections
+                )
+            }
+
+            if !libraryManager.songSearchQuery.isEmpty {
+                Button {
+                    libraryManager.songSearchQuery = ""
+                    libraryManager.songSearchResults = []
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.borderless)
+            }
+        }
+        .padding(.horizontal, 6)
+        .padding(.vertical, 4)
+        .background(.quaternary, in: RoundedRectangle(cornerRadius: 6))
+    }
+
+    // MARK: - Screen Selector
+
+    private var screenSelectorMenu: some View {
         Menu {
             ForEach(Array(presentationManager.availableScreens.enumerated()), id: \.offset) { index, screen in
                 Button {
@@ -206,40 +582,6 @@ struct MainControlView: View {
                 systemImage: "rectangle.on.rectangle"
             )
         }
-
-        // Present button
-        Button {
-            openWindow(id: WindowIdentifiers.presentation, value: "main")
-            presentationManager.isPresentationWindowOpen = true
-        } label: {
-            Label(
-                String(localized: "Present", comment: "Toolbar button"),
-                systemImage: "play.rectangle.fill"
-            )
-        }
-        .keyboardShortcut("p", modifiers: [.command, .shift])
-
-        // Black screen toggle
-        Button {
-            presentationManager.toggleBlack()
-        } label: {
-            Label(
-                String(localized: "Black Screen", comment: "Toolbar button"),
-                systemImage: presentationManager.isBlackScreen ? "rectangle.fill" : "rectangle"
-            )
-        }
-        .keyboardShortcut("b", modifiers: [.command])
-
-        // Clear output
-        Button {
-            presentationManager.clearOutput()
-        } label: {
-            Label(
-                String(localized: "Clear", comment: "Toolbar button"),
-                systemImage: "xmark.rectangle"
-            )
-        }
-        .keyboardShortcut(.escape, modifiers: [])
     }
 }
 

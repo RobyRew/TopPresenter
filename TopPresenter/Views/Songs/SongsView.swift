@@ -24,15 +24,6 @@ struct SongsView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Top bar: collection selector + search
-            SongsTopBar(
-                showImportSheet: $showImportSheet,
-                showDeleteConfirmation: $showDeleteConfirmation,
-                collectionToDelete: $collectionToDelete
-            )
-
-            Divider()
-
             if collections.isEmpty {
                 emptyStateView
             } else {
@@ -68,8 +59,10 @@ struct SongsView: View {
             }
         } message: {
             Text(String(localized: "Are you sure you want to delete \"\(collectionToDelete?.name ?? "")\"? This cannot be undone.", comment: "Alert message"))
-        }
-    }
+        }        .onReceive(NotificationCenter.default.publisher(for: .deleteSongCollection)) { _ in
+            collectionToDelete = libraryManager.selectedSongCollection
+            showDeleteConfirmation = true
+        }    }
 
     private var emptyStateView: some View {
         VStack(spacing: 16) {
@@ -107,96 +100,6 @@ struct SongsView: View {
         }
         modelContext.delete(collection)
         try? modelContext.save()
-    }
-}
-
-// MARK: - Songs Top Bar
-struct SongsTopBar: View {
-    @Environment(LibraryManager.self) private var libraryManager
-    @Query(sort: \SongCollection.name) private var collections: [SongCollection]
-
-    @Binding var showImportSheet: Bool
-    @Binding var showDeleteConfirmation: Bool
-    @Binding var collectionToDelete: SongCollection?
-
-    var body: some View {
-        @Bindable var library = libraryManager
-
-        HStack(spacing: 12) {
-            // Collection selector
-            if !collections.isEmpty {
-                Picker(
-                    String(localized: "Collection:", comment: "Picker label"),
-                    selection: Binding(
-                        get: { libraryManager.selectedSongCollection?.id },
-                        set: { newID in
-                            if let id = newID, let coll = collections.first(where: { $0.id == id }) {
-                                libraryManager.selectCollection(coll)
-                            }
-                        }
-                    )
-                ) {
-                    Text(String(localized: "All Collections", comment: "Picker option"))
-                        .tag(nil as UUID?)
-                    ForEach(collections) { coll in
-                        Text(coll.name).tag(coll.id as UUID?)
-                    }
-                }
-                .frame(maxWidth: 250)
-            }
-
-            // Search
-            HStack {
-                Image(systemName: "magnifyingglass")
-                    .foregroundStyle(.secondary)
-                TextField(
-                    String(localized: "Search songs by title or lyrics...", comment: "Search placeholder"),
-                    text: $library.songSearchQuery
-                )
-                .textFieldStyle(.plain)
-                .onSubmit {
-                    libraryManager.searchSongs(
-                        query: libraryManager.songSearchQuery,
-                        in: collections
-                    )
-                }
-
-                if !libraryManager.songSearchQuery.isEmpty {
-                    Button {
-                        libraryManager.songSearchQuery = ""
-                        libraryManager.songSearchResults = []
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundStyle(.secondary)
-                    }
-                    .buttonStyle(.borderless)
-                }
-            }
-            .padding(6)
-            .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
-
-            Spacer()
-
-            Button {
-                showImportSheet = true
-            } label: {
-                Label(String(localized: "Import", comment: "Button"), systemImage: "square.and.arrow.down")
-            }
-            .controlSize(.small)
-
-            if libraryManager.selectedSongCollection != nil {
-                Button {
-                    collectionToDelete = libraryManager.selectedSongCollection
-                    showDeleteConfirmation = true
-                } label: {
-                    Label(String(localized: "Delete", comment: "Button"), systemImage: "trash")
-                }
-                .controlSize(.small)
-                .foregroundStyle(.red)
-            }
-        }
-        .padding(.horizontal)
-        .padding(.vertical, 8)
     }
 }
 

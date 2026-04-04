@@ -107,23 +107,19 @@ struct MediaView: View {
                                 MediaGridItem(item: item, isSelected: selectedItem?.id == item.id)
                                     .onTapGesture {
                                         selectedItem = item
+                                        NotificationCenter.default.post(name: .mediaItemSelected, object: item)
                                     }
                                     .onTapGesture(count: 2) {
                                         useMedia(item)
                                     }
                                     .contextMenu {
                                         Button(String(localized: "Use as Background", comment: "Context menu")) {
-                                            if item.mediaType == "image" {
-                                                let url = URL(fileURLWithPath: item.filePath)
-                                                presentationManager.setBackgroundImage(from: url)
-                                            }
-                                        }
-                                        .disabled(item.mediaType != "image")
-
-                                        Button(String(localized: "Play", comment: "Context menu")) {
-                                            useMedia(item)
-                                        }
-
+                            if item.mediaType == "image", let url = item.resolvedURL {
+                                let accessing = url.startAccessingSecurityScopedResource()
+                                presentationManager.setBackgroundImage(from: url)
+                                if accessing { url.stopAccessingSecurityScopedResource() }
+                            }
+                        }
                                         Divider()
 
                                         Button(String(localized: "Delete", comment: "Context menu"), role: .destructive) {
@@ -143,6 +139,9 @@ struct MediaView: View {
                     }
                 }
             }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .importMedia)) { _ in
+            importMedia()
         }
     }
 
@@ -169,6 +168,9 @@ struct MediaView: View {
                 }
 
                 modelContext.insert(item)
+
+                // Create security-scoped bookmark for persistent access
+                item.createBookmark(from: url)
             }
             try? modelContext.save()
         }
@@ -187,7 +189,10 @@ struct MediaView: View {
     }
 
     private func useMedia(_ item: MediaItem) {
-        let url = URL(fileURLWithPath: item.filePath)
+        guard let url = item.resolvedURL else { return }
+        let accessing = url.startAccessingSecurityScopedResource()
+        defer { if accessing { url.stopAccessingSecurityScopedResource() } }
+
         switch item.mediaType {
         case "image":
             presentationManager.setBackgroundImage(from: url)
@@ -279,7 +284,8 @@ struct MediaDetailPanel: View {
 
             // Preview
             if item.mediaType == "image" {
-                if let image = NSImage(contentsOfFile: item.filePath) {
+                if let url = item.resolvedURL,
+                   let image = NSImage(contentsOf: url) {
                     Image(nsImage: image)
                         .resizable()
                         .aspectRatio(contentMode: .fit)
@@ -300,8 +306,11 @@ struct MediaDetailPanel: View {
             VStack(spacing: 8) {
                 if item.mediaType == "image" {
                     Button {
-                        let url = URL(fileURLWithPath: item.filePath)
-                        presentationManager.setBackgroundImage(from: url)
+                        if let url = item.resolvedURL {
+                            let accessing = url.startAccessingSecurityScopedResource()
+                            presentationManager.setBackgroundImage(from: url)
+                            if accessing { url.stopAccessingSecurityScopedResource() }
+                        }
                     } label: {
                         Label(
                             String(localized: "Set as Background", comment: "Button"),
@@ -314,9 +323,12 @@ struct MediaDetailPanel: View {
 
                 if item.mediaType == "audio" {
                     Button {
-                        let url = URL(fileURLWithPath: item.filePath)
-                        audioPlayerManager.loadAudio(url: url)
-                        audioPlayerManager.play()
+                        if let url = item.resolvedURL {
+                            let accessing = url.startAccessingSecurityScopedResource()
+                            audioPlayerManager.loadAudio(url: url)
+                            audioPlayerManager.play()
+                            if accessing { url.stopAccessingSecurityScopedResource() }
+                        }
                     } label: {
                         Label(
                             String(localized: "Play Audio", comment: "Button"),
@@ -329,9 +341,12 @@ struct MediaDetailPanel: View {
 
                 if item.mediaType == "video" {
                     Button {
-                        let url = URL(fileURLWithPath: item.filePath)
-                        videoService.loadVideo(url: url)
-                        videoService.play()
+                        if let url = item.resolvedURL {
+                            let accessing = url.startAccessingSecurityScopedResource()
+                            videoService.loadVideo(url: url)
+                            videoService.play()
+                            if accessing { url.stopAccessingSecurityScopedResource() }
+                        }
                     } label: {
                         Label(
                             String(localized: "Play Video", comment: "Button"),

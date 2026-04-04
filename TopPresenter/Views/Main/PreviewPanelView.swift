@@ -8,70 +8,57 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// Right-side panel showing a live preview of the presentation output and controls.
+/// Right-side panel router — switches between dedicated panels based on the active sidebar item.
 struct PreviewPanelView: View {
-    @Environment(PresentationManager.self) private var presentationManager
-    @Environment(LibraryManager.self) private var libraryManager
-    @Environment(AudioPlayerManager.self) private var audioPlayerManager
     @Environment(AppState.self) private var appState
 
     var body: some View {
-        VStack(spacing: 0) {
-            // Preview header
-            HStack {
-                Text(String(localized: "Preview", comment: "Panel title"))
-                    .font(.headline)
-                Spacer()
+        Group {
+            switch appState.selectedSidebarItem {
+            case .bible:
+                BiblePreviewPanel()
+            case .songs:
+                SongsPreviewPanel()
+            case .media:
+                MediaPreviewPanel()
+            case .schedule:
+                SchedulePreviewPanel()
+            case .customSlides:
+                CustomSlidesPreviewPanel()
+            }
+        }
+    }
+}
 
-                // Live indicator
-                if presentationManager.liveContent.isLive && !presentationManager.isBlackScreen {
-                    HStack(spacing: 4) {
-                        Circle()
-                            .fill(.red)
-                            .frame(width: 8, height: 8)
-                        Text(String(localized: "LIVE", comment: "Live indicator"))
-                            .font(.caption.bold())
-                            .foregroundStyle(.red)
-                    }
+// MARK: - Shared Panel Header
+/// Reusable header showing the panel title, content type icon, and live indicator.
+struct PanelHeader: View {
+    let contentType: AppState.SidebarItem
+    @Environment(PresentationManager.self) private var pm
+
+    var body: some View {
+        HStack {
+            Image(systemName: contentType.systemImage)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Text(contentType.localizedName)
+                .font(.headline)
+            Spacer()
+
+            // Live indicator
+            if pm.liveContent.isLive && !pm.isBlackScreen {
+                HStack(spacing: 4) {
+                    Circle()
+                        .fill(.red)
+                        .frame(width: 8, height: 8)
+                    Text(String(localized: "LIVE", comment: "Live indicator"))
+                        .font(.caption.bold())
+                        .foregroundStyle(.red)
                 }
             }
-            .padding(.horizontal)
-            .padding(.vertical, 8)
-
-            Divider()
-
-            // Preview display (16:9 aspect ratio)
-            PresentationPreviewCard()
-                .padding()
-
-            Divider()
-
-            // Verse / Slide navigation controls (context-aware)
-            VerseSlideControlsBar()
-                .padding(.horizontal, 10)
-                .padding(.vertical, 8)
-
-            Divider()
-
-            // Presentation controls (Black, Freeze, Clear, Open Output)
-            PresentationControlsBar()
-                .padding(.horizontal)
-                .padding(.vertical, 8)
-
-            Divider()
-
-            // Audio player (if audio is loaded)
-            if !audioPlayerManager.currentFileName.isEmpty {
-                AudioControlsView()
-                    .padding(.horizontal)
-                    .padding(.vertical, 8)
-                Divider()
-            }
-
-            // All settings (collapsible sections)
-            StyleQuickSettings()
         }
-        .background(.background)
+        .padding(.horizontal)
+        .padding(.vertical, 8)
     }
 }
 
@@ -133,14 +120,26 @@ struct PresentationPreviewCard: View {
         return notLiveYet || frozenAndPreparing
     }
 
+    /// Aspect ratio of the target presentation screen.
+    private var targetAspectRatio: CGFloat {
+        let size = pm.presentationScreenSize
+        guard size.height > 0 else { return 16.0 / 9.0 }
+        return size.width / size.height
+    }
+
     var body: some View {
         ZStack {
+            // Preview always has a black background so text is legible
+            Color.black
+
             // Background
             if pm.isBlackScreen {
-                Color.black
+                // Already black — just show nothing
             } else {
-                // Background color
-                pm.backgroundColor
+                // Solid background color (when user enabled it)
+                if pm.backgroundEnabled {
+                    pm.backgroundColor
+                }
 
                 // Background image
                 if pm.useBackgroundImage, let bgImage = pm.backgroundImage {
@@ -203,8 +202,30 @@ struct PresentationPreviewCard: View {
                     Spacer()
                 }
             }
+
+            // Transparent indicator — always visible when output has no solid background
+            if !pm.backgroundEnabled && !pm.isBlackScreen {
+                VStack {
+                    Spacer()
+                    HStack(spacing: 0) {
+                        HStack(spacing: 4) {
+                            // Mini checkerboard icon
+                            Image(systemName: "checkerboard.rectangle")
+                                .font(.system(size: 9))
+                            Text(String(localized: "Transparent", comment: "Preview badge"))
+                                .font(.system(size: 9, weight: .medium))
+                        }
+                        .foregroundStyle(.white.opacity(0.6))
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 3)
+                        .background(.black.opacity(0.4), in: Capsule())
+                        Spacer()
+                    }
+                    .padding(6)
+                }
+            }
         }
-        .aspectRatio(16/9, contentMode: .fit)
+        .aspectRatio(targetAspectRatio, contentMode: .fit)
         .clipShape(RoundedRectangle(cornerRadius: 8))
         .overlay(
             RoundedRectangle(cornerRadius: 8)
@@ -497,7 +518,8 @@ struct VerseSlideControlsBar: View {
 // MARK: - Presentation Controls Bar
 struct PresentationControlsBar: View {
     @Environment(PresentationManager.self) private var pm
-    @Environment(\.openWindow) private var openWindow
+    @Environment(AppState.self) private var appState
+    @Environment(LibraryManager.self) private var libraryManager
 
     var body: some View {
         HStack(spacing: 12) {
@@ -527,18 +549,348 @@ struct PresentationControlsBar: View {
 
             Spacer()
 
-            Button {
-                openWindow(id: WindowIdentifiers.presentation, value: "main")
-                pm.isPresentationWindowOpen = true
-            } label: {
-                Label(
-                    String(localized: "Open Output", comment: "Control button"),
-                    systemImage: "rectangle.on.rectangle"
-                )
-            }
+            // Unified split clear button
+            SplitClearButton()
         }
         .buttonStyle(.bordered)
         .controlSize(.small)
+    }
+}
+
+// MARK: - Split Clear Button (unified: left = action, right = dropdown, right-click = menu, force touch = configurable)
+struct SplitClearButton: View {
+    @Environment(PresentationManager.self) private var pm
+    @Environment(AppState.self) private var appState
+    @Environment(LibraryManager.self) private var libraryManager
+    @AppStorage("forceTouchClearAction") private var forceTouchAction: String = "clearAll"
+    @State private var isHoveringMain = false
+    @State private var isHoveringChevron = false
+    @State private var showMenu = false
+
+    var body: some View {
+        HStack(spacing: 0) {
+            // Main clear action (left side)
+            Button {
+                pm.clearOutput()
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "xmark.rectangle")
+                        .font(.caption)
+                    Text(String(localized: "Clear", comment: "Control button"))
+                        .font(.caption)
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(isHoveringMain ? Color.primary.opacity(0.08) : Color.clear)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .onHover { isHoveringMain = $0 }
+            .overlay {
+                ForceTouchDetector {
+                    performForceTouchAction()
+                }
+            }
+
+            // Divider line
+            Rectangle()
+                .fill(Color.primary.opacity(0.15))
+                .frame(width: 1, height: 18)
+
+            // Dropdown chevron (right side)
+            Button {
+                showMenu = true
+            } label: {
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 8, weight: .bold))
+                    .frame(width: 20, height: 24)
+                    .background(isHoveringChevron ? Color.primary.opacity(0.08) : Color.clear)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .onHover { isHoveringChevron = $0 }
+            .popover(isPresented: $showMenu, arrowEdge: .bottom) {
+                clearMenuContent
+            }
+        }
+        .background(
+            RoundedRectangle(cornerRadius: 6)
+                .fill(Color.primary.opacity(0.05))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6)
+                        .strokeBorder(Color.primary.opacity(0.12), lineWidth: 0.5)
+                )
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 6))
+        .contextMenu { clearContextMenuItems }
+        .help(String(localized: "Clear Output (Force Touch: \(forceTouchActionLabel))", comment: "Tooltip"))
+    }
+
+    // MARK: - Menu Content (used for both popover and context menu)
+
+    @ViewBuilder
+    private var clearMenuContent: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ClearMenuItem(
+                title: String(localized: "Golește Ecranul", comment: "Clear menu"),
+                icon: "xmark.rectangle",
+                shortcut: "⎋"
+            ) {
+                pm.clearOutput()
+                showMenu = false
+            }
+
+            ClearMenuItem(
+                title: String(localized: "Golește și Ecran Negru", comment: "Clear menu"),
+                icon: "moon.fill",
+                shortcut: "⌘B"
+            ) {
+                pm.clearOutput()
+                pm.isBlackScreen = true
+                showMenu = false
+            }
+
+            Divider().padding(.vertical, 4)
+
+            ClearMenuItem(
+                title: String(localized: "Golește și Mergi la Biblie", comment: "Clear menu"),
+                icon: "book.closed",
+                shortcut: nil
+            ) {
+                pm.clearOutput()
+                appState.selectedSidebarItem = .bible
+                showMenu = false
+            }
+
+            ClearMenuItem(
+                title: String(localized: "Golește și Mergi la Cântece", comment: "Clear menu"),
+                icon: "music.note.list",
+                shortcut: nil
+            ) {
+                pm.clearOutput()
+                appState.selectedSidebarItem = .songs
+                showMenu = false
+            }
+
+            ClearMenuItem(
+                title: String(localized: "Golește și Mergi la Media", comment: "Clear menu"),
+                icon: "photo.on.rectangle",
+                shortcut: nil
+            ) {
+                pm.clearOutput()
+                appState.selectedSidebarItem = .media
+                showMenu = false
+            }
+
+            Divider().padding(.vertical, 4)
+
+            ClearMenuItem(
+                title: String(localized: "Golește Tot (ecran + selecție)", comment: "Clear menu"),
+                icon: "trash",
+                shortcut: "⇧⌘⎋",
+                isDestructive: true
+            ) {
+                pm.clearOutput()
+                libraryManager.clearVerseSelection()
+                libraryManager.isAutoFillActive = false
+                showMenu = false
+            }
+
+            Divider().padding(.vertical, 4)
+
+            // Force Touch action configurator
+            HStack(spacing: 6) {
+                Image(systemName: "hand.tap.fill")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Text(String(localized: "Force Touch:", comment: "Clear menu"))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Picker("", selection: Binding(
+                    get: { forceTouchAction },
+                    set: { forceTouchAction = $0; showMenu = false }
+                )) {
+                    Text(String(localized: "Golește Tot", comment: "Force touch option")).tag("clearAll")
+                    Text(String(localized: "Ecran Negru", comment: "Force touch option")).tag("goBlack")
+                    Text(String(localized: "Mergi la Biblie", comment: "Force touch option")).tag("gotoBible")
+                    Text(String(localized: "Mergi la Cântece", comment: "Force touch option")).tag("gotoSongs")
+                    Text(String(localized: "Îngheață", comment: "Force touch option")).tag("freeze")
+                }
+                .labelsHidden()
+                .pickerStyle(.menu)
+                .controlSize(.small)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+        }
+        .padding(.vertical, 6)
+        .frame(width: 260)
+    }
+
+    @ViewBuilder
+    private var clearContextMenuItems: some View {
+        Button {
+            pm.clearOutput()
+        } label: {
+            Label(String(localized: "Golește Ecranul", comment: "Clear menu"), systemImage: "xmark.rectangle")
+        }
+
+        Button {
+            pm.clearOutput()
+            pm.isBlackScreen = true
+        } label: {
+            Label(String(localized: "Golește și Ecran Negru", comment: "Clear menu"), systemImage: "moon.fill")
+        }
+
+        Divider()
+
+        Button {
+            pm.clearOutput()
+            appState.selectedSidebarItem = .bible
+        } label: {
+            Label(String(localized: "Golește și Mergi la Biblie", comment: "Clear menu"), systemImage: "book.closed")
+        }
+
+        Button {
+            pm.clearOutput()
+            appState.selectedSidebarItem = .songs
+        } label: {
+            Label(String(localized: "Golește și Mergi la Cântece", comment: "Clear menu"), systemImage: "music.note.list")
+        }
+
+        Button {
+            pm.clearOutput()
+            appState.selectedSidebarItem = .media
+        } label: {
+            Label(String(localized: "Golește și Mergi la Media", comment: "Clear menu"), systemImage: "photo.on.rectangle")
+        }
+
+        Divider()
+
+        Button(role: .destructive) {
+            pm.clearOutput()
+            libraryManager.clearVerseSelection()
+            libraryManager.isAutoFillActive = false
+        } label: {
+            Label(String(localized: "Golește Tot (ecran + selecție)", comment: "Clear menu"), systemImage: "trash")
+        }
+    }
+
+    // MARK: - Force Touch Action
+
+    private var forceTouchActionLabel: String {
+        switch forceTouchAction {
+        case "clearAll": return String(localized: "Golește Tot", comment: "Force touch label")
+        case "goBlack": return String(localized: "Ecran Negru", comment: "Force touch label")
+        case "gotoBible": return String(localized: "Mergi la Biblie", comment: "Force touch label")
+        case "gotoSongs": return String(localized: "Mergi la Cântece", comment: "Force touch label")
+        case "freeze": return String(localized: "Îngheață", comment: "Force touch label")
+        default: return String(localized: "Golește Tot", comment: "Force touch label")
+        }
+    }
+
+    private func performForceTouchAction() {
+        switch forceTouchAction {
+        case "clearAll":
+            pm.clearOutput()
+            libraryManager.clearVerseSelection()
+            libraryManager.isAutoFillActive = false
+        case "goBlack":
+            pm.clearOutput()
+            pm.isBlackScreen = true
+        case "gotoBible":
+            pm.clearOutput()
+            appState.selectedSidebarItem = .bible
+        case "gotoSongs":
+            pm.clearOutput()
+            appState.selectedSidebarItem = .songs
+        case "freeze":
+            pm.toggleFreeze()
+        default:
+            pm.clearOutput()
+        }
+    }
+}
+
+// MARK: - Clear Menu Item (custom row for the popover)
+private struct ClearMenuItem: View {
+    let title: String
+    let icon: String
+    var shortcut: String? = nil
+    var isDestructive: Bool = false
+    let action: () -> Void
+
+    @State private var isHovering = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 8) {
+                Image(systemName: icon)
+                    .font(.body)
+                    .frame(width: 20)
+                    .foregroundStyle(isDestructive ? .red : .primary)
+                Text(title)
+                    .font(.callout)
+                    .foregroundStyle(isDestructive ? .red : .primary)
+                Spacer()
+                if let shortcut {
+                    Text(shortcut)
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                }
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(isHovering ? Color.accentColor.opacity(0.12) : Color.clear)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovering = $0 }
+    }
+}
+
+// MARK: - Force Touch Detector (NSViewRepresentable)
+struct ForceTouchDetector: NSViewRepresentable {
+    let onForceTouch: () -> Void
+
+    func makeNSView(context: Context) -> ForceTouchNSView {
+        let view = ForceTouchNSView()
+        view.onForceTouch = onForceTouch
+        return view
+    }
+
+    func updateNSView(_ nsView: ForceTouchNSView, context: Context) {
+        nsView.onForceTouch = onForceTouch
+    }
+
+    class ForceTouchNSView: NSView {
+        var onForceTouch: (() -> Void)?
+        private var didTrigger = false
+
+        override var acceptsFirstResponder: Bool { true }
+
+        override func pressureChange(with event: NSEvent) {
+            // Stage 2 = Force Touch (deep press)
+            if event.stage == 2 && !didTrigger {
+                didTrigger = true
+                // Haptic feedback
+                NSHapticFeedbackManager.defaultPerformer.perform(
+                    .alignment,
+                    performanceTime: .now
+                )
+                onForceTouch?()
+            }
+
+            if event.stage == 0 {
+                didTrigger = false
+            }
+        }
+
+        // Pass through regular clicks to the button underneath
+        override func hitTest(_ point: NSPoint) -> NSView? {
+            return nil
+        }
     }
 }
 
@@ -627,8 +979,17 @@ struct AudioControlsView: View {
 
 // MARK: - Settings Panel
 /// Comprehensive inline settings panel with collapsible sections.
-/// Contains all presentation settings except Import/Export (which stays in Settings window).
+/// Pass `sections` to control which sections are shown for each content type.
 struct StyleQuickSettings: View {
+    /// Which setting sections to display.
+    var sections: Set<SettingsSection> = SettingsSection.allSet
+
+    enum SettingsSection: Hashable {
+        case textFont, background, displayOutput, multiVerse, general
+
+        static let allSet: Set<SettingsSection> = [.textFont, .background, .displayOutput, .multiVerse, .general]
+    }
+
     @Environment(PresentationManager.self) private var pm
 
     @AppStorage("settingsExpanded_text") private var textExpanded: Bool = true
@@ -638,13 +999,9 @@ struct StyleQuickSettings: View {
     @AppStorage("settingsExpanded_general") private var generalExpanded: Bool = false
 
     // General settings
-    @AppStorage("startupSection") private var startupSection: String = "bible"
-    @AppStorage("confirmBeforeDelete") private var confirmBeforeDelete: Bool = true
     @AppStorage("showVerseNumbers") private var showVerseNumbers: Bool = true
-    @AppStorage("autoSelectFirstModule") private var autoSelectFirstModule: Bool = true
     @AppStorage("showCrossReferences") private var showCrossReferences: Bool = false
     @AppStorage("showFootnotes") private var showFootnotes: Bool = false
-    @AppStorage("rememberLastModule") private var rememberLastModule: Bool = true
     @AppStorage("multiVerseLayout") private var multiVerseLayout: String = "inline"
     @AppStorage("showVerseNumberPrefix") private var showVerseNumberPrefix: Bool = false
 
@@ -657,49 +1014,59 @@ struct StyleQuickSettings: View {
 
         ScrollView {
             VStack(alignment: .leading, spacing: 2) {
-                // ─── Text & Font ───
-                settingsSection(
-                    title: String(localized: "Text & Font", comment: "Settings section"),
-                    icon: "textformat",
-                    isExpanded: $textExpanded
-                ) {
-                    textAndFontSection(pmBinding: pmBinding)
+                if sections.contains(.textFont) {
+                    // ─── Text & Font ───
+                    settingsSection(
+                        title: String(localized: "Text & Font", comment: "Settings section"),
+                        icon: "textformat",
+                        isExpanded: $textExpanded
+                    ) {
+                        textAndFontSection(pmBinding: pmBinding)
+                    }
                 }
 
-                // ─── Background ───
-                settingsSection(
-                    title: String(localized: "Background", comment: "Settings section"),
-                    icon: "photo.artframe",
-                    isExpanded: $backgroundExpanded
-                ) {
-                    backgroundSection(pmBinding: pmBinding)
+                if sections.contains(.background) {
+                    // ─── Background ───
+                    settingsSection(
+                        title: String(localized: "Background", comment: "Settings section"),
+                        icon: "photo.artframe",
+                        isExpanded: $backgroundExpanded
+                    ) {
+                        backgroundSection(pmBinding: pmBinding)
+                    }
                 }
 
-                // ─── Display & Output ───
-                settingsSection(
-                    title: String(localized: "Display & Output", comment: "Settings section"),
-                    icon: "display",
-                    isExpanded: $displayExpanded
-                ) {
-                    displaySection(pmBinding: pmBinding)
+                if sections.contains(.displayOutput) {
+                    // ─── Display & Output ───
+                    settingsSection(
+                        title: String(localized: "Display & Output", comment: "Settings section"),
+                        icon: "display",
+                        isExpanded: $displayExpanded
+                    ) {
+                        displaySection(pmBinding: pmBinding)
+                    }
                 }
 
-                // ─── Multi-Verse ───
-                settingsSection(
-                    title: String(localized: "Multi-Verse", comment: "Settings section"),
-                    icon: "text.justify.leading",
-                    isExpanded: $multiVerseExpanded
-                ) {
-                    multiVerseSection
+                if sections.contains(.multiVerse) {
+                    // ─── Multi-Verse ───
+                    settingsSection(
+                        title: String(localized: "Multi-Verse", comment: "Settings section"),
+                        icon: "text.justify.leading",
+                        isExpanded: $multiVerseExpanded
+                    ) {
+                        multiVerseSection
+                    }
                 }
 
-                // ─── General ───
-                settingsSection(
-                    title: String(localized: "General", comment: "Settings section"),
-                    icon: "gearshape",
-                    isExpanded: $generalExpanded
-                ) {
-                    generalSection
+                if sections.contains(.general) {
+                    // ─── General ───
+                    settingsSection(
+                        title: String(localized: "General", comment: "Settings section"),
+                        icon: "gearshape",
+                        isExpanded: $generalExpanded
+                    ) {
+                        generalSection
+                    }
                 }
             }
             .padding(.horizontal, 12)
@@ -863,19 +1230,29 @@ struct StyleQuickSettings: View {
 
     @ViewBuilder
     private func backgroundSection(pmBinding: Bindable<PresentationManager>) -> some View {
-        // Background color
-        HStack {
-            Text(String(localized: "Color:", comment: "Setting label"))
+        // Enable background toggle
+        Toggle(isOn: pmBinding.backgroundEnabled) {
+            Text(String(localized: "Enable Background", comment: "Setting label"))
                 .font(.caption)
-                .frame(width: 55, alignment: .trailing)
-            ColorPicker(
-                "",
-                selection: Binding(
-                    get: { pm.backgroundColor },
-                    set: { pm.backgroundColorHex = $0.toHex() }
+        }
+        .toggleStyle(.switch)
+        .controlSize(.small)
+
+        // Background color (only shown when background is enabled)
+        if pm.backgroundEnabled {
+            HStack {
+                Text(String(localized: "Color:", comment: "Setting label"))
+                    .font(.caption)
+                    .frame(width: 55, alignment: .trailing)
+                ColorPicker(
+                    "",
+                    selection: Binding(
+                        get: { pm.backgroundColor },
+                        set: { pm.backgroundColorHex = $0.toHex() }
+                    )
                 )
-            )
-            .labelsHidden()
+                .labelsHidden()
+            }
         }
 
         // Background opacity
@@ -963,6 +1340,21 @@ struct StyleQuickSettings: View {
             .help(String(localized: "Refresh Screens", comment: "Button tooltip"))
         }
 
+        // Window level / position
+        HStack {
+            Text(String(localized: "Window:", comment: "Setting label"))
+                .font(.caption)
+                .frame(width: 55, alignment: .trailing)
+            Picker("", selection: pmBinding.windowLevel) {
+                Text(String(localized: "Normal", comment: "Window level option")).tag("normal")
+                Text(String(localized: "Floating", comment: "Window level option")).tag("floating")
+                Text(String(localized: "Always on Top", comment: "Window level option")).tag("alwaysOnTop")
+                Text(String(localized: "Behind Desktop", comment: "Window level option")).tag("behindDesktop")
+            }
+            .labelsHidden()
+            .controlSize(.small)
+        }
+
         // Transition duration
         HStack {
             Text(String(localized: "Transition:", comment: "Setting label"))
@@ -1007,36 +1399,36 @@ struct StyleQuickSettings: View {
 
     @ViewBuilder
     private var generalSection: some View {
-        // Startup section
-        HStack {
-            Text(String(localized: "Startup:", comment: "Setting label"))
-                .font(.caption)
-                .frame(width: 55, alignment: .trailing)
-            Picker("", selection: $startupSection) {
-                Text(String(localized: "Bible", comment: "Option")).tag("bible")
-                Text(String(localized: "Songs", comment: "Option")).tag("songs")
-                Text(String(localized: "Schedule", comment: "Option")).tag("schedule")
-            }
-            .labelsHidden()
-            .controlSize(.small)
-        }
-
-        // Toggles
+        // Quick-access toggles relevant during presentation
         VStack(alignment: .leading, spacing: 4) {
             HStack {
                 Text("")
                     .frame(width: 55)
                 VStack(alignment: .leading, spacing: 4) {
-                    Toggle(String(localized: "Auto-select first Bible module", comment: "Setting label"), isOn: $autoSelectFirstModule)
-                    Toggle(String(localized: "Remember last Bible module", comment: "Setting label"), isOn: $rememberLastModule)
-                    Toggle(String(localized: "Confirm before deleting", comment: "Setting label"), isOn: $confirmBeforeDelete)
-                    Toggle(String(localized: "Show verse numbers", comment: "Setting label"), isOn: $showVerseNumbers)
-                    Toggle(String(localized: "Show cross-references", comment: "Setting label"), isOn: $showCrossReferences)
-                    Toggle(String(localized: "Show footnotes", comment: "Setting label"), isOn: $showFootnotes)
+                    Toggle(String(localized: "Afișează numerele versetelor", comment: "Setting label"), isOn: $showVerseNumbers)
+                    Toggle(String(localized: "Afișează referințe încrucișate", comment: "Setting label"), isOn: $showCrossReferences)
+                    Toggle(String(localized: "Afișează note de subsol", comment: "Setting label"), isOn: $showFootnotes)
                 }
                 .font(.caption)
                 .controlSize(.small)
             }
+        }
+
+        // Link to full settings
+        HStack {
+            Spacer()
+            Button {
+                NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "gearshape")
+                        .font(.caption2)
+                    Text(String(localized: "Mai multe setări...", comment: "Button"))
+                        .font(.caption)
+                }
+            }
+            .buttonStyle(.borderless)
+            .foregroundStyle(.secondary)
         }
     }
 

@@ -8,14 +8,127 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// Application settings window.
-/// Non-import/export settings are available inline in the Preview Panel.
+/// Application settings window with tabbed sections.
 struct SettingsView: View {
     @Environment(PresentationManager.self) private var presentationManager
 
     var body: some View {
-        ImportExportSettingsTab()
-            .frame(width: 500, height: 400)
+        TabView {
+            InterfaceSettingsTab()
+                .tabItem {
+                    Label(String(localized: "Interfață", comment: "Settings tab"), systemImage: "paintbrush")
+                }
+
+            BibleSettingsTab()
+                .tabItem {
+                    Label(String(localized: "Biblie", comment: "Settings tab"), systemImage: "book.closed")
+                }
+
+            ImportExportSettingsTab()
+                .tabItem {
+                    Label(String(localized: "Import / Export", comment: "Settings tab"), systemImage: "arrow.up.arrow.down")
+                }
+        }
+        .frame(width: 550, height: 480)
+    }
+}
+
+// MARK: - Interface Settings Tab
+struct InterfaceSettingsTab: View {
+    @AppStorage("startupSection") private var startupSection: String = "bible"
+    @AppStorage("confirmBeforeDelete") private var confirmBeforeDelete: Bool = true
+    @AppStorage("showVerseNumbers") private var showVerseNumbers: Bool = true
+    @AppStorage("forceTouchClearAction") private var forceTouchAction: String = "clearAll"
+
+    var body: some View {
+        Form {
+            Section(String(localized: "General", comment: "Settings section")) {
+                Picker(String(localized: "Secțiunea de start:", comment: "Setting label"), selection: $startupSection) {
+                    Text(String(localized: "Biblie", comment: "Option")).tag("bible")
+                    Text(String(localized: "Cântece", comment: "Option")).tag("songs")
+                    Text(String(localized: "Program", comment: "Option")).tag("schedule")
+                }
+
+                Toggle(String(localized: "Confirmă înainte de ștergere", comment: "Setting label"), isOn: $confirmBeforeDelete)
+                Toggle(String(localized: "Afișează numerele versetelor", comment: "Setting label"), isOn: $showVerseNumbers)
+            }
+
+            Section(String(localized: "Acțiuni Trackpad", comment: "Settings section")) {
+                Picker(String(localized: "Force Touch pe butonul Clear:", comment: "Setting label"), selection: $forceTouchAction) {
+                    Label(String(localized: "Golește Tot (ecran + selecție)", comment: "Force touch option"), systemImage: "trash")
+                        .tag("clearAll")
+                    Label(String(localized: "Golește și Ecran Negru", comment: "Force touch option"), systemImage: "moon.fill")
+                        .tag("goBlack")
+                    Label(String(localized: "Golește și Mergi la Biblie", comment: "Force touch option"), systemImage: "book.closed")
+                        .tag("gotoBible")
+                    Label(String(localized: "Golește și Mergi la Cântece", comment: "Force touch option"), systemImage: "music.note.list")
+                        .tag("gotoSongs")
+                    Label(String(localized: "Îngheață Prezentarea", comment: "Force touch option"), systemImage: "lock.fill")
+                        .tag("freeze")
+                }
+
+                Text(String(localized: "Apasă tare (Force Touch) pe butonul Clear pentru a executa acțiunea selectată.", comment: "Settings info"))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .formStyle(.grouped)
+        .padding()
+    }
+}
+
+// MARK: - Bible Settings Tab
+struct BibleSettingsTab: View {
+    @AppStorage("autoSelectFirstModule") private var autoSelectFirstModule: Bool = true
+    @AppStorage("rememberLastModule") private var rememberLastModule: Bool = true
+    @AppStorage("showCrossReferences") private var showCrossReferences: Bool = false
+    @AppStorage("showFootnotes") private var showFootnotes: Bool = false
+    @AppStorage("showBookCategoryColors") private var showBookCategoryColors: Bool = true
+    @AppStorage("showBookCategoryLabels") private var showBookCategoryLabels: Bool = true
+
+    var body: some View {
+        Form {
+            Section(String(localized: "Module", comment: "Settings section")) {
+                Toggle(String(localized: "Selectează automat primul modul", comment: "Setting label"), isOn: $autoSelectFirstModule)
+                Toggle(String(localized: "Reține ultimul modul folosit", comment: "Setting label"), isOn: $rememberLastModule)
+            }
+
+            Section(String(localized: "Conținut", comment: "Settings section")) {
+                Toggle(String(localized: "Afișează referințe încrucișate", comment: "Setting label"), isOn: $showCrossReferences)
+                Toggle(String(localized: "Afișează note de subsol", comment: "Setting label"), isOn: $showFootnotes)
+            }
+
+            Section(String(localized: "Categorii Cărți", comment: "Settings section")) {
+                Toggle(String(localized: "Colorează cărțile pe categorii", comment: "Setting label"), isOn: $showBookCategoryColors)
+                Toggle(String(localized: "Afișează eticheta categoriei", comment: "Setting label"), isOn: $showBookCategoryLabels)
+                    .disabled(!showBookCategoryColors)
+
+                if showBookCategoryColors {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(String(localized: "Previzualizare categorii:", comment: "Settings info"))
+                            .font(.caption.bold())
+                            .foregroundStyle(.secondary)
+
+                        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 2), spacing: 6) {
+                            ForEach(BibleBookCategory.allCases, id: \.self) { category in
+                                HStack(spacing: 6) {
+                                    RoundedRectangle(cornerRadius: 3)
+                                        .fill(category.color)
+                                        .frame(width: 20, height: 14)
+                                    Text(category.localizedName)
+                                        .font(.caption)
+                                        .lineLimit(1)
+                                    Spacer()
+                                }
+                            }
+                        }
+                    }
+                    .padding(.top, 4)
+                }
+            }
+        }
+        .formStyle(.grouped)
+        .padding()
     }
 }
 
@@ -29,10 +142,10 @@ struct ImportExportSettingsTab: View {
     var body: some View {
         Form {
             Section(String(localized: "Import", comment: "Settings section")) {
-                Toggle(String(localized: "Auto-detect file format on import", comment: "Setting label"), isOn: $autoDetectFormat)
+                Toggle(String(localized: "Detectare automată a formatului", comment: "Setting label"), isOn: $autoDetectFormat)
 
                 VStack(alignment: .leading, spacing: 6) {
-                    Text(String(localized: "Supported import formats:", comment: "Settings info"))
+                    Text(String(localized: "Formate de import suportate:", comment: "Settings info"))
                         .font(.caption.bold())
                         .foregroundStyle(.secondary)
 
@@ -53,23 +166,23 @@ struct ImportExportSettingsTab: View {
             }
 
             Section(String(localized: "Export", comment: "Settings section")) {
-                Picker(String(localized: "Default export format:", comment: "Setting label"), selection: $defaultExportFormat) {
+                Picker(String(localized: "Format export implicit:", comment: "Setting label"), selection: $defaultExportFormat) {
                     ForEach(SupportedExportFormat.allCases) { format in
                         Text(format.displayName).tag(format.rawValue)
                     }
                 }
 
-                Toggle(String(localized: "Include metadata in exports", comment: "Setting label"), isOn: $includeMetadata)
-                Toggle(String(localized: "Pretty-print JSON output", comment: "Setting label"), isOn: $prettyPrint)
+                Toggle(String(localized: "Include metadata în exporturi", comment: "Setting label"), isOn: $includeMetadata)
+                Toggle(String(localized: "Formatare JSON (pretty-print)", comment: "Setting label"), isOn: $prettyPrint)
             }
 
-            Section(String(localized: "About Formats", comment: "Settings section")) {
+            Section(String(localized: "Despre Formate", comment: "Settings section")) {
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 6) {
                         Image(systemName: "star.fill")
                             .foregroundStyle(.yellow)
                             .font(.caption)
-                        Text(String(localized: "TopPresenter JSON is the recommended format for full fidelity, including cross-references, footnotes, and section headings.", comment: "Settings info"))
+                        Text(String(localized: "TopPresenter JSON este formatul recomandat pentru fidelitate completă, inclusiv referințe încrucișate, note de subsol și titluri de secțiuni.", comment: "Settings info"))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }

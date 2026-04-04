@@ -25,21 +25,18 @@ struct BibleView: View {
     @State private var showDeleteConfirmation = false
     @State private var moduleToDelete: BibleModule?
 
+    @AppStorage("bibleViewMode") private var viewMode: String = "list"
+    @AppStorage("rememberLastModule") private var rememberLastModule: Bool = true
+    @AppStorage("defaultBibleModuleName") private var defaultBibleModuleName: String = ""
+    @State private var didRestoreModule = false
+
     var body: some View {
-        @Bindable var library = libraryManager
-
         VStack(spacing: 0) {
-            // Top bar: module selector + search
-            BibleTopBar(
-                showImportSheet: $showImportSheet,
-                showDeleteConfirmation: $showDeleteConfirmation,
-                moduleToDelete: $moduleToDelete
-            )
-
-            Divider()
-
             if modules.isEmpty {
                 emptyStateView
+            } else if viewMode == "grid" {
+                // Grid navigation: Books → Chapters → Verses as button grids
+                BibleGridNavigationView()
             } else {
                 HSplitView {
                     // Left: Book/Chapter navigation
@@ -77,6 +74,24 @@ struct BibleView: View {
             }
         } message: {
             Text(String(localized: "Are you sure you want to delete \"\(moduleToDelete?.name ?? "")\"? This cannot be undone.", comment: "Alert message"))
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .deleteBibleModule)) { _ in
+            moduleToDelete = libraryManager.selectedBibleModule
+            showDeleteConfirmation = true
+        }
+        .onAppear {
+            if !didRestoreModule && rememberLastModule && !defaultBibleModuleName.isEmpty {
+                if libraryManager.selectedBibleModule == nil,
+                   let saved = modules.first(where: { $0.name == defaultBibleModuleName }) {
+                    libraryManager.selectModule(saved)
+                }
+                didRestoreModule = true
+            }
+        }
+        .onChange(of: libraryManager.selectedBibleModule?.name) { _, newName in
+            if rememberLastModule, let name = newName {
+                defaultBibleModuleName = name
+            }
         }
     }
 
@@ -120,125 +135,11 @@ struct BibleView: View {
     }
 }
 
-// MARK: - Bible Top Bar
-struct BibleTopBar: View {
-    @Environment(LibraryManager.self) private var libraryManager
-    @Environment(AppState.self) private var appState
-    @Query(sort: \BibleModule.name) private var modules: [BibleModule]
-
-    @Binding var showImportSheet: Bool
-    @Binding var showDeleteConfirmation: Bool
-    @Binding var moduleToDelete: BibleModule?
-
-    @AppStorage("rememberLastModule") private var rememberLastModule: Bool = true
-    @AppStorage("defaultBibleModuleName") private var defaultBibleModuleName: String = ""
-    @State private var didRestoreModule = false
-
-    var body: some View {
-        @Bindable var library = libraryManager
-
-        HStack(spacing: 12) {
-            // Module selector
-            if !modules.isEmpty {
-                Picker(
-                    String(localized: "Module:", comment: "Picker label"),
-                    selection: Binding(
-                        get: { libraryManager.selectedBibleModule?.id },
-                        set: { newID in
-                            if let id = newID, let module = modules.first(where: { $0.id == id }) {
-                                libraryManager.selectModule(module)
-                            }
-                        }
-                    )
-                ) {
-                    Text(String(localized: "Select Module", comment: "Picker placeholder"))
-                        .tag(nil as UUID?)
-                    ForEach(modules) { module in
-                        Text(module.abbreviation.isEmpty ? module.name : "\(module.abbreviation) - \(module.name)")
-                            .tag(module.id as UUID?)
-                    }
-                }
-                .frame(maxWidth: 300)
-            }
-
-            // Search field
-            HStack {
-                Image(systemName: "magnifyingglass")
-                    .foregroundStyle(.secondary)
-                TextField(
-                    String(localized: "Search Bible (e.g., John 3:16 or keyword)", comment: "Search placeholder"),
-                    text: $library.bibleSearchQuery
-                )
-                .textFieldStyle(.plain)
-                .onSubmit {
-                    libraryManager.searchBible(query: libraryManager.bibleSearchQuery, in: modules)
-                }
-
-                if !libraryManager.bibleSearchQuery.isEmpty {
-                    Button {
-                        libraryManager.bibleSearchQuery = ""
-                        libraryManager.bibleSearchResults = []
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundStyle(.secondary)
-                    }
-                    .buttonStyle(.borderless)
-                }
-            }
-            .padding(6)
-            .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
-
-            Spacer()
-
-            // Import button
-            Button {
-                showImportSheet = true
-            } label: {
-                Label(
-                    String(localized: "Import", comment: "Button"),
-                    systemImage: "square.and.arrow.down"
-                )
-            }
-            .controlSize(.small)
-
-            // Delete module
-            if libraryManager.selectedBibleModule != nil {
-                Button {
-                    moduleToDelete = libraryManager.selectedBibleModule
-                    showDeleteConfirmation = true
-                } label: {
-                    Label(
-                        String(localized: "Delete Module", comment: "Button"),
-                        systemImage: "trash"
-                    )
-                }
-                .controlSize(.small)
-                .foregroundStyle(.red)
-            }
-        }
-        .padding(.horizontal)
-        .padding(.vertical, 8)
-        .onAppear {
-            // Restore last selected module on launch
-            if !didRestoreModule && rememberLastModule && !defaultBibleModuleName.isEmpty {
-                if libraryManager.selectedBibleModule == nil,
-                   let saved = modules.first(where: { $0.name == defaultBibleModuleName }) {
-                    libraryManager.selectModule(saved)
-                }
-                didRestoreModule = true
-            }
-        }
-        .onChange(of: libraryManager.selectedBibleModule?.name) { _, newName in
-            if rememberLastModule, let name = newName {
-                defaultBibleModuleName = name
-            }
-        }
-    }
-}
-
 // MARK: - Bible Navigation Panel (Books & Chapters)
 struct BibleNavigationPanel: View {
     @Environment(LibraryManager.self) private var libraryManager
+    @AppStorage("showBookCategoryColors") private var showBookCategoryColors: Bool = true
+    @AppStorage("showBookCategoryLabels") private var showBookCategoryLabels: Bool = true
 
     var body: some View {
         VStack(spacing: 0) {
@@ -289,10 +190,25 @@ struct BibleNavigationPanel: View {
     }
 
     private func bookRow(_ book: BibleBook) -> some View {
-        HStack {
+        let category = BibleBookCategory.from(bookNumber: book.bookNumber)
+        return HStack(spacing: 8) {
+            // Color indicator dot (conditional)
+            if showBookCategoryColors {
+                Circle()
+                    .fill(category.color)
+                    .frame(width: 10, height: 10)
+            }
             Text(book.name)
                 .lineLimit(1)
             Spacer()
+            if showBookCategoryColors && showBookCategoryLabels {
+                Text(category.localizedName)
+                    .font(.system(size: 9))
+                    .foregroundStyle(category.darkColor)
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 2)
+                    .background(category.color.opacity(0.2), in: Capsule())
+            }
             Text("\(book.chapters.count)")
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -495,6 +411,345 @@ struct BibleVerseRow: View {
             Button(String(localized: "Copy Reference", comment: "Context menu")) {
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString(verse.fullReference, forType: .string)
+            }
+        }
+    }
+}
+
+// MARK: - Bible Grid Navigation View (BibleShow-style)
+/// A full-panel grid view: Books → Chapters → Verses shown as tappable button grids
+/// with breadcrumb navigation to go back.
+struct BibleGridNavigationView: View {
+    @Environment(LibraryManager.self) private var libraryManager
+    @Environment(PresentationManager.self) private var presentationManager
+    @AppStorage("multiVerseLayout") private var multiVerseLayout: String = "inline"
+    @AppStorage("showVerseNumberPrefix") private var showVerseNumberPrefix: Bool = false
+    @AppStorage("showBookCategoryColors") private var showBookCategoryColors: Bool = true
+    @AppStorage("showBookCategoryLabels") private var showBookCategoryLabels: Bool = true
+
+    /// Grid navigation level
+    enum GridLevel {
+        case books
+        case chapters
+        case verses
+    }
+
+    @State private var level: GridLevel = .books
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Breadcrumb bar
+            breadcrumbBar
+            Divider()
+
+            // Grid content
+            switch level {
+            case .books:
+                booksGrid
+            case .chapters:
+                chaptersGrid
+            case .verses:
+                versesGrid
+            }
+        }
+        .onChange(of: libraryManager.selectedBibleModule) { _, _ in
+            level = .books
+        }
+    }
+
+    // MARK: - Breadcrumb Bar
+    private var breadcrumbBar: some View {
+        HStack(spacing: 4) {
+            // Module/Books level
+            Button {
+                withAnimation(.easeInOut(duration: 0.15)) {
+                    level = .books
+                    libraryManager.selectedBook = nil
+                    libraryManager.selectedChapter = nil
+                    libraryManager.selectedVerses = []
+                    libraryManager.isAutoFillActive = false
+                }
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "book.fill")
+                        .font(.caption2)
+                    Text(libraryManager.selectedBibleModule?.abbreviation ?? String(localized: "Books", comment: "Breadcrumb"))
+                        .fontWeight(level == .books ? .bold : .regular)
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(level == .books ? Color.accentColor.opacity(0.15) : Color.clear, in: Capsule())
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(level == .books ? Color.accentColor : .primary)
+
+            if let book = libraryManager.selectedBook {
+                let bookCategory = BibleBookCategory.from(bookNumber: book.bookNumber)
+
+                Image(systemName: "chevron.right")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+
+                // Chapter level
+                Button {
+                    withAnimation(.easeInOut(duration: 0.15)) {
+                        level = .chapters
+                        libraryManager.selectedChapter = nil
+                        libraryManager.selectedVerses = []
+                        libraryManager.isAutoFillActive = false
+                    }
+                } label: {
+                    HStack(spacing: 4) {
+                        if showBookCategoryColors {
+                            Circle().fill(bookCategory.color).frame(width: 8, height: 8)
+                        }
+                        Text(book.name)
+                            .fontWeight(level == .chapters ? .bold : .regular)
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(
+                        level == .chapters
+                            ? (showBookCategoryColors ? bookCategory.color.opacity(0.15) : Color.accentColor.opacity(0.15))
+                            : Color.clear,
+                        in: Capsule()
+                    )
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(level == .chapters ? bookCategory.darkColor : .primary)
+
+                if let chapter = libraryManager.selectedChapter {
+                    Image(systemName: "chevron.right")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+
+                    // Verse level
+                    Text("\(String(localized: "Chapter", comment: "Breadcrumb")) \(chapter.chapterNumber)")
+                        .fontWeight(.bold)
+                        .foregroundStyle(Color.accentColor)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Color.accentColor.opacity(0.15), in: Capsule())
+                }
+            }
+
+            Spacer()
+
+            // Verse count when viewing verses
+            if level == .verses, let chapter = libraryManager.selectedChapter {
+                Text(String(localized: "\(chapter.verses.count) verses", comment: "Verse count"))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .font(.subheadline)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+    }
+
+    // MARK: - Books Grid
+    private var booksGrid: some View {
+        ScrollView {
+            if let module = libraryManager.selectedBibleModule {
+                let otBooks = module.books.filter { $0.testament == "OT" }.sorted { $0.bookNumber < $1.bookNumber }
+                let ntBooks = module.books.filter { $0.testament == "NT" }.sorted { $0.bookNumber < $1.bookNumber }
+
+                VStack(alignment: .leading, spacing: 16) {
+                    if !otBooks.isEmpty {
+                        bookSection(
+                            title: String(localized: "Old Testament", comment: "Section header"),
+                            books: otBooks
+                        )
+                    }
+                    if !ntBooks.isEmpty {
+                        bookSection(
+                            title: String(localized: "New Testament", comment: "Section header"),
+                            books: ntBooks
+                        )
+                    }
+                }
+                .padding(12)
+            }
+        }
+    }
+
+    private func bookSection(title: String, books: [BibleBook]) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.caption.bold())
+                .foregroundStyle(.secondary)
+                .padding(.leading, 4)
+
+            // Category legend (conditional)
+            if showBookCategoryColors && showBookCategoryLabels {
+                let categories = Set(books.map { BibleBookCategory.from(bookNumber: $0.bookNumber) })
+                HStack(spacing: 8) {
+                    ForEach(Array(categories).sorted(by: { $0.localizedName < $1.localizedName }), id: \.self) { cat in
+                        HStack(spacing: 3) {
+                            Circle().fill(cat.color).frame(width: 8, height: 8)
+                            Text(cat.localizedName)
+                                .font(.system(size: 9))
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                .padding(.leading, 4)
+            }
+
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 5), spacing: 6) {
+                ForEach(books) { book in
+                    let category = BibleBookCategory.from(bookNumber: book.bookNumber)
+                    let isSelected = libraryManager.selectedBook?.id == book.id
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.15)) {
+                            libraryManager.selectBook(book)
+                            level = .chapters
+                        }
+                    } label: {
+                        Text(book.name)
+                            .font(.system(.callout, weight: .medium))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.7)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 10)
+                            .background(
+                                isSelected
+                                    ? Color.accentColor
+                                    : showBookCategoryColors ? category.color.opacity(0.3) : Color.gray.opacity(0.12),
+                                in: RoundedRectangle(cornerRadius: 8)
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .stroke(
+                                        showBookCategoryColors ? category.color.opacity(0.6) : Color.gray.opacity(0.2),
+                                        lineWidth: 1
+                                    )
+                            )
+                            .foregroundStyle(isSelected ? .white : .primary)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+
+    // MARK: - Chapters Grid
+    private var chaptersGrid: some View {
+        ScrollView {
+            if let book = libraryManager.selectedBook {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(String(localized: "Select a chapter from \(book.name)", comment: "Grid instruction"))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .padding(.leading, 4)
+
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 8), spacing: 6) {
+                        ForEach(book.sortedChapters) { chapter in
+                            Button {
+                                withAnimation(.easeInOut(duration: 0.15)) {
+                                    libraryManager.selectChapter(chapter)
+                                    level = .verses
+                                }
+                            } label: {
+                                Text("\(chapter.chapterNumber)")
+                                    .font(.system(.title3, design: .rounded, weight: .semibold))
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 14)
+                                    .background(
+                                        libraryManager.selectedChapter?.id == chapter.id
+                                            ? Color.accentColor
+                                            : Color.gray.opacity(0.12),
+                                        in: RoundedRectangle(cornerRadius: 8)
+                                    )
+                                    .foregroundStyle(
+                                        libraryManager.selectedChapter?.id == chapter.id ? .white : .primary
+                                    )
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+                .padding(12)
+            }
+        }
+    }
+
+    // MARK: - Verses Grid
+    private var versesGrid: some View {
+        VStack(spacing: 0) {
+            if let chapter = libraryManager.selectedChapter {
+                ScrollView {
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 10), spacing: 6) {
+                        ForEach(chapter.sortedVerses) { verse in
+                            let isSelected = libraryManager.selectedVerses.contains { $0.id == verse.id }
+
+                            Button {
+                                if NSEvent.modifierFlags.contains(.command) {
+                                    libraryManager.toggleVerseSelection(verse)
+                                } else {
+                                    libraryManager.selectVerse(verse)
+                                }
+                            } label: {
+                                Text("\(verse.verseNumber)")
+                                    .font(.system(.body, design: .rounded, weight: .semibold))
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 12)
+                                    .background(
+                                        isSelected
+                                            ? Color.accentColor
+                                            : Color.gray.opacity(0.12),
+                                        in: RoundedRectangle(cornerRadius: 8)
+                                    )
+                                    .foregroundStyle(isSelected ? .white : .primary)
+                            }
+                            .buttonStyle(.plain)
+                            .help(verse.text.prefix(120) + (verse.text.count > 120 ? "…" : ""))
+                            .contextMenu {
+                                Button(String(localized: "Show on Screen", comment: "Context menu")) {
+                                    presentationManager.showBibleVerse(
+                                        text: verse.text,
+                                        reference: verse.fullReference
+                                    )
+                                }
+                                Button(String(localized: "Copy Text", comment: "Context menu")) {
+                                    NSPasteboard.general.clearContents()
+                                    NSPasteboard.general.setString(verse.text, forType: .string)
+                                }
+                            }
+                        }
+                    }
+                    .padding(12)
+                }
+
+                // Selected verse preview at the bottom
+                if !libraryManager.selectedVerses.isEmpty {
+                    Divider()
+
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack {
+                            Text(libraryManager.selectedVersesReference)
+                                .font(.subheadline.bold())
+                                .foregroundStyle(Color.accentColor)
+                            Spacer()
+                            Text(String(localized: "\(libraryManager.selectedVerses.count) selected", comment: "Selection count"))
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+
+                        ScrollView {
+                            Text(libraryManager.formattedSelectedVersesText(
+                                layout: multiVerseLayout,
+                                showPrefix: showVerseNumberPrefix
+                            ))
+                            .font(.body)
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .frame(maxHeight: 120)
+                    }
+                    .padding(12)
+                    .background(.quaternary.opacity(0.3))
+                }
             }
         }
     }

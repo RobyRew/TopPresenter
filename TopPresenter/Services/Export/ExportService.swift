@@ -8,10 +8,10 @@
 import Foundation
 import SwiftData
 
-/// Service for exporting Bible modules to various file formats.
+/// Service for exporting Bible modules and Song collections to various file formats.
 final class ExportService {
 
-    // MARK: - Public API
+    // MARK: - Public API — Bible
 
     /// Export a Bible module to the specified format at the given URL.
     static func exportBible(
@@ -74,6 +74,7 @@ final class ExportService {
                 "number": book.bookNumber,
                 "name": book.name,
                 "testament": book.testament,
+                "category": BibleBookCategory.from(bookNumber: book.bookNumber).englishName,
                 "chapters": chaptersArray
             ]
             booksArray.append(bookDict)
@@ -180,6 +181,197 @@ final class ExportService {
         }
 
         return lines.joined(separator: "\n")
+    }
+
+    // MARK: - Public API — Songs
+
+    /// Export a song collection to the specified format at the given URL.
+    static func exportSongs(
+        collection: SongCollection,
+        format: SupportedSongExportFormat,
+        to fileURL: URL,
+        progressHandler: ((Double, String) -> Void)? = nil
+    ) async throws {
+        progressHandler?(0.05, String(localized: "Preparing export...", comment: "Export progress"))
+
+        let content: String
+
+        switch format {
+        case .topPresenter:
+            content = try await exportSongsToTopPresenterJSON(collection: collection, progressHandler: progressHandler)
+        case .openLyricsXML:
+            content = try await exportSongsToOpenLyrics(collection: collection, progressHandler: progressHandler)
+        case .plainText:
+            content = try await exportSongsToPlainText(collection: collection, progressHandler: progressHandler)
+        }
+
+        progressHandler?(0.95, String(localized: "Writing file...", comment: "Export progress"))
+        try content.write(to: fileURL, atomically: true, encoding: .utf8)
+        progressHandler?(1.0, String(localized: "Complete!", comment: "Export progress"))
+    }
+
+    // MARK: - TopPresenter Songs JSON Export
+
+    private static func exportSongsToTopPresenterJSON(
+        collection: SongCollection,
+        progressHandler: ((Double, String) -> Void)?
+    ) async throws -> String {
+        let sortedSongs = collection.sortedSongs
+        let totalSongs = sortedSongs.count
+
+        var songsArray: [[String: Any]] = []
+
+        for (index, song) in sortedSongs.enumerated() {
+            var versesArray: [[String: Any]] = []
+            for verse in song.sortedVerses {
+                versesArray.append([
+                    "label": verse.label,
+                    "verseType": verse.verseType,
+                    "text": verse.text,
+                    "order": verse.order
+                ])
+            }
+
+            let songDict: [String: Any] = [
+                "title": song.title,
+                "author": song.author,
+                "copyright": song.copyright,
+                "ccliNumber": song.ccliNumber,
+                "key": song.key,
+                "tempo": song.tempo,
+                "songNumber": song.songNumber,
+                "tags": song.tags,
+                "verses": versesArray
+            ]
+            songsArray.append(songDict)
+
+            let progress = 0.1 + (Double(index + 1) / Double(totalSongs)) * 0.8
+            progressHandler?(progress, String(localized: "Exporting \(song.title)...", comment: "Export progress"))
+        }
+
+        let result: [String: Any] = [
+            "schemaVersion": "1.0.0",
+            "format": "TopPresenter Songs",
+            "collection": [
+                "name": collection.name,
+                "description": collection.collectionDescription,
+                "sourceFormat": collection.sourceFormat
+            ],
+            "exportInfo": [
+                "source": "TopPresenter",
+                "exportDate": ISO8601DateFormatter().string(from: Date()),
+                "exporterVersion": "1.0.0",
+                "totalSongs": sortedSongs.count
+            ],
+            "songs": songsArray
+        ]
+
+        let jsonData = try JSONSerialization.data(withJSONObject: result, options: [.prettyPrinted, .sortedKeys])
+        guard let jsonString = String(data: jsonData, encoding: .utf8) else {
+            throw ExportError.encodingFailed
+        }
+        return jsonString
+    }
+
+    // MARK: - OpenLyrics XML Export
+
+    private static func exportSongsToOpenLyrics(
+        collection: SongCollection,
+        progressHandler: ((Double, String) -> Void)?
+    ) async throws -> String {
+        let sortedSongs = collection.sortedSongs
+        var xmlParts: [String] = []
+
+        xmlParts.append("<?xml version=\"1.0\" encoding=\"UTF-8\"?>")
+        xmlParts.append("<!-- format: TopPresenter Songs (OpenLyrics) -->")
+        xmlParts.append("<!-- collection: \(escapeXML(collection.name)) -->")
+        xmlParts.append("")
+
+        for (index, song) in sortedSongs.enumerated() {
+            xmlParts.append("<song xmlns=\"http://openlyrics.info/namespace/2009/song\" version=\"0.9\">")
+            xmlParts.append("  <properties>")
+            xmlParts.append("    <titles><title>\(escapeXML(song.title))</title></titles>")
+            if !song.author.isEmpty {
+                xmlParts.append("    <authors><author>\(escapeXML(song.author))</author></authors>")
+            }
+            if !song.copyright.isEmpty {
+                xmlParts.append("    <copyright>\(escapeXML(song.copyright))</copyright>")
+            }
+            if !song.ccliNumber.isEmpty {
+                xmlParts.append("    <ccliNo>\(escapeXML(song.ccliNumber))</ccliNo>")
+            }
+            if !song.key.isEmpty {
+                xmlParts.append("    <key>\(escapeXML(song.key))</key>")
+            }
+            if !song.tempo.isEmpty {
+                xmlParts.append("    <tempo>\(escapeXML(song.tempo))</tempo>")
+            }
+            xmlParts.append("  </properties>")
+            xmlParts.append("  <lyrics>")
+
+            for verse in song.sortedVerses {
+                let name = verse.verseType == "chorus" ? "c" : "v\(verse.order + 1)"
+                xmlParts.append("    <verse name=\"\(name)\">")
+                let lines = verse.text.components(separatedBy: "\n")
+                for line in lines {
+                    xmlParts.append("      <lines>\(escapeXML(line))</lines>")
+                }
+                xmlParts.append("    </verse>")
+            }
+
+            xmlParts.append("  </lyrics>")
+            xmlParts.append("</song>")
+            xmlParts.append("")
+
+            let progress = 0.1 + (Double(index + 1) / Double(sortedSongs.count)) * 0.8
+            progressHandler?(progress, String(localized: "Exporting \(song.title)...", comment: "Export progress"))
+        }
+
+        return xmlParts.joined(separator: "\n")
+    }
+
+    // MARK: - Songs Plain Text Export
+
+    private static func exportSongsToPlainText(
+        collection: SongCollection,
+        progressHandler: ((Double, String) -> Void)?
+    ) async throws -> String {
+        let sortedSongs = collection.sortedSongs
+        var lines: [String] = []
+
+        lines.append("# TopPresenter Songs — \(collection.name)")
+        lines.append("")
+
+        for (index, song) in sortedSongs.enumerated() {
+            lines.append("=== \(song.title) ===")
+            if !song.author.isEmpty { lines.append("Author: \(song.author)") }
+            if !song.copyright.isEmpty { lines.append("Copyright: \(song.copyright)") }
+            lines.append("")
+
+            for verse in song.sortedVerses {
+                lines.append("[\(verse.label)]")
+                lines.append(verse.text)
+                lines.append("")
+            }
+
+            lines.append("---")
+            lines.append("")
+
+            let progress = 0.1 + (Double(index + 1) / Double(sortedSongs.count)) * 0.8
+            progressHandler?(progress, String(localized: "Exporting \(song.title)...", comment: "Export progress"))
+        }
+
+        return lines.joined(separator: "\n")
+    }
+
+    /// Escape special XML characters
+    private static func escapeXML(_ string: String) -> String {
+        string
+            .replacingOccurrences(of: "&", with: "&amp;")
+            .replacingOccurrences(of: "<", with: "&lt;")
+            .replacingOccurrences(of: ">", with: "&gt;")
+            .replacingOccurrences(of: "\"", with: "&quot;")
+            .replacingOccurrences(of: "'", with: "&apos;")
     }
 }
 

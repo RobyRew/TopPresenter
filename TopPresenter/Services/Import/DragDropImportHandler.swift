@@ -13,12 +13,14 @@ import UniformTypeIdentifiers
 enum DroppedFileCategory {
     case bible(SupportedBibleFormat)
     case song(SupportedSongFormat)
+    case media(String)  // "image", "audio", "video"
     case unknown
 
     var displayName: String {
         switch self {
         case .bible(let fmt): return "Bible (\(fmt.displayName))"
         case .song(let fmt): return "Song (\(fmt.displayName))"
+        case .media(let type): return "Media (\(type))"
         case .unknown: return "Unknown"
         }
     }
@@ -59,23 +61,48 @@ enum ImportFileStatus: Equatable {
     }
 }
 
+/// Known media file extensions
+private enum MediaExtensions {
+    static let image = Set(["jpg", "jpeg", "png", "gif", "bmp", "tiff", "tif", "heic", "heif", "webp", "svg", "ico"])
+    static let audio = Set(["mp3", "wav", "aac", "m4a", "flac", "aiff", "aif", "ogg", "wma", "opus"])
+    static let video = Set(["mp4", "mov", "avi", "mkv", "m4v", "wmv", "webm", "mpg", "mpeg", "flv"])
+    static let all = image.union(audio).union(video)
+}
+
 /// Service that classifies dropped files and performs batch imports.
 final class DragDropImportHandler {
 
     /// Classify a single file URL into a category.
     static func classify(_ url: URL) -> DroppedFileCategory {
-        // Try Bible format detection first
+        let ext = url.pathExtension.lowercased()
+
+        // Check PowerPoint first (these are songs)
+        if ext == "pptx" || ext == "ppt" {
+            return .song(.powerPoint)
+        }
+
+        // Check media files by extension
+        if MediaExtensions.image.contains(ext) {
+            return .media("image")
+        }
+        if MediaExtensions.audio.contains(ext) {
+            return .media("audio")
+        }
+        if MediaExtensions.video.contains(ext) {
+            return .media("video")
+        }
+
+        // Try Bible format detection (reads file content)
         if let format = ImportService.detectBibleFormat(fileURL: url) {
             return .bible(format)
         }
 
-        // Try Song format detection
+        // Try Song format detection (reads file content)
         if let format = ImportService.detectSongFormat(fileURL: url) {
             return .song(format)
         }
 
         // Fallback: guess by extension
-        let ext = url.pathExtension.lowercased()
         switch ext {
         case "json":
             return .bible(.topPresenter)
@@ -157,5 +184,42 @@ final class DragDropImportHandler {
         }
 
         return collections
+    }
+
+    /// Import all pending Media files.
+    static func importMedia(
+        files: [PendingImportFile],
+        modelContext: ModelContext,
+        onUpdate: @escaping (UUID, ImportFileStatus) -> Void
+    ) -> [MediaItem] {
+        var imported: [MediaItem] = []
+
+        for file in files {
+            guard case .media(let mediaType) = file.category else { continue }
+
+            onUpdate(file.id, .importing)
+
+            let item = MediaItem(
+                name: file.url.lastPathComponent,
+                filePath: file.url.path,
+                mediaType: mediaType
+            )
+
+            // Generate thumbnail for images
+            if mediaType == "image", let image = NSImage(contentsOf: file.url) {
+                let thumbnailSize = NSSize(width: 200, height: 200)
+                if let resized = image.resized(to: thumbnailSize) {
+                    item.thumbnailData = resized.tiffRepresentation
+                }
+            }
+
+            modelContext.insert(item)
+            item.createBookmark(from: file.url)
+            imported.append(item)
+            onUpdate(file.id, .success(file.fileName))
+        }
+
+        try? modelContext.save()
+        return imported
     }
 }

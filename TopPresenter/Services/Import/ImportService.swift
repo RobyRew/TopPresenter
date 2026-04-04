@@ -38,9 +38,8 @@ final class ImportService {
         importers[openSongImporter.format] = openSongImporter
         let openLyricsImporter = OpenLyricsImporter()
         importers[openLyricsImporter.format] = openLyricsImporter
-        // Add new Song importers here:
-        // let myFormatImporter = MyFormatSongImporter()
-        // importers[myFormatImporter.format] = myFormatImporter
+        let powerPointImporter = PowerPointSongImporter()
+        importers[powerPointImporter.format] = powerPointImporter
         return importers
     }()
 
@@ -323,6 +322,13 @@ final class ImportService {
 
     /// Auto-detect song format from file content
     static func detectSongFormat(fileURL: URL) -> SupportedSongFormat? {
+        let ext = fileURL.pathExtension.lowercased()
+
+        // PowerPoint files
+        if ext == "pptx" || ext == "ppt" {
+            return .powerPoint
+        }
+
         guard let data = try? Data(contentsOf: fileURL, options: .mappedIfSafe) else { return nil }
         guard let content = String(data: data.prefix(2000), encoding: .utf8) else { return nil }
 

@@ -45,6 +45,9 @@ struct ScheduleView: View {
                     set: { newID in
                         if let id = newID {
                             selectedSchedule = schedules.first { $0.id == id }
+                            if let schedule = selectedSchedule {
+                                NotificationCenter.default.post(name: .scheduleSelected, object: schedule)
+                            }
                         }
                     }
                 )) { schedule in
@@ -128,6 +131,14 @@ struct ScheduleView: View {
                 AddScheduleItemSheet(schedule: schedule)
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .addScheduleItem)) { _ in
+            if selectedSchedule != nil {
+                showAddItemSheet = true
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .newSchedule)) { _ in
+            showNewScheduleSheet = true
+        }
     }
 
     private func deleteSchedule(_ schedule: ServiceSchedule) {
@@ -206,34 +217,55 @@ struct NewScheduleSheet: View {
 
     @State private var name = ""
     @State private var date = Date()
+    @State private var notes = ""
 
     var body: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: 20) {
             Text(String(localized: "New Schedule", comment: "Sheet title"))
                 .font(.title2.bold())
 
-            TextField(String(localized: "Schedule Name", comment: "Text field"), text: $name)
-                .textFieldStyle(.roundedBorder)
-
-            DatePicker(
-                String(localized: "Date:", comment: "Date picker label"),
-                selection: $date,
-                displayedComponents: .date
-            )
+            Form {
+                TextField(
+                    String(localized: "Name", comment: "Form label"),
+                    text: $name
+                )
+                DatePicker(
+                    String(localized: "Date", comment: "Form label"),
+                    selection: $date,
+                    displayedComponents: .date
+                )
+                TextField(
+                    String(localized: "Notes", comment: "Form label"),
+                    text: $notes,
+                    axis: .vertical
+                )
+                .lineLimit(3...6)
+            }
+            .formStyle(.grouped)
 
             HStack {
-                Button(String(localized: "Cancel", comment: "Button")) { dismiss() }
-                    .keyboardShortcut(.cancelAction)
+                Button(String(localized: "Cancel", comment: "Button")) {
+                    dismiss()
+                }
+                .keyboardShortcut(.cancelAction)
+
                 Spacer()
+
                 Button(String(localized: "Create", comment: "Button")) {
-                    let schedule = ServiceSchedule(name: name, date: date)
+                    let schedule = ServiceSchedule(
+                        name: name.isEmpty
+                            ? String(localized: "Untitled Schedule", comment: "Default name")
+                            : name,
+                        date: date,
+                        notes: notes
+                    )
                     modelContext.insert(schedule)
                     try? modelContext.save()
                     dismiss()
                 }
                 .buttonStyle(.borderedProminent)
-                .disabled(name.isEmpty)
                 .keyboardShortcut(.defaultAction)
+                .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
             }
         }
         .padding(24)
@@ -248,58 +280,83 @@ struct AddScheduleItemSheet: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
 
+    @State private var itemType = "text"
     @State private var title = ""
     @State private var content = ""
     @State private var subtitle = ""
-    @State private var itemType = "text"
+
+    private let itemTypes = [
+        ("bible", String(localized: "Bible Verse", comment: "Item type")),
+        ("song", String(localized: "Song", comment: "Item type")),
+        ("text", String(localized: "Custom Text", comment: "Item type")),
+        ("blank", String(localized: "Blank / Black Screen", comment: "Item type")),
+    ]
 
     var body: some View {
-        VStack(spacing: 16) {
-            Text(String(localized: "Add Schedule Item", comment: "Sheet title"))
+        VStack(spacing: 20) {
+            Text(String(localized: "Add Item", comment: "Sheet title"))
                 .font(.title2.bold())
 
-            Picker(String(localized: "Type:", comment: "Picker label"), selection: $itemType) {
-                Text(String(localized: "Bible", comment: "Item type")).tag("bible")
-                Text(String(localized: "Song", comment: "Item type")).tag("song")
-                Text(String(localized: "Text", comment: "Item type")).tag("text")
-                Text(String(localized: "Blank", comment: "Item type")).tag("blank")
+            Form {
+                Picker(String(localized: "Type", comment: "Form label"), selection: $itemType) {
+                    ForEach(itemTypes, id: \.0) { type in
+                        Text(type.1).tag(type.0)
+                    }
+                }
+
+                if itemType != "blank" {
+                    TextField(
+                        String(localized: "Title", comment: "Form label"),
+                        text: $title
+                    )
+
+                    TextField(
+                        itemType == "bible"
+                            ? String(localized: "Reference (e.g., John 3:16)", comment: "Form label")
+                            : String(localized: "Subtitle", comment: "Form label"),
+                        text: $subtitle
+                    )
+
+                    TextField(
+                        String(localized: "Content", comment: "Form label"),
+                        text: $content,
+                        axis: .vertical
+                    )
+                    .lineLimit(4...10)
+                }
             }
-            .pickerStyle(.segmented)
-
-            TextField(String(localized: "Title", comment: "Text field"), text: $title)
-                .textFieldStyle(.roundedBorder)
-
-            if itemType != "blank" {
-                TextField(String(localized: "Subtitle / Reference", comment: "Text field"), text: $subtitle)
-                    .textFieldStyle(.roundedBorder)
-
-                TextEditor(text: $content)
-                    .frame(height: 100)
-                    .border(.tertiary)
-            }
+            .formStyle(.grouped)
 
             HStack {
-                Button(String(localized: "Cancel", comment: "Button")) { dismiss() }
-                    .keyboardShortcut(.cancelAction)
+                Button(String(localized: "Cancel", comment: "Button")) {
+                    dismiss()
+                }
+                .keyboardShortcut(.cancelAction)
+
                 Spacer()
+
                 Button(String(localized: "Add", comment: "Button")) {
+                    let nextOrder = (schedule.items.map(\.order).max() ?? -1) + 1
                     let item = ScheduleItem(
-                        title: title.isEmpty && itemType == "blank" ? "Blank Screen" : title,
+                        title: itemType == "blank"
+                            ? String(localized: "Black Screen", comment: "Default item title")
+                            : title,
                         itemType: itemType,
                         content: content,
                         subtitle: subtitle,
-                        order: schedule.items.count
+                        order: nextOrder
                     )
                     item.schedule = schedule
+                    modelContext.insert(item)
                     try? modelContext.save()
                     dismiss()
                 }
                 .buttonStyle(.borderedProminent)
-                .disabled(title.isEmpty && itemType != "blank")
                 .keyboardShortcut(.defaultAction)
+                .disabled(itemType != "blank" && title.trimmingCharacters(in: .whitespaces).isEmpty)
             }
         }
         .padding(24)
-        .frame(width: 450)
+        .frame(width: 440)
     }
 }

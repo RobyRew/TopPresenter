@@ -16,20 +16,7 @@ struct TopPresenterApp: App {
     @State private var audioPlayerManager = AudioPlayerManager()
 
     var sharedModelContainer: ModelContainer = {
-        let schema = Schema([
-            BibleModule.self,
-            BibleBook.self,
-            BibleChapter.self,
-            BibleVerse.self,
-            SongCollection.self,
-            Song.self,
-            SongVerse.self,
-            PresentationSlide.self,
-            ServiceSchedule.self,
-            ScheduleItem.self,
-            MediaItem.self,
-            PresentationStyle.self,
-        ])
+        let schema = Schema(versionedSchema: SchemaV1.self)
         let modelConfiguration = ModelConfiguration(
             schema: schema,
             isStoredInMemoryOnly: false
@@ -38,6 +25,7 @@ struct TopPresenterApp: App {
         do {
             return try ModelContainer(
                 for: schema,
+                migrationPlan: TopPresenterMigrationPlan.self,
                 configurations: [modelConfiguration]
             )
         } catch {
@@ -71,6 +59,7 @@ struct TopPresenterApp: App {
         }
         .modelContainer(sharedModelContainer)
         .windowStyle(.plain)
+        .windowResizability(.contentSize)
         .defaultSize(width: 1920, height: 1080)
 
         // Settings window

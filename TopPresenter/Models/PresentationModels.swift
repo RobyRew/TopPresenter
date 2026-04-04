@@ -46,6 +46,8 @@ final class MediaItem {
     var mediaType: String  // "image", "video", "audio"
     var importDate: Date
     @Attribute(.externalStorage) var thumbnailData: Data?
+    /// Security-scoped bookmark data for persistent file access
+    @Attribute(.externalStorage) var bookmarkData: Data?
 
     init(name: String, filePath: String, mediaType: String) {
         self.id = UUID()
@@ -53,6 +55,49 @@ final class MediaItem {
         self.filePath = filePath
         self.mediaType = mediaType
         self.importDate = Date()
+    }
+
+    /// Resolves the file URL, preferring the security-scoped bookmark.
+    /// Falls back to the stored filePath if bookmark resolution fails.
+    var resolvedURL: URL? {
+        if let data = bookmarkData {
+            var isStale = false
+            if let url = try? URL(
+                resolvingBookmarkData: data,
+                options: .withSecurityScope,
+                relativeTo: nil,
+                bookmarkDataIsStale: &isStale
+            ) {
+                if isStale {
+                    // Bookmark is stale — try to refresh it
+                    refreshBookmark(from: url)
+                }
+                return url
+            }
+        }
+        // Fallback to raw path
+        let url = URL(fileURLWithPath: filePath)
+        return FileManager.default.fileExists(atPath: filePath) ? url : nil
+    }
+
+    /// Creates a security-scoped bookmark from a URL.
+    func createBookmark(from url: URL) {
+        do {
+            bookmarkData = try url.bookmarkData(
+                options: .withSecurityScope,
+                includingResourceValuesForKeys: nil,
+                relativeTo: nil
+            )
+        } catch {
+            // Bookmark creation can fail in sandboxed contexts — fall back to filePath
+        }
+    }
+
+    /// Refreshes a stale bookmark.
+    private func refreshBookmark(from url: URL) {
+        _ = url.startAccessingSecurityScopedResource()
+        defer { url.stopAccessingSecurityScopedResource() }
+        createBookmark(from: url)
     }
 }
 
