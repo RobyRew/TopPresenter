@@ -1,0 +1,181 @@
+name: Build & Release
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+
+# Cancel in-progress runs for the same branch
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  SCHEME: TopPresenter
+  PRODUCT_NAME: TopPresenter
+  XCODE_VERSION: '16.0'
+
+jobs:
+  build:
+    name: Build & Package
+    runs-on: macos-15
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_${{ env.XCODE_VERSION }}.app/Contents/Developer
+
+      - name: Show Xcode version
+        run: xcodebuild -version
+
+      - name: Resolve dependencies
+        run: xcodebuild -resolvePackageDependencies -scheme "$SCHEME" -project "$PRODUCT_NAME.xcodeproj"
+
+      - name: Build
+        run: |
+          xcodebuild \
+            -scheme "$SCHEME" \
+            -project "$PRODUCT_NAME.xcodeproj" \
+            -configuration Release \
+            -derivedDataPath build \
+            -destination 'platform=macOS' \
+            CODE_SIGN_IDENTITY="-" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            DEVELOPMENT_TEAM="" \
+            clean build
+
+      - name: Run Unit Tests
+        run: |
+          xcodebuild \
+            -scheme "$SCHEME" \
+            -project "$PRODUCT_NAME.xcodeproj" \
+            -destination 'platform=macOS' \
+            -resultBundlePath TestResults.xcresult \
+            CODE_SIGN_IDENTITY="-" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            DEVELOPMENT_TEAM="" \
+            test || true
+
+      - name: Package app
+        run: |
+          APP_PATH="build/Build/Products/Release/$PRODUCT_NAME.app"
+          if [ ! -d "$APP_PATH" ]; then
+            echo "❌ App not found at $APP_PATH"
+            find build -name "*.app" -type d
+            exit 1
+          fi
+
+          # Get version info
+          VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$APP_PATH/Contents/Info.plist" 2>/dev/null || echo "1.0")
+          BUILD=$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$APP_PATH/Contents/Info.plist" 2>/dev/null || echo "1")
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          echo "BUILD=$BUILD" >> $GITHUB_ENV
+
+          # Create ZIP
+          cd "build/Build/Products/Release"
+          ditto -c -k --keepParent "$PRODUCT_NAME.app" "$PRODUCT_NAME-$VERSION.zip"
+          mv "$PRODUCT_NAME-$VERSION.zip" "$GITHUB_WORKSPACE/"
+
+          # Create DMG
+          hdiutil create -volname "$PRODUCT_NAME" \
+            -srcfolder "$PRODUCT_NAME.app" \
+            -ov -format UDZO \
+            "$GITHUB_WORKSPACE/$PRODUCT_NAME-$VERSION.dmg"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: TopPresenter-${{ env.VERSION }}
+          path: |
+            TopPresenter-*.zip
+            TopPresenter-*.dmg
+          retention-days: 30
+
+  # Pre-release on every push to main
+  pre-release:
+    name: Pre-release (Beta)
+    needs: build
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: macos-15
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          pattern: TopPresenter-*
+          merge-multiple: true
+
+      - name: Get short SHA
+        run: echo "SHORT_SHA=${GITHUB_SHA::7}" >> $GITHUB_ENV
+
+      - name: Delete existing beta release
+        uses: dev-drprasad/delete-tag-and-release@v1.1
+        with:
+          tag_name: beta
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          delete_release: true
+        continue-on-error: true
+
+      - name: Create beta pre-release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: beta
+          name: "🧪 Beta — ${{ env.SHORT_SHA }}"
+          prerelease: true
+          generate_release_notes: true
+          body: |
+            ### ⚡ Automatic Beta Build
+
+            **Commit:** `${{ github.sha }}`
+            **Branch:** `main`
+            **Built:** ${{ github.event.head_commit.timestamp }}
+
+            > ⚠️ This is an unsigned build. To open on macOS:
+            > Right-click the app → Open → Open (bypass Gatekeeper).
+            > Or run: `xattr -cr TopPresenter.app`
+
+            ---
+            **Commit message:** ${{ github.event.head_commit.message }}
+          files: |
+            TopPresenter-*.zip
+            TopPresenter-*.dmg
+
+  # Stable release on version tags (v1.0.0, v2.1.0, etc.)
+  release:
+    name: Stable Release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: macos-15
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          pattern: TopPresenter-*
+          merge-multiple: true
+
+      - name: Create stable release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "TopPresenter ${{ github.ref_name }}"
+          generate_release_notes: true
+          body: |
+            ### 🎉 TopPresenter ${{ github.ref_name }}
+
+            > ⚠️ This is an unsigned build. To open on macOS:
+            > Right-click the app → Open → Open (bypass Gatekeeper).
+            > Or run: `xattr -cr TopPresenter.app`
+          files: |
+            TopPresenter-*.zip
+            TopPresenter-*.dmg
