@@ -14,7 +14,7 @@
   <img src="https://img.shields.io/badge/Swift-5.0+-F05138?logo=swift&logoColor=white" alt="Swift 5.0+">
   <img src="https://img.shields.io/badge/SwiftUI-Native-6C47FF" alt="SwiftUI">
   <img src="https://img.shields.io/badge/SwiftData-Persistence-34C759" alt="SwiftData">
-  <img src="https://img.shields.io/badge/License-MIT-yellow" alt="License">
+  <img src="https://img.shields.io/badge/License-Apache%202.0-yellow" alt="License">
 </p>
 
 ---
@@ -214,4 +214,4 @@ Select the **TopPresenter** scheme → Build and Run (`⌘R`).
 
 ## License
 
-MIT — see [LICENSE](LICENSE) for details.
+Apache 2.0 — see [LICENSE](LICENSE) and [NOTICE](NOTICE) for details.
