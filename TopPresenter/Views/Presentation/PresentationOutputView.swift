@@ -70,57 +70,77 @@ struct PresentationOutputView: View {
     // MARK: - Content Layer
     @ViewBuilder
     private var contentLayer: some View {
-        VStack(spacing: 0) {
-            Spacer()
+        GeometryReader { geo in
+            VStack(spacing: 0) {
+                Spacer()
 
-            // Main text
-            Text(pm.liveContent.mainText)
-                .font(resolvedFont)
-                .foregroundStyle(pm.outputTextColor)
-                .multilineTextAlignment(pm.outputTextAlignment)
-                .lineSpacing(pm.outputLineSpacing * pm.outputFontSize * 0.1)
-                .shadow(
-                    color: pm.outputShadowEnabled ? .black.opacity(0.8) : .clear,
-                    radius: pm.outputShadowEnabled ? pm.outputShadowRadius : 0,
-                    x: 0,
-                    y: pm.outputShadowEnabled ? 2 : 0
-                )
-                .padding(.horizontal, pm.outputPadding)
-
-            // Reference / Title
-            if !pm.liveContent.reference.isEmpty {
-                Text(pm.liveContent.reference)
-                    .font(.system(size: pm.outputFontSize * 0.55, weight: .semibold))
-                    .foregroundStyle(pm.outputTextColor.opacity(0.85))
-                    .multilineTextAlignment(pm.outputTextAlignment)
+                // Main text — verse content section
+                Text(pm.liveContent.mainText)
+                    .font(verseFont)
+                    .foregroundStyle(pm.outputVerseTextColor.opacity(pm.outputVerseOpacity))
+                    .multilineTextAlignment(pm.outputVerseAlignment)
+                    .lineSpacing(pm.outputVerseLineSpacing * pm.outputVerseFontSize * 0.1)
                     .shadow(
-                        color: pm.outputShadowEnabled ? .black.opacity(0.6) : .clear,
-                        radius: pm.outputShadowEnabled ? pm.outputShadowRadius * 0.7 : 0
+                        color: pm.outputShadowEnabled ? .black.opacity(0.8) : .clear,
+                        radius: pm.outputShadowEnabled ? pm.outputShadowRadius : 0,
+                        x: 0,
+                        y: pm.outputShadowEnabled ? 2 : 0
                     )
-                    .padding(.top, pm.outputFontSize * 0.4)
-                    .padding(.horizontal, pm.outputPadding)
-            }
+                    .scaleEffect(pm.outputVerseMultiplier)
+                    .offset(pm.outputVerseOffset)
+                    .padding(.horizontal, pm.outputPadding + pm.outputVersePadding)
 
-            // Subtitle (verse label, etc.)
-            if !pm.liveContent.subtitle.isEmpty {
-                Text(pm.liveContent.subtitle)
-                    .font(.system(size: pm.outputFontSize * 0.4))
-                    .foregroundStyle(pm.outputTextColor.opacity(0.6))
-                    .multilineTextAlignment(pm.outputTextAlignment)
-                    .padding(.top, 4)
-                    .padding(.horizontal, pm.outputPadding)
-            }
+                // Reference / Title — reference section
+                if !pm.liveContent.reference.isEmpty {
+                    Text(pm.liveContent.reference)
+                        .font(refFont)
+                        .foregroundStyle(pm.outputRefTextColor.opacity(pm.outputRefOpacity))
+                        .multilineTextAlignment(pm.outputRefAlignment)
+                        .shadow(
+                            color: pm.outputShadowEnabled ? .black.opacity(0.6) : .clear,
+                            radius: pm.outputShadowEnabled ? pm.outputShadowRadius * 0.7 : 0
+                        )
+                        .scaleEffect(pm.outputRefMultiplier)
+                        .offset(pm.outputRefOffset)
+                        .padding(.top, pm.outputVerseFontSize * 0.4)
+                        .padding(.horizontal, pm.outputPadding + pm.outputRefPadding)
+                }
 
-            Spacer()
+                // Subtitle (verse label, etc.)
+                if !pm.liveContent.subtitle.isEmpty {
+                    Text(pm.liveContent.subtitle)
+                        .font(.system(size: pm.outputFontSize * 0.4))
+                        .foregroundStyle(pm.outputTextColor.opacity(0.6))
+                        .multilineTextAlignment(pm.outputTextAlignment)
+                        .padding(.top, 4)
+                        .padding(.horizontal, pm.outputPadding + pm.outputRefPadding)
+                }
+
+                Spacer()
+            }
+            .frame(width: geo.size.width, height: geo.size.height)
         }
     }
 
-    // MARK: - Font Resolution
-    private var resolvedFont: Font {
-        if pm.outputFontName == "System" || pm.outputFontName.isEmpty {
-            return .system(size: pm.outputFontSize, weight: .regular)
+    // MARK: - Font Resolution (per-section)
+    private var verseFont: Font {
+        let name = pm.outputVerseFontName
+        let size = pm.outputVerseFontSize
+        if name == "System" || name.isEmpty {
+            return .system(size: size, weight: .regular)
         } else {
-            return .custom(pm.outputFontName, size: pm.outputFontSize)
+            return .custom(name, size: size)
+        }
+    }
+
+    private var refFont: Font {
+        let name = pm.outputRefFontName
+        let size = pm.outputRefFontSize
+        let weight = pm.outputRefWeight
+        if name == "System" || name.isEmpty {
+            return .system(size: size, weight: weight)
+        } else {
+            return .custom(name, size: size)
         }
     }
 }

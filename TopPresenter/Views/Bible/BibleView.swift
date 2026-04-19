@@ -374,6 +374,11 @@ struct BibleVerseRow: View {
 
             Text(verse.text)
                 .font(.body)
+                .textRenderer(VerseTextRenderer(
+                    isEditMode: presentationManager.isEditMode,
+                    fontSizeMultiplier: 1.0,
+                    alignmentOffset: .zero
+                ))
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(.vertical, 6)

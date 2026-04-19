@@ -89,6 +89,36 @@ struct MainControlView: View {
                 openWindow(id: WindowIdentifiers.presentation, value: "main")
                 presentationManager.isPresentationWindowOpen = true
             }
+            // Start monitoring screen connect/disconnect
+            presentationManager.startScreenMonitoring()
+        }
+        // Screen disconnection alert
+        .alert(
+            String(localized: "Ecran Deconectat", comment: "Alert title"),
+            isPresented: Binding(
+                get: { presentationManager.showScreenDisconnectedAlert },
+                set: { presentationManager.showScreenDisconnectedAlert = $0 }
+            )
+        ) {
+            Button(String(localized: "Mută pe alt ecran", comment: "Alert button")) {
+                presentationManager.moveToNextAvailableScreen()
+            }
+            .keyboardShortcut(.defaultAction)
+
+            Button(String(localized: "Ecran Negru", comment: "Alert button")) {
+                presentationManager.isBlackScreen = true
+            }
+
+            Button(String(localized: "Nu face nimic", comment: "Alert button"), role: .cancel) {
+                // Do nothing
+            }
+
+            Button(String(localized: "Oprește prezentarea", comment: "Alert button"), role: .destructive) {
+                presentationManager.clearOutput()
+                presentationManager.isPresentationWindowOpen = false
+            }
+        } message: {
+            Text(String(localized: "Ecranul de prezentare a fost deconectat. Ce dorești să faci?", comment: "Alert message"))
         }
     }
 
@@ -406,6 +436,21 @@ struct MainControlView: View {
             }
             .keyboardShortcut(.escape, modifiers: [])
             .help(String(localized: "Clear Output", comment: "Toolbar tooltip"))
+        }
+
+        ToolbarItem(id: "editMode", placement: .primaryAction) {
+            Button {
+                presentationManager.isEditMode.toggle()
+            } label: {
+                Label(
+                    String(localized: "Edit Mode", comment: "Toolbar button"),
+                    systemImage: presentationManager.isEditMode
+                        ? "rectangle.dashed.badge.record"
+                        : "rectangle.dashed"
+                )
+            }
+            .keyboardShortcut("e", modifiers: [.command, .shift])
+            .help(String(localized: "Toggle Edit Mode — shows layout bounds", comment: "Toolbar tooltip"))
         }
     }
 

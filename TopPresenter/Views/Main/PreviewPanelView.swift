@@ -62,7 +62,7 @@ struct PanelHeader: View {
     }
 }
 
-// MARK: - Preview Card
+// MARK: - Preview Card (1:1 representation of the output screen)
 struct PresentationPreviewCard: View {
     @Environment(PresentationManager.self) private var pm
     @Environment(LibraryManager.self) private var libraryManager
@@ -72,7 +72,6 @@ struct PresentationPreviewCard: View {
     /// Text to preview: when frozen show the current selection (what will go live next),
     /// when live show the live content, otherwise show the selected verses preview.
     private var previewText: String {
-        // When frozen, show what the user is preparing (selected verses), not the frozen output
         if pm.isFrozen && !libraryManager.selectedVerses.isEmpty {
             return libraryManager.formattedSelectedVersesText(
                 layout: multiVerseLayout, showPrefix: showVerseNumberPrefix
@@ -109,80 +108,136 @@ struct PresentationPreviewCard: View {
         return ""
     }
 
-    private var hasContent: Bool {
-        !previewText.isEmpty
-    }
+    private var hasContent: Bool { !previewText.isEmpty }
 
-    /// True when showing selected but not-yet-live content, or when frozen (preparing next slide).
     private var isPreviewOnly: Bool {
         let notLiveYet = !pm.liveContent.isLive && !libraryManager.selectedVerses.isEmpty
         let frozenAndPreparing = pm.isFrozen && !libraryManager.selectedVerses.isEmpty
         return notLiveYet || frozenAndPreparing
     }
 
-    /// Aspect ratio of the target presentation screen.
-    private var targetAspectRatio: CGFloat {
-        let size = pm.presentationScreenSize
-        guard size.height > 0 else { return 16.0 / 9.0 }
-        return size.width / size.height
+    /// The metrics of the target screen.
+    private var metrics: PresentationManager.ScreenMetrics {
+        pm.targetScreenMetrics
     }
 
     var body: some View {
-        ZStack {
-            // Preview always has a black background so text is legible
-            Color.black
+        GeometryReader { geo in
+            let availableWidth = geo.size.width
+            let scale = availableWidth / max(metrics.points.width, 1)
+            let previewHeight = metrics.points.height * scale
 
-            // Background
-            if pm.isBlackScreen {
-                // Already black — just show nothing
-            } else {
-                // Solid background color (when user enabled it)
-                if pm.backgroundEnabled {
-                    pm.backgroundColor
-                }
+            ZStack {
+                // Black bg (stands in for transparent on projector)
+                Color.black
 
-                // Background image
-                if pm.useBackgroundImage, let bgImage = pm.backgroundImage {
-                    Image(nsImage: bgImage)
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                        .opacity(pm.backgroundOpacity)
-                }
+                // Background layers
+                if pm.isBlackScreen {
+                    // Full black — nothing else rendered
+                } else {
+                    if pm.backgroundEnabled {
+                        pm.backgroundColor
+                    }
 
-                // Content (live OR selected preview)
-                if hasContent {
-                    VStack(spacing: 8) {
-                        Text(previewText)
-                            .font(.system(size: pm.fontSize * 0.25))
-                            .foregroundStyle(pm.textColor.opacity(isPreviewOnly ? 0.5 : 1.0))
-                            .multilineTextAlignment(pm.textAlignment)
-                            .shadow(
-                                radius: pm.shadowEnabled ? pm.shadowRadius * 0.25 : 0
-                            )
+                    if pm.useBackgroundImage, let bgImage = pm.backgroundImage {
+                        Image(nsImage: bgImage)
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                            .opacity(pm.backgroundOpacity)
+                    }
 
-                        if !previewReference.isEmpty {
-                            Text(previewReference)
-                                .font(.system(size: pm.fontSize * 0.15, weight: .medium))
-                                .foregroundStyle(pm.textColor.opacity(isPreviewOnly ? 0.4 : 0.8))
-                        }
+                    // Content — use EXACT same layout as PresentationOutputView, scaled down
+                    if hasContent {
+                        let scaledPadding = pm.padding * scale
+                        let scaledVerseFontSize = pm.resolvedVerseFontSize * scale
+                        let scaledSubSize = pm.resolvedVerseFontSize * 0.4 * scale
+                        let scaledVerseLineSpacing = pm.resolvedVerseLineSpacing * scaledVerseFontSize * 0.1
+                        let scaledShadowRadius = pm.shadowEnabled ? pm.shadowRadius * scale : 0
+                        let scaledRefGap = pm.resolvedVerseFontSize * 0.4 * scale
+                        // Per-section scaled values
+                        let scaledVerseOffset = CGSize(
+                            width: pm.editVerseOffset.width * scale,
+                            height: pm.editVerseOffset.height * scale
+                        )
+                        let scaledVersePadding = pm.editVersePadding * scale
+                        let scaledRefOffset = CGSize(
+                            width: pm.editRefOffset.width * scale,
+                            height: pm.editRefOffset.height * scale
+                        )
+                        let scaledRefPadding = pm.editRefPadding * scale
 
-                        if !previewSubtitle.isEmpty {
-                            Text(previewSubtitle)
-                                .font(.system(size: pm.fontSize * 0.12))
-                                .foregroundStyle(pm.textColor.opacity(0.6))
+                        VStack(spacing: 0) {
+                            Spacer()
+
+                            // Main text — uses per-section font, color, alignment
+                            Text(previewText)
+                                .font(scaledVerseFont(scale: scale))
+                                .foregroundStyle(pm.resolvedVerseTextColor.opacity((isPreviewOnly ? 0.5 : 1.0) * pm.editVerseOpacity))
+                                .multilineTextAlignment(pm.resolvedVerseAlignment)
+                                .lineSpacing(scaledVerseLineSpacing)
+                                .shadow(
+                                    color: pm.shadowEnabled ? .black.opacity(0.8) : .clear,
+                                    radius: scaledShadowRadius,
+                                    x: 0,
+                                    y: pm.shadowEnabled ? 2 * scale : 0
+                                )
+                                .scaleEffect(pm.editVerseMultiplier)
+                                .offset(scaledVerseOffset)
+                                // Edit mode bounding box overlay — ONLY in preview
+                                .textRenderer(VerseTextRenderer(
+                                    isEditMode: pm.isEditMode,
+                                    section: .verseContent,
+                                    fontSizeMultiplier: 1.0,
+                                    alignmentOffset: .zero,
+                                    textOpacity: 1.0
+                                ))
+                                .padding(.horizontal, scaledPadding + scaledVersePadding)
+
+                            // Reference — uses per-section font, color, alignment, weight
+                            if !previewReference.isEmpty {
+                                Text(previewReference)
+                                    .font(scaledRefFont(scale: scale))
+                                    .foregroundStyle(pm.resolvedRefTextColor.opacity((isPreviewOnly ? 0.4 : 1.0) * pm.editRefOpacity))
+                                    .multilineTextAlignment(pm.resolvedRefAlignment)
+                                    .shadow(
+                                        color: pm.shadowEnabled ? .black.opacity(0.6) : .clear,
+                                        radius: pm.shadowEnabled ? pm.shadowRadius * 0.7 * scale : 0
+                                    )
+                                    .scaleEffect(pm.editRefMultiplier)
+                                    .offset(scaledRefOffset)
+                                    // Edit mode bounding box overlay — ONLY in preview
+                                    .textRenderer(VerseTextRenderer(
+                                        isEditMode: pm.isEditMode,
+                                        section: .reference,
+                                        fontSizeMultiplier: 1.0,
+                                        alignmentOffset: .zero,
+                                        textOpacity: 1.0
+                                    ))
+                                    .padding(.top, scaledRefGap)
+                                    .padding(.horizontal, scaledPadding + scaledRefPadding)
+                            }
+
+                            // Subtitle — mirrors PresentationOutputView exactly
+                            if !previewSubtitle.isEmpty {
+                                Text(previewSubtitle)
+                                    .font(.system(size: scaledSubSize))
+                                    .foregroundStyle(pm.textColor.opacity(0.6))
+                                    .multilineTextAlignment(pm.textAlignment)
+                                    .padding(.top, 4 * scale)
+                                    .padding(.horizontal, scaledPadding)
+                            }
+
+                            Spacer()
                         }
                     }
-                    .padding(pm.padding * 0.25)
                 }
-            }
 
-            // "PREVIEW" / "FROZEN" badge when showing non-live selection
-            if isPreviewOnly && !pm.isBlackScreen {
+                // Badges overlay
                 VStack {
                     HStack {
                         Spacer()
                         HStack(spacing: 4) {
-                            if pm.isFrozen {
+                            if pm.isFrozen && isPreviewOnly {
                                 Text("FROZEN")
                                     .font(.system(size: 8, weight: .bold))
                                     .foregroundStyle(.white)
@@ -190,48 +245,85 @@ struct PresentationPreviewCard: View {
                                     .padding(.vertical, 2)
                                     .background(.orange.opacity(0.8), in: Capsule())
                             }
-                            Text("PREVIEW")
-                                .font(.system(size: 8, weight: .bold))
-                                .foregroundStyle(.white)
-                                .padding(.horizontal, 5)
-                                .padding(.vertical, 2)
-                                .background(.blue.opacity(0.7), in: Capsule())
+                            if isPreviewOnly {
+                                Text("PREVIEW")
+                                    .font(.system(size: 8, weight: .bold))
+                                    .foregroundStyle(.white)
+                                    .padding(.horizontal, 5)
+                                    .padding(.vertical, 2)
+                                    .background(.blue.opacity(0.7), in: Capsule())
+                            }
                         }
                         .padding(6)
                     }
                     Spacer()
-                }
-            }
 
-            // Transparent indicator — always visible when output has no solid background
-            if !pm.backgroundEnabled && !pm.isBlackScreen {
-                VStack {
-                    Spacer()
-                    HStack(spacing: 0) {
-                        HStack(spacing: 4) {
-                            // Mini checkerboard icon
-                            Image(systemName: "checkerboard.rectangle")
-                                .font(.system(size: 9))
-                            Text(String(localized: "Transparent", comment: "Preview badge"))
-                                .font(.system(size: 9, weight: .medium))
+                    HStack(spacing: 6) {
+                        if !pm.backgroundEnabled && !pm.isBlackScreen {
+                            HStack(spacing: 3) {
+                                Image(systemName: "checkerboard.rectangle")
+                                    .font(.system(size: 8))
+                                Text(String(localized: "Transparent", comment: "Preview badge"))
+                                    .font(.system(size: 8, weight: .medium))
+                            }
+                            .foregroundStyle(.white.opacity(0.6))
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 2)
+                            .background(.black.opacity(0.5), in: Capsule())
                         }
-                        .foregroundStyle(.white.opacity(0.6))
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 3)
-                        .background(.black.opacity(0.4), in: Capsule())
+
                         Spacer()
+
+                        HStack(spacing: 3) {
+                            Image(systemName: "display")
+                                .font(.system(size: 7))
+                            Text("\(Int(metrics.resolution.width))×\(Int(metrics.resolution.height))")
+                                .font(.system(size: 7, weight: .medium, design: .monospaced))
+                            Text(metrics.aspectRatioLabel)
+                                .font(.system(size: 7, weight: .bold))
+                        }
+                        .foregroundStyle(.white.opacity(0.5))
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 2)
+                        .background(.black.opacity(0.5), in: Capsule())
                     }
                     .padding(6)
                 }
             }
+            .frame(width: availableWidth, height: previewHeight)
+            .clipShape(RoundedRectangle(cornerRadius: 6))
+            .overlay(
+                RoundedRectangle(cornerRadius: 6)
+                    .stroke(
+                        isPreviewOnly ? Color.blue.opacity(0.5) : Color.gray.opacity(0.3),
+                        lineWidth: isPreviewOnly ? 1.5 : 1
+                    )
+            )
+            .shadow(radius: 2)
         }
-        .aspectRatio(targetAspectRatio, contentMode: .fit)
-        .clipShape(RoundedRectangle(cornerRadius: 8))
-        .overlay(
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(isPreviewOnly ? Color.blue.opacity(0.5) : Color.gray.opacity(0.3), lineWidth: isPreviewOnly ? 1.5 : 1)
-        )
-        .shadow(radius: 2)
+        .aspectRatio(metrics.aspectRatio, contentMode: .fit)
+    }
+
+    // MARK: - Font Resolution (per-section, scaled for preview)
+    private func scaledVerseFont(scale: Double) -> Font {
+        let size = pm.resolvedVerseFontSize * scale
+        let name = pm.resolvedVerseFontName
+        if name == "System" || name.isEmpty {
+            return .system(size: size, weight: .regular)
+        } else {
+            return .custom(name, size: size)
+        }
+    }
+
+    private func scaledRefFont(scale: Double) -> Font {
+        let size = pm.resolvedRefFontSize * scale
+        let name = pm.resolvedRefFontName
+        let weight = pm.resolvedRefWeight
+        if name == "System" || name.isEmpty {
+            return .system(size: size, weight: weight)
+        } else {
+            return .custom(name, size: size)
+        }
     }
 }
 
@@ -419,31 +511,41 @@ struct VerseSlideControlsBar: View {
                     : String(localized: "Previous Verse", comment: "Button tooltip")
                 )
 
-                // Show / Hide toggle — single big button
+                // Show button — sends the current selection to the live output
                 Button {
-                    if isLive {
-                        pm.clearOutput()
-                    } else if !libraryManager.selectedVerses.isEmpty {
-                        pm.showBibleVerse(
-                            text: formattedText,
-                            reference: libraryManager.selectedVersesReference
-                        )
-                    }
+                    pm.showBibleVerse(
+                        text: formattedText,
+                        reference: libraryManager.selectedVersesReference
+                    )
                 } label: {
                     Label(
-                        isLive
-                            ? String(localized: "Hide", comment: "Control button")
-                            : String(localized: "Show", comment: "Control button"),
-                        systemImage: isLive ? "eye.slash.fill" : "play.fill"
+                        String(localized: "Show", comment: "Control button"),
+                        systemImage: "play.fill"
                     )
                     .font(.body.weight(.semibold))
                     .frame(maxWidth: .infinity)
                     .frame(height: 36)
                 }
                 .buttonStyle(.borderedProminent)
-                .tint(isLive ? .orange : .accentColor)
+                .tint(.accentColor)
                 .keyboardShortcut(.return, modifiers: [])
-                .disabled(!isLive && libraryManager.selectedVerses.isEmpty)
+                .disabled(libraryManager.selectedVerses.isEmpty)
+
+                // Hide button — clears the live output
+                Button {
+                    pm.clearOutput()
+                } label: {
+                    Label(
+                        String(localized: "Hide", comment: "Control button"),
+                        systemImage: "eye.slash.fill"
+                    )
+                    .font(.body.weight(.semibold))
+                    .frame(height: 36)
+                }
+                .buttonStyle(.bordered)
+                .tint(.orange)
+                .keyboardShortcut(.escape, modifiers: [])
+                .disabled(!isLive)
 
                 // Auto-fill toggle — select max verses that fit / revert to single
                 Button {
@@ -1366,6 +1468,54 @@ struct StyleQuickSettings: View {
                 .font(.caption.monospacedDigit())
                 .frame(width: 30)
         }
+
+        // Screen disconnect behavior
+        HStack {
+            Text(String(localized: "Disconnect:", comment: "Setting label"))
+                .font(.caption)
+                .frame(width: 55, alignment: .trailing)
+            Picker("", selection: Binding(
+                get: { pm.screenDisconnectAction.rawValue },
+                set: { pm.screenDisconnectAction = PresentationManager.ScreenDisconnectAction(rawValue: $0) ?? .ask }
+            )) {
+                Text(String(localized: "Întreabă", comment: "Disconnect option")).tag("ask")
+                Text(String(localized: "Mută pe alt ecran", comment: "Disconnect option")).tag("moveToAvailable")
+                Text(String(localized: "Ecran negru", comment: "Disconnect option")).tag("goBlack")
+                Text(String(localized: "Nu face nimic", comment: "Disconnect option")).tag("doNothing")
+            }
+            .labelsHidden()
+            .controlSize(.small)
+        }
+
+        // Screen info (read-only — shows metrics of the target screen)
+        let m = pm.targetScreenMetrics
+        HStack(spacing: 6) {
+            Image(systemName: "display")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            Text("\(Int(m.resolution.width))×\(Int(m.resolution.height))")
+                .font(.caption2.monospacedDigit())
+                .foregroundStyle(.secondary)
+            Text("•")
+                .foregroundStyle(.quaternary)
+            Text(m.aspectRatioLabel)
+                .font(.caption2.bold())
+                .foregroundStyle(.secondary)
+            Text("•")
+                .foregroundStyle(.quaternary)
+            Text("\(Int(m.ppi)) PPI")
+                .font(.caption2.monospacedDigit())
+                .foregroundStyle(.secondary)
+            if m.isRetina {
+                Text("Retina")
+                    .font(.system(size: 8, weight: .bold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 4)
+                    .padding(.vertical, 1)
+                    .background(.blue.opacity(0.6), in: Capsule())
+            }
+        }
+        .padding(.top, 2)
     }
 
     // MARK: - Multi-Verse Section
