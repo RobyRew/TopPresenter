@@ -132,12 +132,24 @@ struct PresentationPreviewCard: View {
     }
 
     var body: some View {
-        GeometryReader { geo in
-            let availableWidth = geo.size.width
-            let scale = availableWidth / max(metrics.points.width, 1)
-            let previewHeight = metrics.points.height * scale
+        // Outer frame: let SwiftUI determine the width, then constrain height via aspectRatio.
+        // A background GeometryReader is layout-neutral (reports size without affecting it),
+        // so the card never causes a circular layout cycle when switching views.
+        Color.clear
+            .aspectRatio(metrics.aspectRatio, contentMode: .fit)
+            .overlay(
+                GeometryReader { geo in
+                    cardContent(size: geo.size)
+                }
+            )
+    }
 
-            ZStack {
+    @ViewBuilder
+    private func cardContent(size: CGSize) -> some View {
+        let availableWidth = size.width
+        let scale = availableWidth / max(metrics.points.width, 1)
+
+        ZStack {
                 // Black bg (stands in for transparent on projector)
                 Color.black
 
@@ -334,7 +346,7 @@ struct PresentationPreviewCard: View {
                     .padding(6)
                 }
             }
-            .frame(width: availableWidth, height: previewHeight)
+            .frame(width: availableWidth, height: size.height)
             .clipShape(RoundedRectangle(cornerRadius: 6))
             .overlay(
                 RoundedRectangle(cornerRadius: 6)
@@ -344,8 +356,7 @@ struct PresentationPreviewCard: View {
                     )
             )
             .shadow(radius: 2)
-        }
-        .aspectRatio(metrics.aspectRatio, contentMode: .fit)
+        .frame(width: availableWidth, height: size.height)
     }
 
     // MARK: - Font Resolution (per-section, scaled for preview)
