@@ -22,6 +22,10 @@ jobs:
     name: Build & Package
     runs-on: macos-15
     timeout-minutes: 30
+    outputs:
+      version: ${{ steps.package.outputs.VERSION }}
+      prerelease_tag: ${{ steps.package.outputs.PRERELEASE_TAG }}
+      prerelease_version: ${{ steps.package.outputs.PRERELEASE_VERSION }}
 
     steps:
       - name: Checkout
@@ -64,6 +68,7 @@ jobs:
             test || true
 
       - name: Package app
+        id: package
         run: |
           APP_PATH="build/Build/Products/Release/$PRODUCT_NAME.app"
           if [ ! -d "$APP_PATH" ]; then
@@ -79,6 +84,9 @@ jobs:
           echo "BUILD=$BUILD" >> $GITHUB_ENV
           echo "PRERELEASE_VERSION=$VERSION-alpha.${GITHUB_RUN_NUMBER}" >> $GITHUB_ENV
           echo "PRERELEASE_TAG=v$VERSION-alpha.${GITHUB_RUN_NUMBER}" >> $GITHUB_ENV
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          echo "PRERELEASE_VERSION=$VERSION-alpha.${GITHUB_RUN_NUMBER}" >> $GITHUB_OUTPUT
+          echo "PRERELEASE_TAG=v$VERSION-alpha.${GITHUB_RUN_NUMBER}" >> $GITHUB_OUTPUT
 
           # Create ZIP
           cd "build/Build/Products/Release"
@@ -122,15 +130,15 @@ jobs:
       - name: Create alpha pre-release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ env.PRERELEASE_TAG }}
-          name: "TopPresenter ${{ env.PRERELEASE_VERSION }}"
+          tag_name: ${{ needs.build.outputs.prerelease_tag }}
+          name: "TopPresenter ${{ needs.build.outputs.prerelease_version }}"
           prerelease: true
           generate_release_notes: true
           body: |
             ### ⚡ Automatic Alpha Build
 
-            **Version:** `${{ env.PRERELEASE_VERSION }}`
-            **Tag:** `${{ env.PRERELEASE_TAG }}`
+            **Version:** `${{ needs.build.outputs.prerelease_version }}`
+            **Tag:** `${{ needs.build.outputs.prerelease_tag }}`
 
             **Commit:** `${{ github.sha }}`
             **Branch:** `main`
