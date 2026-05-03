@@ -272,6 +272,35 @@ final class PresentationManager {
     var isBlackScreen: Bool = false
     var isFrozen: Bool = false
 
+    // MARK: - Auto-Fit Verse Font
+    /// When true, the verse font size is shrunk automatically to prevent overflow.
+    var autoFitVerseFont: Bool {
+        didSet { UserDefaults.standard.set(autoFitVerseFont, forKey: "pm_autoFitVerseFont") }
+    }
+
+    // MARK: - Translation Name (Bible-only text box)
+    /// Show the Bible translation/version name below the reference.
+    var showTranslationName: Bool {
+        didSet { UserDefaults.standard.set(showTranslationName, forKey: "pm_showTranslationName") }
+    }
+    /// Color override hex. Empty = use global text color.
+    var translationNameColorHex: String {
+        didSet { UserDefaults.standard.set(translationNameColorHex, forKey: "pm_translationNameColorHex") }
+    }
+    /// Font size as a ratio of the verse font size (e.g. 0.35 = 35%).
+    var translationNameSizeRatio: Double {
+        didSet { UserDefaults.standard.set(translationNameSizeRatio, forKey: "pm_translationNameSizeRatio") }
+    }
+    /// Opacity of the translation name label.
+    var translationNameOpacity: Double {
+        didSet { UserDefaults.standard.set(translationNameOpacity, forKey: "pm_translationNameOpacity") }
+    }
+
+    var resolvedTranslationColor: Color {
+        translationNameColorHex.isEmpty ? textColor : (Color(hex: translationNameColorHex) ?? textColor)
+    }
+    var resolvedTranslationFontSize: Double { resolvedVerseFontSize * translationNameSizeRatio }
+
     // MARK: - Edit Mode (Layout Debug)
     /// Shows text box bounding boxes in the preview.
     var isEditMode: Bool = false
@@ -514,6 +543,18 @@ final class PresentationManager {
     var outputTextColor: Color { Color(hex: outputTextColorHex) ?? .white }
     var outputBackgroundColor: Color { Color(hex: outputBackgroundColorHex) ?? .black }
 
+    // Translation name output accessors
+    var outputShowTranslationName: Bool { showTranslationName }
+    var outputTranslationFontSize: Double {
+        let baseSize = isFrozen ? frozenVerseFontSize : resolvedVerseFontSize
+        return max(baseSize, 1) * translationNameSizeRatio
+    }
+    var outputTranslationColor: Color {
+        let base = isFrozen ? (Color(hex: frozenTextColorHex) ?? .white) : resolvedTranslationColor
+        return base
+    }
+    var outputTranslationOpacity: Double { translationNameOpacity }
+
     // MARK: - Init (restore from UserDefaults)
     init() {
         let d = UserDefaults.standard
@@ -530,6 +571,13 @@ final class PresentationManager {
         self.useBackgroundImage = d.bool(forKey: "pm_useBackgroundImage")
         self.backgroundEnabled = d.bool(forKey: "pm_backgroundEnabled") // defaults to false = transparent
         self.windowLevel = d.string(forKey: "pm_windowLevel") ?? "alwaysOnTop"
+        // Auto-fit
+        self.autoFitVerseFont = d.bool(forKey: "pm_autoFitVerseFont")
+        // Translation name
+        self.showTranslationName = d.bool(forKey: "pm_showTranslationName")
+        self.translationNameColorHex = d.string(forKey: "pm_translationNameColorHex") ?? ""
+        self.translationNameSizeRatio = d.object(forKey: "pm_translationNameSizeRatio") as? Double ?? 0.35
+        self.translationNameOpacity = d.object(forKey: "pm_translationNameOpacity") as? Double ?? 0.6
         // Verse section
         self.editVerseMultiplier = d.object(forKey: "pm_editVerseMultiplier") as? Double
             ?? d.object(forKey: "pm_editFontSizeMultiplier") as? Double ?? 1.0
@@ -654,10 +702,10 @@ final class PresentationManager {
         }
     }
 
-    func showBibleVerse(text: String, reference: String) {
+    func showBibleVerse(text: String, reference: String, translationName: String = "") {
         guard !isFrozen else { return }
         showPresentationWindow()
-        liveContent.setBibleVerse(text: text, reference: reference)
+        liveContent.setBibleVerse(text: text, reference: reference, translationName: translationName)
         liveContent.isLive = true
         isBlackScreen = false
     }
@@ -763,6 +811,68 @@ final class PresentationManager {
         window.styleMask = [.borderless]
         window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
         window.ignoresMouseEvents = true
+    }
+
+    // MARK: - Auto-Fit Font Size
+
+    /// Returns the largest font size ≤ resolvedVerseFontSize at which the verse text
+    /// (plus reference + optional translation name rows) fits within `screenSize`.
+    /// Falls back to resolvedVerseFontSize when autoFitVerseFont is off or text is empty.
+    func fittedVerseFontSize(text: String, reference: String, screenSize: CGSize) -> CGFloat {
+        guard autoFitVerseFont, !text.isEmpty else { return CGFloat(resolvedVerseFontSize) }
+        let maxSize = CGFloat(resolvedVerseFontSize)
+        let minSize: CGFloat = 14.0
+        guard !verseFits(text: text, reference: reference, size: maxSize, screenSize: screenSize) else {
+            return maxSize
+        }
+        var lo = minSize
+        var hi = maxSize
+        var best = minSize
+        for _ in 0..<16 {
+            let mid = (lo + hi) / 2.0
+            if verseFits(text: text, reference: reference, size: mid, screenSize: screenSize) {
+                best = mid
+                lo = mid
+            } else {
+                hi = mid
+            }
+        }
+        return max(best, minSize)
+    }
+
+    private func verseFits(text: String, reference: String, size: CGFloat, screenSize: CGSize) -> Bool {
+        let pad = CGFloat(outputPadding + outputVersePadding)
+        let availWidth = max(screenSize.width - pad * 2.0, 100.0)
+
+        // Reference row height (proportional to verse size)
+        let refRatio = CGFloat(resolvedRefFontSize) / max(CGFloat(resolvedVerseFontSize), 1.0)
+        let scaledRefSize = size * refRatio
+        let refHeightReserve = reference.isEmpty ? 0.0 : (scaledRefSize * 1.4 + size * 0.4)
+
+        // Translation name row height (if enabled)
+        let translationReserve: CGFloat = showTranslationName
+            ? size * CGFloat(translationNameSizeRatio) * 1.4 + size * 0.15
+            : 0.0
+
+        // Spacer() top + bottom breathing room (~1.5 line-heights)
+        let breathingRoom = size * 1.8
+        let availHeight = max(screenSize.height - refHeightReserve - translationReserve - breathingRoom, 30.0)
+
+        let fn = resolvedVerseFontName
+        let nsFont: NSFont = (fn == "System" || fn.isEmpty)
+            ? NSFont.systemFont(ofSize: size)
+            : (NSFont(name: fn, size: size) ?? NSFont.systemFont(ofSize: size))
+
+        let paraStyle = NSMutableParagraphStyle()
+        paraStyle.lineSpacing = CGFloat(resolvedVerseLineSpacing) * size * 0.1
+
+        let textHeight = (text as NSString).boundingRect(
+            with: CGSize(width: availWidth, height: .greatestFiniteMagnitude),
+            options: [.usesLineFragmentOrigin, .usesFontLeading],
+            attributes: [.font: nsFont, .paragraphStyle: paraStyle]
+        ).height
+
+        return textHeight <= availHeight
     }
 
     /// Moves the presentation window to the currently selected screen.

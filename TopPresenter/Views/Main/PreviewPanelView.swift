@@ -69,6 +69,9 @@ struct PresentationPreviewCard: View {
     @AppStorage("multiVerseLayout") private var multiVerseLayout: String = "inline"
     @AppStorage("showVerseNumberPrefix") private var showVerseNumberPrefix: Bool = false
 
+    /// Pass `true` when rendering Bible content so auto-fit and translation name are applied.
+    var isBibleContent: Bool = false
+
     /// Text to preview: when frozen show the current selection (what will go live next),
     /// when live show the live content, otherwise show the selected verses preview.
     private var previewText: String {
@@ -106,6 +109,13 @@ struct PresentationPreviewCard: View {
             return pm.liveContent.subtitle
         }
         return ""
+    }
+
+    /// Translation name shown in the preview: live value when live, module abbrev otherwise.
+    private var previewTranslationName: String {
+        guard isBibleContent else { return "" }
+        if pm.liveContent.isLive { return pm.liveContent.translationName }
+        return libraryManager.selectedBibleModule?.abbreviation ?? ""
     }
 
     private var hasContent: Bool { !previewText.isEmpty }
@@ -148,12 +158,27 @@ struct PresentationPreviewCard: View {
 
                     // Content — use EXACT same layout as PresentationOutputView, scaled down
                     if hasContent {
+                        // Auto-fit: compute the fitted font size at real screen resolution,
+                        // then scale it down to preview size.
+                        let actualFontSize: CGFloat = (isBibleContent && pm.autoFitVerseFont)
+                            ? pm.fittedVerseFontSize(
+                                text: previewText,
+                                reference: previewReference,
+                                screenSize: metrics.points
+                              )
+                            : CGFloat(pm.resolvedVerseFontSize)
+
+                        let refRatio = CGFloat(pm.resolvedRefFontSize) / max(CGFloat(pm.resolvedVerseFontSize), 1.0)
+
                         let scaledPadding = pm.padding * scale
-                        let scaledVerseFontSize = pm.resolvedVerseFontSize * scale
-                        let scaledSubSize = pm.resolvedVerseFontSize * 0.4 * scale
+                        let scaledVerseFontSize = actualFontSize * scale
+                        let scaledRefFontSize = actualFontSize * refRatio * scale
+                        let scaledTranslationSize = actualFontSize * CGFloat(pm.translationNameSizeRatio) * scale
+                        let scaledSubSize = actualFontSize * 0.4 * scale
                         let scaledVerseLineSpacing = pm.resolvedVerseLineSpacing * scaledVerseFontSize * 0.1
                         let scaledShadowRadius = pm.shadowEnabled ? pm.shadowRadius * scale : 0
-                        let scaledRefGap = pm.resolvedVerseFontSize * 0.4 * scale
+                        let scaledRefGap = actualFontSize * 0.4 * scale
+                        let scaledTranslationGap = actualFontSize * 0.15 * scale
                         // Per-section scaled values
                         let scaledVerseOffset = CGSize(
                             width: pm.editVerseOffset.width * scale,
@@ -171,7 +196,7 @@ struct PresentationPreviewCard: View {
 
                             // Main text — uses per-section font, color, alignment
                             Text(previewText)
-                                .font(scaledVerseFont(scale: scale))
+                                .font(scaledVerseFont(size: scaledVerseFontSize))
                                 .foregroundStyle(pm.resolvedVerseTextColor.opacity((isPreviewOnly ? 0.5 : 1.0) * pm.editVerseOpacity))
                                 .multilineTextAlignment(pm.resolvedVerseAlignment)
                                 .lineSpacing(scaledVerseLineSpacing)
@@ -196,7 +221,7 @@ struct PresentationPreviewCard: View {
                             // Reference — uses per-section font, color, alignment, weight
                             if !previewReference.isEmpty {
                                 Text(previewReference)
-                                    .font(scaledRefFont(scale: scale))
+                                    .font(scaledRefFont(size: scaledRefFontSize))
                                     .foregroundStyle(pm.resolvedRefTextColor.opacity((isPreviewOnly ? 0.4 : 1.0) * pm.editRefOpacity))
                                     .multilineTextAlignment(pm.resolvedRefAlignment)
                                     .shadow(
@@ -214,6 +239,25 @@ struct PresentationPreviewCard: View {
                                         textOpacity: 1.0
                                     ))
                                     .padding(.top, scaledRefGap)
+                                    .padding(.horizontal, scaledPadding + scaledRefPadding)
+                            }
+
+                            // Translation name — Bible only, when enabled
+                            if isBibleContent,
+                               pm.showTranslationName,
+                               !previewTranslationName.isEmpty {
+                                Text(previewTranslationName)
+                                    .font(scaledRefFont(size: scaledTranslationSize))
+                                    .foregroundStyle(pm.resolvedTranslationColor.opacity(pm.translationNameOpacity * (isPreviewOnly ? 0.7 : 1.0)))
+                                    .multilineTextAlignment(pm.resolvedRefAlignment)
+                                    .textRenderer(VerseTextRenderer(
+                                        isEditMode: pm.isEditMode,
+                                        section: .translationName,
+                                        fontSizeMultiplier: 1.0,
+                                        alignmentOffset: .zero,
+                                        textOpacity: 1.0
+                                    ))
+                                    .padding(.top, scaledTranslationGap)
                                     .padding(.horizontal, scaledPadding + scaledRefPadding)
                             }
 
@@ -305,8 +349,7 @@ struct PresentationPreviewCard: View {
     }
 
     // MARK: - Font Resolution (per-section, scaled for preview)
-    private func scaledVerseFont(scale: Double) -> Font {
-        let size = pm.resolvedVerseFontSize * scale
+    private func scaledVerseFont(size: CGFloat) -> Font {
         let name = pm.resolvedVerseFontName
         if name == "System" || name.isEmpty {
             return .system(size: size, weight: .regular)
@@ -315,8 +358,7 @@ struct PresentationPreviewCard: View {
         }
     }
 
-    private func scaledRefFont(scale: Double) -> Font {
-        let size = pm.resolvedRefFontSize * scale
+    private func scaledRefFont(size: CGFloat) -> Font {
         let name = pm.resolvedRefFontName
         let weight = pm.resolvedRefWeight
         if name == "System" || name.isEmpty {
@@ -375,7 +417,8 @@ struct VerseSlideControlsBar: View {
         guard pm.liveContent.isLive else { return }
         pm.showBibleVerse(
             text: formattedText,
-            reference: libraryManager.selectedVersesReference
+            reference: libraryManager.selectedVersesReference,
+            translationName: libraryManager.selectedBibleModule?.abbreviation ?? ""
         )
     }
 
@@ -515,7 +558,8 @@ struct VerseSlideControlsBar: View {
                 Button {
                     pm.showBibleVerse(
                         text: formattedText,
-                        reference: libraryManager.selectedVersesReference
+                        reference: libraryManager.selectedVersesReference,
+                        translationName: libraryManager.selectedBibleModule?.abbreviation ?? ""
                     )
                 } label: {
                     Label(
@@ -1087,7 +1131,7 @@ struct StyleQuickSettings: View {
     var sections: Set<SettingsSection> = SettingsSection.allSet
 
     enum SettingsSection: Hashable {
-        case textFont, background, displayOutput, multiVerse, general
+        case textFont, background, displayOutput, multiVerse, general, bibleExtra
 
         static let allSet: Set<SettingsSection> = [.textFont, .background, .displayOutput, .multiVerse, .general]
     }
@@ -1099,6 +1143,7 @@ struct StyleQuickSettings: View {
     @AppStorage("settingsExpanded_display") private var displayExpanded: Bool = false
     @AppStorage("settingsExpanded_multiVerse") private var multiVerseExpanded: Bool = false
     @AppStorage("settingsExpanded_general") private var generalExpanded: Bool = false
+    @AppStorage("settingsExpanded_bibleExtra") private var bibleExtraExpanded: Bool = false
 
     // General settings
     @AppStorage("showVerseNumbers") private var showVerseNumbers: Bool = true
@@ -1168,6 +1213,17 @@ struct StyleQuickSettings: View {
                         isExpanded: $generalExpanded
                     ) {
                         generalSection
+                    }
+                }
+
+                if sections.contains(.bibleExtra) {
+                    // ─── Bible Options ───
+                    settingsSection(
+                        title: String(localized: "Bible Options", comment: "Settings section"),
+                        icon: "book.closed.fill",
+                        isExpanded: $bibleExtraExpanded
+                    ) {
+                        bibleExtraSection(pmBinding: pmBinding)
                     }
                 }
             }
@@ -1542,6 +1598,76 @@ struct StyleQuickSettings: View {
             Toggle(String(localized: "Show verse number prefix", comment: "Setting label"), isOn: $showVerseNumberPrefix)
                 .font(.caption)
                 .controlSize(.small)
+        }
+    }
+
+    // MARK: - Bible Options Section
+
+    @ViewBuilder
+    private func bibleExtraSection(pmBinding: Bindable<PresentationManager>) -> some View {
+        // Auto-fit font size
+        Toggle(isOn: pmBinding.autoFitVerseFont) {
+            Text(String(localized: "Auto-fit font size", comment: "Setting label"))
+                .font(.caption)
+        }
+        .toggleStyle(.switch)
+        .controlSize(.small)
+        .help(String(localized: "Shrinks the font automatically so all selected verses fit on screen.", comment: "Tooltip"))
+
+        Divider()
+
+        // Translation name
+        Toggle(isOn: pmBinding.showTranslationName) {
+            Text(String(localized: "Show translation name", comment: "Setting label"))
+                .font(.caption)
+        }
+        .toggleStyle(.switch)
+        .controlSize(.small)
+
+        if pm.showTranslationName {
+            // Size ratio
+            HStack {
+                Text(String(localized: "Size:", comment: "Setting label"))
+                    .font(.caption)
+                    .frame(width: 55, alignment: .trailing)
+                Slider(value: pmBinding.translationNameSizeRatio, in: 0.15...0.7, step: 0.05)
+                    .controlSize(.small)
+                Text("\(Int(pm.translationNameSizeRatio * 100))%")
+                    .font(.caption.monospacedDigit())
+                    .frame(width: 30)
+            }
+
+            // Opacity
+            HStack {
+                Text(String(localized: "Opacity:", comment: "Setting label"))
+                    .font(.caption)
+                    .frame(width: 55, alignment: .trailing)
+                Slider(value: pmBinding.translationNameOpacity, in: 0...1)
+                    .controlSize(.small)
+                Text("\(Int(pm.translationNameOpacity * 100))%")
+                    .font(.caption.monospacedDigit())
+                    .frame(width: 30)
+            }
+
+            // Color
+            HStack {
+                Text(String(localized: "Color:", comment: "Setting label"))
+                    .font(.caption)
+                    .frame(width: 55, alignment: .trailing)
+                ColorPicker(
+                    "",
+                    selection: Binding(
+                        get: { pm.resolvedTranslationColor },
+                        set: { pm.translationNameColorHex = $0.toHex() }
+                    )
+                )
+                .labelsHidden()
+                Button(String(localized: "Global", comment: "Button")) {
+                    pm.translationNameColorHex = ""
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.mini)
+            }
         }
     }
 

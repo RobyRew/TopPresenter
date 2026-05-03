@@ -71,15 +71,28 @@ struct PresentationOutputView: View {
     @ViewBuilder
     private var contentLayer: some View {
         GeometryReader { geo in
+            // Fitted font size: shrinks automatically for Bible content when the feature is on.
+            let isBible = pm.liveContent.contentType == .bible
+            let effectiveFontSize: CGFloat = isBible
+                ? pm.fittedVerseFontSize(
+                    text: pm.liveContent.mainText,
+                    reference: pm.liveContent.reference,
+                    screenSize: geo.size
+                  )
+                : CGFloat(pm.outputVerseFontSize)
+
+            let refRatio = CGFloat(pm.outputRefFontSize) / max(CGFloat(pm.outputVerseFontSize), 1.0)
+            let effectiveRefSize = effectiveFontSize * refRatio
+
             VStack(spacing: 0) {
                 Spacer()
 
                 // Main text — verse content section
                 Text(pm.liveContent.mainText)
-                    .font(verseFont)
+                    .font(verseFont(size: effectiveFontSize))
                     .foregroundStyle(pm.outputVerseTextColor.opacity(pm.outputVerseOpacity))
                     .multilineTextAlignment(pm.outputVerseAlignment)
-                    .lineSpacing(pm.outputVerseLineSpacing * pm.outputVerseFontSize * 0.1)
+                    .lineSpacing(pm.outputVerseLineSpacing * effectiveFontSize * 0.1)
                     .shadow(
                         color: pm.outputShadowEnabled ? .black.opacity(0.8) : .clear,
                         radius: pm.outputShadowEnabled ? pm.outputShadowRadius : 0,
@@ -93,7 +106,7 @@ struct PresentationOutputView: View {
                 // Reference / Title — reference section
                 if !pm.liveContent.reference.isEmpty {
                     Text(pm.liveContent.reference)
-                        .font(refFont)
+                        .font(refFont(size: effectiveRefSize))
                         .foregroundStyle(pm.outputRefTextColor.opacity(pm.outputRefOpacity))
                         .multilineTextAlignment(pm.outputRefAlignment)
                         .shadow(
@@ -102,7 +115,19 @@ struct PresentationOutputView: View {
                         )
                         .scaleEffect(pm.outputRefMultiplier)
                         .offset(pm.outputRefOffset)
-                        .padding(.top, pm.outputVerseFontSize * 0.4)
+                        .padding(.top, effectiveFontSize * 0.4)
+                        .padding(.horizontal, pm.outputPadding + pm.outputRefPadding)
+                }
+
+                // Translation name — small label below reference (Bible only, when enabled)
+                if pm.outputShowTranslationName,
+                   !pm.liveContent.translationName.isEmpty,
+                   isBible {
+                    Text(pm.liveContent.translationName)
+                        .font(translationFont(size: effectiveFontSize * CGFloat(pm.translationNameSizeRatio)))
+                        .foregroundStyle(pm.outputTranslationColor.opacity(pm.outputTranslationOpacity))
+                        .multilineTextAlignment(pm.outputRefAlignment)
+                        .padding(.top, effectiveFontSize * 0.15)
                         .padding(.horizontal, pm.outputPadding + pm.outputRefPadding)
                 }
 
@@ -123,9 +148,8 @@ struct PresentationOutputView: View {
     }
 
     // MARK: - Font Resolution (per-section)
-    private var verseFont: Font {
+    private func verseFont(size: CGFloat) -> Font {
         let name = pm.outputVerseFontName
-        let size = pm.outputVerseFontSize
         if name == "System" || name.isEmpty {
             return .system(size: size, weight: .regular)
         } else {
@@ -133,12 +157,20 @@ struct PresentationOutputView: View {
         }
     }
 
-    private var refFont: Font {
+    private func refFont(size: CGFloat) -> Font {
         let name = pm.outputRefFontName
-        let size = pm.outputRefFontSize
         let weight = pm.outputRefWeight
         if name == "System" || name.isEmpty {
             return .system(size: size, weight: weight)
+        } else {
+            return .custom(name, size: size)
+        }
+    }
+
+    private func translationFont(size: CGFloat) -> Font {
+        let name = pm.outputRefFontName
+        if name == "System" || name.isEmpty {
+            return .system(size: size, weight: .regular)
         } else {
             return .custom(name, size: size)
         }

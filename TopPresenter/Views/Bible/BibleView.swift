@@ -314,13 +314,15 @@ struct BibleContentPanel: View {
                 .onTapGesture(count: 2) {
                     presentationManager.showBibleVerse(
                         text: result.text,
-                        reference: result.reference
+                        reference: result.reference,
+                        translationName: libraryManager.selectedBibleModule?.abbreviation ?? ""
                     )
                 }
                 .onTapGesture {
                     presentationManager.showBibleVerse(
                         text: result.text,
-                        reference: result.reference
+                        reference: result.reference,
+                        translationName: libraryManager.selectedBibleModule?.abbreviation ?? ""
                     )
                 }
             }
@@ -392,7 +394,8 @@ struct BibleVerseRow: View {
             // Double-click sends to presentation
             presentationManager.showBibleVerse(
                 text: verse.text,
-                reference: verse.fullReference
+                reference: verse.fullReference,
+                translationName: libraryManager.selectedBibleModule?.abbreviation ?? ""
             )
         }
         .onTapGesture {
@@ -406,7 +409,8 @@ struct BibleVerseRow: View {
             Button(String(localized: "Show on Screen", comment: "Context menu")) {
                 presentationManager.showBibleVerse(
                     text: verse.text,
-                    reference: verse.fullReference
+                    reference: verse.fullReference,
+                    translationName: libraryManager.selectedBibleModule?.abbreviation ?? ""
                 )
             }
             Button(String(localized: "Copy Text", comment: "Context menu")) {
@@ -713,7 +717,8 @@ struct BibleGridNavigationView: View {
                                 Button(String(localized: "Show on Screen", comment: "Context menu")) {
                                     presentationManager.showBibleVerse(
                                         text: verse.text,
-                                        reference: verse.fullReference
+                                        reference: verse.fullReference,
+                                        translationName: libraryManager.selectedBibleModule?.abbreviation ?? ""
                                     )
                                 }
                                 Button(String(localized: "Copy Text", comment: "Context menu")) {

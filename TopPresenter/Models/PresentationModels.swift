@@ -235,6 +235,7 @@ final class LiveContent {
     var mainText: String = ""
     var subtitle: String = ""
     var reference: String = ""
+    var translationName: String = ""
     var contentType: ContentType = .blank
     var isLive: Bool = false
 
@@ -250,13 +251,15 @@ final class LiveContent {
         mainText = ""
         subtitle = ""
         reference = ""
+        translationName = ""
         contentType = .blank
         isLive = false
     }
 
-    func setBibleVerse(text: String, reference: String) {
+    func setBibleVerse(text: String, reference: String, translationName: String = "") {
         self.mainText = text
         self.reference = reference
+        self.translationName = translationName
         self.subtitle = ""
         self.contentType = .bible
     }

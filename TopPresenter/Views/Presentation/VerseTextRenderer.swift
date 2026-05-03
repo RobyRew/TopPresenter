@@ -14,6 +14,7 @@ import AppKit
 enum TextBoxSection: String, CaseIterable, Identifiable {
     case verseContent = "verseContent"
     case reference = "reference"
+    case translationName = "translationName"
 
     var id: String { rawValue }
 
@@ -21,6 +22,7 @@ enum TextBoxSection: String, CaseIterable, Identifiable {
         switch self {
         case .verseContent: return String(localized: "Conținut Verset", comment: "Edit mode tab")
         case .reference: return String(localized: "Referință / Titlu", comment: "Edit mode tab")
+        case .translationName: return String(localized: "Traducere", comment: "Edit mode tab — Bible translation name")
         }
     }
 
@@ -28,6 +30,7 @@ enum TextBoxSection: String, CaseIterable, Identifiable {
         switch self {
         case .verseContent: return "text.quote"
         case .reference: return "bookmark.fill"
+        case .translationName: return "character.book.closed.fill"
         }
     }
 
@@ -35,6 +38,7 @@ enum TextBoxSection: String, CaseIterable, Identifiable {
         switch self {
         case .verseContent: return .cyan
         case .reference: return .orange
+        case .translationName: return .purple
         }
     }
 }
@@ -207,6 +211,13 @@ struct EditModeControlsSection: View {
                     verseContentTab
                 case .reference:
                     referenceTab
+                case .translationName:
+                    // Translation name styling is controlled in the Bible Options settings section.
+                    Text(String(localized: "Configure the translation name in Bible Options → Show translation name.", comment: "Edit mode hint"))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.vertical, 8)
                 }
 
                 Divider()
