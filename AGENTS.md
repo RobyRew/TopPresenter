@@ -227,3 +227,22 @@ Unsigned builds require users to right-click → Open, or run `xattr -cr TopPres
 | Songs | `"format"` | `"TopPresenter Songs"` |
 
 All TopPresenter exports embed this identifier so importers can reliably distinguish them from generic JSON.
+
+---
+
+## Keeping This File Up To Date
+
+**This file must be updated whenever any of the following change:**
+
+- A new architectural pattern is introduced or an existing one is changed (e.g. a new observable class, a new notification name, a new persistence model)
+- A new importer/exporter format is added (update the File Format Identifiers table + the Importer section)
+- A new keyboard shortcut is added or an existing one is remapped
+- A new `@Model` type is added to the SwiftData schema (update `DataMigration.swift` section + models list)
+- A new screen management rule is established
+- A "What NOT To Do" rule is discovered (e.g. after a painful bug or regression)
+- The deployment target, Xcode version, or Swift version changes
+- The versioning or release process changes
+- A new localization locale is added
+- Any important constraint or behaviour is explained verbally in a chat — **if it's worth saying once, write it here so it doesn't need to be said again**
+
+When in doubt: add it. Future agents and contributors will thank you.
