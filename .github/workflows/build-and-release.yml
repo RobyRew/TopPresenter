@@ -77,6 +77,8 @@ jobs:
           BUILD=$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$APP_PATH/Contents/Info.plist" 2>/dev/null || echo "1")
           echo "VERSION=$VERSION" >> $GITHUB_ENV
           echo "BUILD=$BUILD" >> $GITHUB_ENV
+          echo "PRERELEASE_VERSION=$VERSION-alpha.${GITHUB_RUN_NUMBER}" >> $GITHUB_ENV
+          echo "PRERELEASE_TAG=v$VERSION-alpha.${GITHUB_RUN_NUMBER}" >> $GITHUB_ENV
 
           # Create ZIP
           cd "build/Build/Products/Release"
@@ -98,9 +100,9 @@ jobs:
             TopPresenter-*.dmg
           retention-days: 30
 
-  # Pre-release on every push to main
+  # Unique pre-release on every push to main
   pre-release:
-    name: Pre-release (Beta)
+    name: Pre-release (Alpha)
     needs: build
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: macos-15
@@ -117,23 +119,18 @@ jobs:
       - name: Get short SHA
         run: echo "SHORT_SHA=${GITHUB_SHA::7}" >> $GITHUB_ENV
 
-      - name: Delete existing beta release
-        uses: dev-drprasad/delete-tag-and-release@v1.1
-        with:
-          tag_name: beta
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          delete_release: true
-        continue-on-error: true
-
-      - name: Create beta pre-release
+      - name: Create alpha pre-release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: beta
-          name: "🧪 Beta — ${{ env.SHORT_SHA }}"
+          tag_name: ${{ env.PRERELEASE_TAG }}
+          name: "TopPresenter ${{ env.PRERELEASE_VERSION }}"
           prerelease: true
           generate_release_notes: true
           body: |
-            ### ⚡ Automatic Beta Build
+            ### ⚡ Automatic Alpha Build
+
+            **Version:** `${{ env.PRERELEASE_VERSION }}`
+            **Tag:** `${{ env.PRERELEASE_TAG }}`
 
             **Commit:** `${{ github.sha }}`
             **Branch:** `main`
@@ -149,11 +146,11 @@ jobs:
             TopPresenter-*.zip
             TopPresenter-*.dmg
 
-  # Stable release on version tags (v1.0.0, v2.1.0, etc.)
+  # Stable release on final version tags (v1.0.0, v1.1.0, etc.)
   release:
     name: Stable Release
     needs: build
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: startsWith(github.ref, 'refs/tags/v') && !contains(github.ref_name, '-')
     runs-on: macos-15
     permissions:
       contents: write

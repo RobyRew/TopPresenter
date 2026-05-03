@@ -212,6 +212,31 @@ Select the **TopPresenter** scheme → Build and Run (`⌘R`).
 
 **Requirements:** macOS 15.7+, Xcode 16.3+, Swift 5.0+
 
+## Releases
+
+- Every push to `main` now creates a new GitHub **alpha pre-release** with a unique version such as `v0.0.1-alpha.12`.
+- These pre-releases do **not** overwrite older ones; each build is kept as its own release.
+- Stable releases are reserved for final tags like `v1.0.0`, `v1.1.0`, and later.
+
+### How To Make A Stable Release
+
+1. Bump `MARKETING_VERSION` in the Xcode project from `0.0.1` to the final version you want, for example `1.0.0`.
+2. Commit and push that version change to `main`.
+3. Create a Git tag for the same version and push it:
+
+```bash
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+4. GitHub Actions will build the app and publish a normal release named `TopPresenter v1.0.0`.
+
+### How To Keep Shipping Pre-Releases
+
+1. Leave the app on a pre-1.0 version like `0.0.1`, `0.0.2`, or `0.1.0`.
+2. Push commits to `main`.
+3. Each push creates a new alpha release automatically, for example `v0.0.1-alpha.13`.
+
 ## License
 
 Apache 2.0 — see [LICENSE](LICENSE) and [NOTICE](NOTICE) for details.
