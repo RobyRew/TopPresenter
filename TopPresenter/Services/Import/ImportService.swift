@@ -320,6 +320,99 @@ final class ImportService {
         return collection
     }
 
+    /// Result of a multi-file song import: what worked, what didn't and why.
+    struct SongBatchResult {
+        var collection: SongCollection?
+        var importedTitles: [String] = []
+        var failures: [(file: String, reason: String)] = []
+    }
+
+    /// Imports any mix of song FILES and/or DIRECTORIES into one collection.
+    /// Format is AUTO-DETECTED per file (extension + content sniffing) — no
+    /// format picker traps. Per-file failures are collected, not swallowed.
+    static func importSongItems(
+        urls: [URL],
+        collectionName: String,
+        modelContext: ModelContext,
+        progressHandler: ((Double, String) -> Void)? = nil
+    ) async -> SongBatchResult {
+        var result = SongBatchResult()
+
+        // Expand directories into their files (flat, like before)
+        var fileURLs: [(url: URL, parent: URL?)] = []
+        for url in urls {
+            let accessing = url.startAccessingSecurityScopedResource()
+            var isDirectory: ObjCBool = false
+            if FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory),
+               isDirectory.boolValue {
+                let contents = (try? FileManager.default.contentsOfDirectory(
+                    at: url, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles]
+                )) ?? []
+                for child in contents.sorted(by: { $0.lastPathComponent < $1.lastPathComponent }) {
+                    fileURLs.append((child, url))
+                }
+                if contents.isEmpty {
+                    result.failures.append((url.lastPathComponent, String(localized: "Directorul este gol.", comment: "Import error")))
+                }
+            } else {
+                fileURLs.append((url, nil))
+            }
+            if accessing { /* keep open until the end of this function */ }
+        }
+
+        guard !fileURLs.isEmpty else { return result }
+
+        // Find or create the collection lazily (only once something imports)
+        func collection() -> SongCollection {
+            if let existing = result.collection { return existing }
+            let descriptor = FetchDescriptor<SongCollection>(
+                predicate: #Predicate { $0.name == collectionName }
+            )
+            if let found = (try? modelContext.fetch(descriptor))?.first {
+                result.collection = found
+                return found
+            }
+            let fresh = SongCollection(name: collectionName, sourceFormat: "mixed")
+            modelContext.insert(fresh)
+            result.collection = fresh
+            return fresh
+        }
+
+        for (index, item) in fileURLs.enumerated() {
+            let name = item.url.lastPathComponent
+            progressHandler?(
+                Double(index) / Double(fileURLs.count),
+                String(localized: "Se importă \(name)…", comment: "Import progress")
+            )
+
+            guard let format = detectSongFormat(fileURL: item.url) else {
+                result.failures.append((name, String(localized: "Format necunoscut (acceptat: OpenSong/OpenLyrics XML, PPTX, PPT).", comment: "Import error")))
+                continue
+            }
+            guard let importer = songImporters[format] else {
+                result.failures.append((name, String(localized: "Niciun importator pentru acest format.", comment: "Import error")))
+                continue
+            }
+
+            let accessing = item.url.startAccessingSecurityScopedResource()
+            defer { if accessing { item.url.stopAccessingSecurityScopedResource() } }
+
+            do {
+                let parsed = try await importer.parse(fileURL: item.url)
+                _ = createSongFromResult(parsed, collection: collection(), modelContext: modelContext)
+                result.importedTitles.append(parsed.title)
+            } catch {
+                result.failures.append((name, error.localizedDescription))
+            }
+        }
+
+        if result.collection != nil {
+            try? modelContext.save()
+        }
+        progressHandler?(1.0, String(localized: "Gata!", comment: "Import progress"))
+        return result
+    }
+
     /// Auto-detect song format from file content
     static func detectSongFormat(fileURL: URL) -> SupportedSongFormat? {
         let ext = fileURL.pathExtension.lowercased()

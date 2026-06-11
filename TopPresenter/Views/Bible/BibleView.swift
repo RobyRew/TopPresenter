@@ -935,17 +935,8 @@ struct BibleImportSheet: View {
 
     private func chooseFile() {
         let panel = NSOpenPanel()
-        panel.allowedContentTypes = [
-            UTType(filenameExtension: "json") ?? .json,
-            UTType(filenameExtension: "xml") ?? .xml,
-            UTType(filenameExtension: "osis") ?? .xml,
-            UTType(filenameExtension: "mybible") ?? .data,
-            UTType(filenameExtension: "usfm") ?? .plainText,
-            UTType(filenameExtension: "sfm") ?? .plainText,
-            UTType(filenameExtension: "txt") ?? .plainText,
-            UTType(filenameExtension: "utf8") ?? .plainText,
-            UTType(filenameExtension: "zef") ?? .xml
-        ]
+        // No type restriction — any file is selectable; the selected
+        // format decides how it's parsed.
         panel.allowsMultipleSelection = true
         panel.canChooseDirectories = false
         panel.message = String(localized: "Select Bible file(s) to import", comment: "Open panel message")

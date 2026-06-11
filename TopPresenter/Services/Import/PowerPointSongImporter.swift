@@ -27,53 +27,39 @@ final class PowerPointSongImporter: SongImporter {
 
     // MARK: - PPTX Parsing (ZIP + XML)
 
-    /// PPTX files are ZIP archives containing XML.
-    /// Slides are in ppt/slides/slide1.xml, slide2.xml, etc.
+    /// PPTX files are ZIP archives containing XML — slides live in
+    /// ppt/slides/slide1.xml, slide2.xml, …
+    /// Read ENTIRELY in-process via ZipArchiveReader: spawning /usr/bin/ditto
+    /// fails in the sandbox because child processes don't inherit the user's
+    /// file-access grant for the selected file.
     private func parsePPTX(fileURL: URL) async throws -> SongImportResult {
-        let tempDir = FileManager.default.temporaryDirectory
-            .appendingPathComponent("toppresenter-pptx-\(UUID().uuidString)")
-
-        defer {
-            try? FileManager.default.removeItem(at: tempDir)
+        let archiveData = try Data(contentsOf: fileURL)
+        let zip: ZipArchiveReader
+        do {
+            zip = try ZipArchiveReader(data: archiveData)
+        } catch {
+            throw SongImportError.parsingFailed("Failed to read PPTX archive: \(error.localizedDescription)")
         }
 
-        // Unzip using /usr/bin/ditto (macOS built-in, handles ZIP)
-        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
-
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/ditto")
-        process.arguments = ["-xk", fileURL.path, tempDir.path]
-        process.standardOutput = FileHandle.nullDevice
-        process.standardError = FileHandle.nullDevice
-        try process.run()
-        process.waitUntilExit()
-
-        guard process.terminationStatus == 0 else {
-            throw SongImportError.parsingFailed("Failed to extract PPTX archive")
-        }
-
-        // Find and sort slide XML files
-        let slidesDir = tempDir.appendingPathComponent("ppt/slides")
-        guard FileManager.default.fileExists(atPath: slidesDir.path) else {
-            throw SongImportError.parsingFailed("No slides found in PPTX")
-        }
-
-        let slideFiles = try FileManager.default.contentsOfDirectory(at: slidesDir, includingPropertiesForKeys: nil)
-            .filter { $0.pathExtension.lowercased() == "xml" && $0.lastPathComponent.hasPrefix("slide") }
-            .sorted { file1, file2 in
-                let num1 = extractSlideNumber(from: file1.lastPathComponent)
-                let num2 = extractSlideNumber(from: file2.lastPathComponent)
-                return num1 < num2
+        // Find and sort the slide XML entries (ppt/slides/slideN.xml, not _rels)
+        let slideEntries = zip.entries
+            .filter {
+                $0.name.hasPrefix("ppt/slides/slide")
+                    && $0.name.hasSuffix(".xml")
+                    && !$0.name.contains("_rels")
+            }
+            .sorted { entry1, entry2 in
+                extractSlideNumber(from: entry1.name) < extractSlideNumber(from: entry2.name)
             }
 
-        guard !slideFiles.isEmpty else {
+        guard !slideEntries.isEmpty else {
             throw SongImportError.parsingFailed("No slides found in PPTX")
         }
 
         // Extract metadata (title) from docProps/core.xml
         var presentationTitle = ""
-        let coreXML = tempDir.appendingPathComponent("docProps/core.xml")
-        if let coreData = try? Data(contentsOf: coreXML),
+        if let coreEntry = zip.entry(named: "docProps/core.xml"),
+           let coreData = try? zip.extract(coreEntry),
            let coreString = String(data: coreData, encoding: .utf8) {
             presentationTitle = extractXMLValue(from: coreString, tag: "dc:title")
                 ?? extractXMLValue(from: coreString, tag: "title")
@@ -82,8 +68,8 @@ final class PowerPointSongImporter: SongImporter {
 
         // Parse each slide
         var slideTexts: [(title: String, body: String)] = []
-        for slideFile in slideFiles {
-            let slideData = try Data(contentsOf: slideFile)
+        for entry in slideEntries {
+            let slideData = try zip.extract(entry)
             let slideContent = try parsePPTXSlideXML(data: slideData)
             if !slideContent.title.isEmpty || !slideContent.body.isEmpty {
                 slideTexts.append(slideContent)
@@ -270,7 +256,7 @@ final class PowerPointSongImporter: SongImporter {
 
     /// Parse PPT binary records to extract slide text.
     /// Returns an array of slides, each containing an array of text strings.
-    private func parsePPTRecords(data: Data) -> [[String]] {
+    func parsePPTRecords(data: Data) -> [[String]] {
         let bytes = [UInt8](data)
         var slides: [[String]] = []
         var currentSlideTexts: [String] = []
@@ -283,12 +269,25 @@ final class PowerPointSongImporter: SongImporter {
 
         while offset + 8 <= bytes.count {
             // Read record header: 2 bytes ver+instance, 2 bytes type, 4 bytes length
+            let verInstance = UInt16(bytes[offset]) | (UInt16(bytes[offset + 1]) << 8)
+            let recVer = verInstance & 0x000F
             let recType = UInt16(bytes[offset + 2]) | (UInt16(bytes[offset + 3]) << 8)
             let recLen = readUInt32LE(bytes, offset: offset + 4)
 
             let recordEnd = offset + 8 + Int(recLen)
             guard recordEnd <= bytes.count && recLen < 100_000_000 else {
                 offset += 1
+                continue
+            }
+
+            // CONTAINER records (recVer == 0xF) hold their children inside recLen
+            // — descend into them instead of skipping, or no text is ever found.
+            if recVer == 0xF {
+                if recType == RT_Slide, !currentSlideTexts.isEmpty {
+                    slides.append(currentSlideTexts)
+                    currentSlideTexts = []
+                }
+                offset += 8
                 continue
             }
 

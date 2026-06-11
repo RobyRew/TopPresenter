@@ -353,39 +353,21 @@ struct SongImportSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(AppState.self) private var appState
 
-    @State private var selectedFormat: SupportedSongFormat = .openSongXML
-    @State private var importMode: SongImportMode = .directory
     @State private var collectionName: String = ""
-    @State private var selectedURL: URL?
+    @State private var selectedURLs: [URL] = []
     @State private var isImporting = false
     @State private var importProgress: Double = 0
     @State private var importStatusText = ""
-
-    enum SongImportMode: String, CaseIterable {
-        case singleFile = "Single File"
-        case directory = "Directory (Multiple Songs)"
-    }
 
     var body: some View {
         VStack(spacing: 20) {
             Text(String(localized: "Import Songs", comment: "Sheet title"))
                 .font(.title2.bold())
 
-            // Format picker
-            Picker(String(localized: "Format:", comment: "Picker label"), selection: $selectedFormat) {
-                ForEach(SupportedSongFormat.allCases) { format in
-                    Text(format.displayName).tag(format)
-                }
-            }
-            .pickerStyle(.segmented)
-
-            // Import mode
-            Picker(String(localized: "Import:", comment: "Picker label"), selection: $importMode) {
-                ForEach(SongImportMode.allCases, id: \.rawValue) { mode in
-                    Text(mode.rawValue).tag(mode)
-                }
-            }
-            .pickerStyle(.segmented)
+            Text(String(localized: "Alege fișiere individuale și/sau directoare — formatul fiecărui fișier este detectat automat (OpenSong, OpenLyrics, PPTX, PPT).", comment: "Import sheet hint"))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
 
             // Collection name
             TextField(
@@ -394,30 +376,42 @@ struct SongImportSheet: View {
             )
             .textFieldStyle(.roundedBorder)
 
-            // File/Directory selector
+            // Selection summary + chooser
             HStack {
-                if let url = selectedURL {
-                    Text(url.lastPathComponent)
+                if selectedURLs.isEmpty {
+                    Text(String(localized: "Nimic selectat", comment: "Placeholder"))
+                        .foregroundStyle(.secondary)
+                } else if selectedURLs.count == 1 {
+                    Text(selectedURLs[0].lastPathComponent)
                         .lineLimit(1)
                         .truncationMode(.middle)
                 } else {
-                    Text(importMode == .directory
-                         ? String(localized: "No directory selected", comment: "Placeholder")
-                         : String(localized: "No file selected", comment: "Placeholder"))
-                        .foregroundStyle(.secondary)
+                    Text(String(localized: "\(selectedURLs.count) elemente selectate", comment: "Selection summary"))
                 }
 
                 Spacer()
 
-                Button(importMode == .directory
-                       ? String(localized: "Choose Directory...", comment: "Button")
-                       : String(localized: "Choose File...", comment: "Button")
-                ) {
+                Button(String(localized: "Alege…", comment: "Button")) {
                     chooseLocation()
                 }
             }
             .padding()
             .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
+
+            if selectedURLs.count > 1 {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 2) {
+                        ForEach(selectedURLs, id: \.self) { url in
+                            Text(url.lastPathComponent)
+                                .font(.caption)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .frame(maxHeight: 90)
+            }
 
             if isImporting {
                 ProgressView(value: importProgress) {
@@ -432,7 +426,7 @@ struct SongImportSheet: View {
                 Spacer()
                 Button(String(localized: "Import", comment: "Button")) { performImport() }
                     .buttonStyle(.borderedProminent)
-                    .disabled(selectedURL == nil || collectionName.isEmpty || isImporting)
+                    .disabled(selectedURLs.isEmpty || collectionName.isEmpty || isImporting)
                     .keyboardShortcut(.defaultAction)
             }
         }
@@ -442,67 +436,66 @@ struct SongImportSheet: View {
 
     private func chooseLocation() {
         let panel = NSOpenPanel()
-        if importMode == .directory {
-            panel.canChooseDirectories = true
-            panel.canChooseFiles = false
-        } else {
-            panel.canChooseDirectories = false
-            panel.canChooseFiles = true
-            panel.allowedContentTypes = [UTType(filenameExtension: "xml") ?? .xml]
-        }
-        panel.allowsMultipleSelection = false
+        // Files AND directories, multi-select, ANY type — auto-detection
+        // decides how each file is parsed.
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = true
+        panel.allowsMultipleSelection = true
+        panel.message = String(localized: "Alege cântece (fișiere sau directoare)", comment: "Open panel message")
 
         if panel.runModal() == .OK {
-            selectedURL = panel.url
-            if collectionName.isEmpty, let url = panel.url {
-                collectionName = url.deletingPathExtension().lastPathComponent
+            selectedURLs = panel.urls
+            if collectionName.isEmpty, let first = panel.urls.first {
+                collectionName = first.deletingPathExtension().lastPathComponent
             }
         }
     }
 
     private func performImport() {
-        guard let url = selectedURL else { return }
+        guard !selectedURLs.isEmpty else { return }
         isImporting = true
 
         Task {
-            do {
-                let collection: SongCollection
-                if importMode == .directory {
-                    collection = try await ImportService.importSongsFromDirectory(
-                        directoryURL: url,
-                        format: selectedFormat,
-                        collectionName: collectionName,
-                        modelContext: modelContext
-                    ) { progress, status in
-                        Task { @MainActor in
-                            importProgress = progress
-                            importStatusText = status
-                        }
-                    }
-                } else {
-                    collection = try await ImportService.importSingleSongFile(
-                        fileURL: url,
-                        format: selectedFormat,
-                        collectionName: collectionName,
-                        modelContext: modelContext
-                    )
+            let result = await ImportService.importSongItems(
+                urls: selectedURLs,
+                collectionName: collectionName,
+                modelContext: modelContext
+            ) { progress, status in
+                Task { @MainActor in
+                    importProgress = progress
+                    importStatusText = status
                 }
+            }
 
-                await MainActor.run {
-                    isImporting = false
+            await MainActor.run {
+                isImporting = false
+                if result.failures.isEmpty, !result.importedTitles.isEmpty {
                     appState.showSuccess(
                         String(localized: "Import Successful", comment: "Alert title"),
-                        message: String(localized: "Imported \(collection.songs.count) songs into \"\(collection.name)\".", comment: "Alert message")
+                        message: String(localized: "Au fost importate \(result.importedTitles.count) cântece în \"\(collectionName)\".", comment: "Alert message")
                     )
                     dismiss()
-                }
-            } catch {
-                await MainActor.run {
-                    isImporting = false
+                } else if result.importedTitles.isEmpty {
+                    let details = result.failures
+                        .prefix(5)
+                        .map { "\($0.file): \($0.reason)" }
+                        .joined(separator: "\n")
                     appState.showError(
                         String(localized: "Import Failed", comment: "Alert title"),
-                        message: error.localizedDescription
+                        message: details.isEmpty
+                            ? String(localized: "Nu a fost găsit niciun cântec.", comment: "Alert message")
+                            : details
                     )
+                } else {
+                    let details = result.failures
+                        .prefix(5)
+                        .map { "\($0.file): \($0.reason)" }
+                        .joined(separator: "\n")
+                    appState.showSuccess(
+                        String(localized: "Import Parțial", comment: "Alert title"),
+                        message: String(localized: "Importate: \(result.importedTitles.count). Eșuate: \(result.failures.count).\n\(details)", comment: "Alert message")
+                    )
+                    dismiss()
                 }
             }
         }

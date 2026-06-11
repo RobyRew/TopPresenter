@@ -196,6 +196,10 @@ TopPresenter/
 - Background image: bookmark stored under `pm_backgroundImageBookmark` (set in `setBackgroundImage(from:)`, removed in `removeBackgroundImage()`)
 - Media files: `MediaItem.bookmarkData` / `resolvedURL`
 
+### Import Pipeline Rules
+- **NEVER spawn child processes (ditto, unzip, …) to read user-selected files** — children of a sandboxed app do NOT inherit the user's file-access grant, so extraction fails. PPTX is read in-process via `ZipArchiveReader` (Services/Import) — central directory + stored/deflate entries through the Compression framework (`COMPRESSION_ZLIB` == raw DEFLATE)
+- Import file pickers (Bible + Songs) are intentionally UNRESTRICTED (no allowedContentTypes) — the selected format decides parsing; restricting types made .pptx unselectable. Keep them unrestricted
+
 ### Adding a Bible Importer
 1. Create `Services/Import/MyFormatImporter.swift`
 2. Conform to `BibleImporter` — implement `format` and `parse(fileURL:) async throws -> BibleImportResult`

@@ -7,7 +7,9 @@
 
 import Testing
 import Foundation
+import Compression
 import SwiftUI
+import SwiftData
 @testable import TopPresenter
 
 // MARK: - TopPresenter JSON Importer Tests
@@ -346,6 +348,236 @@ struct LiveContentTests {
         #expect(content.subtitle == "")
         #expect(content.isLive == false)
         #expect(content.contentType == .blank)
+    }
+}
+
+// MARK: - ZIP / PPTX Importer Tests
+
+struct PPTXImporterTests {
+    /// Builds a minimal valid ZIP in memory (stored or deflated entries).
+    private func makeZip(entries: [(name: String, data: Data, deflate: Bool)]) -> Data {
+        var out = Data()
+        var central = Data()
+        var offsets: [Int] = []
+
+        func u16(_ v: Int) -> Data { Data([UInt8(v & 0xFF), UInt8((v >> 8) & 0xFF)]) }
+        func u32(_ v: Int) -> Data {
+            Data([UInt8(v & 0xFF), UInt8((v >> 8) & 0xFF), UInt8((v >> 16) & 0xFF), UInt8((v >> 24) & 0xFF)])
+        }
+
+        for entry in entries {
+            offsets.append(out.count)
+            let nameData = entry.name.data(using: .utf8)!
+            let payload: Data
+            let method: Int
+            if entry.deflate {
+                payload = rawDeflate(entry.data)
+                method = 8
+            } else {
+                payload = entry.data
+                method = 0
+            }
+            // Local header
+            out.append(u32(0x04034b50))
+            out.append(u16(20)); out.append(u16(0)); out.append(u16(method))
+            out.append(u16(0)); out.append(u16(0))      // time, date
+            out.append(u32(0))                           // crc (unchecked by reader)
+            out.append(u32(payload.count))
+            out.append(u32(entry.data.count))
+            out.append(u16(nameData.count)); out.append(u16(0))
+            out.append(nameData)
+            out.append(payload)
+        }
+        let cdStart = out.count
+        for (i, entry) in entries.enumerated() {
+            let nameData = entry.name.data(using: .utf8)!
+            let payload = entry.deflate ? rawDeflate(entry.data) : entry.data
+            central.append(u32(0x02014b50))
+            central.append(u16(20)); central.append(u16(20)); central.append(u16(0))
+            central.append(u16(entry.deflate ? 8 : 0))
+            central.append(u16(0)); central.append(u16(0))   // time, date
+            central.append(u32(0))                            // crc
+            central.append(u32(payload.count))
+            central.append(u32(entry.data.count))
+            central.append(u16(nameData.count)); central.append(u16(0)); central.append(u16(0))
+            central.append(u16(0)); central.append(u16(0))   // disk, internal attrs
+            central.append(u32(0))                            // external attrs
+            central.append(u32(offsets[i]))
+            central.append(nameData)
+        }
+        out.append(central)
+        // EOCD
+        out.append(u32(0x06054b50))
+        out.append(u16(0)); out.append(u16(0))
+        out.append(u16(entries.count)); out.append(u16(entries.count))
+        out.append(u32(out.count - cdStart - 4 - 12)) // cd size (not validated by reader)
+        out.append(u32(cdStart))
+        out.append(u16(0))
+        return out
+    }
+
+    private func rawDeflate(_ data: Data) -> Data {
+        var output = Data(count: data.count + 256)
+        let written = output.withUnsafeMutableBytes { dst -> Int in
+            data.withUnsafeBytes { src -> Int in
+                compression_encode_buffer(
+                    dst.bindMemory(to: UInt8.self).baseAddress!, data.count + 256,
+                    src.bindMemory(to: UInt8.self).baseAddress!, data.count,
+                    nil, COMPRESSION_ZLIB
+                )
+            }
+        }
+        return output.prefix(written)
+    }
+
+    private func slideXML(title: String?, body: String) -> String {
+        let titleShape = title.map {
+            """
+            <p:sp><p:nvSpPr><p:nvPr><p:ph type="title"/></p:nvPr></p:nvSpPr>
+            <p:txBody><a:p><a:r><a:t>\($0)</a:t></a:r></a:p></p:txBody></p:sp>
+            """
+        } ?? ""
+        return """
+        <?xml version="1.0"?>
+        <p:sld xmlns:p="urn:p" xmlns:a="urn:a"><p:cSld><p:spTree>
+        \(titleShape)
+        <p:sp><p:nvSpPr><p:nvPr><p:ph type="body"/></p:nvPr></p:nvSpPr>
+        <p:txBody><a:p><a:r><a:t>\(body)</a:t></a:r></a:p></p:txBody></p:sp>
+        </p:spTree></p:cSld></p:sld>
+        """
+    }
+
+    @Test func zipReaderExtractsStoredAndDeflated() throws {
+        let storedContent = Data("hello stored".utf8)
+        let deflatedContent = Data(String(repeating: "verse text ", count: 50).utf8)
+        let zip = makeZip(entries: [
+            ("a.txt", storedContent, false),
+            ("b.txt", deflatedContent, true),
+        ])
+
+        let reader = try ZipArchiveReader(data: zip)
+        #expect(reader.entries.count == 2)
+        #expect(try reader.extract(reader.entry(named: "a.txt")!) == storedContent)
+        #expect(try reader.extract(reader.entry(named: "b.txt")!) == deflatedContent)
+    }
+
+    @Test func importsPPTXWithoutSpawningProcesses() async throws {
+        // A real (minimal) pptx: deflated slide XMLs + core metadata
+        let zip = makeZip(entries: [
+            ("docProps/core.xml", Data("<cp><dc:title>Cântec Test</dc:title></cp>".utf8), true),
+            ("ppt/slides/slide1.xml", Data(slideXML(title: "Chorus", body: "La la la").utf8), true),
+            ("ppt/slides/slide2.xml", Data(slideXML(title: nil, body: "Strofa a doua").utf8), false),
+            ("ppt/slides/_rels/slide1.xml.rels", Data("<rels/>".utf8), false),
+        ])
+
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("test-\(UUID().uuidString).pptx")
+        try zip.write(to: url)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let result = try await PowerPointSongImporter().parse(fileURL: url)
+        #expect(result.title == "Cântec Test")
+        #expect(result.verses.count == 2)
+        #expect(result.verses[0].verseType == "chorus")
+        #expect(result.verses[0].text.contains("La la la"))
+        #expect(result.verses[1].text.contains("Strofa a doua"))
+    }
+}
+
+// MARK: - Batch Song Import Tests
+
+struct SongBatchImportTests {
+    private func makeInMemoryContext() throws -> ModelContext {
+        let container = try ModelContainer(
+            for: Schema(versionedSchema: SchemaV1.self),
+            configurations: [ModelConfiguration(isStoredInMemoryOnly: true)]
+        )
+        return ModelContext(container)
+    }
+
+    @Test func importsMixOfFilesAndReportsFailures() async throws {
+        let context = try makeInMemoryContext()
+        let fm = FileManager.default
+        let dir = fm.temporaryDirectory.appendingPathComponent("songs-\(UUID().uuidString)")
+        try fm.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? fm.removeItem(at: dir) }
+
+        // A valid OpenSong file
+        let openSong = dir.appendingPathComponent("Cantec.xml")
+        try """
+        <song><title>Cântec Bun</title><lyrics>[V1]
+        Prima strofă</lyrics></song>
+        """.data(using: .utf8)!.write(to: openSong)
+
+        // An unknown file type
+        let junk = dir.appendingPathComponent("nota.rtf")
+        try Data("junk".utf8).write(to: junk)
+
+        let result = await ImportService.importSongItems(
+            urls: [openSong, junk],
+            collectionName: "Test Batch",
+            modelContext: context
+        )
+
+        #expect(result.importedTitles.count == 1)
+        #expect(result.importedTitles.first == "Cântec Bun")
+        #expect(result.failures.count == 1)
+        #expect(result.failures.first?.file == "nota.rtf")
+        #expect(result.collection?.songs.count == 1)
+    }
+
+    @Test func importsDirectoryWithAutoDetection() async throws {
+        let context = try makeInMemoryContext()
+        let fm = FileManager.default
+        let dir = fm.temporaryDirectory.appendingPathComponent("songdir-\(UUID().uuidString)")
+        try fm.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? fm.removeItem(at: dir) }
+
+        try """
+        <song><title>Unu</title><lyrics>[V1]
+        La la</lyrics></song>
+        """.data(using: .utf8)!.write(to: dir.appendingPathComponent("a.xml"))
+        try """
+        <song><title>Doi</title><lyrics>[V1]
+        Lo lo</lyrics></song>
+        """.data(using: .utf8)!.write(to: dir.appendingPathComponent("b.xml"))
+
+        // Pass the DIRECTORY itself — files are discovered + auto-detected
+        let result = await ImportService.importSongItems(
+            urls: [dir],
+            collectionName: "Director",
+            modelContext: context
+        )
+
+        #expect(result.importedTitles.sorted() == ["Doi", "Unu"])
+        #expect(result.failures.isEmpty)
+    }
+
+    @Test func pptRecordWalkerDescendsIntoContainers() {
+        // Slide container (recVer 0xF) WRAPPING a TextCharsAtom child —
+        // the old walker skipped container children and found no text.
+        func u16(_ v: Int) -> [UInt8] { [UInt8(v & 0xFF), UInt8((v >> 8) & 0xFF)] }
+        func u32(_ v: Int) -> [UInt8] {
+            [UInt8(v & 0xFF), UInt8((v >> 8) & 0xFF), UInt8((v >> 16) & 0xFF), UInt8((v >> 24) & 0xFF)]
+        }
+
+        let text = "Salut lume"
+        let textBytes = [UInt8](text.data(using: .utf16LittleEndian)!)
+        var child: [UInt8] = []
+        child += u16(0x0000)            // ver/instance (atom)
+        child += u16(0x0FA0)            // RT_TextCharsAtom
+        child += u32(textBytes.count)
+        child += textBytes
+
+        var container: [UInt8] = []
+        container += u16(0x000F)        // ver 0xF = container
+        container += u16(0x03EE)        // RT_Slide
+        container += u32(child.count)
+        container += child
+
+        let slides = PowerPointSongImporter().parsePPTRecords(data: Data(container))
+        #expect(slides.count == 1)
+        #expect(slides.first?.first == "Salut lume")
     }
 }
 
