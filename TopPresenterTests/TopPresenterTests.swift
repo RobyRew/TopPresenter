@@ -637,6 +637,94 @@ struct PresentationManagerTests {
         #expect(hms.split(separator: ":").count == 3)
     }
 
+    @Test func resilientPayloadDecodesPartialJSON() throws {
+        // Imported/old themes may carry only a subset of fields
+        let json = """
+        {"fontSize": 72, "backgroundMediaTypeRaw": "video",
+         "frames": {"verseContent": {"x": 0.1, "y": 0.2, "width": 0.8, "height": 0.5}},
+         "visibility": {"translationName": true}}
+        """
+        let payload = try JSONDecoder().decode(
+            PresentationManager.ThemePayload.self,
+            from: json.data(using: .utf8)!
+        )
+        #expect(payload.fontSize == 72)
+        #expect(payload.backgroundMediaTypeRaw == "video")
+        #expect(payload.frames["verseContent"]?.width == 0.8)
+        #expect(payload.fontName == PresentationDefaults.fontName) // default filled in
+        #expect(payload.customTextBoxes.isEmpty)
+    }
+
+    @Test func themeImportExportRoundTrip() throws {
+        let pm = PresentationManager()
+        let fm = FileManager.default
+        let tmp = fm.temporaryDirectory.appendingPathComponent("tptheme-test-\(UUID().uuidString)")
+        defer { try? fm.removeItem(at: tmp) }
+
+        // Build a package like the generator does (subset JSON + media file)
+        let pkg = tmp.appendingPathComponent("Test.tptheme")
+        let mediaDir = pkg.appendingPathComponent("media")
+        try fm.createDirectory(at: mediaDir, withIntermediateDirectories: true)
+        let fakeMedia = mediaDir.appendingPathComponent("bg.jpg")
+        try Data([0xFF, 0xD8, 0xFF, 0xE0]).write(to: fakeMedia)
+        let archiveJSON = """
+        {"version": 1, "name": "Temă Test", "format": "bible",
+         "payload": {"fontSize": 64, "useBackgroundImage": true, "backgroundMediaTypeRaw": "image"},
+         "assets": [{"slot": "background", "file": "bg.jpg", "mediaType": "image"}]}
+        """
+        try archiveJSON.data(using: .utf8)!.write(to: pkg.appendingPathComponent("theme.json"))
+
+        // Import: media lands in the container, bookmark resolves
+        let imported = try pm.importTheme(from: pkg)
+        defer {
+            pm.deleteTheme(id: imported.id)
+            try? fm.removeItem(at: PresentationManager.themeMediaDirectory(for: imported.id))
+        }
+        #expect(imported.name == "Temă Test")
+        #expect(imported.formatRaw == "bible")
+        #expect(imported.payload.fontSize == 64)
+        #expect(imported.payload.backgroundImageBookmark != nil)
+        let resolved = PresentationManager.resolveBookmark(imported.payload.backgroundImageBookmark!)
+        #expect(resolved != nil)
+
+        // Export it back out: package contains theme.json + the media file
+        let exportPkg = tmp.appendingPathComponent("Exported.tptheme")
+        try pm.exportTheme(id: imported.id, to: exportPkg)
+        #expect(fm.fileExists(atPath: exportPkg.appendingPathComponent("theme.json").path))
+        #expect(fm.fileExists(atPath: exportPkg.appendingPathComponent("media/bg.jpg").path))
+
+        let exportedData = try Data(contentsOf: exportPkg.appendingPathComponent("theme.json"))
+        let archive = try JSONDecoder().decode(PresentationManager.ThemeArchive.self, from: exportedData)
+        #expect(archive.name == "Temă Test")
+        #expect(archive.format == "bible")
+        #expect(archive.assets.count == 1)
+        #expect(archive.payload.backgroundImageBookmark == nil) // stripped, file embedded
+    }
+
+    @Test func mediaTypeDetection() {
+        #expect(PresentationManager.mediaType(forExtension: "jpg") == "image")
+        #expect(PresentationManager.mediaType(forExtension: "GIF") == "gif")
+        #expect(PresentationManager.mediaType(forExtension: "mp4") == "video")
+        #expect(PresentationManager.mediaType(forExtension: "MOV") == "video")
+    }
+
+    @Test func themesFilterByFormat() {
+        let pm = PresentationManager()
+        let bible = pm.saveCurrentAsTheme(named: "B", formatRaw: "bible")
+        let song = pm.saveCurrentAsTheme(named: "S", formatRaw: "song")
+        let universal = pm.saveCurrentAsTheme(named: "U", formatRaw: "all")
+        defer {
+            pm.deleteTheme(id: bible.id)
+            pm.deleteTheme(id: song.id)
+            pm.deleteTheme(id: universal.id)
+        }
+
+        let bibleThemes = pm.themes(forFormat: "bible")
+        #expect(bibleThemes.contains(where: { $0.id == bible.id }))
+        #expect(bibleThemes.contains(where: { $0.id == universal.id }))
+        #expect(!bibleThemes.contains(where: { $0.id == song.id }))
+    }
+
     @Test func themeRoundTripRestoresLook() {
         let pm = PresentationManager()
         let originalThemes = pm.themes

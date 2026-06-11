@@ -261,6 +261,43 @@ func boxLabel(for identity: BoxIdentity, pm: PresentationManager) -> String {
     }
 }
 
+/// Small media preview row used in the Fundal tab (image/GIF/video aware).
+struct BackgroundMediaThumb: View {
+    let bookmark: Data?
+    let mediaType: String
+    let opacity: Double
+
+    @State private var thumb: NSImage?
+
+    var body: some View {
+        HStack {
+            Spacer()
+            ZStack(alignment: .bottomTrailing) {
+                if let thumb {
+                    Image(nsImage: thumb)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .opacity(opacity)
+                        .frame(maxHeight: 70)
+                        .clipShape(RoundedRectangle(cornerRadius: 4))
+                }
+                if mediaType != "image" {
+                    Image(systemName: mediaType == "video" ? "video.fill" : "photo.stack")
+                        .font(.system(size: 9))
+                        .foregroundStyle(.white)
+                        .padding(3)
+                        .background(.black.opacity(0.55), in: Capsule())
+                        .padding(3)
+                }
+            }
+            Spacer()
+        }
+        .task(id: bookmark) {
+            thumb = await MediaThumbnailer.thumbnail(forBookmark: bookmark, mediaType: mediaType)
+        }
+    }
+}
+
 /// Where the box pulls its content from — shown in the inspector and context menu.
 func boxSourceDescription(for identity: BoxIdentity, pm: PresentationManager) -> String {
     switch identity {
@@ -716,43 +753,333 @@ struct ThemeMenuControl: View {
     }
 }
 
-// MARK: - Panel Footer (right bar: theme switcher + Layout Editor button)
+// MARK: - Panel Footer (right bar: theme gallery + Theme Editor button)
 
+/// Footer of every preview panel: a visual THEME GALLERY (thumbnail cards,
+/// filtered by the panel's format) and the Theme Editor button.
 struct PanelFooter: View {
+    /// Presenter format of the hosting panel ("bible"/"song"/"text") — the
+    /// gallery shows that format's themes plus universal ("all") themes.
+    var format: String? = nil
+
     var body: some View {
         VStack(spacing: 6) {
-            HStack {
-                Text(String(localized: "Temă:", comment: "Theme label"))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                ThemeMenuControl()
-                Spacer()
-            }
-            .padding(.horizontal, 12)
-
+            ThemeGalleryView(format: format)
             LayoutEditorButton()
         }
         .padding(.top, 6)
     }
 }
 
-/// Small footer button shown in every preview panel — opens the design studio.
+/// The Theme Editor button — the one place for boxes, text, backgrounds, output.
 struct LayoutEditorButton: View {
     var body: some View {
         Button {
             NotificationCenter.default.post(name: .openLayoutEditor, object: nil)
         } label: {
             Label(
-                String(localized: "Editor de Layout…", comment: "Open layout editor button"),
-                systemImage: "rectangle.and.pencil.and.ellipsis"
+                String(localized: "Editor de Teme", comment: "Open theme editor button"),
+                systemImage: "paintbrush.pointed.fill"
             )
+            .font(.callout.weight(.semibold))
             .frame(maxWidth: .infinity)
+            .padding(.vertical, 2)
         }
         .buttonStyle(.bordered)
-        .controlSize(.small)
+        .controlSize(.regular)
         .padding(.horizontal, 12)
         .padding(.bottom, 8)
-        .help(String(localized: "Deschide Editorul de Layout — casete, text, fundal, ieșire", comment: "Tooltip"))
+        .help(String(localized: "Deschide Editorul de Teme — casete, text, fundal, ieșire", comment: "Tooltip"))
+    }
+}
+
+// MARK: - Theme Gallery (thumbnail cards)
+
+/// Horizontal gallery of theme cards with live thumbnails. Click applies the
+/// theme; right-click manages it (update, rename, format, export, delete).
+struct ThemeGalleryView: View {
+    @Environment(PresentationManager.self) private var pm
+
+    var format: String? = nil
+
+    @State private var showNewThemeAlert = false
+    @State private var newThemeName = ""
+    @State private var renameThemeID: UUID?
+    @State private var renameText = ""
+
+    private var visibleThemes: [PresentationManager.Theme] {
+        pm.themes(forFormat: format)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Label(String(localized: "Teme", comment: "Theme gallery title"), systemImage: "paintpalette")
+                    .font(.caption.bold())
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Button {
+                    importThemes()
+                } label: {
+                    Image(systemName: "square.and.arrow.down")
+                        .font(.caption)
+                }
+                .buttonStyle(.borderless)
+                .help(String(localized: "Importă teme (.tptheme)", comment: "Tooltip"))
+
+                Button {
+                    newThemeName = ""
+                    showNewThemeAlert = true
+                } label: {
+                    Image(systemName: "plus")
+                        .font(.caption)
+                }
+                .buttonStyle(.borderless)
+                .help(String(localized: "Salvează aspectul curent ca temă nouă", comment: "Tooltip"))
+            }
+            .padding(.horizontal, 12)
+
+            if visibleThemes.isEmpty {
+                Text(String(localized: "Nicio temă încă — apasă + pentru a salva aspectul curent.", comment: "Theme gallery empty state"))
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+                    .padding(.horizontal, 12)
+            } else {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(visibleThemes) { theme in
+                            ThemeCard(
+                                theme: theme,
+                                isActive: pm.activeThemeID == theme.id,
+                                onRename: {
+                                    renameText = theme.name
+                                    renameThemeID = theme.id
+                                }
+                            )
+                        }
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 2)
+                }
+            }
+        }
+        .alert(
+            String(localized: "Temă nouă", comment: "New theme alert title"),
+            isPresented: $showNewThemeAlert
+        ) {
+            TextField(String(localized: "Numele temei", comment: "Theme name field"), text: $newThemeName)
+            Button(String(localized: "Salvează", comment: "Save button")) {
+                let name = newThemeName.trimmingCharacters(in: .whitespacesAndNewlines)
+                pm.saveCurrentAsTheme(
+                    named: name.isEmpty ? String(localized: "Temă fără nume", comment: "Default theme name") : name,
+                    formatRaw: format ?? "all"
+                )
+            }
+            Button(String(localized: "Anulează", comment: "Cancel button"), role: .cancel) { }
+        } message: {
+            Text(String(localized: "Salvează aspectul curent (casete, stiluri, fundal, media) ca temă.", comment: "New theme alert message"))
+        }
+        .alert(
+            String(localized: "Redenumește tema", comment: "Rename theme alert title"),
+            isPresented: Binding(
+                get: { renameThemeID != nil },
+                set: { if !$0 { renameThemeID = nil } }
+            )
+        ) {
+            TextField(String(localized: "Numele temei", comment: "Theme name field"), text: $renameText)
+            Button(String(localized: "Salvează", comment: "Save button")) {
+                if let id = renameThemeID {
+                    pm.renameTheme(id: id, to: renameText.trimmingCharacters(in: .whitespacesAndNewlines))
+                }
+                renameThemeID = nil
+            }
+            Button(String(localized: "Anulează", comment: "Cancel button"), role: .cancel) {
+                renameThemeID = nil
+            }
+        }
+    }
+
+    private func importThemes() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = true
+        panel.allowsMultipleSelection = true
+        panel.message = String(localized: "Alege pachete .tptheme de importat", comment: "Import panel message")
+        if panel.runModal() == .OK {
+            for url in panel.urls {
+                _ = try? pm.importTheme(from: url)
+            }
+        }
+    }
+}
+
+/// One theme card: background thumbnail + miniature layout sketch + name.
+private struct ThemeCard: View {
+    @Environment(PresentationManager.self) private var pm
+
+    let theme: PresentationManager.Theme
+    let isActive: Bool
+    let onRename: () -> Void
+
+    @State private var thumbnail: NSImage?
+
+    private var payload: PresentationManager.ThemePayload { theme.payload }
+
+    var body: some View {
+        VStack(spacing: 3) {
+            ZStack {
+                // Background: theme color, then media thumbnail
+                Color(hex: payload.backgroundEnabled ? payload.backgroundColorHex : "000000") ?? .black
+                if let thumbnail {
+                    Image(nsImage: thumbnail)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .opacity(payload.backgroundOpacity)
+                }
+
+                // Miniature layout sketch from the payload's frames
+                GeometryReader { geo in
+                    ZStack(alignment: .topLeading) {
+                        ForEach(TextBoxSection.allCases) { section in
+                            if payload.visibility[section.rawValue] ?? true {
+                                let frame = payload.frames[section.rawValue] ?? PresentationManager.TextBoxFrame.defaultVerse
+                                let rect = frame.rect(in: geo.size)
+                                if section == .verseContent {
+                                    Text("Aa")
+                                        .font(.system(size: max(rect.height * 0.42, 7), weight: .semibold))
+                                        .foregroundStyle(
+                                            (Color(hex: payload.styles[section.rawValue]?.colorHex ?? "") ?? (Color(hex: payload.textColorHex) ?? .white))
+                                        )
+                                        .frame(width: rect.width, height: rect.height)
+                                        .position(x: rect.midX, y: rect.midY)
+                                } else {
+                                    RoundedRectangle(cornerRadius: 1)
+                                        .fill(.white.opacity(0.35))
+                                        .frame(width: rect.width, height: max(rect.height * 0.45, 2))
+                                        .position(x: rect.midX, y: rect.midY)
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Media-type badge
+                if payload.useBackgroundImage && payload.backgroundMediaTypeRaw != "image" {
+                    VStack {
+                        HStack {
+                            Spacer()
+                            Image(systemName: payload.backgroundMediaTypeRaw == "video" ? "video.fill" : "photo.stack")
+                                .font(.system(size: 7))
+                                .foregroundStyle(.white.opacity(0.9))
+                                .padding(2)
+                                .background(.black.opacity(0.5), in: Capsule())
+                        }
+                        Spacer()
+                    }
+                    .padding(3)
+                }
+            }
+            .frame(width: 108, height: 61)
+            .clipShape(RoundedRectangle(cornerRadius: 6))
+            .overlay(
+                RoundedRectangle(cornerRadius: 6)
+                    .strokeBorder(
+                        isActive ? Color.accentColor : Color.gray.opacity(0.35),
+                        lineWidth: isActive ? 2 : 1
+                    )
+            )
+
+            HStack(spacing: 3) {
+                if theme.formatRaw != "all" {
+                    Circle()
+                        .fill(formatColor)
+                        .frame(width: 5, height: 5)
+                }
+                Text(theme.name)
+                    .font(.caption2)
+                    .lineLimit(1)
+                    .foregroundStyle(isActive ? Color.accentColor : .secondary)
+            }
+            .frame(width: 108)
+        }
+        .contentShape(Rectangle())
+        .onTapGesture {
+            pm.applyTheme(id: theme.id)
+        }
+        .help("\(theme.name) — \(PresentationManager.Theme.formatLabel(theme.formatRaw))")
+        .task(id: payload.backgroundImageBookmark) {
+            thumbnail = await MediaThumbnailer.thumbnail(
+                forBookmark: payload.backgroundImageBookmark,
+                mediaType: payload.backgroundMediaTypeRaw
+            )
+        }
+        .contextMenu {
+            Button {
+                pm.applyTheme(id: theme.id)
+            } label: {
+                Label(String(localized: "Aplică tema", comment: "Context menu"), systemImage: "checkmark.circle")
+            }
+
+            Button {
+                pm.updateTheme(id: theme.id)
+            } label: {
+                Label(String(localized: "Actualizează din aspectul curent", comment: "Context menu"), systemImage: "square.and.arrow.down")
+            }
+
+            Button {
+                onRename()
+            } label: {
+                Label(String(localized: "Redenumește…", comment: "Context menu"), systemImage: "pencil")
+            }
+
+            Menu {
+                ForEach(["all", "bible", "song", "text"], id: \.self) { raw in
+                    Button {
+                        pm.setThemeFormat(id: theme.id, formatRaw: raw)
+                    } label: {
+                        if theme.formatRaw == raw {
+                            Label(PresentationManager.Theme.formatLabel(raw), systemImage: "checkmark")
+                        } else {
+                            Text(PresentationManager.Theme.formatLabel(raw))
+                        }
+                    }
+                }
+            } label: {
+                Label(String(localized: "Format", comment: "Context menu"), systemImage: "tag")
+            }
+
+            Divider()
+
+            Button {
+                exportTheme()
+            } label: {
+                Label(String(localized: "Exportă…", comment: "Context menu"), systemImage: "square.and.arrow.up")
+            }
+
+            Button(role: .destructive) {
+                pm.deleteTheme(id: theme.id)
+            } label: {
+                Label(String(localized: "Șterge", comment: "Context menu"), systemImage: "trash")
+            }
+        }
+    }
+
+    private var formatColor: Color {
+        switch theme.formatRaw {
+        case "bible": return .cyan
+        case "song": return .orange
+        case "text": return .green
+        default: return .gray
+        }
+    }
+
+    private func exportTheme() {
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = theme.name + ".tptheme"
+        panel.message = String(localized: "Exportă tema ca pachet .tptheme (include toate fișierele media)", comment: "Export panel message")
+        if panel.runModal() == .OK, let url = panel.url {
+            try? pm.exportTheme(id: theme.id, to: url)
+        }
     }
 }
 
@@ -839,8 +1166,8 @@ struct LayoutEditorSheet: View {
     private var header: some View {
         HStack {
             Label(
-                String(localized: "Editor de Layout", comment: "Layout editor title"),
-                systemImage: "rectangle.and.pencil.and.ellipsis"
+                String(localized: "Editor de Teme", comment: "Theme editor title"),
+                systemImage: "paintbrush.pointed.fill"
             )
             .font(.headline)
 
@@ -1025,11 +1352,8 @@ struct LayoutEditorSheet: View {
                         if bg.showColor {
                             bg.color
                         }
-                        if bg.useImage, let image = bg.image {
-                            Image(nsImage: image)
-                                .resizable()
-                                .aspectRatio(contentMode: .fill)
-                                .opacity(bg.opacity)
+                        if bg.useMedia {
+                            BackgroundMediaView(background: bg, plays: true)
                                 .frame(width: size.width, height: size.height)
                                 .clipped()
                         }
@@ -2203,20 +2527,18 @@ struct LayoutEditorSheet: View {
                         }
                     }
 
-                    Button(String(localized: "Alege imagine…", comment: "Button")) {
+                    Button(String(localized: "Alege imagine / video…", comment: "Button")) {
                         selectBackgroundImage()
                     }
                     .controlSize(.small)
-                    .help(String(localized: "Alege o imagine de fundal globală", comment: "Tooltip"))
+                    .help(String(localized: "Fundal global: imagine, GIF animat sau video în buclă", comment: "Tooltip"))
 
-                    if let bgImage = pm.backgroundImage, pm.useBackgroundImage {
-                        Image(nsImage: bgImage)
-                            .resizable()
-                            .aspectRatio(contentMode: .fit)
-                            .opacity(pm.backgroundOpacity)
-                            .frame(maxHeight: 70)
-                            .clipShape(RoundedRectangle(cornerRadius: 4))
-                            .frame(maxWidth: .infinity)
+                    if pm.useBackgroundImage {
+                        BackgroundMediaThumb(
+                            bookmark: UserDefaults.standard.data(forKey: "pm_backgroundImageBookmark"),
+                            mediaType: pm.backgroundMediaTypeRaw,
+                            opacity: pm.backgroundOpacity
+                        )
                     }
                 }
             } label: {
@@ -2330,24 +2652,23 @@ struct LayoutEditorSheet: View {
                         }
                     }
 
-                    Button(String(localized: "Alege imagine…", comment: "Button")) {
+                    Button(String(localized: "Alege imagine / video…", comment: "Button")) {
                         let panel = NSOpenPanel()
-                        panel.allowedContentTypes = [.image]
+                        panel.allowedContentTypes = [.image, .movie]
                         panel.allowsMultipleSelection = false
                         if panel.runModal() == .OK, let url = panel.url {
-                            pm.setContentBackgroundImage(url: url, for: key)
+                            pm.setContentBackgroundMedia(url: url, for: key)
                         }
                     }
                     .controlSize(.small)
+                    .help(String(localized: "Fundal pentru acest prezentator: imagine, GIF sau video în buclă", comment: "Tooltip"))
 
-                    if let image = pm.contentBackgroundImages[key], config.useImage {
-                        Image(nsImage: image)
-                            .resizable()
-                            .aspectRatio(contentMode: .fit)
-                            .opacity(config.opacity)
-                            .frame(maxHeight: 60)
-                            .clipShape(RoundedRectangle(cornerRadius: 4))
-                            .frame(maxWidth: .infinity)
+                    if config.useImage {
+                        BackgroundMediaThumb(
+                            bookmark: config.imageBookmark,
+                            mediaType: config.mediaTypeRaw,
+                            opacity: config.opacity
+                        )
                     }
                 }
             }
@@ -2475,12 +2796,12 @@ struct LayoutEditorSheet: View {
 
     private func selectBackgroundImage() {
         let panel = NSOpenPanel()
-        panel.allowedContentTypes = [.image]
+        panel.allowedContentTypes = [.image, .movie]
         panel.allowsMultipleSelection = false
         panel.canChooseDirectories = false
 
         if panel.runModal() == .OK, let url = panel.url {
-            pm.setBackgroundImage(from: url)
+            pm.setBackgroundMedia(from: url)
         }
     }
 }

@@ -59,7 +59,7 @@ struct CustomSlidesPreviewPanel: View {
             Divider()
 
             // Theme switcher + Layout Editor access
-            PanelFooter()
+            PanelFooter(format: "text")
         }
         .background(.background)
         .onKeyWindowNotification(.slideSelected) { notification in

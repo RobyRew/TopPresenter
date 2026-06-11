@@ -71,11 +71,8 @@ struct PresentationOutputView: View {
                 bg.color
                     .ignoresSafeArea()
             }
-            if bg.useImage, let image = bg.image {
-                Image(nsImage: image)
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-                    .opacity(bg.opacity)
+            if bg.useMedia {
+                BackgroundMediaView(background: bg, plays: true)
                     .ignoresSafeArea()
             }
         }

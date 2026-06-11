@@ -87,7 +87,7 @@ struct PresentationCommands: Commands {
 
             Divider()
 
-            Button(String(localized: "Layout Editor…", comment: "Menu item")) {
+            Button(String(localized: "Editor de Teme…", comment: "Menu item")) {
                 NotificationCenter.default.post(name: .openLayoutEditor, object: nil)
             }
 

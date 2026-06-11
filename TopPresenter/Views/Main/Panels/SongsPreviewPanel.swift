@@ -56,7 +56,7 @@ struct SongsPreviewPanel: View {
             Divider()
 
             // Theme switcher + Layout Editor access
-            PanelFooter()
+            PanelFooter(format: "song")
         }
         .background(.background)
     }

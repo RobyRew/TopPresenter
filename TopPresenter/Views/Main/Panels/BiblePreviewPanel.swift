@@ -53,7 +53,7 @@ struct BiblePreviewPanel: View {
             Divider()
 
             // Theme switcher + Layout Editor access
-            PanelFooter()
+            PanelFooter(format: "bible")
         }
         .background(.background)
     }

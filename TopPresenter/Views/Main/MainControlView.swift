@@ -469,11 +469,11 @@ struct MainControlView: View {
                 showLayoutEditor = true
             } label: {
                 Label(
-                    String(localized: "Layout Editor", comment: "Toolbar button"),
-                    systemImage: "rectangle.and.pencil.and.ellipsis"
+                    String(localized: "Editor de Teme", comment: "Toolbar button"),
+                    systemImage: "paintbrush.pointed.fill"
                 )
             }
-            .help(String(localized: "Open the Layout Editor — boxes, text, background, output", comment: "Toolbar tooltip"))
+            .help(String(localized: "Deschide Editorul de Teme — casete, text, fundal, ieșire", comment: "Toolbar tooltip"))
         }
     }
 

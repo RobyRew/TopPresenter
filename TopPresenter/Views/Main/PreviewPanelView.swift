@@ -173,11 +173,8 @@ struct PresentationPreviewCard: View {
                     if bg.showColor {
                         bg.color
                     }
-                    if bg.useImage, let image = bg.image {
-                        Image(nsImage: image)
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                            .opacity(bg.opacity)
+                    if bg.useMedia {
+                        BackgroundMediaView(background: bg, plays: false)
                     }
 
                     // Content + media — same unified stacking order as the output, scaled.

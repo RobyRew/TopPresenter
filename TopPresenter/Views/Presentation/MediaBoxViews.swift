@@ -15,6 +15,88 @@ import SwiftUI
 import AppKit
 import AVKit
 
+// MARK: - Background Media View
+
+/// Full-bleed background media: image, animated GIF, or looping muted video.
+/// `plays == false` (preview card) shows a still thumbnail instead of playing.
+struct BackgroundMediaView: View {
+    let background: PresentationManager.ActiveBackground
+    var plays: Bool = true
+
+    @State private var videoThumb: NSImage?
+
+    var body: some View {
+        Group {
+            switch background.mediaType {
+            case "gif":
+                if let url = background.mediaURL {
+                    AnimatedGIFView(url: url)
+                }
+            case "video":
+                if plays, let url = background.mediaURL {
+                    MediaBoxVideoView(url: url, fills: true)
+                } else if let videoThumb {
+                    Image(nsImage: videoThumb)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                }
+            default:
+                if let image = background.image {
+                    Image(nsImage: image)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                }
+            }
+        }
+        .opacity(background.opacity)
+        .task(id: background.mediaURL) {
+            if !plays, background.mediaType == "video", let url = background.mediaURL {
+                videoThumb = await MediaThumbnailer.thumbnail(for: url, mediaType: "video")
+            }
+        }
+    }
+}
+
+// MARK: - Media Thumbnailer
+
+/// Async thumbnails for media files (video first-frame via AVAssetImageGenerator),
+/// cached by path. Used by the preview card and the theme gallery.
+enum MediaThumbnailer {
+    private static let cache = NSCache<NSString, NSImage>()
+
+    static func thumbnail(for url: URL, mediaType: String) async -> NSImage? {
+        let key = url.path as NSString
+        if let hit = cache.object(forKey: key) { return hit }
+
+        let result: NSImage?
+        switch mediaType {
+        case "video":
+            let asset = AVURLAsset(url: url)
+            let generator = AVAssetImageGenerator(asset: asset)
+            generator.appliesPreferredTrackTransform = true
+            generator.maximumSize = CGSize(width: 480, height: 270)
+            if let cgImage = try? await generator.image(at: CMTime(seconds: 1, preferredTimescale: 600)).image {
+                result = NSImage(cgImage: cgImage, size: .zero)
+            } else {
+                result = nil
+            }
+        default:
+            result = NSImage(contentsOf: url)
+        }
+
+        if let result {
+            cache.setObject(result, forKey: key)
+        }
+        return result
+    }
+
+    /// Thumbnail straight from a bookmark (theme gallery cards).
+    static func thumbnail(forBookmark bookmark: Data?, mediaType: String) async -> NSImage? {
+        guard let bookmark, let url = PresentationManager.resolveBookmark(bookmark) else { return nil }
+        return await thumbnail(for: url, mediaType: mediaType)
+    }
+}
+
 // MARK: - Media Box Content
 
 /// One media box: resolves the file, renders it inside its fixed frame with

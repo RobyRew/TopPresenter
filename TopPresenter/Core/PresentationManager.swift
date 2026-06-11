@@ -22,6 +22,12 @@ final class PresentationManager {
 
     // MARK: - Global Background
     var backgroundImage: NSImage?
+    /// Resolved URL of the background media (needed for gif/video playback).
+    var backgroundMediaURL: URL?
+    /// "image" | "gif" | "video" — backgrounds support the full media trio.
+    var backgroundMediaTypeRaw: String {
+        didSet { UserDefaults.standard.set(backgroundMediaTypeRaw, forKey: "pm_backgroundMediaTypeRaw") }
+    }
     var backgroundImagePath: String? {
         didSet { UserDefaults.standard.set(backgroundImagePath, forKey: "pm_backgroundImagePath") }
     }
@@ -37,6 +43,60 @@ final class PresentationManager {
         didSet { UserDefaults.standard.set(backgroundEnabled, forKey: "pm_backgroundEnabled") }
     }
 
+    // MARK: - Media Helpers (bookmarks + type detection)
+
+    /// Creates a bookmark, preferring security-scoped (user-selected files);
+    /// falls back to a plain bookmark (app-container files don't need scope).
+    static func makeBookmark(for url: URL) -> Data? {
+        if let data = try? url.bookmarkData(
+            options: .withSecurityScope,
+            includingResourceValuesForKeys: nil,
+            relativeTo: nil
+        ) {
+            return data
+        }
+        return try? url.bookmarkData()
+    }
+
+    /// Resolves a bookmark, trying security-scoped first, then plain.
+    /// Opens scoped access when applicable (kept open — media renders continuously).
+    static func resolveBookmark(_ data: Data) -> URL? {
+        var isStale = false
+        if let url = try? URL(
+            resolvingBookmarkData: data,
+            options: .withSecurityScope,
+            relativeTo: nil,
+            bookmarkDataIsStale: &isStale
+        ) {
+            _ = url.startAccessingSecurityScopedResource()
+            return url
+        }
+        if let url = try? URL(
+            resolvingBookmarkData: data,
+            options: [],
+            relativeTo: nil,
+            bookmarkDataIsStale: &isStale
+        ) {
+            return url
+        }
+        return nil
+    }
+
+    /// "image" | "gif" | "video" from a file extension.
+    static func mediaType(forExtension ext: String) -> String {
+        let lower = ext.lowercased()
+        if lower == "gif" { return "gif" }
+        if ["mp4", "mov", "m4v", "avi", "mkv", "webm"].contains(lower) { return "video" }
+        return "image"
+    }
+
+    /// App-container directory where imported theme media lives.
+    static func themeMediaDirectory(for themeID: UUID) -> URL {
+        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        return base.appendingPathComponent("ThemeMedia", isDirectory: true)
+            .appendingPathComponent(themeID.uuidString, isDirectory: true)
+    }
+
     // MARK: - Per-Content Backgrounds
     /// Optional background override per presenter type ("bible" / "song" / "text").
     /// When a config exists and is enabled, it replaces the global background for
@@ -49,6 +109,24 @@ final class PresentationManager {
         var useImage: Bool = false
         var imageBookmark: Data? = nil
         var imageName: String = ""
+        /// "image" | "gif" | "video" — backgrounds support the full media trio.
+        var mediaTypeRaw: String = "image"
+
+        init() {}
+
+        // Resilient decoding: missing keys fall back to defaults so stored
+        // configs and imported themes survive future model growth.
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            enabled = try c.decodeIfPresent(Bool.self, forKey: .enabled) ?? false
+            showColor = try c.decodeIfPresent(Bool.self, forKey: .showColor) ?? false
+            colorHex = try c.decodeIfPresent(String.self, forKey: .colorHex) ?? "000000"
+            opacity = try c.decodeIfPresent(Double.self, forKey: .opacity) ?? 1.0
+            useImage = try c.decodeIfPresent(Bool.self, forKey: .useImage) ?? false
+            imageBookmark = try c.decodeIfPresent(Data.self, forKey: .imageBookmark)
+            imageName = try c.decodeIfPresent(String.self, forKey: .imageName) ?? ""
+            mediaTypeRaw = try c.decodeIfPresent(String.self, forKey: .mediaTypeRaw) ?? "image"
+        }
     }
 
     var contentBackgrounds: [String: BackgroundConfig] {
@@ -58,8 +136,10 @@ final class PresentationManager {
             }
         }
     }
-    /// Decoded images for per-content backgrounds (loaded from bookmarks).
+    /// Decoded still images for per-content backgrounds (image type only).
     var contentBackgroundImages: [String: NSImage] = [:]
+    /// Resolved media URLs for per-content backgrounds (gif/video playback).
+    var contentBackgroundURLs: [String: URL] = [:]
 
     static func contentKey(for type: LiveContent.ContentType) -> String {
         switch type {
@@ -85,18 +165,16 @@ final class PresentationManager {
         contentBackgrounds[key] = config
     }
 
-    func setContentBackgroundImage(url: URL, for key: String) {
-        guard let bookmark = try? url.bookmarkData(
-            options: .withSecurityScope,
-            includingResourceValuesForKeys: nil,
-            relativeTo: nil
-        ), let image = NSImage(contentsOf: url) else { return }
+    func setContentBackgroundMedia(url: URL, for key: String) {
+        guard let bookmark = Self.makeBookmark(for: url) else { return }
         var config = backgroundConfig(for: key)
         config.imageBookmark = bookmark
         config.imageName = url.lastPathComponent
         config.useImage = true
+        config.mediaTypeRaw = Self.mediaType(forExtension: url.pathExtension)
         contentBackgrounds[key] = config
-        contentBackgroundImages[key] = image
+        contentBackgroundURLs[key] = url
+        contentBackgroundImages[key] = config.mediaTypeRaw == "image" ? NSImage(contentsOf: url) : nil
     }
 
     func removeContentBackgroundImage(for key: String) {
@@ -104,25 +182,18 @@ final class PresentationManager {
         config.imageBookmark = nil
         config.imageName = ""
         config.useImage = false
+        config.mediaTypeRaw = "image"
         contentBackgrounds[key] = config
         contentBackgroundImages[key] = nil
+        contentBackgroundURLs[key] = nil
     }
 
     private func loadContentBackgroundImages() {
         for (key, config) in contentBackgrounds {
-            guard let bookmark = config.imageBookmark else { continue }
-            var isStale = false
-            guard let url = try? URL(
-                resolvingBookmarkData: bookmark,
-                options: .withSecurityScope,
-                relativeTo: nil,
-                bookmarkDataIsStale: &isStale
-            ) else { continue }
-            let accessing = url.startAccessingSecurityScopedResource()
-            if let image = NSImage(contentsOf: url) {
-                contentBackgroundImages[key] = image
-            }
-            if accessing { url.stopAccessingSecurityScopedResource() }
+            guard let bookmark = config.imageBookmark,
+                  let url = Self.resolveBookmark(bookmark) else { continue }
+            contentBackgroundURLs[key] = url
+            contentBackgroundImages[key] = config.mediaTypeRaw == "image" ? NSImage(contentsOf: url) : nil
         }
     }
 
@@ -132,8 +203,10 @@ final class PresentationManager {
         var showColor: Bool
         var color: Color
         var opacity: Double
-        var useImage: Bool
-        var image: NSImage?
+        var useMedia: Bool
+        var mediaType: String   // image | gif | video
+        var mediaURL: URL?
+        var image: NSImage?     // decoded still (image type)
     }
 
     func activeBackground(for type: LiveContent.ContentType, frozen: Bool) -> ActiveBackground {
@@ -143,7 +216,9 @@ final class PresentationManager {
                 showColor: config.showColor,
                 color: Color(hex: config.colorHex) ?? .black,
                 opacity: config.opacity,
-                useImage: config.useImage,
+                useMedia: config.useImage,
+                mediaType: config.mediaTypeRaw,
+                mediaURL: contentBackgroundURLs[key],
                 image: contentBackgroundImages[key]
             )
         }
@@ -152,7 +227,9 @@ final class PresentationManager {
                 showColor: frozenBackgroundEnabled,
                 color: Color(hex: frozenBackgroundColorHex) ?? .black,
                 opacity: frozenBackgroundOpacity,
-                useImage: frozenUseBackgroundImage,
+                useMedia: frozenUseBackgroundImage,
+                mediaType: backgroundMediaTypeRaw,
+                mediaURL: backgroundMediaURL,
                 image: frozenBackgroundImage
             )
         }
@@ -160,7 +237,9 @@ final class PresentationManager {
             showColor: backgroundEnabled,
             color: backgroundColor,
             opacity: backgroundOpacity,
-            useImage: useBackgroundImage,
+            useMedia: useBackgroundImage,
+            mediaType: backgroundMediaTypeRaw,
+            mediaURL: backgroundMediaURL,
             image: backgroundImage
         )
     }
@@ -772,15 +851,7 @@ final class PresentationManager {
 
         func resolvedURL() -> URL? {
             guard let data = bookmarkData else { return nil }
-            var isStale = false
-            guard let url = try? URL(
-                resolvingBookmarkData: data,
-                options: .withSecurityScope,
-                relativeTo: nil,
-                bookmarkDataIsStale: &isStale
-            ) else { return nil }
-            _ = url.startAccessingSecurityScopedResource()
-            return url
+            return PresentationManager.resolveBookmark(data)
         }
 
         func showsFor(contentType: LiveContent.ContentType, isLive: Bool) -> Bool {
@@ -812,24 +883,13 @@ final class PresentationManager {
 
     @discardableResult
     func addMediaBox(url: URL) -> MediaBox? {
-        guard let bookmark = try? url.bookmarkData(
-            options: .withSecurityScope,
-            includingResourceValuesForKeys: nil,
-            relativeTo: nil
-        ) else { return nil }
+        guard let bookmark = Self.makeBookmark(for: url) else { return nil }
 
         registerLayoutUndo()
         var box = MediaBox()
         box.fileName = url.lastPathComponent
         box.bookmarkData = bookmark
-        let ext = url.pathExtension.lowercased()
-        if ext == "gif" {
-            box.mediaTypeRaw = "gif"
-        } else if ["mp4", "mov", "m4v", "avi", "mkv", "webm"].contains(ext) {
-            box.mediaTypeRaw = "video"
-        } else {
-            box.mediaTypeRaw = "image"
-        }
+        box.mediaTypeRaw = Self.mediaType(forExtension: url.pathExtension)
         let offset = Double(mediaBoxes.count % 4) * 0.04
         box.frame = TextBoxFrame(x: 0.74 - offset, y: 0.05 + offset, width: 0.20, height: 0.18).clamped()
         mediaBoxes.append(box)
@@ -1096,40 +1156,105 @@ final class PresentationManager {
     struct Theme: Identifiable, Codable, Equatable {
         var id: UUID = UUID()
         var name: String
+        /// Which presenter this theme is designed for:
+        /// "all" | "bible" | "song" | "text" — galleries filter on this.
+        var formatRaw: String = "all"
         var payload: ThemePayload
+
+        init(id: UUID = UUID(), name: String, formatRaw: String = "all", payload: ThemePayload) {
+            self.id = id
+            self.name = name
+            self.formatRaw = formatRaw
+            self.payload = payload
+        }
+
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            id = try c.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+            name = try c.decodeIfPresent(String.self, forKey: .name) ?? "Temă"
+            formatRaw = try c.decodeIfPresent(String.self, forKey: .formatRaw) ?? "all"
+            payload = try c.decodeIfPresent(ThemePayload.self, forKey: .payload) ?? ThemePayload()
+        }
+
+        static func formatLabel(_ raw: String) -> String {
+            switch raw {
+            case "bible": return String(localized: "Biblie", comment: "Theme format")
+            case "song": return String(localized: "Cântece", comment: "Theme format")
+            case "text": return String(localized: "Slide-uri", comment: "Theme format")
+            default: return String(localized: "Toate", comment: "Theme format")
+            }
+        }
     }
 
+    /// A full-look snapshot. Every field has a default and decoding is
+    /// resilient (decodeIfPresent) so stored themes, undo snapshots, and
+    /// imported .tptheme files survive future model growth.
     struct ThemePayload: Codable, Equatable {
         // Global text
-        var fontSize: Double
-        var fontName: String
-        var textColorHex: String
-        var textAlignmentRaw: String
-        var lineSpacing: Double
-        var padding: Double
-        var shadowEnabled: Bool
-        var shadowRadius: Double
-        var autoFitVerseFont: Bool
-        var globalWeightRaw: String
-        var globalVAlignRaw: String
-        var globalTextOpacity: Double
+        var fontSize: Double = PresentationDefaults.fontSize
+        var fontName: String = PresentationDefaults.fontName
+        var textColorHex: String = PresentationDefaults.textColor
+        var textAlignmentRaw: String = "center"
+        var lineSpacing: Double = PresentationDefaults.lineSpacing
+        var padding: Double = PresentationDefaults.padding
+        var shadowEnabled: Bool = true
+        var shadowRadius: Double = 3.0
+        var autoFitVerseFont: Bool = false
+        var globalWeightRaw: String = "regular"
+        var globalVAlignRaw: String = "center"
+        var globalTextOpacity: Double = 1.0
         // Global background
-        var backgroundEnabled: Bool
-        var backgroundColorHex: String
-        var backgroundOpacity: Double
-        var useBackgroundImage: Bool
-        var backgroundImageBookmark: Data?
-        var contentBackgrounds: [String: BackgroundConfig]
+        var backgroundEnabled: Bool = false
+        var backgroundColorHex: String = PresentationDefaults.backgroundColor
+        var backgroundOpacity: Double = PresentationDefaults.backgroundOpacity
+        var useBackgroundImage: Bool = false
+        var backgroundImageBookmark: Data? = nil
+        var backgroundMediaTypeRaw: String = "image"
+        var contentBackgrounds: [String: BackgroundConfig] = [:]
         // Boxes
-        var frames: [String: TextBoxFrame]
-        var visibility: [String: Bool]
-        var styles: [String: BoxTextStyle]
-        var sources: [String: String]
-        var sourceFormats: [String: String]
-        var staticTexts: [String: String]
-        var customTextBoxes: [CustomTextBox]
-        var mediaBoxes: [MediaBox]
-        var boxOrder: [String]
+        var frames: [String: TextBoxFrame] = [:]
+        var visibility: [String: Bool] = [:]
+        var styles: [String: BoxTextStyle] = [:]
+        var sources: [String: String] = [:]
+        var sourceFormats: [String: String] = [:]
+        var staticTexts: [String: String] = [:]
+        var customTextBoxes: [CustomTextBox] = []
+        var mediaBoxes: [MediaBox] = []
+        var boxOrder: [String] = []
+
+        init() {}
+
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            fontSize = try c.decodeIfPresent(Double.self, forKey: .fontSize) ?? PresentationDefaults.fontSize
+            fontName = try c.decodeIfPresent(String.self, forKey: .fontName) ?? PresentationDefaults.fontName
+            textColorHex = try c.decodeIfPresent(String.self, forKey: .textColorHex) ?? PresentationDefaults.textColor
+            textAlignmentRaw = try c.decodeIfPresent(String.self, forKey: .textAlignmentRaw) ?? "center"
+            lineSpacing = try c.decodeIfPresent(Double.self, forKey: .lineSpacing) ?? PresentationDefaults.lineSpacing
+            padding = try c.decodeIfPresent(Double.self, forKey: .padding) ?? PresentationDefaults.padding
+            shadowEnabled = try c.decodeIfPresent(Bool.self, forKey: .shadowEnabled) ?? true
+            shadowRadius = try c.decodeIfPresent(Double.self, forKey: .shadowRadius) ?? 3.0
+            autoFitVerseFont = try c.decodeIfPresent(Bool.self, forKey: .autoFitVerseFont) ?? false
+            globalWeightRaw = try c.decodeIfPresent(String.self, forKey: .globalWeightRaw) ?? "regular"
+            globalVAlignRaw = try c.decodeIfPresent(String.self, forKey: .globalVAlignRaw) ?? "center"
+            globalTextOpacity = try c.decodeIfPresent(Double.self, forKey: .globalTextOpacity) ?? 1.0
+            backgroundEnabled = try c.decodeIfPresent(Bool.self, forKey: .backgroundEnabled) ?? false
+            backgroundColorHex = try c.decodeIfPresent(String.self, forKey: .backgroundColorHex) ?? PresentationDefaults.backgroundColor
+            backgroundOpacity = try c.decodeIfPresent(Double.self, forKey: .backgroundOpacity) ?? PresentationDefaults.backgroundOpacity
+            useBackgroundImage = try c.decodeIfPresent(Bool.self, forKey: .useBackgroundImage) ?? false
+            backgroundImageBookmark = try c.decodeIfPresent(Data.self, forKey: .backgroundImageBookmark)
+            backgroundMediaTypeRaw = try c.decodeIfPresent(String.self, forKey: .backgroundMediaTypeRaw) ?? "image"
+            contentBackgrounds = try c.decodeIfPresent([String: BackgroundConfig].self, forKey: .contentBackgrounds) ?? [:]
+            frames = try c.decodeIfPresent([String: TextBoxFrame].self, forKey: .frames) ?? [:]
+            visibility = try c.decodeIfPresent([String: Bool].self, forKey: .visibility) ?? [:]
+            styles = try c.decodeIfPresent([String: BoxTextStyle].self, forKey: .styles) ?? [:]
+            sources = try c.decodeIfPresent([String: String].self, forKey: .sources) ?? [:]
+            sourceFormats = try c.decodeIfPresent([String: String].self, forKey: .sourceFormats) ?? [:]
+            staticTexts = try c.decodeIfPresent([String: String].self, forKey: .staticTexts) ?? [:]
+            customTextBoxes = try c.decodeIfPresent([CustomTextBox].self, forKey: .customTextBoxes) ?? []
+            mediaBoxes = try c.decodeIfPresent([MediaBox].self, forKey: .mediaBoxes) ?? []
+            boxOrder = try c.decodeIfPresent([String].self, forKey: .boxOrder) ?? []
+        }
     }
 
     var themes: [Theme] {
@@ -1159,43 +1284,55 @@ final class PresentationManager {
             formats[section.rawValue] = sourceFormat(for: section)
             statics[section.rawValue] = staticText(for: section)
         }
-        return ThemePayload(
-            fontSize: fontSize,
-            fontName: fontName,
-            textColorHex: textColorHex,
-            textAlignmentRaw: Self.alignmentRaw(textAlignment),
-            lineSpacing: lineSpacing,
-            padding: padding,
-            shadowEnabled: shadowEnabled,
-            shadowRadius: shadowRadius,
-            autoFitVerseFont: autoFitVerseFont,
-            globalWeightRaw: globalWeightRaw,
-            globalVAlignRaw: globalVAlignRaw,
-            globalTextOpacity: globalTextOpacity,
-            backgroundEnabled: backgroundEnabled,
-            backgroundColorHex: backgroundColorHex,
-            backgroundOpacity: backgroundOpacity,
-            useBackgroundImage: useBackgroundImage,
-            backgroundImageBookmark: UserDefaults.standard.data(forKey: "pm_backgroundImageBookmark"),
-            contentBackgrounds: contentBackgrounds,
-            frames: frames,
-            visibility: visibility,
-            styles: styles,
-            sources: sources,
-            sourceFormats: formats,
-            staticTexts: statics,
-            customTextBoxes: customTextBoxes,
-            mediaBoxes: mediaBoxes,
-            boxOrder: orderedBoxTokens()
-        )
+        var p = ThemePayload()
+        p.fontSize = fontSize
+        p.fontName = fontName
+        p.textColorHex = textColorHex
+        p.textAlignmentRaw = Self.alignmentRaw(textAlignment)
+        p.lineSpacing = lineSpacing
+        p.padding = padding
+        p.shadowEnabled = shadowEnabled
+        p.shadowRadius = shadowRadius
+        p.autoFitVerseFont = autoFitVerseFont
+        p.globalWeightRaw = globalWeightRaw
+        p.globalVAlignRaw = globalVAlignRaw
+        p.globalTextOpacity = globalTextOpacity
+        p.backgroundEnabled = backgroundEnabled
+        p.backgroundColorHex = backgroundColorHex
+        p.backgroundOpacity = backgroundOpacity
+        p.useBackgroundImage = useBackgroundImage
+        p.backgroundImageBookmark = UserDefaults.standard.data(forKey: "pm_backgroundImageBookmark")
+        p.backgroundMediaTypeRaw = backgroundMediaTypeRaw
+        p.contentBackgrounds = contentBackgrounds
+        p.frames = frames
+        p.visibility = visibility
+        p.styles = styles
+        p.sources = sources
+        p.sourceFormats = formats
+        p.staticTexts = statics
+        p.customTextBoxes = customTextBoxes
+        p.mediaBoxes = mediaBoxes
+        p.boxOrder = orderedBoxTokens()
+        return p
     }
 
     @discardableResult
-    func saveCurrentAsTheme(named name: String) -> Theme {
-        let theme = Theme(name: name, payload: captureThemePayload())
+    func saveCurrentAsTheme(named name: String, formatRaw: String = "all") -> Theme {
+        let theme = Theme(name: name, formatRaw: formatRaw, payload: captureThemePayload())
         themes.append(theme)
         activeThemeID = theme.id
         return theme
+    }
+
+    func setThemeFormat(id: UUID, formatRaw: String) {
+        guard let idx = themes.firstIndex(where: { $0.id == id }) else { return }
+        themes[idx].formatRaw = formatRaw
+    }
+
+    /// Themes relevant to a presenter format: its own + universal ("all").
+    func themes(forFormat format: String?) -> [Theme] {
+        guard let format else { return themes }
+        return themes.filter { $0.formatRaw == "all" || $0.formatRaw == format }
     }
 
     /// Overwrites a theme with the current look.
@@ -1221,6 +1358,205 @@ final class PresentationManager {
         activeThemeID = id
     }
 
+    // MARK: - Theme Import / Export (.tptheme packages)
+    // A .tptheme is a directory package: theme.json (ThemeArchive) + media/
+    // with every referenced file embedded — themes travel between machines
+    // with ALL their features. Import copies media into the app container,
+    // so themes keep working even if the original package is deleted.
+
+    /// One media asset inside a theme package. `slot` says where it plugs in:
+    /// "background" | "contentBackground:<key>" | "mediaBox:<uuid>".
+    struct ThemeAssetRef: Codable, Equatable {
+        var slot: String
+        var file: String
+        var mediaType: String = "image"
+
+        init(slot: String, file: String, mediaType: String) {
+            self.slot = slot
+            self.file = file
+            self.mediaType = mediaType
+        }
+
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            slot = try c.decodeIfPresent(String.self, forKey: .slot) ?? ""
+            file = try c.decodeIfPresent(String.self, forKey: .file) ?? ""
+            mediaType = try c.decodeIfPresent(String.self, forKey: .mediaType) ?? "image"
+        }
+    }
+
+    /// The portable theme file format (versioned for future evolution).
+    struct ThemeArchive: Codable {
+        var version: Int = 1
+        var name: String = "Temă"
+        var format: String = "all"
+        var payload: ThemePayload = ThemePayload()
+        var assets: [ThemeAssetRef] = []
+
+        init() {}
+
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            version = try c.decodeIfPresent(Int.self, forKey: .version) ?? 1
+            name = try c.decodeIfPresent(String.self, forKey: .name) ?? "Temă"
+            format = try c.decodeIfPresent(String.self, forKey: .format) ?? "all"
+            payload = try c.decodeIfPresent(ThemePayload.self, forKey: .payload) ?? ThemePayload()
+            assets = try c.decodeIfPresent([ThemeAssetRef].self, forKey: .assets) ?? []
+        }
+    }
+
+    enum ThemeIOError: LocalizedError {
+        case themeNotFound
+        case invalidPackage
+
+        var errorDescription: String? {
+            switch self {
+            case .themeNotFound:
+                return String(localized: "Tema nu a fost găsită.", comment: "Theme IO error")
+            case .invalidPackage:
+                return String(localized: "Pachetul de temă este invalid (lipsește theme.json).", comment: "Theme IO error")
+            }
+        }
+    }
+
+    /// Exports a theme as a .tptheme package at `packageURL` (a directory).
+    func exportTheme(id: UUID, to packageURL: URL) throws {
+        guard let theme = themes.first(where: { $0.id == id }) else {
+            throw ThemeIOError.themeNotFound
+        }
+        let fm = FileManager.default
+        try? fm.removeItem(at: packageURL)
+        let mediaDir = packageURL.appendingPathComponent("media", isDirectory: true)
+        try fm.createDirectory(at: mediaDir, withIntermediateDirectories: true)
+
+        var archive = ThemeArchive()
+        archive.name = theme.name
+        archive.format = theme.formatRaw
+        var payload = theme.payload
+        var assets: [ThemeAssetRef] = []
+        var usedNames = Set<String>()
+
+        func copyAsset(bookmark: Data?, slot: String, mediaType: String, preferredName: String) -> Bool {
+            guard let bookmark, let url = Self.resolveBookmark(bookmark) else { return false }
+            var name = preferredName.isEmpty ? url.lastPathComponent : preferredName
+            // Avoid duplicate file names inside the package
+            var candidate = name
+            var counter = 2
+            while usedNames.contains(candidate) {
+                candidate = "\(counter)-\(name)"
+                counter += 1
+            }
+            name = candidate
+            usedNames.insert(name)
+            do {
+                try fm.copyItem(at: url, to: mediaDir.appendingPathComponent(name))
+            } catch {
+                return false
+            }
+            assets.append(ThemeAssetRef(slot: slot, file: name, mediaType: mediaType))
+            return true
+        }
+
+        // Global background
+        if copyAsset(
+            bookmark: payload.backgroundImageBookmark,
+            slot: "background",
+            mediaType: payload.backgroundMediaTypeRaw,
+            preferredName: ""
+        ) {
+            payload.backgroundImageBookmark = nil
+        }
+        // Per-content backgrounds
+        for (key, var config) in payload.contentBackgrounds {
+            if copyAsset(
+                bookmark: config.imageBookmark,
+                slot: "contentBackground:\(key)",
+                mediaType: config.mediaTypeRaw,
+                preferredName: config.imageName
+            ) {
+                config.imageBookmark = nil
+                payload.contentBackgrounds[key] = config
+            }
+        }
+        // Media boxes
+        for idx in payload.mediaBoxes.indices {
+            let box = payload.mediaBoxes[idx]
+            if copyAsset(
+                bookmark: box.bookmarkData,
+                slot: "mediaBox:\(box.id.uuidString)",
+                mediaType: box.mediaTypeRaw,
+                preferredName: box.fileName
+            ) {
+                payload.mediaBoxes[idx].bookmarkData = nil
+            }
+        }
+
+        archive.payload = payload
+        archive.assets = assets
+
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        let data = try encoder.encode(archive)
+        try data.write(to: packageURL.appendingPathComponent("theme.json"))
+    }
+
+    /// Imports a .tptheme package: media files are copied into the app
+    /// container and re-bookmarked, then the theme is added to the library.
+    @discardableResult
+    func importTheme(from packageURL: URL) throws -> Theme {
+        let accessing = packageURL.startAccessingSecurityScopedResource()
+        defer { if accessing { packageURL.stopAccessingSecurityScopedResource() } }
+
+        let jsonURL = packageURL.appendingPathComponent("theme.json")
+        guard let data = try? Data(contentsOf: jsonURL) else {
+            throw ThemeIOError.invalidPackage
+        }
+        let archive = try JSONDecoder().decode(ThemeArchive.self, from: data)
+
+        let themeID = UUID()
+        let fm = FileManager.default
+        let containerDir = Self.themeMediaDirectory(for: themeID)
+        try fm.createDirectory(at: containerDir, withIntermediateDirectories: true)
+
+        var payload = archive.payload
+        let packageMedia = packageURL.appendingPathComponent("media", isDirectory: true)
+
+        for asset in archive.assets {
+            let source = packageMedia.appendingPathComponent(asset.file)
+            let destination = containerDir.appendingPathComponent(asset.file)
+            guard (try? fm.copyItem(at: source, to: destination)) != nil,
+                  let bookmark = Self.makeBookmark(for: destination) else { continue }
+
+            if asset.slot == "background" {
+                payload.backgroundImageBookmark = bookmark
+                payload.backgroundMediaTypeRaw = asset.mediaType
+                payload.useBackgroundImage = true
+            } else if asset.slot.hasPrefix("contentBackground:") {
+                let key = String(asset.slot.dropFirst("contentBackground:".count))
+                var config = payload.contentBackgrounds[key] ?? BackgroundConfig()
+                config.imageBookmark = bookmark
+                config.imageName = asset.file
+                config.mediaTypeRaw = asset.mediaType
+                config.useImage = true
+                payload.contentBackgrounds[key] = config
+            } else if asset.slot.hasPrefix("mediaBox:") {
+                let idString = String(asset.slot.dropFirst("mediaBox:".count))
+                if let boxID = UUID(uuidString: idString),
+                   let idx = payload.mediaBoxes.firstIndex(where: { $0.id == boxID }) {
+                    payload.mediaBoxes[idx].bookmarkData = bookmark
+                    payload.mediaBoxes[idx].mediaTypeRaw = asset.mediaType
+                    if payload.mediaBoxes[idx].fileName.isEmpty {
+                        payload.mediaBoxes[idx].fileName = asset.file
+                    }
+                }
+            }
+        }
+
+        let theme = Theme(id: themeID, name: archive.name, formatRaw: archive.format, payload: payload)
+        themes.append(theme)
+        return theme
+    }
+
     /// Restores a full look snapshot (used by themes AND layout undo/redo).
     /// Suppresses undo registration — the mutators it calls must not push new
     /// snapshots while we are restoring one.
@@ -1243,11 +1579,13 @@ final class PresentationManager {
         backgroundColorHex = p.backgroundColorHex
         backgroundOpacity = p.backgroundOpacity
         useBackgroundImage = p.useBackgroundImage
+        backgroundMediaTypeRaw = p.backgroundMediaTypeRaw
         if let bookmark = p.backgroundImageBookmark {
             UserDefaults.standard.set(bookmark, forKey: "pm_backgroundImageBookmark")
             restoreBackgroundImage(from: bookmark)
         } else {
             backgroundImage = nil
+            backgroundMediaURL = nil
             backgroundImagePath = nil
             UserDefaults.standard.removeObject(forKey: "pm_backgroundImageBookmark")
         }
@@ -1374,6 +1712,7 @@ final class PresentationManager {
         self.globalTextOpacity = d.object(forKey: "pm_globalTextOpacity") as? Double ?? 1.0
         self.backgroundOpacity = d.object(forKey: "pm_backgroundOpacity") as? Double ?? PresentationDefaults.backgroundOpacity
         self.useBackgroundImage = d.bool(forKey: "pm_useBackgroundImage")
+        self.backgroundMediaTypeRaw = d.string(forKey: "pm_backgroundMediaTypeRaw") ?? "image" 
         self.backgroundEnabled = d.bool(forKey: "pm_backgroundEnabled") // defaults to false = transparent
         self.windowLevel = d.string(forKey: "pm_windowLevel") ?? "alwaysOnTop"
         self.autoFitVerseFont = d.bool(forKey: "pm_autoFitVerseFont")
@@ -1456,26 +1795,11 @@ final class PresentationManager {
     }
 
     private func restoreBackgroundImage(from bookmark: Data) {
-        var isStale = false
-        guard let url = try? URL(
-            resolvingBookmarkData: bookmark,
-            options: .withSecurityScope,
-            relativeTo: nil,
-            bookmarkDataIsStale: &isStale
-        ) else { return }
-        let accessing = url.startAccessingSecurityScopedResource()
-        if let image = NSImage(contentsOf: url) {
-            self.backgroundImagePath = url.path
-            self.backgroundImage = image
-            if isStale, let fresh = try? url.bookmarkData(
-                options: .withSecurityScope,
-                includingResourceValuesForKeys: nil,
-                relativeTo: nil
-            ) {
-                UserDefaults.standard.set(fresh, forKey: "pm_backgroundImageBookmark")
-            }
-        }
-        if accessing { url.stopAccessingSecurityScopedResource() }
+        guard let url = Self.resolveBookmark(bookmark) else { return }
+        backgroundMediaURL = url
+        backgroundMediaTypeRaw = Self.mediaType(forExtension: url.pathExtension)
+        backgroundImagePath = url.path
+        backgroundImage = backgroundMediaTypeRaw == "image" ? NSImage(contentsOf: url) : nil
     }
 
     // MARK: - Computed Properties
@@ -1582,23 +1906,29 @@ final class PresentationManager {
         isBlackScreen = false
     }
 
-    func setBackgroundImage(from url: URL) {
-        if let image = NSImage(contentsOf: url) {
-            backgroundImage = image
-            backgroundImagePath = url.path
-            useBackgroundImage = true
-            if let bookmark = try? url.bookmarkData(
-                options: .withSecurityScope,
-                includingResourceValuesForKeys: nil,
-                relativeTo: nil
-            ) {
-                UserDefaults.standard.set(bookmark, forKey: "pm_backgroundImageBookmark")
-            }
+    /// Sets the global background from any supported media: image, GIF, or video.
+    func setBackgroundMedia(from url: URL) {
+        registerLayoutUndo()
+        backgroundMediaTypeRaw = Self.mediaType(forExtension: url.pathExtension)
+        backgroundMediaURL = url
+        backgroundImage = backgroundMediaTypeRaw == "image" ? NSImage(contentsOf: url) : nil
+        backgroundImagePath = url.path
+        useBackgroundImage = true
+        if let bookmark = Self.makeBookmark(for: url) {
+            UserDefaults.standard.set(bookmark, forKey: "pm_backgroundImageBookmark")
         }
     }
 
+    /// Legacy name kept for callers that set a plain image background.
+    func setBackgroundImage(from url: URL) {
+        setBackgroundMedia(from: url)
+    }
+
     func removeBackgroundImage() {
+        registerLayoutUndo()
         backgroundImage = nil
+        backgroundMediaURL = nil
+        backgroundMediaTypeRaw = "image"
         backgroundImagePath = nil
         useBackgroundImage = false
         UserDefaults.standard.removeObject(forKey: "pm_backgroundImageBookmark")
