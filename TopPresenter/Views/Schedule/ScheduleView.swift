@@ -131,12 +131,12 @@ struct ScheduleView: View {
                 AddScheduleItemSheet(schedule: schedule)
             }
         }
-        .onReceive(NotificationCenter.default.publisher(for: .addScheduleItem)) { _ in
+        .onKeyWindowNotification(.addScheduleItem) { _ in
             if selectedSchedule != nil {
                 showAddItemSheet = true
             }
         }
-        .onReceive(NotificationCenter.default.publisher(for: .newSchedule)) { _ in
+        .onKeyWindowNotification(.newSchedule) { _ in
             showNewScheduleSheet = true
         }
     }

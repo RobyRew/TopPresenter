@@ -268,6 +268,7 @@ final class LiveContent {
         self.mainText = text
         self.reference = title
         self.subtitle = verseLabel
+        self.translationName = ""
         self.contentType = .song
     }
 
@@ -275,7 +276,16 @@ final class LiveContent {
         self.mainText = text
         self.reference = title
         self.subtitle = ""
+        self.translationName = ""
         self.contentType = .text
+    }
+
+    func setVideo() {
+        self.mainText = ""
+        self.reference = ""
+        self.subtitle = ""
+        self.translationName = ""
+        self.contentType = .media
     }
 }
 
@@ -308,11 +318,12 @@ extension Color {
     }
 
     func toHex() -> String {
-        let nsColor = NSColor(self)
-        guard let components = nsColor.cgColor.components else { return "FFFFFF" }
-        let r = Int((components[0] * 255).rounded())
-        let g = Int(((components.count > 1 ? components[1] : components[0]) * 255).rounded())
-        let b = Int(((components.count > 2 ? components[2] : components[0]) * 255).rounded())
+        // Normalize to sRGB first — picker colors can be P3 or grayscale, whose raw
+        // CGColor components would map to the wrong hex channels.
+        guard let nsColor = NSColor(self).usingColorSpace(.sRGB) else { return "FFFFFF" }
+        let r = Int((nsColor.redComponent * 255).rounded())
+        let g = Int((nsColor.greenComponent * 255).rounded())
+        let b = Int((nsColor.blueComponent * 255).rounded())
         return String(format: "%02X%02X%02X", r, g, b)
     }
 }

@@ -47,14 +47,13 @@ struct BiblePreviewPanel: View {
                 Divider()
             }
 
-            // Edit Mode controls (only when active)
-            if pm.isEditMode {
-                EditModeControlsSection()
-                Divider()
-            }
+            // Operational quick settings (styling lives in the Layout Editor)
+            StyleQuickSettings(sections: [.multiVerse, .general])
 
-            // Style settings (all sections)
-            StyleQuickSettings(sections: [.textFont, .background, .displayOutput, .multiVerse, .general, .bibleExtra])
+            Divider()
+
+            // Theme switcher + Layout Editor access
+            PanelFooter()
         }
         .background(.background)
     }

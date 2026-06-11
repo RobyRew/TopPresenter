@@ -19,9 +19,13 @@ struct SongsPreviewPanel: View {
 
             Divider()
 
-            // Preview display
-            PresentationPreviewCard()
-                .padding()
+            // Preview display — previews the selected song verse before it goes live
+            PresentationPreviewCard(pendingContent: .init(
+                text: libraryManager.selectedSongVerse?.text ?? "",
+                reference: libraryManager.selectedSong?.title ?? "",
+                subtitle: libraryManager.selectedSongVerse?.label ?? ""
+            ))
+            .padding()
 
             Divider()
 
@@ -47,8 +51,12 @@ struct SongsPreviewPanel: View {
                 Divider()
             }
 
-            // Style settings (text, background, display — no multi-verse or general)
-            StyleQuickSettings(sections: [.textFont, .background, .displayOutput])
+            Spacer()
+
+            Divider()
+
+            // Theme switcher + Layout Editor access
+            PanelFooter()
         }
         .background(.background)
     }

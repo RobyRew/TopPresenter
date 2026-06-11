@@ -59,7 +59,7 @@ struct SongsView: View {
             }
         } message: {
             Text(String(localized: "Are you sure you want to delete \"\(collectionToDelete?.name ?? "")\"? This cannot be undone.", comment: "Alert message"))
-        }        .onReceive(NotificationCenter.default.publisher(for: .deleteSongCollection)) { _ in
+        }        .onKeyWindowNotification(.deleteSongCollection) { _ in
             collectionToDelete = libraryManager.selectedSongCollection
             showDeleteConfirmation = true
         }    }

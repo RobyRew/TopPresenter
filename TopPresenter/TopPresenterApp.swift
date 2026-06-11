@@ -10,10 +10,21 @@ import SwiftData
 
 @main
 struct TopPresenterApp: App {
-    @State private var appState = AppState()
-    @State private var presentationManager = PresentationManager()
-    @State private var libraryManager = LibraryManager()
+    @State private var presentationManager: PresentationManager
     @State private var audioPlayerManager = AudioPlayerManager()
+    @State private var videoPlayerService: VideoPlayerService
+    /// Handles output-wide menu commands (black/freeze/clear/font) exactly once —
+    /// they act on the shared PresentationManager, not per window/tab.
+    private let commandRouter: PresentationCommandRouter
+
+    init() {
+        let video = VideoPlayerService()
+        let pm = PresentationManager()
+        pm.videoService = video
+        _videoPlayerService = State(initialValue: video)
+        _presentationManager = State(initialValue: pm)
+        commandRouter = PresentationCommandRouter(pm: pm)
+    }
 
     var sharedModelContainer: ModelContainer = {
         let schema = Schema(versionedSchema: SchemaV1.self)
@@ -34,13 +45,15 @@ struct TopPresenterApp: App {
     }()
 
     var body: some Scene {
-        // Main control window
+        // Main control window(s). Each window/tab gets its OWN navigation and
+        // library state (own sidebar selection, own Bible module, own verse
+        // selection) — the presentation OUTPUT stays app-global, so whichever
+        // tab presses Show owns the projector.
         WindowGroup(id: WindowIdentifiers.main) {
-            MainControlView()
-                .environment(appState)
+            MainWindowRoot()
                 .environment(presentationManager)
-                .environment(libraryManager)
                 .environment(audioPlayerManager)
+                .environment(videoPlayerService)
                 .frame(minWidth: 1100, minHeight: 700)
         }
         .modelContainer(sharedModelContainer)
@@ -56,6 +69,7 @@ struct TopPresenterApp: App {
         WindowGroup(id: WindowIdentifiers.presentation, for: String.self) { _ in
             PresentationOutputView()
                 .environment(presentationManager)
+                .environment(videoPlayerService)
         }
         .modelContainer(sharedModelContainer)
         .windowStyle(.plain)
@@ -65,9 +79,23 @@ struct TopPresenterApp: App {
         // Settings window
         Settings {
             SettingsView()
-                .environment(appState)
+                .environment(AppState())
                 .environment(presentationManager)
         }
         .modelContainer(sharedModelContainer)
+    }
+}
+
+/// Root of one main window/tab: owns the PER-WINDOW state (navigation +
+/// library selections), so different tabs can sit in different modules with
+/// different Bible sources at the same time.
+struct MainWindowRoot: View {
+    @State private var appState = AppState()
+    @State private var libraryManager = LibraryManager()
+
+    var body: some View {
+        MainControlView()
+            .environment(appState)
+            .environment(libraryManager)
     }
 }

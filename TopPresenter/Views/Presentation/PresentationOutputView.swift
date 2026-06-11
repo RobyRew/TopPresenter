@@ -7,29 +7,43 @@
 
 import SwiftUI
 import AppKit
+import AVKit
 
 /// The presentation output window — displayed fullscreen on the target screen/projector.
 /// Transparent by default: when nothing is being shown, the projector sees through it.
 /// The NSWindow is configured as borderless, transparent, and always-on-top.
 struct PresentationOutputView: View {
     @Environment(PresentationManager.self) private var pm
+    @Environment(VideoPlayerService.self) private var videoService
 
     var body: some View {
         ZStack {
-            // Black screen mode — full opaque black overlay
+            if !pm.isBlackScreen {
+                // Background layer — per-content override or global
+                backgroundLayer
+
+                // Unified box layer: media + text boxes in ONE user-controlled
+                // stacking order (pm.orderedBoxTokens). Always mounted — media
+                // marked "always" shows even when nothing is live.
+                unifiedLayer
+                    .animation(.easeInOut(duration: pm.transitionDuration), value: pm.liveContent.mainText)
+            }
+
+            // Full-screen video layer (Media module → Play Video).
+            // Stays mounted during black screen — the overlay covers it — so
+            // toggling black doesn't tear down the player view mid-playback.
+            if pm.liveContent.isLive,
+               pm.liveContent.contentType == .media,
+               let player = videoService.player {
+                OutputVideoView(player: player)
+                    .ignoresSafeArea()
+                    .transition(.opacity)
+            }
+
+            // Black screen mode — full opaque black overlay on top
             if pm.isBlackScreen {
                 Color.black
                     .ignoresSafeArea()
-            } else {
-                // Background layer (only rendered when explicitly enabled)
-                backgroundLayer
-
-                // Content layer
-                if pm.liveContent.isLive {
-                    contentLayer
-                        .transition(.opacity.combined(with: .scale(scale: 0.98)))
-                        .animation(.easeInOut(duration: pm.transitionDuration), value: pm.liveContent.mainText)
-                }
             }
         }
         .ignoresSafeArea()
@@ -47,132 +61,169 @@ struct PresentationOutputView: View {
     }
 
     // MARK: - Background Layer
+    // Per-content backgrounds: an enabled override for the current content type
+    // replaces the global background (e.g. a dedicated Bible background).
     @ViewBuilder
     private var backgroundLayer: some View {
+        let bg = pm.activeBackground(for: pm.liveContent.contentType, frozen: pm.isFrozen)
         ZStack {
-            // Solid background color — only when user has enabled it
-            if pm.outputBackgroundEnabled {
-                pm.outputBackgroundColor
+            if bg.showColor {
+                bg.color
                     .ignoresSafeArea()
             }
-
-            // Background image
-            if pm.outputUseBackgroundImage, let bgImage = pm.outputBackgroundImage {
-                Image(nsImage: bgImage)
+            if bg.useImage, let image = bg.image {
+                Image(nsImage: image)
                     .resizable()
                     .aspectRatio(contentMode: .fill)
-                    .opacity(pm.outputBackgroundOpacity)
+                    .opacity(bg.opacity)
                     .ignoresSafeArea()
             }
         }
     }
 
-    // MARK: - Content Layer
+    // MARK: - Unified Box Layer
+    // Every box renders inside its FIXED frame with its resolved style, in the
+    // user's unified stacking order. Font sizes are authored at 1080p reference
+    // height and scaled to the actual screen — fully resolution/aspect adaptive.
+    // A TimelineView drives live clock boxes (date/time sources).
     @ViewBuilder
-    private var contentLayer: some View {
+    private var unifiedLayer: some View {
+        if let tick = pm.clockTickInterval {
+            TimelineView(.periodic(from: .now, by: tick)) { timeline in
+                orderedBoxes(now: timeline.date)
+            }
+        } else {
+            orderedBoxes(now: .now)
+        }
+    }
+
+    @ViewBuilder
+    private func orderedBoxes(now: Date) -> some View {
         GeometryReader { geo in
-            // Fitted font size: shrinks automatically for Bible content when the feature is on.
-            let isBible = pm.liveContent.contentType == .bible
-            let effectiveFontSize: CGFloat = isBible
-                ? pm.fittedVerseFontSize(
-                    text: pm.liveContent.mainText,
-                    reference: pm.liveContent.reference,
-                    screenSize: geo.size
-                  )
-                : CGFloat(pm.outputVerseFontSize)
+            let fontScale = PresentationManager.fontScale(forHeight: geo.size.height)
+            let scaledPadding = pm.outputPadding * fontScale
+            let live = pm.liveContent
+            // Text boxes only render with live (non-video) content; "always"
+            // media renders even when idle.
+            let textVisible = live.isLive && live.contentType != .media
 
-            let refRatio = CGFloat(pm.outputRefFontSize) / max(CGFloat(pm.outputVerseFontSize), 1.0)
-            let effectiveRefSize = effectiveFontSize * refRatio
-
-            VStack(spacing: 0) {
-                Spacer()
-
-                // Main text — verse content section
-                Text(pm.liveContent.mainText)
-                    .font(verseFont(size: effectiveFontSize))
-                    .foregroundStyle(pm.outputVerseTextColor.opacity(pm.outputVerseOpacity))
-                    .multilineTextAlignment(pm.outputVerseAlignment)
-                    .lineSpacing(pm.outputVerseLineSpacing * effectiveFontSize * 0.1)
-                    .shadow(
-                        color: pm.outputShadowEnabled ? .black.opacity(0.8) : .clear,
-                        radius: pm.outputShadowEnabled ? pm.outputShadowRadius : 0,
-                        x: 0,
-                        y: pm.outputShadowEnabled ? 2 : 0
-                    )
-                    .scaleEffect(pm.outputVerseMultiplier)
-                    .offset(pm.outputVerseOffset)
-                    .padding(.horizontal, pm.outputPadding + pm.outputVersePadding)
-
-                // Reference / Title — reference section
-                if !pm.liveContent.reference.isEmpty {
-                    Text(pm.liveContent.reference)
-                        .font(refFont(size: effectiveRefSize))
-                        .foregroundStyle(pm.outputRefTextColor.opacity(pm.outputRefOpacity))
-                        .multilineTextAlignment(pm.outputRefAlignment)
-                        .shadow(
-                            color: pm.outputShadowEnabled ? .black.opacity(0.6) : .clear,
-                            radius: pm.outputShadowEnabled ? pm.outputShadowRadius * 0.7 : 0
-                        )
-                        .scaleEffect(pm.outputRefMultiplier)
-                        .offset(pm.outputRefOffset)
-                        .padding(.top, effectiveFontSize * 0.4)
-                        .padding(.horizontal, pm.outputPadding + pm.outputRefPadding)
+            ZStack(alignment: .topLeading) {
+                ForEach(pm.orderedBoxTokens(), id: \.self) { token in
+                    orderedBox(token: token, now: now, textVisible: textVisible, canvasSize: geo.size, fontScale: fontScale, scaledPadding: scaledPadding)
                 }
-
-                // Translation name — small label below reference (Bible only, when enabled)
-                if pm.outputShowTranslationName,
-                   !pm.liveContent.translationName.isEmpty,
-                   isBible {
-                    Text(pm.liveContent.translationName)
-                        .font(translationFont(size: effectiveFontSize * CGFloat(pm.translationNameSizeRatio)))
-                        .foregroundStyle(pm.outputTranslationColor.opacity(pm.outputTranslationOpacity))
-                        .multilineTextAlignment(pm.outputRefAlignment)
-                        .padding(.top, effectiveFontSize * 0.15)
-                        .padding(.horizontal, pm.outputPadding + pm.outputRefPadding)
-                }
-
-                // Subtitle (verse label, etc.)
-                if !pm.liveContent.subtitle.isEmpty {
-                    Text(pm.liveContent.subtitle)
-                        .font(.system(size: pm.outputFontSize * 0.4))
-                        .foregroundStyle(pm.outputTextColor.opacity(0.6))
-                        .multilineTextAlignment(pm.outputTextAlignment)
-                        .padding(.top, 4)
-                        .padding(.horizontal, pm.outputPadding + pm.outputRefPadding)
-                }
-
-                Spacer()
             }
             .frame(width: geo.size.width, height: geo.size.height)
         }
+        .ignoresSafeArea()
     }
 
-    // MARK: - Font Resolution (per-section)
-    private func verseFont(size: CGFloat) -> Font {
-        let name = pm.outputVerseFontName
-        if name == "System" || name.isEmpty {
-            return .system(size: size, weight: .regular)
-        } else {
-            return .custom(name, size: size)
+    @ViewBuilder
+    private func orderedBox(
+        token: String, now: Date, textVisible: Bool,
+        canvasSize: CGSize, fontScale: CGFloat, scaledPadding: CGFloat
+    ) -> some View {
+        let live = pm.liveContent
+        switch boxIdentity(fromToken: token) {
+        case .section(let section):
+            if textVisible, pm.outputSectionVisible(section) {
+                let text = pm.sectionText(
+                    section,
+                    main: live.mainText, reference: live.reference,
+                    translation: live.translationName, subtitle: live.subtitle,
+                    now: now
+                )
+                if !text.isEmpty {
+                    sectionBox(section, text: text, canvasSize: canvasSize, fontScale: fontScale, scaledPadding: scaledPadding)
+                }
+            }
+        case .custom(let id):
+            if textVisible, let box = pm.outputCustomTextBoxes.first(where: { $0.id == id }), box.isVisible {
+                let text = box.resolvedText(live: live, now: now)
+                if !text.isEmpty {
+                    let rect = box.frame.rect(in: canvasSize)
+                    let style = pm.resolvedCustomStyle(box)
+                    boxText(text, style: style, rect: rect, fontScale: fontScale, scaledPadding: scaledPadding, fittedSize: nil)
+                }
+            }
+        case .media(let id):
+            if let box = pm.outputMediaBoxes.first(where: { $0.id == id }),
+               box.isVisible,
+               box.showsFor(contentType: live.contentType, isLive: live.isLive) {
+                MediaBoxContent(box: box, canvasSize: canvasSize, playsVideo: true)
+                    .allowsHitTesting(false)
+            }
+        case nil:
+            EmptyView()
         }
     }
 
-    private func refFont(size: CGFloat) -> Font {
-        let name = pm.outputRefFontName
-        let weight = pm.outputRefWeight
-        if name == "System" || name.isEmpty {
-            return .system(size: size, weight: weight)
-        } else {
-            return .custom(name, size: size)
-        }
+    @ViewBuilder
+    private func sectionBox(
+        _ section: TextBoxSection, text: String,
+        canvasSize: CGSize, fontScale: CGFloat, scaledPadding: CGFloat
+    ) -> some View {
+        let rect = pm.outputBoxFrame(for: section).rect(in: canvasSize)
+        let style = pm.outputStyle(for: section)
+
+        // Auto-fit shrinks the VERSE font so the text fits its box.
+        let fitted: CGFloat? = (section == .verseContent)
+            ? pm.fittedVerseFontSize(
+                text: text,
+                boxSize: rect.size,
+                maxSize: CGFloat(style.fontSize) * fontScale,
+                padding: scaledPadding,
+                fontName: style.fontName,
+                lineSpacing: style.lineSpacing
+              )
+            : nil
+
+        boxText(text, style: style, rect: rect, fontScale: fontScale, scaledPadding: scaledPadding, fittedSize: fitted)
     }
 
-    private func translationFont(size: CGFloat) -> Font {
-        let name = pm.outputRefFontName
-        if name == "System" || name.isEmpty {
-            return .system(size: size, weight: .regular)
-        } else {
-            return .custom(name, size: size)
+    @ViewBuilder
+    private func boxText(
+        _ text: String,
+        style: PresentationManager.ResolvedBoxStyle,
+        rect: CGRect, fontScale: CGFloat, scaledPadding: CGFloat,
+        fittedSize: CGFloat?
+    ) -> some View {
+        let size = fittedSize ?? CGFloat(style.fontSize) * fontScale
+        Text(text)
+            .font(style.font(at: size))
+            .foregroundStyle(style.color.opacity(style.opacity))
+            .multilineTextAlignment(style.hAlign)
+            .lineSpacing(style.lineSpacing * size * 0.1)
+            .minimumScaleFactor(fittedSize == nil ? 0.3 : 1.0)
+            .shadow(
+                color: pm.outputShadowEnabled ? .black.opacity(0.7) : .clear,
+                radius: pm.outputShadowEnabled ? pm.outputShadowRadius * fontScale : 0,
+                x: 0,
+                y: pm.outputShadowEnabled ? 2 * fontScale : 0
+            )
+            .padding(.horizontal, scaledPadding)
+            .frame(width: rect.width, height: rect.height, alignment: style.frameAlignment)
+            .position(x: rect.midX, y: rect.midY)
+    }
+}
+
+// MARK: - Output Video View
+/// Chromeless video surface for the presentation output — AVPlayerView with all
+/// controls hidden (the operator controls playback from the Media panel).
+struct OutputVideoView: NSViewRepresentable {
+    let player: AVPlayer
+
+    func makeNSView(context: Context) -> AVPlayerView {
+        let view = AVPlayerView()
+        view.player = player
+        view.controlsStyle = .none
+        view.videoGravity = .resizeAspect
+        view.allowsPictureInPicturePlayback = false
+        return view
+    }
+
+    func updateNSView(_ nsView: AVPlayerView, context: Context) {
+        if nsView.player !== player {
+            nsView.player = player
         }
     }
 }
@@ -221,5 +272,6 @@ struct TransparentWindowConfigurator: NSViewRepresentable {
 
     return PresentationOutputView()
         .environment(pm)
+        .environment(VideoPlayerService())
         .frame(width: 800, height: 450)
 }

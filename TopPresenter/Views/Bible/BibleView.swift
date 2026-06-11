@@ -75,7 +75,7 @@ struct BibleView: View {
         } message: {
             Text(String(localized: "Are you sure you want to delete \"\(moduleToDelete?.name ?? "")\"? This cannot be undone.", comment: "Alert message"))
         }
-        .onReceive(NotificationCenter.default.publisher(for: .deleteBibleModule)) { _ in
+        .onKeyWindowNotification(.deleteBibleModule) { _ in
             moduleToDelete = libraryManager.selectedBibleModule
             showDeleteConfirmation = true
         }

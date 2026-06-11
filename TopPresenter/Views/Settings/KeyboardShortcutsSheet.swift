@@ -42,6 +42,7 @@ struct KeyboardShortcutsSheet: View {
                         title: String(localized: "File", comment: "Shortcut section"),
                         icon: "doc",
                         shortcuts: [
+                            ShortcutItem(keys: "⌘ T", description: String(localized: "Filă nouă (tab nou de prezentare)", comment: "Shortcut")),
                             ShortcutItem(keys: "⌘ I", description: String(localized: "Import Bible Module", comment: "Shortcut")),
                             ShortcutItem(keys: "⇧ ⌘ I", description: String(localized: "Import Songs", comment: "Shortcut")),
                             ShortcutItem(keys: "⌘ E", description: String(localized: "Export Bible Module", comment: "Shortcut")),

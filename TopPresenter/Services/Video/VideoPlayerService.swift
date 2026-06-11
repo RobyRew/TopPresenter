@@ -22,6 +22,9 @@ final class VideoPlayerService {
     var currentFileName: String = ""
 
     private var timeObserver: Any?
+    private var endObserver: (any NSObjectProtocol)?
+    /// URL we hold security-scoped access on for the duration of playback (sandbox).
+    private var scopedURL: URL?
 
     // MARK: - Computed
     var progress: Double {
@@ -41,6 +44,11 @@ final class VideoPlayerService {
 
     func loadVideo(url: URL) {
         stop()
+
+        // Keep security-scoped access alive while the player streams from the file.
+        if url.startAccessingSecurityScopedResource() {
+            scopedURL = url
+        }
 
         let playerItem = AVPlayerItem(url: url)
         player = AVPlayer(playerItem: playerItem)
@@ -64,7 +72,7 @@ final class VideoPlayerService {
         }
 
         // Loop notification
-        NotificationCenter.default.addObserver(
+        endObserver = NotificationCenter.default.addObserver(
             forName: .AVPlayerItemDidPlayToEndTime,
             object: playerItem,
             queue: .main
@@ -82,7 +90,7 @@ final class VideoPlayerService {
     }
 
     func play() {
-        player?.rate = playbackSpeed
+        player?.playImmediately(atRate: playbackSpeed)
         isPlaying = true
     }
 
@@ -96,13 +104,29 @@ final class VideoPlayerService {
         player?.seek(to: .zero)
         isPlaying = false
         currentTime = 0
+        duration = 0
+        currentFileName = ""
 
         if let observer = timeObserver {
             player?.removeTimeObserver(observer)
             timeObserver = nil
         }
+        if let observer = endObserver {
+            NotificationCenter.default.removeObserver(observer)
+            endObserver = nil
+        }
 
         player = nil
+
+        scopedURL?.stopAccessingSecurityScopedResource()
+        scopedURL = nil
+    }
+
+    deinit {
+        if let observer = endObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
+        scopedURL?.stopAccessingSecurityScopedResource()
     }
 
     func togglePlayPause() {

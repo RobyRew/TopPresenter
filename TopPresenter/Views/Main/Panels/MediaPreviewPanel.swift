@@ -13,6 +13,7 @@ import AVKit
 struct MediaPreviewPanel: View {
     @Environment(PresentationManager.self) private var pm
     @Environment(AudioPlayerManager.self) private var audioPlayerManager
+    @Environment(VideoPlayerService.self) private var videoPlayerService
     @Environment(\.openWindow) private var openWindow
 
     @Query(sort: \MediaItem.importDate, order: .reverse) private var allMedia: [MediaItem]
@@ -54,11 +55,23 @@ struct MediaPreviewPanel: View {
                 Divider()
             }
 
-            // Minimal settings: just background opacity + screen selector
-            StyleQuickSettings(sections: [.background, .displayOutput])
+            // Video controls (if a video is loaded)
+            if videoPlayerService.player != nil {
+                VideoControlsView()
+                    .padding(.horizontal)
+                    .padding(.vertical, 8)
+                Divider()
+            }
+
+            Spacer()
+
+            Divider()
+
+            // Theme switcher + Layout Editor access
+            PanelFooter()
         }
         .background(.background)
-        .onReceive(NotificationCenter.default.publisher(for: .mediaItemSelected)) { notification in
+        .onKeyWindowNotification(.mediaItemSelected) { notification in
             if let item = notification.object as? MediaItem {
                 selectedItem = item
             }
@@ -124,6 +137,7 @@ struct MediaActionBar: View {
 
     @Environment(PresentationManager.self) private var pm
     @Environment(AudioPlayerManager.self) private var audioPlayerManager
+    @Environment(VideoPlayerService.self) private var videoPlayerService
 
     var body: some View {
         VStack(spacing: 6) {
@@ -187,7 +201,11 @@ struct MediaActionBar: View {
 
                     if item.mediaType == "video" {
                         Button {
-                            // Video playback placeholder — would show in output window
+                            if let url = item.resolvedURL {
+                                videoPlayerService.loadVideo(url: url)
+                                videoPlayerService.play()
+                                pm.showVideo()
+                            }
                         } label: {
                             Label(
                                 String(localized: "Play Video", comment: "Button"),
@@ -214,6 +232,80 @@ struct MediaActionBar: View {
         case "audio": return "waveform"
         case "video": return "film"
         default: return "doc"
+        }
+    }
+}
+
+// MARK: - Video Controls
+/// Transport controls for the video playing on the output window.
+struct VideoControlsView: View {
+    @Environment(VideoPlayerService.self) private var video
+    @Environment(PresentationManager.self) private var pm
+
+    var body: some View {
+        @Bindable var videoBinding = video
+
+        VStack(spacing: 8) {
+            HStack {
+                Text(video.currentFileName)
+                    .font(.caption)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                Spacer()
+                Text("\(video.formattedCurrentTime) / \(video.formattedDuration)")
+                    .font(.caption.monospacedDigit())
+            }
+
+            // Progress bar
+            Slider(
+                value: Binding(
+                    get: { video.progress },
+                    set: { video.seek(to: $0 * video.duration) }
+                ),
+                in: 0...1
+            )
+            .controlSize(.small)
+
+            HStack(spacing: 12) {
+                Button { video.togglePlayPause() } label: {
+                    Image(systemName: video.isPlaying ? "pause.fill" : "play.fill")
+                }
+                .help(video.isPlaying
+                    ? String(localized: "Pause", comment: "Video control tooltip")
+                    : String(localized: "Play", comment: "Video control tooltip"))
+
+                Button {
+                    pm.clearOutput()
+                } label: {
+                    Image(systemName: "stop.fill")
+                }
+                .help(String(localized: "Stop and clear output", comment: "Video control tooltip"))
+
+                Toggle(isOn: $videoBinding.isLooping) {
+                    Image(systemName: "repeat")
+                }
+                .toggleStyle(.button)
+                .help(String(localized: "Loop video", comment: "Video control tooltip"))
+
+                Spacer()
+
+                Button { video.toggleMute() } label: {
+                    Image(systemName: video.isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
+                }
+                .help(String(localized: "Mute", comment: "Video control tooltip"))
+
+                Slider(
+                    value: Binding(
+                        get: { video.volume },
+                        set: { video.setVolume($0) }
+                    ),
+                    in: 0...1
+                )
+                .frame(width: 80)
+                .controlSize(.small)
+            }
+            .buttonStyle(.borderless)
+            .controlSize(.small)
         }
     }
 }

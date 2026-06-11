@@ -132,7 +132,7 @@ struct CustomSlidesView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
-        .onReceive(NotificationCenter.default.publisher(for: .addSlide)) { _ in
+        .onKeyWindowNotification(.addSlide) { _ in
             addSlide()
         }
     }

@@ -351,6 +351,9 @@ struct LiveContentTests {
 
 // MARK: - PresentationManager Tests
 
+// MainActor: PresentationManager drives NSWindow/NSScreen (AppKit is main-thread-only),
+// and Swift Testing otherwise runs test functions on background threads.
+@MainActor
 struct PresentationManagerTests {
     @Test func freezeSnapshotsCurrentValues() {
         let pm = PresentationManager()
@@ -415,5 +418,329 @@ struct PresentationManagerTests {
 
         pm.toggleBlack()
         #expect(pm.isBlackScreen == false)
+    }
+
+    // MARK: Fixed Text Boxes
+
+    @Test func boxFrameClampsToScreen() {
+        let frame = PresentationManager.TextBoxFrame(x: 0.9, y: -0.2, width: 0.5, height: 0.01)
+        let clamped = frame.clamped()
+
+        #expect(clamped.height == PresentationManager.TextBoxFrame.minSize)
+        #expect(clamped.y == 0)
+        #expect(clamped.x + clamped.width <= 1.0)
+        #expect(clamped.width == 0.5)
+    }
+
+    @Test func boxFrameRectScalesToCanvas() {
+        let frame = PresentationManager.TextBoxFrame(x: 0.1, y: 0.2, width: 0.5, height: 0.25)
+        let rect = frame.rect(in: CGSize(width: 1000, height: 800))
+
+        #expect(rect.origin.x == 100)
+        #expect(rect.origin.y == 160)
+        #expect(rect.width == 500)
+        #expect(rect.height == 200)
+    }
+
+    @Test func setBoxFrameClampsAndPersistsRoundTrip() {
+        let pm = PresentationManager()
+        pm.setBoxFrame(.init(x: 0.95, y: 0.1, width: 0.3, height: 0.2), for: .verseContent)
+
+        // x clamped so the box stays fully on screen
+        #expect(pm.verseBoxFrame.x + pm.verseBoxFrame.width <= 1.0)
+
+        // Persisted value decodes back to the same frame
+        let decoded = PresentationManager.TextBoxFrame.decode(
+            from: .standard, key: "pm_verseBoxFrame", fallback: .defaultVerse
+        )
+        #expect(decoded == pm.verseBoxFrame)
+    }
+
+    @Test func resetAllBoxFramesRestoresDefaults() {
+        let pm = PresentationManager()
+        pm.setBoxFrame(.init(x: 0.2, y: 0.2, width: 0.4, height: 0.3), for: .reference)
+
+        pm.resetAllBoxFrames()
+
+        #expect(pm.refBoxFrame == .defaultReference)
+        #expect(pm.verseBoxFrame == .defaultVerse)
+    }
+
+    @Test func fittedFontSizeNeverExceedsConfiguredSize() {
+        let pm = PresentationManager()
+        pm.autoFitVerseFont = true
+
+        let longText = String(repeating: "For God so loved the world. ", count: 40)
+        let fitted = pm.fittedVerseFontSize(
+            text: longText,
+            boxSize: CGSize(width: 800, height: 300),
+            maxSize: 80,
+            padding: 40,
+            fontName: "",
+            lineSpacing: 1.0
+        )
+
+        #expect(fitted <= 80)
+        #expect(fitted >= 10)
+    }
+
+    @Test func customTextBoxLifecycle() {
+        let pm = PresentationManager()
+        let initialCount = pm.customTextBoxes.count
+
+        var box = pm.addCustomTextBox()
+        #expect(pm.customTextBoxes.count == initialCount + 1)
+
+        box.text = "CCLI #123456"
+        box.style.isCustomized = true
+        box.style.fontSize = 24
+        pm.updateCustomTextBox(box)
+        #expect(pm.customTextBox(id: box.id)?.text == "CCLI #123456")
+        #expect(pm.customTextBox(id: box.id)?.style.fontSize == 24)
+
+        pm.removeCustomTextBox(id: box.id)
+        #expect(pm.customTextBox(id: box.id) == nil)
+        #expect(pm.customTextBoxes.count == initialCount)
+    }
+
+    @Test func quickAlignCentersBox() {
+        let pm = PresentationManager()
+        pm.setBoxFrame(.init(x: 0.0, y: 0.0, width: 0.4, height: 0.2), for: .verseContent)
+
+        pm.centerBoxHorizontally(.section(.verseContent))
+        pm.centerBoxVertically(.section(.verseContent))
+
+        let frame = pm.verseBoxFrame
+        #expect(abs(frame.x - 0.3) < 0.0001)
+        #expect(abs(frame.y - 0.4) < 0.0001)
+    }
+
+    @Test func fontScaleUsesReferenceHeight() {
+        #expect(PresentationManager.fontScale(forHeight: 1080) == 1.0)
+        #expect(PresentationManager.fontScale(forHeight: 2160) == 2.0)
+        #expect(PresentationManager.fontScale(forHeight: 540) == 0.5)
+        #expect(PresentationManager.fontScale(forHeight: 0) == 1.0)
+    }
+
+    @Test func customBoxResolvesDynamicSources() {
+        var box = PresentationManager.CustomTextBox()
+        box.text = "Static text"
+
+        let live = LiveContent()
+        live.setBibleVerse(text: "Verse body", reference: "Ioan 3:16", translationName: "VDC")
+
+        box.sourceRaw = "static"
+        #expect(box.resolvedText(live: live) == "Static text")
+
+        box.sourceRaw = "reference"
+        #expect(box.resolvedText(live: live) == "Ioan 3:16")
+
+        box.sourceRaw = "translation"
+        #expect(box.resolvedText(live: live) == "VDC")
+    }
+
+    @Test func sectionSourceOverrideResolvesText() {
+        let pm = PresentationManager()
+        let originalSource = pm.refSourceRaw
+        let originalStatic = pm.refStaticText
+
+        // Default "auto" → the box's natural field
+        pm.refSourceRaw = "auto"
+        #expect(pm.sectionText(.reference, main: "M", reference: "R", translation: "T", subtitle: "S") == "R")
+
+        // Override to another live field
+        pm.refSourceRaw = "translation"
+        #expect(pm.sectionText(.reference, main: "M", reference: "R", translation: "T", subtitle: "S") == "T")
+
+        // Static text
+        pm.refSourceRaw = "static"
+        pm.refStaticText = "Biserica Sion"
+        #expect(pm.sectionText(.reference, main: "M", reference: "R", translation: "T", subtitle: "S") == "Biserica Sion")
+
+        pm.refSourceRaw = originalSource
+        pm.refStaticText = originalStatic
+    }
+
+    @Test func sectionVisibilityToggles() {
+        let pm = PresentationManager()
+        let original = pm.refBoxVisible
+
+        pm.setSectionVisible(false, for: .reference)
+        #expect(pm.isSectionVisible(.reference) == false)
+
+        pm.toggleBoxVisibility(.section(.reference))
+        #expect(pm.isSectionVisible(.reference) == true)
+
+        pm.setSectionVisible(original, for: .reference)
+    }
+
+    @Test func mediaBoxShowsForContentFilters() {
+        var box = PresentationManager.MediaBox()
+
+        box.showOnRaw = "always"
+        #expect(box.showsFor(contentType: .blank, isLive: false))
+
+        box.showOnRaw = "bible"
+        #expect(box.showsFor(contentType: .bible, isLive: true))
+        #expect(!box.showsFor(contentType: .song, isLive: true))
+        #expect(!box.showsFor(contentType: .bible, isLive: false))
+    }
+
+    @Test func duplicateCustomBoxOffsetsFrame() {
+        let pm = PresentationManager()
+        var original = pm.addCustomTextBox()
+        original.text = "Original"
+        pm.updateCustomTextBox(original)
+
+        let copy = pm.duplicateCustomTextBox(id: original.id)
+        #expect(copy != nil)
+        #expect(copy?.id != original.id)
+        #expect(copy?.text == "Original")
+        #expect(copy!.frame.x > original.frame.x || copy!.frame.y > original.frame.y)
+
+        pm.removeCustomTextBox(id: original.id)
+        if let copy { pm.removeCustomTextBox(id: copy.id) }
+    }
+
+    @Test func boxStyleResolvesGlobalsWhenNotCustomized() {
+        let pm = PresentationManager()
+        let originalStyle = pm.refStyle
+        pm.refStyle = PresentationManager.BoxTextStyle() // not customized
+
+        let resolved = pm.resolvedStyle(for: .reference)
+        // Inherits globals + the section defaults (55% size, semibold)
+        #expect(abs(resolved.fontSize - pm.fontSize * 0.55) < 0.001)
+        #expect(resolved.weight == .semibold)
+        #expect(resolved.hAlign == pm.textAlignment)
+
+        pm.refStyle = originalStyle
+    }
+
+    @Test func enableStyleCustomizationSeedsCurrentValues() {
+        let pm = PresentationManager()
+        let originalStyle = pm.verseStyle
+        pm.verseStyle = PresentationManager.BoxTextStyle()
+
+        pm.enableStyleCustomization(for: .verseContent)
+        #expect(pm.verseStyle.isCustomized)
+        #expect(abs(pm.verseStyle.fontSize - pm.fontSize) < 0.001)
+
+        pm.verseStyle = originalStyle
+    }
+
+    @Test func clockFormatsProduceOutput() {
+        let now = Date.now
+        #expect(!PresentationManager.formattedClock(source: "date", format: "", now: now).isEmpty)
+        #expect(!PresentationManager.formattedClock(source: "date", format: "short", now: now).isEmpty)
+        #expect(!PresentationManager.formattedClock(source: "time", format: "", now: now).isEmpty)
+        let hms = PresentationManager.formattedClock(source: "time", format: "hms", now: now)
+        #expect(hms.split(separator: ":").count == 3)
+    }
+
+    @Test func themeRoundTripRestoresLook() {
+        let pm = PresentationManager()
+        let originalThemes = pm.themes
+        let originalFrame = pm.verseBoxFrame
+        let originalFontSize = pm.fontSize
+
+        pm.fontSize = 72
+        pm.setBoxFrame(.init(x: 0.1, y: 0.1, width: 0.5, height: 0.3), for: .verseContent)
+        let theme = pm.saveCurrentAsTheme(named: "Test")
+
+        // Change things, then apply the theme back
+        pm.fontSize = 48
+        pm.setBoxFrame(.defaultVerse, for: .verseContent)
+        pm.applyTheme(id: theme.id)
+
+        #expect(pm.fontSize == 72)
+        #expect(pm.verseBoxFrame == PresentationManager.TextBoxFrame(x: 0.1, y: 0.1, width: 0.5, height: 0.3))
+        #expect(pm.activeThemeID == theme.id)
+
+        pm.deleteTheme(id: theme.id)
+        pm.themes = originalThemes
+        pm.verseBoxFrame = originalFrame
+        pm.fontSize = originalFontSize
+    }
+
+    @Test func layoutUndoRedoRestoresBoxState() async throws {
+        let pm = PresentationManager()
+        let originalFrame = pm.verseBoxFrame
+
+        let moved = PresentationManager.TextBoxFrame(x: 0.1, y: 0.1, width: 0.5, height: 0.3)
+        pm.setBoxFrame(moved, for: .verseContent)
+        #expect(pm.canUndoLayout)
+
+        pm.undoLayout()
+        #expect(pm.verseBoxFrame == originalFrame)
+        #expect(pm.canRedoLayout)
+
+        pm.redoLayout()
+        #expect(pm.verseBoxFrame == moved)
+
+        // Restoring must not pollute the undo stack (suppression flag)
+        pm.undoLayout()
+        #expect(pm.verseBoxFrame == originalFrame)
+
+        // Cleanup: put the frame back without leaving coalesced state behind
+        try await Task.sleep(for: .milliseconds(900))
+        pm.setBoxFrame(originalFrame, for: .verseContent)
+    }
+
+    @Test func layoutUndoCoalescesRapidChanges() {
+        let pm = PresentationManager()
+        let originalFrame = pm.verseBoxFrame
+        let stackBefore = pm.layoutUndoStack.count
+
+        // Simulates a drag: many rapid frame updates → ONE undo step
+        for i in 1...20 {
+            pm.setBoxFrame(.init(x: Double(i) * 0.01, y: 0.2, width: 0.4, height: 0.3), for: .verseContent)
+        }
+        #expect(pm.layoutUndoStack.count == stackBefore + 1)
+
+        pm.undoLayout()
+        #expect(pm.verseBoxFrame == originalFrame)
+    }
+
+    @Test func unifiedZOrderReordersAnyBox() {
+        let pm = PresentationManager()
+        let originalOrder = pm.boxOrder
+
+        // Every box appears exactly once in the reconciled order
+        let tokens = pm.orderedBoxTokens()
+        #expect(tokens.contains("section:verseContent"))
+        #expect(tokens.contains("section:reference"))
+        #expect(Set(tokens).count == tokens.count)
+
+        // Built-in sections can be sent to front/back too
+        pm.moveBoxTokenToEdge("section:reference", front: true)
+        #expect(pm.orderedBoxTokens().last == "section:reference")
+
+        pm.moveBoxTokenToEdge("section:reference", front: false)
+        #expect(pm.orderedBoxTokens().first == "section:reference")
+
+        // Drag-drop placement: token lands directly above the target
+        pm.reorderBoxToken("section:reference", above: "section:verseContent")
+        let after = pm.orderedBoxTokens()
+        let refIdx = after.firstIndex(of: "section:reference")!
+        let verseIdx = after.firstIndex(of: "section:verseContent")!
+        #expect(refIdx == verseIdx + 1)
+
+        pm.boxOrder = originalOrder
+    }
+
+    @Test func freezeSnapshotsBoxFrames() {
+        let pm = PresentationManager()
+        let custom = PresentationManager.TextBoxFrame(x: 0.1, y: 0.1, width: 0.5, height: 0.3)
+        pm.setBoxFrame(custom, for: .verseContent)
+
+        pm.toggleFreeze()
+        pm.setBoxFrame(.defaultVerse, for: .verseContent)
+
+        // Output keeps the frozen frame while live edits continue underneath
+        #expect(pm.outputBoxFrame(for: .verseContent) == custom)
+        #expect(pm.verseBoxFrame == .defaultVerse)
+
+        pm.toggleFreeze()
+        #expect(pm.outputBoxFrame(for: .verseContent) == .defaultVerse)
     }
 }

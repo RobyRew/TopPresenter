@@ -80,7 +80,7 @@ TopPresenter/
 │   ├── Media/         MediaView.swift
 │   ├── Schedule/      ScheduleView.swift
 │   ├── CustomSlides/  CustomSlidesView.swift
-│   ├── Presentation/  PresentationOutputView.swift, VerseTextRenderer.swift
+│   ├── Presentation/  PresentationOutputView.swift, TextBoxLayout.swift
 │   ├── Import/        BatchImportSheet.swift, BatchExportSheet.swift
 │   └── Settings/      SettingsView.swift, KeyboardShortcutsSheet.swift
 │
@@ -130,6 +130,67 @@ TopPresenter/
 - `isSingleScreenMode = NSScreen.screens.count <= 1`
 - On screen disconnect: configurable action (`doNothing` / `moveToAvailable` / `goBlack` / `ask`)
 - Monitoring started in `MainControlView.onAppear` via `presentationManager.startScreenMonitoring()`
+
+### Video Output
+- `VideoPlayerService` (`@Observable`) is created in `TopPresenterApp.init()`, injected via `.environment(...)` into both windows, and linked back via `PresentationManager.videoService` (weak) so `clearOutput()` stops playback
+- "Play Video" in `MediaPreviewPanel` → `videoService.loadVideo(url:)` + `play()` + `pm.showVideo()` (sets `LiveContent.contentType = .media`)
+- The output window renders `OutputVideoView` (AVKit `AVPlayerView`, `controlsStyle = .none`) when `contentType == .media`; it stays mounted under the black-screen overlay so toggling black doesn't tear down the player
+- `VideoPlayerService` holds `startAccessingSecurityScopedResource()` for the whole playback; released in `stop()`
+
+### Preview Card Parity
+- `PresentationPreviewCard` previews the **Bible verse selection** by default
+- Non-Bible panels (Songs / Schedule / Custom Slides) must pass `pendingContent:` (`PendingContent(text:reference:subtitle:)`) so the card previews their selection before it goes live — never rely on the Bible-selection fallback there
+- The preview card and `PresentationOutputView` must stay layout-identical: both render every section inside the same normalized `TextBoxFrame`s
+
+### Uniform Box Styles (BoxTextStyle)
+- EVERY text box (4 built-ins + custom) carries the same `BoxTextStyle`: `isCustomized == false` (default) inherits global text settings + section defaults (`styleDefaults(for:)` — ref 55%/semibold, translation 35%/0.6 opacity, subtitle 40%/0.6); the UI "Personalizează textul" toggle calls `enableStyleCustomization(for:)` which SEEDS fields with current resolved values
+- Render exclusively through `resolvedStyle(for:)` / `outputStyle(for:)` (frozen-aware) / `resolvedCustomStyle(_:)` — never read raw style fields in views
+- The old per-section properties (verseFontName, refFontWeight, showTranslationName, translationNameSizeRatio, …) are GONE; translation is a normal box (hidden by default, default frame top-left), subtitle hidden by default
+- Sources support `date`/`time` with per-box formats (`formattedClock`); output wraps content in a TimelineView driven by `pm.clockTickInterval` so clocks tick live
+
+### Per-Content Backgrounds & Themes
+- `contentBackgrounds["bible"/"song"/"text"]` (`BackgroundConfig`) override the global background per presenter type; render via `activeBackground(for:frozen:)` — never read backgroundEnabled/backgroundImage directly in render paths
+- Themes (`Theme`/`ThemePayload`) snapshot the ENTIRE look (global text, backgrounds, frames, visibility, styles, sources, custom + media boxes); `ThemeMenuControl` lives in every panel footer (`PanelFooter`) and the editor header
+- **Unified z-order for EVERY box** (sections + custom + media interleaved): `pm.boxOrder` token list ("section:<raw>" / "custom:<uuid>" / "media:<uuid>"), reconciled via `orderedBoxTokens()` (pure — safe in view body; new boxes land on top, media defaults to the back). ALL render paths (output `orderedBoxes`, preview card, editor canvas) iterate this order — never hardcode section/media layering again. Reorder via drag in the Casete list (front-first, `reorderBoxToken(_:above:)`) or the Ordonare context menu on any box (canvas + list)
+- Custom + media boxes are renamable (`name` field, context-menu Redenumește); translation & subtitle rows have a trash button that HIDES them (built-ins are never deleted)
+- Hidden boxes are COMPLETELY invisible everywhere — preview card AND editor canvas pass `showsHiddenBoxes: false`; the only place a hidden box appears is the Casete list (dimmed, eye to re-enable)
+- The per-box Vertical picker lives INSIDE the "Personalizează textul" toggle (with a Global segment); non-customized boxes inherit `globalVAlignRaw`
+- The GLOBAL text palette includes weight (`globalWeightRaw` — inherited by every section whose design default is regular), vertical alignment (`globalVAlignRaw` — inherited when a box's `vAlignRaw` is empty), and opacity (`globalTextOpacity` — multiplied into non-customized boxes). Every option must exist at BOTH levels — never add a per-box style control without its global counterpart
+- The Fundal tab shows only the per-presenter override relevant to the module the editor was opened from (Bible module → just "Biblie"); Schedule/Media show all three
+
+### Multi-Window Tabs
+- Each main window/tab owns its OWN `AppState` + `LibraryManager` (created in `MainWindowRoot`) — different tabs can browse different modules with different Bible sources. `PresentationManager`/audio/video are app-global: ONE output, whichever tab presses Show drives it
+- File ▸ Filă Nouă (⌘T) opens a new window that joins as a native tab (`tabbingMode = .preferred` set in `WindowReader`); capped at 10 main windows
+- **Notification handlers in window-hosted views MUST use `.onKeyWindowNotification(_:perform:)`** (WindowNotifications.swift), never raw `.onReceive` — otherwise every tab reacts to every menu command. Output-wide commands (black/freeze/clear/font size) are handled ONCE by `PresentationCommandRouter` (created in App.init), never per window
+- **NEVER use a customizable toolbar (`.toolbar(id:)`) on the tabbed main window** — customizable toolbars sync items across the window-tab family via the customization plist, and the second tab re-inserts NavigationSplitView's sidebar toggle → `NSToolbar duplicate item` assertion CRASH. The main toolbar must stay a plain `.toolbar { }`
+
+### Layout Undo / Redo
+- Snapshot-based (`registerLayoutUndo()` called at the top of every box mutator; snapshots reuse `ThemePayload`); registrations <0.8s apart coalesce so a drag = one step; `applyPayload` sets `isRestoringLayout` so restores never re-register; undo/redo buttons live on the "Casete" group title in the editor. New box mutators MUST call `registerLayoutUndo()` first
+
+### Fixed Text Box Layout (the layout system)
+- Four FIXED built-in text boxes — verse content, reference/title, translation name, subtitle — each a `PresentationManager.TextBoxFrame` (normalized 0…1 x/y/width/height of the target screen), plus user-created `CustomTextBox`es (own text + style, persisted as JSON under `pm_customTextBoxes`)
+- **Boxes never move or resize with their content.** Text is laid out INSIDE its box (horizontal alignment from text settings, per-box vertical alignment `pm_verseVAlign` / `pm_refVAlign`); `padding` is the inner horizontal inset
+- Persisted as JSON under `pm_verseBoxFrame` / `pm_refBoxFrame` / `pm_translationBoxFrame` / `pm_subtitleBoxFrame`; always go through `boxFrame(for:)` / `setBoxFrame(_:for:)` — overloads take `TextBoxSection` or `BoxIdentity` (`.section(...)` / `.custom(UUID)`) and clamp via `TextBoxFrame.clamped()`; freeze snapshots the frames (and custom boxes) like every other display setting
+- **Resolution adaptivity:** font sizes are authored at a 1080-point reference height (`PresentationManager.referenceScreenHeight`) and multiplied by `fontScale(forHeight:)` / `targetFontScale` at render time. Normalized boxes + scaled fonts = the layout adapts automatically to any resolution / aspect ratio / PPI. Auto-fill must pass SCALED font/padding (`pm.fontSize * pm.targetFontScale`)
+- `fittedVerseFontSize(text:boxSize:maxSize:padding:)` expects screen-scaled maxSize/padding; reference/translation/subtitle/custom boxes use `minimumScaleFactor` inside their boxes
+- Bible auto-fill measures against `pm.verseBoxPointSize` — `LibraryManager.versesCountThatFits(screenSize:)` expects the verse-box point size, not the screen size
+- The old per-section offset/scale/padding transforms and the `VerseTextRenderer` text-bounds overlay are GONE — do not reintroduce content-driven box geometry
+
+### Layout Editor (the design studio)
+- `LayoutEditorSheet` in `TextBoxLayout.swift` is THE home for all styling: canvas (drag/resize/click-select boxes, right-click context menus, arrow-key nudge 1%/⇧5%, quick-align TOGGLES that restore the previous frame on second press) + tabbed inspector — Layout / Text / Background / Output
+- Opened via: toolbar "Layout Editor" button, the `LayoutEditorButton` footer in every preview panel, or Presentation ▸ Layout Editor… (all post `.openLayoutEditor`)
+- **The right preview panel is OPERATIONAL ONLY** — preview, navigation, Show/Hide/Black/Freeze/Clear, audio/video transport, Multi-Verse + General quick toggles. New style settings go in the Layout Editor inspector, never back into `StyleQuickSettings`
+- Edit Mode (toolbar toggle) shows the drag/resize overlay on the preview card; fine editing happens in the Layout Editor
+- Every box shows its DATA SOURCE (inspector "Sursă:", box tooltip, context-menu header). Built-in sections can be hidden (`pm_*BoxVisible`); custom boxes support duplicate/delete
+- **Sources are configurable on EVERY text box**: built-in sections default to `"auto"` (their natural field — keep that default) but can be overridden via `pm.sourceRaw(for:)` / `setSourceRaw` to any live field (mainText/reference/translation/subtitle), static text (`pm.staticText(for:)`), or date. Custom boxes default to `"static"`. All rendering goes through `pm.sectionText(_:main:reference:translation:subtitle:)` / `CustomTextBox.resolvedText` — output passes live values, preview passes its preview values, editor passes samples. A non-"auto" translation-box source bypasses the showTranslationName/isBible gate
+- **Media boxes** (`PresentationManager.MediaBox`, `pm_mediaBoxes`): image/GIF/video overlays with opacity, corner radius, edge feather (blurred-mask border fade), fit/fill, and `showOnRaw` content filters (always/bible/song/text). Rendering in `MediaBoxViews.swift` — GIFs animate via NSImageView (`animates = true`), videos loop muted via AVQueuePlayer+AVPlayerLooper and PLAY ONLY on the real output (preview/editor show placeholders)
+- Picker gotcha: never attach `.help()` (or other modifiers) to tagged segmented-picker items — it breaks tag matching and the tabs stop switching
+- Drag gotcha: box drag/resize gestures MUST measure in the overlay's named coordinate space (`TextBoxEditOverlay.canvasSpace`) — measuring in the moving view's own space feeds back into the gesture and the box jitters/shakes
+
+### Sandbox Persistence
+- The app is sandboxed (`com.apple.security.app-sandbox`); any user-chosen file that must survive relaunch needs a **security-scoped bookmark**, not a raw path
+- Background image: bookmark stored under `pm_backgroundImageBookmark` (set in `setBackgroundImage(from:)`, removed in `removeBackgroundImage()`)
+- Media files: `MediaItem.bookmarkData` / `resolvedURL`
 
 ### Adding a Bible Importer
 1. Create `Services/Import/MyFormatImporter.swift`
@@ -216,6 +277,8 @@ Unsigned builds require users to right-click → Open, or run `xattr -cr TopPres
 - Do not add `NSPersistentContainer` or CoreData — SwiftData only
 - Do not hardcode screen indices — always use `NSScreen.screens` dynamically
 - Do not skip `security-scoped bookmark` handling for media files — `MediaItem.resolvedURL` handles this
+- Do not give toolbar/panel buttons keyboard shortcuts already owned by a menu command — the menu always wins and the button shortcut is silently dead (this is why Edit Mode has no ⇧⌘E)
+- Do not call `NSApp.sendAction(Selector(("showSettingsWindow:")))` — use `@Environment(\.openSettings)`
 
 ---
 

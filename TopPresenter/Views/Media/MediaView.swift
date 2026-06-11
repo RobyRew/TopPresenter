@@ -140,7 +140,7 @@ struct MediaView: View {
                 }
             }
         }
-        .onReceive(NotificationCenter.default.publisher(for: .importMedia)) { _ in
+        .onKeyWindowNotification(.importMedia) { _ in
             importMedia()
         }
     }

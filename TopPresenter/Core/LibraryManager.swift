@@ -350,26 +350,12 @@ final class LibraryManager {
             nsFont = NSFont(name: fontName, size: fontSize) ?? NSFont.systemFont(ofSize: fontSize)
         }
 
-        // Match PresentationOutputView layout exactly:
-        // - Main text: .padding(.horizontal, padding), .lineSpacing(lineSpacing * fontSize * 0.1)
-        // - Reference: .font(.system(size: fontSize * 0.55)), .padding(.top, fontSize * 0.4)
-        // - Content is in VStack with Spacer() top/bottom (centered)
-        // - Subtitle (optional, usually empty for Bible)
-
-        let refFontSize = fontSize * 0.55
-        let refLineHeight = refFontSize * 1.3 // approximate line height for reference
-        let refTopPadding = fontSize * 0.4
-
-        // Vertical space consumed by reference + its padding
-        let referenceReserve = refLineHeight + refTopPadding
-
-        // Horizontal padding on both sides
-        let availableWidth = max(screenSize.width - padding * 2, 100)
-
-        // Total vertical space minus reference area and some top/bottom breathing room
-        // The breathing room accounts for the Spacer() centering — text shouldn't fill 100%
-        let breathingRoom = fontSize * 1.5 // top + bottom margin from centering
-        let availableHeight = max(screenSize.height - referenceReserve - breathingRoom, 100)
+        // `screenSize` is the point size of the FIXED verse text box — the reference,
+        // translation, and subtitle live in their own boxes and need no reserve here.
+        // Match the output layout: .padding(.horizontal, padding) inside the box,
+        // .lineSpacing(lineSpacing * fontSize * 0.1).
+        let availableWidth = max(screenSize.width - padding * 2, 50)
+        let availableHeight = max(screenSize.height * 0.98, 50)
 
         // Build paragraph style matching SwiftUI's .lineSpacing() modifier
         // SwiftUI .lineSpacing adds EXTRA spacing between lines (not a multiplier)

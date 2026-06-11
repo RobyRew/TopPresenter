@@ -69,46 +69,63 @@ struct PresentationPreviewCard: View {
     @AppStorage("multiVerseLayout") private var multiVerseLayout: String = "inline"
     @AppStorage("showVerseNumberPrefix") private var showVerseNumberPrefix: Bool = false
 
-    /// Pass `true` when rendering Bible content so auto-fit and translation name are applied.
+    /// Pass `true` when rendering Bible content so the translation name is populated.
     var isBibleContent: Bool = false
 
-    /// Text to preview: when frozen show the current selection (what will go live next),
-    /// when live show the live content, otherwise show the selected verses preview.
+    /// Content a non-Bible panel (songs, slides, schedule) wants previewed before it
+    /// goes live. When nil, the card falls back to the Bible verse selection.
+    struct PendingContent {
+        var text: String
+        var reference: String
+        var subtitle: String = ""
+    }
+    var pendingContent: PendingContent? = nil
+
+    /// What would go live next: the panel-supplied content, or the Bible selection.
+    private var pendingText: String {
+        if let pendingContent { return pendingContent.text }
+        guard !libraryManager.selectedVerses.isEmpty else { return "" }
+        return libraryManager.formattedSelectedVersesText(
+            layout: multiVerseLayout, showPrefix: showVerseNumberPrefix
+        )
+    }
+
+    private var pendingReference: String {
+        if let pendingContent { return pendingContent.reference }
+        guard !libraryManager.selectedVerses.isEmpty else { return "" }
+        return libraryManager.selectedVersesReference
+    }
+
+    /// Text to preview: when frozen show the pending content (what will go live next),
+    /// when live show the live content, otherwise show the pending content.
     private var previewText: String {
-        if pm.isFrozen && !libraryManager.selectedVerses.isEmpty {
-            return libraryManager.formattedSelectedVersesText(
-                layout: multiVerseLayout, showPrefix: showVerseNumberPrefix
-            )
+        if pm.isFrozen && !pendingText.isEmpty {
+            return pendingText
         }
         if pm.liveContent.isLive, !pm.liveContent.mainText.isEmpty {
             return pm.liveContent.mainText
         }
-        if !libraryManager.selectedVerses.isEmpty {
-            return libraryManager.formattedSelectedVersesText(
-                layout: multiVerseLayout, showPrefix: showVerseNumberPrefix
-            )
-        }
-        return ""
+        return pendingText
     }
 
     private var previewReference: String {
-        if pm.isFrozen && !libraryManager.selectedVerses.isEmpty {
-            return libraryManager.selectedVersesReference
+        if pm.isFrozen && !pendingText.isEmpty {
+            return pendingReference
         }
         if pm.liveContent.isLive, !pm.liveContent.reference.isEmpty {
             return pm.liveContent.reference
         }
-        if !libraryManager.selectedVerses.isEmpty {
-            return libraryManager.selectedVersesReference
-        }
-        return ""
+        return pendingReference
     }
 
     private var previewSubtitle: String {
+        if pm.isFrozen, let pendingContent, !pendingContent.text.isEmpty {
+            return pendingContent.subtitle
+        }
         if pm.liveContent.isLive {
             return pm.liveContent.subtitle
         }
-        return ""
+        return pendingContent?.subtitle ?? ""
     }
 
     /// Translation name shown in the preview: live value when live, module abbrev otherwise.
@@ -121,8 +138,8 @@ struct PresentationPreviewCard: View {
     private var hasContent: Bool { !previewText.isEmpty }
 
     private var isPreviewOnly: Bool {
-        let notLiveYet = !pm.liveContent.isLive && !libraryManager.selectedVerses.isEmpty
-        let frozenAndPreparing = pm.isFrozen && !libraryManager.selectedVerses.isEmpty
+        let notLiveYet = !pm.liveContent.isLive && !pendingText.isEmpty
+        let frozenAndPreparing = pm.isFrozen && !pendingText.isEmpty
         return notLiveYet || frozenAndPreparing
     }
 
@@ -133,8 +150,6 @@ struct PresentationPreviewCard: View {
 
     var body: some View {
         // Outer frame: let SwiftUI determine the width, then constrain height via aspectRatio.
-        // A background GeometryReader is layout-neutral (reports size without affecting it),
-        // so the card never causes a circular layout cycle when switching views.
         Color.clear
             .aspectRatio(metrics.aspectRatio, contentMode: .fit)
             .overlay(
@@ -146,207 +161,38 @@ struct PresentationPreviewCard: View {
 
     @ViewBuilder
     private func cardContent(size: CGSize) -> some View {
-        let availableWidth = size.width
-        let scale = availableWidth / max(metrics.points.width, 1)
-
         ZStack {
                 // Black bg (stands in for transparent on projector)
                 Color.black
 
-                // Background layers
+                // Background layers — per-content override or global
                 if pm.isBlackScreen {
                     // Full black — nothing else rendered
                 } else {
-                    if pm.backgroundEnabled {
-                        pm.backgroundColor
+                    let bg = pm.activeBackground(for: pm.liveContent.contentType, frozen: false)
+                    if bg.showColor {
+                        bg.color
                     }
-
-                    if pm.useBackgroundImage, let bgImage = pm.backgroundImage {
-                        Image(nsImage: bgImage)
+                    if bg.useImage, let image = bg.image {
+                        Image(nsImage: image)
                             .resizable()
                             .aspectRatio(contentMode: .fill)
-                            .opacity(pm.backgroundOpacity)
+                            .opacity(bg.opacity)
                     }
 
-                    // Content — use EXACT same layout as PresentationOutputView, scaled down
-                    if hasContent {
-                        // Auto-fit: compute the fitted font size at real screen resolution,
-                        // then scale it down to preview size.
-                        let actualFontSize: CGFloat = (isBibleContent && pm.autoFitVerseFont)
-                            ? pm.fittedVerseFontSize(
-                                text: previewText,
-                                reference: previewReference,
-                                screenSize: metrics.points
-                              )
-                            : CGFloat(pm.resolvedVerseFontSize)
+                    // Content + media — same unified stacking order as the output, scaled.
+                    previewBoxes(size: size)
+                }
 
-                        let refRatio = CGFloat(pm.resolvedRefFontSize) / max(CGFloat(pm.resolvedVerseFontSize), 1.0)
-
-                        let scaledPadding = pm.padding * scale
-                        let scaledVerseFontSize = actualFontSize * scale
-                        let scaledRefFontSize = actualFontSize * refRatio * scale
-                        let scaledTranslationSize = actualFontSize * CGFloat(pm.translationNameSizeRatio) * scale
-                        let scaledSubSize = actualFontSize * 0.4 * scale
-                        let scaledVerseLineSpacing = pm.resolvedVerseLineSpacing * scaledVerseFontSize * 0.1
-                        let scaledShadowRadius = pm.shadowEnabled ? pm.shadowRadius * scale : 0
-                        let scaledRefGap = actualFontSize * 0.4 * scale
-                        let scaledTranslationGap = actualFontSize * 0.15 * scale
-                        // Per-section scaled values
-                        let scaledVerseOffset = CGSize(
-                            width: pm.editVerseOffset.width * scale,
-                            height: pm.editVerseOffset.height * scale
-                        )
-                        let scaledVersePadding = pm.editVersePadding * scale
-                        let scaledRefOffset = CGSize(
-                            width: pm.editRefOffset.width * scale,
-                            height: pm.editRefOffset.height * scale
-                        )
-                        let scaledRefPadding = pm.editRefPadding * scale
-
-                        VStack(spacing: 0) {
-                            Spacer()
-
-                            // Main text — uses per-section font, color, alignment
-                            Text(previewText)
-                                .font(scaledVerseFont(size: scaledVerseFontSize))
-                                .foregroundStyle(pm.resolvedVerseTextColor.opacity((isPreviewOnly ? 0.5 : 1.0) * pm.editVerseOpacity))
-                                .multilineTextAlignment(pm.resolvedVerseAlignment)
-                                .lineSpacing(scaledVerseLineSpacing)
-                                .shadow(
-                                    color: pm.shadowEnabled ? .black.opacity(0.8) : .clear,
-                                    radius: scaledShadowRadius,
-                                    x: 0,
-                                    y: pm.shadowEnabled ? 2 * scale : 0
-                                )
-                                .scaleEffect(pm.editVerseMultiplier)
-                                .offset(scaledVerseOffset)
-                                // Edit mode bounding box overlay — ONLY in preview
-                                .textRenderer(VerseTextRenderer(
-                                    isEditMode: pm.isEditMode,
-                                    section: .verseContent,
-                                    fontSizeMultiplier: 1.0,
-                                    alignmentOffset: .zero,
-                                    textOpacity: 1.0
-                                ))
-                                .padding(.horizontal, scaledPadding + scaledVersePadding)
-
-                            // Reference — uses per-section font, color, alignment, weight
-                            if !previewReference.isEmpty {
-                                Text(previewReference)
-                                    .font(scaledRefFont(size: scaledRefFontSize))
-                                    .foregroundStyle(pm.resolvedRefTextColor.opacity((isPreviewOnly ? 0.4 : 1.0) * pm.editRefOpacity))
-                                    .multilineTextAlignment(pm.resolvedRefAlignment)
-                                    .shadow(
-                                        color: pm.shadowEnabled ? .black.opacity(0.6) : .clear,
-                                        radius: pm.shadowEnabled ? pm.shadowRadius * 0.7 * scale : 0
-                                    )
-                                    .scaleEffect(pm.editRefMultiplier)
-                                    .offset(scaledRefOffset)
-                                    // Edit mode bounding box overlay — ONLY in preview
-                                    .textRenderer(VerseTextRenderer(
-                                        isEditMode: pm.isEditMode,
-                                        section: .reference,
-                                        fontSizeMultiplier: 1.0,
-                                        alignmentOffset: .zero,
-                                        textOpacity: 1.0
-                                    ))
-                                    .padding(.top, scaledRefGap)
-                                    .padding(.horizontal, scaledPadding + scaledRefPadding)
-                            }
-
-                            // Translation name — Bible only, when enabled
-                            if isBibleContent,
-                               pm.showTranslationName,
-                               !previewTranslationName.isEmpty {
-                                Text(previewTranslationName)
-                                    .font(scaledRefFont(size: scaledTranslationSize))
-                                    .foregroundStyle(pm.resolvedTranslationColor.opacity(pm.translationNameOpacity * (isPreviewOnly ? 0.7 : 1.0)))
-                                    .multilineTextAlignment(pm.resolvedRefAlignment)
-                                    .textRenderer(VerseTextRenderer(
-                                        isEditMode: pm.isEditMode,
-                                        section: .translationName,
-                                        fontSizeMultiplier: 1.0,
-                                        alignmentOffset: .zero,
-                                        textOpacity: 1.0
-                                    ))
-                                    .padding(.top, scaledTranslationGap)
-                                    .padding(.horizontal, scaledPadding + scaledRefPadding)
-                            }
-
-                            // Subtitle — mirrors PresentationOutputView exactly
-                            if !previewSubtitle.isEmpty {
-                                Text(previewSubtitle)
-                                    .font(.system(size: scaledSubSize))
-                                    .foregroundStyle(pm.textColor.opacity(0.6))
-                                    .multilineTextAlignment(pm.textAlignment)
-                                    .padding(.top, 4 * scale)
-                                    .padding(.horizontal, scaledPadding)
-                            }
-
-                            Spacer()
-                        }
-                    }
+                // Edit Mode: box overlays — drag to move, corner handles to resize
+                if pm.isEditMode {
+                    TextBoxEditOverlay(canvasSize: size, showsBibleBoxes: isBibleContent, showsHiddenBoxes: false)
                 }
 
                 // Badges overlay
-                VStack {
-                    HStack {
-                        Spacer()
-                        HStack(spacing: 4) {
-                            if pm.isFrozen && isPreviewOnly {
-                                Text("FROZEN")
-                                    .font(.system(size: 8, weight: .bold))
-                                    .foregroundStyle(.white)
-                                    .padding(.horizontal, 5)
-                                    .padding(.vertical, 2)
-                                    .background(.orange.opacity(0.8), in: Capsule())
-                            }
-                            if isPreviewOnly {
-                                Text("PREVIEW")
-                                    .font(.system(size: 8, weight: .bold))
-                                    .foregroundStyle(.white)
-                                    .padding(.horizontal, 5)
-                                    .padding(.vertical, 2)
-                                    .background(.blue.opacity(0.7), in: Capsule())
-                            }
-                        }
-                        .padding(6)
-                    }
-                    Spacer()
-
-                    HStack(spacing: 6) {
-                        if !pm.backgroundEnabled && !pm.isBlackScreen {
-                            HStack(spacing: 3) {
-                                Image(systemName: "checkerboard.rectangle")
-                                    .font(.system(size: 8))
-                                Text(String(localized: "Transparent", comment: "Preview badge"))
-                                    .font(.system(size: 8, weight: .medium))
-                            }
-                            .foregroundStyle(.white.opacity(0.6))
-                            .padding(.horizontal, 5)
-                            .padding(.vertical, 2)
-                            .background(.black.opacity(0.5), in: Capsule())
-                        }
-
-                        Spacer()
-
-                        HStack(spacing: 3) {
-                            Image(systemName: "display")
-                                .font(.system(size: 7))
-                            Text("\(Int(metrics.resolution.width))×\(Int(metrics.resolution.height))")
-                                .font(.system(size: 7, weight: .medium, design: .monospaced))
-                            Text(metrics.aspectRatioLabel)
-                                .font(.system(size: 7, weight: .bold))
-                        }
-                        .foregroundStyle(.white.opacity(0.5))
-                        .padding(.horizontal, 5)
-                        .padding(.vertical, 2)
-                        .background(.black.opacity(0.5), in: Capsule())
-                    }
-                    .padding(6)
-                }
+                badges(size: size)
             }
-            .frame(width: availableWidth, height: size.height)
+            .frame(width: size.width, height: size.height)
             .clipShape(RoundedRectangle(cornerRadius: 6))
             .overlay(
                 RoundedRectangle(cornerRadius: 6)
@@ -356,29 +202,159 @@ struct PresentationPreviewCard: View {
                     )
             )
             .shadow(radius: 2)
-        .frame(width: availableWidth, height: size.height)
     }
 
-    // MARK: - Font Resolution (per-section, scaled for preview)
-    private func scaledVerseFont(size: CGFloat) -> Font {
-        let name = pm.resolvedVerseFontName
-        if name == "System" || name.isEmpty {
-            return .system(size: size, weight: .regular)
-        } else {
-            return .custom(name, size: size)
+    @ViewBuilder
+    private func previewBoxes(size: CGSize) -> some View {
+        // `targetScale` = the 1080p-reference font scale of the target screen;
+        // `canvasScale` shrinks everything down to preview size.
+        let targetScale = pm.targetFontScale
+        let canvasScale = size.width / max(metrics.points.width, 1)
+        let scaledPadding = pm.padding * targetScale * canvasScale
+        let dim = isPreviewOnly ? 0.6 : 1.0
+
+        ZStack(alignment: .topLeading) {
+            // Unified stacking order — exactly what the output renders
+            ForEach(pm.orderedBoxTokens(), id: \.self) { token in
+                switch boxIdentity(fromToken: token) {
+                case .section(let section):
+                    if pm.isSectionVisible(section) {
+                        let text = pm.sectionText(
+                            section,
+                            main: previewText, reference: previewReference,
+                            translation: previewTranslationName, subtitle: previewSubtitle
+                        )
+                        if !text.isEmpty {
+                            let rect = pm.boxFrame(for: section).rect(in: size)
+                            let style = pm.resolvedStyle(for: section)
+
+                            // Auto-fit: computed at FULL resolution then scaled — same math as output
+                            let fitted: CGFloat? = (section == .verseContent)
+                                ? pm.fittedVerseFontSize(
+                                    text: text,
+                                    boxSize: pm.boxFrame(for: section).rect(in: metrics.points).size,
+                                    maxSize: CGFloat(style.fontSize) * targetScale,
+                                    padding: pm.padding * targetScale,
+                                    fontName: style.fontName,
+                                    lineSpacing: style.lineSpacing
+                                  ) * canvasScale
+                                : nil
+
+                            previewBoxText(text, style: style, rect: rect, fontScale: targetScale * canvasScale, scaledPadding: scaledPadding, fittedSize: fitted, dim: dim)
+                        }
+                    }
+                case .custom(let id):
+                    if let box = pm.customTextBox(id: id), box.isVisible {
+                        let text = box.resolvedText(
+                            main: previewText, reference: previewReference,
+                            translation: previewTranslationName, subtitle: previewSubtitle
+                        )
+                        if !text.isEmpty {
+                            let rect = box.frame.rect(in: size)
+                            let style = pm.resolvedCustomStyle(box)
+                            previewBoxText(text, style: style, rect: rect, fontScale: targetScale * canvasScale, scaledPadding: scaledPadding, fittedSize: nil, dim: dim)
+                        }
+                    }
+                case .media(let id):
+                    if let box = pm.mediaBox(id: id),
+                       box.isVisible,
+                       box.showsFor(contentType: pm.liveContent.contentType, isLive: pm.liveContent.isLive) {
+                        MediaBoxContent(box: box, canvasSize: size, playsVideo: false)
+                            .allowsHitTesting(false)
+                    }
+                case nil:
+                    EmptyView()
+                }
+            }
         }
     }
 
-    private func scaledRefFont(size: CGFloat) -> Font {
-        let name = pm.resolvedRefFontName
-        let weight = pm.resolvedRefWeight
-        if name == "System" || name.isEmpty {
-            return .system(size: size, weight: weight)
-        } else {
-            return .custom(name, size: size)
+    @ViewBuilder
+    private func previewBoxText(
+        _ text: String,
+        style: PresentationManager.ResolvedBoxStyle,
+        rect: CGRect, fontScale: CGFloat, scaledPadding: CGFloat,
+        fittedSize: CGFloat?, dim: Double
+    ) -> some View {
+        let size = fittedSize ?? CGFloat(style.fontSize) * fontScale
+        Text(text)
+            .font(style.font(at: size))
+            .foregroundStyle(style.color.opacity(style.opacity * dim))
+            .multilineTextAlignment(style.hAlign)
+            .lineSpacing(style.lineSpacing * size * 0.1)
+            .minimumScaleFactor(fittedSize == nil ? 0.3 : 1.0)
+            .shadow(
+                color: pm.shadowEnabled ? .black.opacity(0.7) : .clear,
+                radius: pm.shadowEnabled ? pm.shadowRadius * fontScale : 0,
+                x: 0,
+                y: pm.shadowEnabled ? 2 * fontScale : 0
+            )
+            .padding(.horizontal, scaledPadding)
+            .frame(width: rect.width, height: rect.height, alignment: style.frameAlignment)
+            .position(x: rect.midX, y: rect.midY)
+    }
+
+    @ViewBuilder
+    private func badges(size: CGSize) -> some View {
+        VStack {
+            HStack {
+                Spacer()
+                HStack(spacing: 4) {
+                    if pm.isFrozen && isPreviewOnly {
+                        Text("FROZEN")
+                            .font(.system(size: 8, weight: .bold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 2)
+                            .background(.orange.opacity(0.8), in: Capsule())
+                    }
+                    if isPreviewOnly {
+                        Text("PREVIEW")
+                            .font(.system(size: 8, weight: .bold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 2)
+                            .background(.blue.opacity(0.7), in: Capsule())
+                    }
+                }
+                .padding(6)
+            }
+            Spacer()
+
+            HStack(spacing: 6) {
+                if !pm.backgroundEnabled && !pm.isBlackScreen {
+                    HStack(spacing: 3) {
+                        Image(systemName: "checkerboard.rectangle")
+                            .font(.system(size: 8))
+                        Text(String(localized: "Transparent", comment: "Preview badge"))
+                            .font(.system(size: 8, weight: .medium))
+                    }
+                    .foregroundStyle(.white.opacity(0.6))
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 2)
+                    .background(.black.opacity(0.5), in: Capsule())
+                }
+
+                Spacer()
+
+                HStack(spacing: 3) {
+                    Image(systemName: "display")
+                        .font(.system(size: 7))
+                    Text("\(Int(metrics.resolution.width))×\(Int(metrics.resolution.height))")
+                        .font(.system(size: 7, weight: .medium, design: .monospaced))
+                    Text(metrics.aspectRatioLabel)
+                        .font(.system(size: 7, weight: .bold))
+                }
+                .foregroundStyle(.white.opacity(0.5))
+                .padding(.horizontal, 5)
+                .padding(.vertical, 2)
+                .background(.black.opacity(0.5), in: Capsule())
+            }
+            .padding(6)
         }
     }
 }
+
 
 // MARK: - Verse / Slide Controls Bar
 /// Shows the selected verse reference, Show/Hide toggle, ←→ navigation.
@@ -398,14 +374,16 @@ struct VerseSlideControlsBar: View {
         libraryManager.formattedSelectedVersesText(layout: multiVerseLayout, showPrefix: showVerseNumberPrefix)
     }
 
-    /// How many verses can fit on screen from the current starting verse.
+    /// How many verses can fit in the verse text box from the current starting verse.
+    /// Font and padding are scaled to the target screen (1080p reference) so the
+    /// count matches what the output actually renders.
     private var maxFittingCount: Int {
         libraryManager.versesCountThatFits(
-            fontSize: pm.fontSize,
+            fontSize: pm.fontSize * pm.targetFontScale,
             fontName: pm.fontName,
             lineSpacing: pm.lineSpacing,
-            padding: pm.padding,
-            screenSize: pm.presentationScreenSize,
+            padding: pm.padding * pm.targetFontScale,
+            screenSize: pm.verseBoxPointSize,
             layout: multiVerseLayout,
             showPrefix: showVerseNumberPrefix
         )
@@ -413,11 +391,11 @@ struct VerseSlideControlsBar: View {
 
     private func runAutoFill() {
         libraryManager.autoFillVerses(
-            fontSize: pm.fontSize,
+            fontSize: pm.fontSize * pm.targetFontScale,
             fontName: pm.fontName,
             lineSpacing: pm.lineSpacing,
-            padding: pm.padding,
-            screenSize: pm.presentationScreenSize,
+            padding: pm.padding * pm.targetFontScale,
+            screenSize: pm.verseBoxPointSize,
             layout: multiVerseLayout,
             showPrefix: showVerseNumberPrefix
         )
@@ -666,6 +644,11 @@ struct VerseSlideControlsBar: View {
             updateLiveOutput()
         }
         .onChange(of: pm.fontName) {
+            if libraryManager.isAutoFillActive { runAutoFill() }
+            updateLiveOutput()
+        }
+        // Re-fill when the verse text box is moved/resized in Edit Mode
+        .onChange(of: pm.verseBoxFrame) {
             if libraryManager.isAutoFillActive { runAutoFill() }
             updateLiveOutput()
         }
@@ -1008,6 +991,9 @@ private struct ClearMenuItem: View {
 }
 
 // MARK: - Force Touch Detector (NSViewRepresentable)
+/// Detects a Force Touch (deep press) over its bounds via a local event monitor.
+/// A monitor is required because the view passes clicks through to the button
+/// underneath (hitTest returns nil), so it never receives pressure events directly.
 struct ForceTouchDetector: NSViewRepresentable {
     let onForceTouch: () -> Void
 
@@ -1021,17 +1007,41 @@ struct ForceTouchDetector: NSViewRepresentable {
         nsView.onForceTouch = onForceTouch
     }
 
+    static func dismantleNSView(_ nsView: ForceTouchNSView, coordinator: ()) {
+        nsView.removeMonitor()
+    }
+
     class ForceTouchNSView: NSView {
         var onForceTouch: (() -> Void)?
         private var didTrigger = false
+        private var monitor: Any?
 
-        override var acceptsFirstResponder: Bool { true }
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            if window == nil {
+                removeMonitor()
+            } else if monitor == nil {
+                monitor = NSEvent.addLocalMonitorForEvents(matching: .pressure) { [weak self] event in
+                    self?.handlePressure(event)
+                    return event
+                }
+            }
+        }
 
-        override func pressureChange(with event: NSEvent) {
-            // Stage 2 = Force Touch (deep press)
-            if event.stage == 2 && !didTrigger {
+        func removeMonitor() {
+            if let monitor {
+                NSEvent.removeMonitor(monitor)
+                self.monitor = nil
+            }
+        }
+
+        private func handlePressure(_ event: NSEvent) {
+            guard event.window === window else { return }
+            let location = convert(event.locationInWindow, from: nil)
+
+            // Stage 2 = Force Touch (deep press) within our bounds
+            if event.stage == 2, !didTrigger, bounds.contains(location) {
                 didTrigger = true
-                // Haptic feedback
                 NSHapticFeedbackManager.defaultPerformer.perform(
                     .alignment,
                     performanceTime: .now
@@ -1047,6 +1057,10 @@ struct ForceTouchDetector: NSViewRepresentable {
         // Pass through regular clicks to the button underneath
         override func hitTest(_ point: NSPoint) -> NSView? {
             return nil
+        }
+
+        deinit {
+            removeMonitor()
         }
     }
 }
@@ -1142,19 +1156,15 @@ struct StyleQuickSettings: View {
     var sections: Set<SettingsSection> = SettingsSection.allSet
 
     enum SettingsSection: Hashable {
-        case textFont, background, displayOutput, multiVerse, general, bibleExtra
+        case multiVerse, general
 
-        static let allSet: Set<SettingsSection> = [.textFont, .background, .displayOutput, .multiVerse, .general]
+        static let allSet: Set<SettingsSection> = [.multiVerse, .general]
     }
 
-    @Environment(PresentationManager.self) private var pm
+    @Environment(\.openSettings) private var openSettings
 
-    @AppStorage("settingsExpanded_text") private var textExpanded: Bool = true
-    @AppStorage("settingsExpanded_background") private var backgroundExpanded: Bool = false
-    @AppStorage("settingsExpanded_display") private var displayExpanded: Bool = false
     @AppStorage("settingsExpanded_multiVerse") private var multiVerseExpanded: Bool = false
     @AppStorage("settingsExpanded_general") private var generalExpanded: Bool = false
-    @AppStorage("settingsExpanded_bibleExtra") private var bibleExtraExpanded: Bool = false
 
     // General settings
     @AppStorage("showVerseNumbers") private var showVerseNumbers: Bool = true
@@ -1163,48 +1173,9 @@ struct StyleQuickSettings: View {
     @AppStorage("multiVerseLayout") private var multiVerseLayout: String = "inline"
     @AppStorage("showVerseNumberPrefix") private var showVerseNumberPrefix: Bool = false
 
-    @State private var availableFonts: [String] = {
-        NSFontManager.shared.availableFontFamilies.sorted()
-    }()
-
     var body: some View {
-        let pmBinding = Bindable(pm)
-
         ScrollView {
             VStack(alignment: .leading, spacing: 2) {
-                if sections.contains(.textFont) {
-                    // ─── Text & Font ───
-                    settingsSection(
-                        title: String(localized: "Text & Font", comment: "Settings section"),
-                        icon: "textformat",
-                        isExpanded: $textExpanded
-                    ) {
-                        textAndFontSection(pmBinding: pmBinding)
-                    }
-                }
-
-                if sections.contains(.background) {
-                    // ─── Background ───
-                    settingsSection(
-                        title: String(localized: "Background", comment: "Settings section"),
-                        icon: "photo.artframe",
-                        isExpanded: $backgroundExpanded
-                    ) {
-                        backgroundSection(pmBinding: pmBinding)
-                    }
-                }
-
-                if sections.contains(.displayOutput) {
-                    // ─── Display & Output ───
-                    settingsSection(
-                        title: String(localized: "Display & Output", comment: "Settings section"),
-                        icon: "display",
-                        isExpanded: $displayExpanded
-                    ) {
-                        displaySection(pmBinding: pmBinding)
-                    }
-                }
-
                 if sections.contains(.multiVerse) {
                     // ─── Multi-Verse ───
                     settingsSection(
@@ -1227,16 +1198,6 @@ struct StyleQuickSettings: View {
                     }
                 }
 
-                if sections.contains(.bibleExtra) {
-                    // ─── Bible Options ───
-                    settingsSection(
-                        title: String(localized: "Bible Options", comment: "Settings section"),
-                        icon: "book.closed.fill",
-                        isExpanded: $bibleExtraExpanded
-                    ) {
-                        bibleExtraSection(pmBinding: pmBinding)
-                    }
-                }
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
@@ -1289,302 +1250,6 @@ struct StyleQuickSettings: View {
         }
     }
 
-    // MARK: - Text & Font Section
-
-    @ViewBuilder
-    private func textAndFontSection(pmBinding: Bindable<PresentationManager>) -> some View {
-        // Font family
-        HStack {
-            Text(String(localized: "Font:", comment: "Setting label"))
-                .font(.caption)
-                .frame(width: 55, alignment: .trailing)
-            Picker("", selection: pmBinding.fontName) {
-                Text(String(localized: "System", comment: "Font option")).tag("System")
-                ForEach(availableFonts, id: \.self) { font in
-                    Text(font).tag(font)
-                }
-            }
-            .labelsHidden()
-            .controlSize(.small)
-        }
-
-        // Font size
-        HStack {
-            Text(String(localized: "Size:", comment: "Setting label"))
-                .font(.caption)
-                .frame(width: 55, alignment: .trailing)
-            Slider(
-                value: pmBinding.fontSize,
-                in: PresentationDefaults.minFontSize...PresentationDefaults.maxFontSize,
-                step: 2
-            )
-            .controlSize(.small)
-            Text("\(Int(pm.fontSize)) pt")
-                .font(.caption.monospacedDigit())
-                .frame(width: 35)
-        }
-
-        // Text color + alignment
-        HStack {
-            Text(String(localized: "Color:", comment: "Setting label"))
-                .font(.caption)
-                .frame(width: 55, alignment: .trailing)
-            ColorPicker(
-                "",
-                selection: Binding(
-                    get: { pm.textColor },
-                    set: { pm.textColorHex = $0.toHex() }
-                )
-            )
-            .labelsHidden()
-
-            Spacer()
-
-            Text(String(localized: "Align:", comment: "Setting label"))
-                .font(.caption)
-            Picker("", selection: pmBinding.textAlignment) {
-                Image(systemName: "text.alignleft").tag(TextAlignment.leading)
-                Image(systemName: "text.aligncenter").tag(TextAlignment.center)
-                Image(systemName: "text.alignright").tag(TextAlignment.trailing)
-            }
-            .pickerStyle(.segmented)
-            .controlSize(.small)
-            .frame(width: 100)
-        }
-
-        // Line spacing
-        HStack {
-            Text(String(localized: "Spacing:", comment: "Setting label"))
-                .font(.caption)
-                .frame(width: 55, alignment: .trailing)
-            Slider(value: pmBinding.lineSpacing, in: 0.8...3.0, step: 0.1)
-                .controlSize(.small)
-            Text(String(format: "%.1f", pm.lineSpacing))
-                .font(.caption.monospacedDigit())
-                .frame(width: 25)
-        }
-
-        // Padding
-        HStack {
-            Text(String(localized: "Padding:", comment: "Setting label"))
-                .font(.caption)
-                .frame(width: 55, alignment: .trailing)
-            Slider(value: pmBinding.padding, in: 10...100, step: 5)
-                .controlSize(.small)
-            Text("\(Int(pm.padding))")
-                .font(.caption.monospacedDigit())
-                .frame(width: 25)
-        }
-
-        // Shadow
-        HStack {
-            Text(String(localized: "Shadow:", comment: "Setting label"))
-                .font(.caption)
-                .frame(width: 55, alignment: .trailing)
-            Toggle("", isOn: pmBinding.shadowEnabled)
-                .labelsHidden()
-                .controlSize(.small)
-
-            if pm.shadowEnabled {
-                Slider(value: pmBinding.shadowRadius, in: 0...20, step: 0.5)
-                    .controlSize(.small)
-                Text(String(format: "%.0f", pm.shadowRadius))
-                    .font(.caption.monospacedDigit())
-                    .frame(width: 20)
-            }
-        }
-    }
-
-    // MARK: - Background Section
-
-    @ViewBuilder
-    private func backgroundSection(pmBinding: Bindable<PresentationManager>) -> some View {
-        // Enable background toggle
-        Toggle(isOn: pmBinding.backgroundEnabled) {
-            Text(String(localized: "Enable Background", comment: "Setting label"))
-                .font(.caption)
-        }
-        .toggleStyle(.switch)
-        .controlSize(.small)
-
-        // Background color (only shown when background is enabled)
-        if pm.backgroundEnabled {
-            HStack {
-                Text(String(localized: "Color:", comment: "Setting label"))
-                    .font(.caption)
-                    .frame(width: 55, alignment: .trailing)
-                ColorPicker(
-                    "",
-                    selection: Binding(
-                        get: { pm.backgroundColor },
-                        set: { pm.backgroundColorHex = $0.toHex() }
-                    )
-                )
-                .labelsHidden()
-            }
-        }
-
-        // Background opacity
-        HStack {
-            Text(String(localized: "Opacity:", comment: "Setting label"))
-                .font(.caption)
-                .frame(width: 55, alignment: .trailing)
-            Slider(value: pmBinding.backgroundOpacity, in: 0...1)
-                .controlSize(.small)
-            Text("\(Int(pm.backgroundOpacity * 100))%")
-                .font(.caption.monospacedDigit())
-                .frame(width: 35)
-        }
-
-        // Background image
-        HStack {
-            Text(String(localized: "Image:", comment: "Setting label"))
-                .font(.caption)
-                .frame(width: 55, alignment: .trailing)
-
-            if pm.useBackgroundImage, let path = pm.backgroundImagePath {
-                Text(URL(fileURLWithPath: path).lastPathComponent)
-                    .font(.caption2)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-
-                Button {
-                    pm.removeBackgroundImage()
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.caption2)
-                }
-                .buttonStyle(.borderless)
-                .foregroundStyle(.secondary)
-            }
-
-            Button(String(localized: "Choose…", comment: "Button")) {
-                selectBackgroundImage()
-            }
-            .controlSize(.small)
-        }
-
-        // Image preview
-        if let bgImage = pm.backgroundImage, pm.useBackgroundImage {
-            HStack {
-                Spacer()
-                Image(nsImage: bgImage)
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .opacity(pm.backgroundOpacity)
-                    .frame(maxHeight: 60)
-                    .clipShape(RoundedRectangle(cornerRadius: 4))
-                Spacer()
-            }
-        }
-    }
-
-    // MARK: - Display & Output Section
-
-    @ViewBuilder
-    private func displaySection(pmBinding: Bindable<PresentationManager>) -> some View {
-        // Target screen
-        HStack {
-            Text(String(localized: "Screen:", comment: "Setting label"))
-                .font(.caption)
-                .frame(width: 55, alignment: .trailing)
-            Picker("", selection: pmBinding.presentationScreenIndex) {
-                Text(String(localized: "Auto", comment: "Picker option"))
-                    .tag(nil as Int?)
-                ForEach(Array(pm.availableScreens.enumerated()), id: \.offset) { index, screen in
-                    Text(screen.localizedName).tag(index as Int?)
-                }
-            }
-            .labelsHidden()
-            .controlSize(.small)
-
-            Button {
-                pm.refreshScreens()
-            } label: {
-                Image(systemName: "arrow.clockwise")
-                    .font(.caption2)
-            }
-            .buttonStyle(.borderless)
-            .help(String(localized: "Refresh Screens", comment: "Button tooltip"))
-        }
-
-        // Window level / position
-        HStack {
-            Text(String(localized: "Window:", comment: "Setting label"))
-                .font(.caption)
-                .frame(width: 55, alignment: .trailing)
-            Picker("", selection: pmBinding.windowLevel) {
-                Text(String(localized: "Normal", comment: "Window level option")).tag("normal")
-                Text(String(localized: "Floating", comment: "Window level option")).tag("floating")
-                Text(String(localized: "Always on Top", comment: "Window level option")).tag("alwaysOnTop")
-                Text(String(localized: "Behind Desktop", comment: "Window level option")).tag("behindDesktop")
-            }
-            .labelsHidden()
-            .controlSize(.small)
-        }
-
-        // Transition duration
-        HStack {
-            Text(String(localized: "Transition:", comment: "Setting label"))
-                .font(.caption)
-                .frame(width: 55, alignment: .trailing)
-            Slider(value: pmBinding.transitionDuration, in: 0...2, step: 0.1)
-                .controlSize(.small)
-            Text(String(format: "%.1fs", pm.transitionDuration))
-                .font(.caption.monospacedDigit())
-                .frame(width: 30)
-        }
-
-        // Screen disconnect behavior
-        HStack {
-            Text(String(localized: "Disconnect:", comment: "Setting label"))
-                .font(.caption)
-                .frame(width: 55, alignment: .trailing)
-            Picker("", selection: Binding(
-                get: { pm.screenDisconnectAction.rawValue },
-                set: { pm.screenDisconnectAction = PresentationManager.ScreenDisconnectAction(rawValue: $0) ?? .ask }
-            )) {
-                Text(String(localized: "Întreabă", comment: "Disconnect option")).tag("ask")
-                Text(String(localized: "Mută pe alt ecran", comment: "Disconnect option")).tag("moveToAvailable")
-                Text(String(localized: "Ecran negru", comment: "Disconnect option")).tag("goBlack")
-                Text(String(localized: "Nu face nimic", comment: "Disconnect option")).tag("doNothing")
-            }
-            .labelsHidden()
-            .controlSize(.small)
-        }
-
-        // Screen info (read-only — shows metrics of the target screen)
-        let m = pm.targetScreenMetrics
-        HStack(spacing: 6) {
-            Image(systemName: "display")
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-            Text("\(Int(m.resolution.width))×\(Int(m.resolution.height))")
-                .font(.caption2.monospacedDigit())
-                .foregroundStyle(.secondary)
-            Text("•")
-                .foregroundStyle(.quaternary)
-            Text(m.aspectRatioLabel)
-                .font(.caption2.bold())
-                .foregroundStyle(.secondary)
-            Text("•")
-                .foregroundStyle(.quaternary)
-            Text("\(Int(m.ppi)) PPI")
-                .font(.caption2.monospacedDigit())
-                .foregroundStyle(.secondary)
-            if m.isRetina {
-                Text("Retina")
-                    .font(.system(size: 8, weight: .bold))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 4)
-                    .padding(.vertical, 1)
-                    .background(.blue.opacity(0.6), in: Capsule())
-            }
-        }
-        .padding(.top, 2)
-    }
-
     // MARK: - Multi-Verse Section
 
     @ViewBuilder
@@ -1612,76 +1277,6 @@ struct StyleQuickSettings: View {
         }
     }
 
-    // MARK: - Bible Options Section
-
-    @ViewBuilder
-    private func bibleExtraSection(pmBinding: Bindable<PresentationManager>) -> some View {
-        // Auto-fit font size
-        Toggle(isOn: pmBinding.autoFitVerseFont) {
-            Text(String(localized: "Auto-fit font size", comment: "Setting label"))
-                .font(.caption)
-        }
-        .toggleStyle(.switch)
-        .controlSize(.small)
-        .help(String(localized: "Shrinks the font automatically so all selected verses fit on screen.", comment: "Tooltip"))
-
-        Divider()
-
-        // Translation name
-        Toggle(isOn: pmBinding.showTranslationName) {
-            Text(String(localized: "Show translation name", comment: "Setting label"))
-                .font(.caption)
-        }
-        .toggleStyle(.switch)
-        .controlSize(.small)
-
-        if pm.showTranslationName {
-            // Size ratio
-            HStack {
-                Text(String(localized: "Size:", comment: "Setting label"))
-                    .font(.caption)
-                    .frame(width: 55, alignment: .trailing)
-                Slider(value: pmBinding.translationNameSizeRatio, in: 0.15...0.7, step: 0.05)
-                    .controlSize(.small)
-                Text("\(Int(pm.translationNameSizeRatio * 100))%")
-                    .font(.caption.monospacedDigit())
-                    .frame(width: 30)
-            }
-
-            // Opacity
-            HStack {
-                Text(String(localized: "Opacity:", comment: "Setting label"))
-                    .font(.caption)
-                    .frame(width: 55, alignment: .trailing)
-                Slider(value: pmBinding.translationNameOpacity, in: 0...1)
-                    .controlSize(.small)
-                Text("\(Int(pm.translationNameOpacity * 100))%")
-                    .font(.caption.monospacedDigit())
-                    .frame(width: 30)
-            }
-
-            // Color
-            HStack {
-                Text(String(localized: "Color:", comment: "Setting label"))
-                    .font(.caption)
-                    .frame(width: 55, alignment: .trailing)
-                ColorPicker(
-                    "",
-                    selection: Binding(
-                        get: { pm.resolvedTranslationColor },
-                        set: { pm.translationNameColorHex = $0.toHex() }
-                    )
-                )
-                .labelsHidden()
-                Button(String(localized: "Global", comment: "Button")) {
-                    pm.translationNameColorHex = ""
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.mini)
-            }
-        }
-    }
-
     // MARK: - General Section
 
     @ViewBuilder
@@ -1705,7 +1300,7 @@ struct StyleQuickSettings: View {
         HStack {
             Spacer()
             Button {
-                NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+                openSettings()
             } label: {
                 HStack(spacing: 4) {
                     Image(systemName: "gearshape")
@@ -1719,16 +1314,4 @@ struct StyleQuickSettings: View {
         }
     }
 
-    // MARK: - Helpers
-
-    private func selectBackgroundImage() {
-        let panel = NSOpenPanel()
-        panel.allowedContentTypes = [.image]
-        panel.allowsMultipleSelection = false
-        panel.canChooseDirectories = false
-
-        if panel.runModal() == .OK, let url = panel.url {
-            pm.setBackgroundImage(from: url)
-        }
-    }
 }

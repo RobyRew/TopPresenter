@@ -31,9 +31,12 @@ struct CustomSlidesPreviewPanel: View {
 
             Divider()
 
-            // Preview display
-            PresentationPreviewCard()
-                .padding()
+            // Preview display — previews the selected slide before it goes live
+            PresentationPreviewCard(pendingContent: .init(
+                text: currentSlide?.content ?? "",
+                reference: currentSlide?.title ?? ""
+            ))
+            .padding()
 
             Divider()
 
@@ -51,11 +54,15 @@ struct CustomSlidesPreviewPanel: View {
 
             Divider()
 
-            // Style settings (text + background + display)
-            StyleQuickSettings(sections: [.textFont, .background, .displayOutput])
+            Spacer()
+
+            Divider()
+
+            // Theme switcher + Layout Editor access
+            PanelFooter()
         }
         .background(.background)
-        .onReceive(NotificationCenter.default.publisher(for: .slideSelected)) { notification in
+        .onKeyWindowNotification(.slideSelected) { notification in
             if let slideID = notification.object as? UUID,
                let idx = slides.firstIndex(where: { $0.id == slideID }) {
                 currentSlideIndex = idx

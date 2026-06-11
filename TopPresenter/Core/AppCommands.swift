@@ -20,6 +20,16 @@ struct FileCommands: Commands {
                     NotificationCenter.default.post(name: .newSchedule, object: nil)
                 }
                 .keyboardShortcut("n", modifiers: [.command])
+
+                Button(String(localized: "Filă Nouă", comment: "Menu item — new tab")) {
+                    // Cap the number of main windows/tabs to keep things sane
+                    let mainCount = NSApp.windows.filter {
+                        $0.identifier?.rawValue.hasPrefix(WindowIdentifiers.main) == true
+                    }.count
+                    guard mainCount < 10 else { return }
+                    openWindow(id: WindowIdentifiers.main)
+                }
+                .keyboardShortcut("t", modifiers: [.command])
             }
 
             Section {
@@ -74,6 +84,12 @@ struct PresentationCommands: Commands {
                 NotificationCenter.default.post(name: .clearOutput, object: nil)
             }
             .keyboardShortcut(.escape, modifiers: [])
+
+            Divider()
+
+            Button(String(localized: "Layout Editor…", comment: "Menu item")) {
+                NotificationCenter.default.post(name: .openLayoutEditor, object: nil)
+            }
 
             Divider()
 
@@ -162,8 +178,8 @@ struct HelpCommands: Commands {
                 NSApplication.shared.orderFrontStandardAboutPanel(
                     options: [
                         .applicationName: "TopPresenter",
-                        .applicationVersion: "1.0.0",
-                        .version: "1",
+                        .applicationVersion: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "",
+                        .version: Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "",
                         .credits: NSAttributedString(
                             string: "Professional worship presentation software for macOS.\n© 2026 TopPresenter",
                             attributes: [
@@ -221,6 +237,9 @@ extension Notification.Name {
     static let importMedia = Notification.Name("TopPresenter.importMedia")
     static let addScheduleItem = Notification.Name("TopPresenter.addScheduleItem")
     static let addSlide = Notification.Name("TopPresenter.addSlide")
+
+    // Layout
+    static let openLayoutEditor = Notification.Name("TopPresenter.openLayoutEditor")
 
     // Help
     static let showKeyboardShortcuts = Notification.Name("TopPresenter.showKeyboardShortcuts")

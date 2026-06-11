@@ -22,6 +22,7 @@ struct MainControlView: View {
     @State private var showQuickSearch = false
     @State private var showBatchImport = false
     @State private var showBatchExport = false
+    @State private var showLayoutEditor = false
     @State private var droppedFiles: [PendingImportFile] = []
     @State private var isDragTargeted = false
 
@@ -50,6 +51,12 @@ struct MainControlView: View {
                 .sheet(isPresented: $showBatchExport) {
                     BatchExportSheet()
                 }
+                .sheet(isPresented: $showLayoutEditor) {
+                    LayoutEditorSheet()
+                }
+                .onKeyWindowNotification(.openLayoutEditor) { _ in
+                    showLayoutEditor = true
+                }
                 .modifier(MenuCommandHandler(
                     appState: appState,
                     presentationManager: presentationManager,
@@ -59,7 +66,7 @@ struct MainControlView: View {
                 ))
                 .modifier(QuickSearchCommandHandler(showQuickSearch: $showQuickSearch))
                 .modifier(BatchExportCommandHandler(showBatchExport: $showBatchExport))
-                .onReceive(NotificationCenter.default.publisher(for: .batchImportFiles)) { notification in
+                .onKeyWindowNotification(.batchImportFiles) { notification in
                     if let files = notification.userInfo?["files"] as? [PendingImportFile] {
                         droppedFiles = files
                         showBatchImport = true
@@ -137,7 +144,7 @@ struct MainControlView: View {
             }
         }
         .navigationTitle("")
-        .toolbar(id: "mainToolbar") {
+        .toolbar {
             bibleToolbarContent
             songToolbarContent
             mediaToolbarContent
@@ -178,17 +185,21 @@ struct MainControlView: View {
     }
 
     private func handleDrop(providers: [NSItemProvider]) {
+        // Provider callbacks arrive on arbitrary threads — serialize the appends.
+        let lock = NSLock()
         var urls: [URL] = []
         let group = DispatchGroup()
 
         for provider in providers {
             group.enter()
-            provider.loadItem(forTypeIdentifier: "public.file-url", options: nil) { data, _ in
+            provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier, options: nil) { data, _ in
                 defer { group.leave() }
                 if let data = data as? Data,
                    let urlString = String(data: data, encoding: .utf8),
                    let url = URL(string: urlString) {
+                    lock.lock()
                     urls.append(url)
+                    lock.unlock()
                 }
             }
         }
@@ -246,26 +257,26 @@ struct MainControlView: View {
     // MARK: - Bible Toolbar Helpers
 
     @ToolbarContentBuilder
-    private var bibleToolbarContent: some CustomizableToolbarContent {
-        ToolbarItem(id: "bibleModule", placement: .navigation) {
+    private var bibleToolbarContent: some ToolbarContent {
+        ToolbarItem(placement: .navigation) {
             if appState.selectedSidebarItem == .bible {
                 bibleModulePicker
             }
         }
 
-        ToolbarItem(id: "bibleSearch", placement: .automatic) {
+        ToolbarItem(placement: .automatic) {
             if appState.selectedSidebarItem == .bible {
                 bibleSearchField
             }
         }
 
-        ToolbarItem(id: "bibleViewMode", placement: .automatic) {
+        ToolbarItem(placement: .automatic) {
             if appState.selectedSidebarItem == .bible {
                 bibleViewModeToggle
             }
         }
 
-        ToolbarItem(id: "bibleImport", placement: .automatic) {
+        ToolbarItem(placement: .automatic) {
             if appState.selectedSidebarItem == .bible {
                 Button {
                     appState.triggerBibleImport = true
@@ -276,7 +287,7 @@ struct MainControlView: View {
             }
         }
 
-        ToolbarItem(id: "bibleDelete", placement: .automatic) {
+        ToolbarItem(placement: .automatic) {
             if appState.selectedSidebarItem == .bible && libraryManager.selectedBibleModule != nil {
                 Button {
                     NotificationCenter.default.post(name: .deleteBibleModule, object: nil)
@@ -291,20 +302,20 @@ struct MainControlView: View {
     // MARK: - Songs Toolbar Content
 
     @ToolbarContentBuilder
-    private var songToolbarContent: some CustomizableToolbarContent {
-        ToolbarItem(id: "songCollection", placement: .navigation) {
+    private var songToolbarContent: some ToolbarContent {
+        ToolbarItem(placement: .navigation) {
             if appState.selectedSidebarItem == .songs {
                 songCollectionPicker
             }
         }
 
-        ToolbarItem(id: "songSearch", placement: .automatic) {
+        ToolbarItem(placement: .automatic) {
             if appState.selectedSidebarItem == .songs {
                 songSearchField
             }
         }
 
-        ToolbarItem(id: "songImport", placement: .automatic) {
+        ToolbarItem(placement: .automatic) {
             if appState.selectedSidebarItem == .songs {
                 Button {
                     appState.triggerSongImport = true
@@ -315,7 +326,7 @@ struct MainControlView: View {
             }
         }
 
-        ToolbarItem(id: "songDelete", placement: .automatic) {
+        ToolbarItem(placement: .automatic) {
             if appState.selectedSidebarItem == .songs && libraryManager.selectedSongCollection != nil {
                 Button {
                     NotificationCenter.default.post(name: .deleteSongCollection, object: nil)
@@ -330,8 +341,8 @@ struct MainControlView: View {
     // MARK: - Media Toolbar Content
 
     @ToolbarContentBuilder
-    private var mediaToolbarContent: some CustomizableToolbarContent {
-        ToolbarItem(id: "mediaFilter", placement: .navigation) {
+    private var mediaToolbarContent: some ToolbarContent {
+        ToolbarItem(placement: .navigation) {
             if appState.selectedSidebarItem == .media {
                 Picker(
                     String(localized: "Filter", comment: "Toolbar picker"),
@@ -349,7 +360,7 @@ struct MainControlView: View {
             }
         }
 
-        ToolbarItem(id: "mediaImport", placement: .automatic) {
+        ToolbarItem(placement: .automatic) {
             if appState.selectedSidebarItem == .media {
                 Button {
                     NotificationCenter.default.post(name: .importMedia, object: nil)
@@ -364,8 +375,8 @@ struct MainControlView: View {
     // MARK: - Schedule Toolbar Content
 
     @ToolbarContentBuilder
-    private var scheduleToolbarContent: some CustomizableToolbarContent {
-        ToolbarItem(id: "scheduleNew", placement: .navigation) {
+    private var scheduleToolbarContent: some ToolbarContent {
+        ToolbarItem(placement: .navigation) {
             if appState.selectedSidebarItem == .schedule {
                 Button {
                     NotificationCenter.default.post(name: .newSchedule, object: nil)
@@ -376,7 +387,7 @@ struct MainControlView: View {
             }
         }
 
-        ToolbarItem(id: "scheduleAddItem", placement: .automatic) {
+        ToolbarItem(placement: .automatic) {
             if appState.selectedSidebarItem == .schedule {
                 Button {
                     NotificationCenter.default.post(name: .addScheduleItem, object: nil)
@@ -391,8 +402,8 @@ struct MainControlView: View {
     // MARK: - Custom Slides Toolbar Content
 
     @ToolbarContentBuilder
-    private var customSlidesToolbarContent: some CustomizableToolbarContent {
-        ToolbarItem(id: "slideNew", placement: .navigation) {
+    private var customSlidesToolbarContent: some ToolbarContent {
+        ToolbarItem(placement: .navigation) {
             if appState.selectedSidebarItem == .customSlides {
                 Button {
                     NotificationCenter.default.post(name: .addSlide, object: nil)
@@ -407,12 +418,12 @@ struct MainControlView: View {
     // MARK: - Presentation Toolbar Content
 
     @ToolbarContentBuilder
-    private var presentationToolbarContent: some CustomizableToolbarContent {
-        ToolbarItem(id: "screenSelector", placement: .primaryAction) {
+    private var presentationToolbarContent: some ToolbarContent {
+        ToolbarItem(placement: .primaryAction) {
             screenSelectorMenu
         }
 
-        ToolbarItem(id: "blackScreen", placement: .primaryAction) {
+        ToolbarItem(placement: .primaryAction) {
             Button {
                 presentationManager.toggleBlack()
             } label: {
@@ -425,7 +436,7 @@ struct MainControlView: View {
             .help(String(localized: "Toggle Black Screen", comment: "Toolbar tooltip"))
         }
 
-        ToolbarItem(id: "clearOutput", placement: .primaryAction) {
+        ToolbarItem(placement: .primaryAction) {
             Button {
                 presentationManager.clearOutput()
             } label: {
@@ -438,7 +449,7 @@ struct MainControlView: View {
             .help(String(localized: "Clear Output", comment: "Toolbar tooltip"))
         }
 
-        ToolbarItem(id: "editMode", placement: .primaryAction) {
+        ToolbarItem(placement: .primaryAction) {
             Button {
                 presentationManager.isEditMode.toggle()
             } label: {
@@ -449,8 +460,20 @@ struct MainControlView: View {
                         : "rectangle.dashed"
                 )
             }
-            .keyboardShortcut("e", modifiers: [.command, .shift])
+            // No keyboard shortcut: ⇧⌘E belongs to Batch Export (File menu wins anyway)
             .help(String(localized: "Toggle Edit Mode — shows layout bounds", comment: "Toolbar tooltip"))
+        }
+
+        ToolbarItem(placement: .primaryAction) {
+            Button {
+                showLayoutEditor = true
+            } label: {
+                Label(
+                    String(localized: "Layout Editor", comment: "Toolbar button"),
+                    systemImage: "rectangle.and.pencil.and.ellipsis"
+                )
+            }
+            .help(String(localized: "Open the Layout Editor — boxes, text, background, output", comment: "Toolbar tooltip"))
         }
     }
 
@@ -640,56 +663,27 @@ private struct MenuCommandHandler: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .onReceive(NotificationCenter.default.publisher(for: .importBible)) { _ in
+            .onKeyWindowNotification(.importBible) { _ in
                 appState.selectedSidebarItem = .bible
                 appState.triggerBibleImport = true
             }
-            .onReceive(NotificationCenter.default.publisher(for: .importSongs)) { _ in
+            .onKeyWindowNotification(.importSongs) { _ in
                 appState.selectedSidebarItem = .songs
                 appState.triggerSongImport = true
             }
-            .onReceive(NotificationCenter.default.publisher(for: .exportBible)) { _ in
+            .onKeyWindowNotification(.exportBible) { _ in
                 showExportSheet = true
             }
-            .modifier(PresentationCommandHandler(
-                presentationManager: presentationManager,
-                openWindow: openWindow
-            ))
+            // Black/freeze/clear/font-size commands are handled ONCE app-wide by
+            // PresentationCommandRouter — never per window/tab.
+            .onKeyWindowNotification(.startPresentation) { _ in
+                openWindow(id: WindowIdentifiers.presentation, value: "main")
+                presentationManager.isPresentationWindowOpen = true
+            }
             .modifier(NavigationCommandHandler(
                 appState: appState,
                 showKeyboardShortcuts: $showKeyboardShortcuts
             ))
-    }
-}
-
-private struct PresentationCommandHandler: ViewModifier {
-    let presentationManager: PresentationManager
-    let openWindow: OpenWindowAction
-
-    func body(content: Content) -> some View {
-        content
-            .onReceive(NotificationCenter.default.publisher(for: .startPresentation)) { _ in
-                openWindow(id: WindowIdentifiers.presentation, value: "main")
-                presentationManager.isPresentationWindowOpen = true
-            }
-            .onReceive(NotificationCenter.default.publisher(for: .toggleBlackScreen)) { _ in
-                presentationManager.toggleBlack()
-            }
-            .onReceive(NotificationCenter.default.publisher(for: .toggleFreeze)) { _ in
-                presentationManager.toggleFreeze()
-            }
-            .onReceive(NotificationCenter.default.publisher(for: .clearOutput)) { _ in
-                presentationManager.clearOutput()
-            }
-            .onReceive(NotificationCenter.default.publisher(for: .increaseFontSize)) { _ in
-                presentationManager.fontSize = min(presentationManager.fontSize + 2, PresentationDefaults.maxFontSize)
-            }
-            .onReceive(NotificationCenter.default.publisher(for: .decreaseFontSize)) { _ in
-                presentationManager.fontSize = max(presentationManager.fontSize - 2, PresentationDefaults.minFontSize)
-            }
-            .onReceive(NotificationCenter.default.publisher(for: .resetFontSize)) { _ in
-                presentationManager.fontSize = PresentationDefaults.fontSize
-            }
     }
 }
 
@@ -699,22 +693,22 @@ private struct NavigationCommandHandler: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .onReceive(NotificationCenter.default.publisher(for: .navigateToBible)) { _ in
+            .onKeyWindowNotification(.navigateToBible) { _ in
                 appState.selectedSidebarItem = .bible
             }
-            .onReceive(NotificationCenter.default.publisher(for: .navigateToSongs)) { _ in
+            .onKeyWindowNotification(.navigateToSongs) { _ in
                 appState.selectedSidebarItem = .songs
             }
-            .onReceive(NotificationCenter.default.publisher(for: .navigateToMedia)) { _ in
+            .onKeyWindowNotification(.navigateToMedia) { _ in
                 appState.selectedSidebarItem = .media
             }
-            .onReceive(NotificationCenter.default.publisher(for: .navigateToSchedule)) { _ in
+            .onKeyWindowNotification(.navigateToSchedule) { _ in
                 appState.selectedSidebarItem = .schedule
             }
-            .onReceive(NotificationCenter.default.publisher(for: .navigateToCustomSlides)) { _ in
+            .onKeyWindowNotification(.navigateToCustomSlides) { _ in
                 appState.selectedSidebarItem = .customSlides
             }
-            .onReceive(NotificationCenter.default.publisher(for: .showKeyboardShortcuts)) { _ in
+            .onKeyWindowNotification(.showKeyboardShortcuts) { _ in
                 showKeyboardShortcuts = true
             }
     }
@@ -725,7 +719,7 @@ private struct QuickSearchCommandHandler: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .onReceive(NotificationCenter.default.publisher(for: .quickSearch)) { _ in
+            .onKeyWindowNotification(.quickSearch) { _ in
                 showQuickSearch = true
             }
     }
@@ -736,7 +730,7 @@ private struct BatchExportCommandHandler: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .onReceive(NotificationCenter.default.publisher(for: .batchExport)) { _ in
+            .onKeyWindowNotification(.batchExport) { _ in
                 showBatchExport = true
             }
     }

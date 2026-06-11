@@ -41,8 +41,8 @@ struct SchedulePreviewPanel: View {
 
             Divider()
 
-            // Current item preview
-            PresentationPreviewCard()
+            // Current item preview — previews the selected item before it goes live
+            PresentationPreviewCard(pendingContent: pendingPreviewContent)
                 .padding()
 
             Divider()
@@ -63,9 +63,14 @@ struct SchedulePreviewPanel: View {
 
             // Running order (compact list of items)
             runningOrderList
+
+            Divider()
+
+            // Theme switcher + Layout Editor access
+            PanelFooter()
         }
         .background(.background)
-        .onReceive(NotificationCenter.default.publisher(for: .scheduleSelected)) { notification in
+        .onKeyWindowNotification(.scheduleSelected) { notification in
             if let schedule = notification.object as? ServiceSchedule {
                 currentSchedule = schedule
                 currentItemIndex = 0
@@ -239,6 +244,21 @@ struct SchedulePreviewPanel: View {
     }
 
     // MARK: - Helpers
+
+    /// Maps the current schedule item to preview content, mirroring showItem(_:).
+    private var pendingPreviewContent: PresentationPreviewCard.PendingContent {
+        guard let item = currentItem else { return .init(text: "", reference: "") }
+        switch item.itemType {
+        case "bible":
+            return .init(text: item.content, reference: item.subtitle)
+        case "song":
+            return .init(text: item.content, reference: item.title, subtitle: item.subtitle)
+        case "blank":
+            return .init(text: "", reference: "")
+        default:
+            return .init(text: item.content, reference: item.title)
+        }
+    }
 
     private func showItem(_ item: ScheduleItem) {
         if isLive {
