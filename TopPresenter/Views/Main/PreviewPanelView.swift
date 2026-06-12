@@ -312,9 +312,10 @@ struct PresentationPreviewCard: View {
             .foregroundStyle(style.color.opacity(style.opacity * dim))
             .multilineTextAlignment(style.hAlign)
             .lineSpacing(style.lineSpacing * size * 0.1)
+            .tracking(style.tracking * fontScale)
             .minimumScaleFactor(fittedSize == nil ? 0.3 : 1.0)
             .shadow(
-                color: style.shadowEnabled ? .black.opacity(0.7) : .clear,
+                color: style.shadowEnabled ? style.shadowColor : .clear,
                 radius: style.shadowEnabled ? style.shadowRadius * fontScale : 0,
                 x: 0,
                 y: style.shadowEnabled ? 2 * fontScale : 0
@@ -1355,18 +1356,6 @@ struct StyleQuickSettings: View {
             .controlSize(.small)
         }
         .help(String(localized: "Nivelul ferestrei de proiecție", comment: "Tooltip"))
-
-        HStack {
-            Text(String(localized: "Tranziție:", comment: "Setting label"))
-                .font(.caption)
-                .frame(width: 55, alignment: .trailing)
-            Slider(value: $pmBinding.transitionDuration, in: 0...2, step: 0.1)
-                .controlSize(.small)
-            Text(String(format: "%.1fs", pm.transitionDuration))
-                .font(.caption.monospacedDigit())
-                .frame(width: 30)
-        }
-        .help(String(localized: "Durata globală a tranzițiilor — efectele per prezentator se aleg în Editor de Teme ▸ Tranziții", comment: "Tooltip"))
 
         HStack {
             Text(String(localized: "Deconect.:", comment: "Setting label"))

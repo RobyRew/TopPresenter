@@ -880,9 +880,16 @@ struct ThemeGalleryView: View {
     @State private var newThemeName = ""
     @State private var renameThemeID: UUID?
     @State private var renameText = ""
+    @State private var importResultMessage: String?
+    /// Click-drag panning state (mouse users don't have trackpad side-scroll).
+    @State private var scrollPosition = ScrollPosition(x: 0)
+    @State private var scrollOffsetX: CGFloat = 0
+    @State private var dragStartOffsetX: CGFloat?
 
+    /// UNIVERSAL: a theme carries every presenter's profile, so every panel
+    /// shows the whole gallery; `format` only pre-tags newly saved themes.
     private var visibleThemes: [PresentationManager.Theme] {
-        pm.themes(forFormat: format)
+        pm.themes
     }
 
     var body: some View {
@@ -914,7 +921,7 @@ struct ThemeGalleryView: View {
             .padding(.horizontal, 12)
 
             if visibleThemes.isEmpty {
-                Text(String(localized: "Nicio temă încă — apasă + pentru a salva aspectul curent.", comment: "Theme gallery empty state"))
+                Text(String(localized: "Nicio temă încă — importă pachete .tptheme cu ⤓ sau salvează aspectul curent cu +.", comment: "Theme gallery empty state"))
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
                     .padding(.horizontal, 12)
@@ -934,6 +941,20 @@ struct ThemeGalleryView: View {
                     }
                     .padding(.horizontal, 12)
                     .padding(.vertical, 2)
+                    // Click-drag pans the gallery; ≥12pt before it kicks in so
+                    // card taps and hover-previews keep working.
+                    .gesture(
+                        DragGesture(minimumDistance: 12)
+                            .onChanged { value in
+                                if dragStartOffsetX == nil { dragStartOffsetX = scrollOffsetX }
+                                scrollPosition.scrollTo(x: (dragStartOffsetX ?? 0) - value.translation.width)
+                            }
+                            .onEnded { _ in dragStartOffsetX = nil }
+                    )
+                }
+                .scrollPosition($scrollPosition)
+                .onScrollGeometryChange(for: CGFloat.self, of: { $0.contentOffset.x }) { _, new in
+                    scrollOffsetX = new
                 }
             }
         }
@@ -952,6 +973,15 @@ struct ThemeGalleryView: View {
             Button(String(localized: "Anulează", comment: "Cancel button"), role: .cancel) { }
         } message: {
             Text(String(localized: "Salvează aspectul curent (casete, stiluri, fundal, media) ca temă.", comment: "New theme alert message"))
+        }
+        .alert(
+            importResultMessage ?? "",
+            isPresented: Binding(
+                get: { importResultMessage != nil },
+                set: { if !$0 { importResultMessage = nil } }
+            )
+        ) {
+            Button(String(localized: "OK", comment: "Alert button")) { importResultMessage = nil }
         }
         .alert(
             String(localized: "Redenumește tema", comment: "Rename theme alert title"),
@@ -978,12 +1008,32 @@ struct ThemeGalleryView: View {
         panel.canChooseDirectories = true
         panel.canChooseFiles = true
         panel.allowsMultipleSelection = true
-        panel.message = String(localized: "Alege pachete .tptheme de importat", comment: "Import panel message")
-        if panel.runModal() == .OK {
-            for url in panel.urls {
-                _ = try? pm.importTheme(from: url)
+        panel.message = String(localized: "Alege pachete .tptheme — sau un folder care le conține", comment: "Import panel message")
+        guard panel.runModal() == .OK else { return }
+
+        // Selecting a plain folder imports every .tptheme found inside it.
+        var packages: [URL] = []
+        let fm = FileManager.default
+        for url in panel.urls {
+            if url.pathExtension == "tptheme" {
+                packages.append(url)
+            } else if (try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true {
+                let accessing = url.startAccessingSecurityScopedResource()
+                let children = (try? fm.contentsOfDirectory(at: url, includingPropertiesForKeys: nil)) ?? []
+                packages.append(contentsOf: children.filter { $0.pathExtension == "tptheme" })
+                if accessing { url.stopAccessingSecurityScopedResource() }
+            } else {
+                packages.append(url)
             }
         }
+
+        var imported = 0
+        for url in packages {
+            if (try? pm.importTheme(from: url)) != nil { imported += 1 }
+        }
+        importResultMessage = imported > 0
+            ? String(localized: "S-au importat \(imported) teme.", comment: "Import result")
+            : String(localized: "Niciun pachet .tptheme valid în selecție.", comment: "Import result")
     }
 }
 
@@ -1579,7 +1629,14 @@ struct LayoutEditorSheet: View {
             .foregroundStyle(style.color.opacity(style.opacity))
             .multilineTextAlignment(style.hAlign)
             .lineSpacing(style.lineSpacing * size * 0.1)
+            .tracking(style.tracking * fontScale)
             .minimumScaleFactor(fittedSize == nil ? 0.2 : 1.0)
+            .shadow(
+                color: style.shadowEnabled ? style.shadowColor : .clear,
+                radius: style.shadowEnabled ? style.shadowRadius * fontScale : 0,
+                x: 0,
+                y: style.shadowEnabled ? 2 * fontScale : 0
+            )
             .padding(.horizontal, CGFloat(style.padding) * fontScale)
             .frame(width: rect.width, height: rect.height, alignment: style.frameAlignment)
             .position(x: rect.midX, y: rect.midY)
@@ -1631,7 +1688,7 @@ struct LayoutEditorSheet: View {
         // The list shows ~3.5 rows and scrolls for the rest — no dead space
         // when there are few boxes.
         let rowHeight: CGFloat = 27
-        let listHeight = min(CGFloat(tokens.count), 3.5) * rowHeight
+        let listHeight = min(CGFloat(tokens.count), 4) * rowHeight
 
         GroupBox {
             VStack(spacing: 2) {
@@ -1741,7 +1798,9 @@ struct LayoutEditorSheet: View {
         let isSelected = selection == identity
         let isVisible = pm.isBoxVisible(identity)
 
-        let row = HStack(spacing: 6) {
+        // The LEADING area selects + drags; the eye/trash buttons live outside
+        // the drag/tap surface so their clicks are never swallowed.
+        let leading = HStack(spacing: 6) {
             Image(systemName: "line.3.horizontal")
                 .font(.system(size: 8))
                 .foregroundStyle(.tertiary)
@@ -1750,13 +1809,22 @@ struct LayoutEditorSheet: View {
             Text(boxLabel(for: identity, pm: pm))
                 .font(.caption)
                 .lineLimit(1)
-            Spacer()
+            Spacer(minLength: 4)
+        }
+        .contentShape(Rectangle())
+        .onTapGesture { selection = identity }
+        .draggable(boxToken(for: identity))
+
+        HStack(spacing: 6) {
+            leading
 
             Button {
                 pm.toggleBoxVisibility(identity)
             } label: {
                 Image(systemName: isVisible ? "eye" : "eye.slash")
                     .font(.caption2)
+                    .frame(width: 18, height: 18)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.borderless)
             .help(String(localized: "Afișează / ascunde caseta", comment: "Tooltip"))
@@ -1766,6 +1834,8 @@ struct LayoutEditorSheet: View {
             } label: {
                 Image(systemName: "trash")
                     .font(.caption2)
+                    .frame(width: 18, height: 18)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.borderless)
             .help({
@@ -1781,19 +1851,13 @@ struct LayoutEditorSheet: View {
             isSelected ? Color.accentColor.opacity(0.15) : Color.clear,
             in: RoundedRectangle(cornerRadius: 5)
         )
-        .contentShape(Rectangle())
-        .onTapGesture { selection = identity }
         .help(boxSourceDescription(for: identity, pm: pm))
         .opacity(isVisible ? 1.0 : 0.55)
         .contextMenu { listRowMenu(identity: identity) }
-
-        // EVERY row is draggable — list order = unified z-order
-        row
-            .draggable(boxToken(for: identity))
-            .dropDestination(for: String.self) { items, _ in
-                guard let dropped = items.first else { return false }
-                return handleReorderDrop(dropped, onto: identity)
-            }
+        .dropDestination(for: String.self) { items, _ in
+            guard let dropped = items.first else { return false }
+            return handleReorderDrop(dropped, onto: identity)
+        }
     }
 
     /// "Remove" semantics: custom/media are deleted; translation & subtitle are hidden.
@@ -2038,7 +2102,7 @@ struct LayoutEditorSheet: View {
                         get: { pm.displayScope(for: section) },
                         set: { pm.setDisplayScope($0, for: section) }
                     )) {
-                        ForEach(PresentationManager.displayScopeOptions, id: \.raw) { option in
+                        ForEach(PresentationManager.displayScopeOptions(for: pm.activeProfileKey), id: \.raw) { option in
                             Text(option.label).tag(option.raw)
                         }
                     }
@@ -2130,7 +2194,7 @@ struct LayoutEditorSheet: View {
                         get: { binding.wrappedValue.displayOnRaw },
                         set: { binding.wrappedValue.displayOnRaw = $0 }
                     )) {
-                        ForEach(PresentationManager.displayScopeOptions, id: \.raw) { option in
+                        ForEach(PresentationManager.displayScopeOptions(for: pm.activeProfileKey), id: \.raw) { option in
                             Text(option.label).tag(option.raw)
                         }
                     }
@@ -2250,7 +2314,7 @@ struct LayoutEditorSheet: View {
                                 get: { style.wrappedValue.fontSize },
                                 set: { style.wrappedValue.fontSize = $0 }
                             ),
-                            in: 8...220, step: 2
+                            in: 8...200, step: 2
                         )
                         .controlSize(.small)
                         Text("\(Int(style.wrappedValue.fontSize)) pt")
@@ -2330,10 +2394,10 @@ struct LayoutEditorSheet: View {
                                 get: { style.wrappedValue.opacity },
                                 set: { style.wrappedValue.opacity = $0 }
                             ),
-                            in: 0.05...1.0, step: 0.05
+                            in: 0...1, step: 0.01
                         )
                         .controlSize(.small)
-                        Text("\(Int(style.wrappedValue.opacity * 100))%")
+                        Text("\(Int((style.wrappedValue.opacity * 100).rounded()))%")
                             .font(.caption.monospacedDigit())
                             .frame(width: 35)
                     }
@@ -2344,7 +2408,7 @@ struct LayoutEditorSheet: View {
                                 get: { style.wrappedValue.lineSpacing },
                                 set: { style.wrappedValue.lineSpacing = $0 }
                             ),
-                            in: -1...20, step: 0.5
+                            in: -1...5, step: 0.1
                         )
                         .controlSize(.small)
                         Text(style.wrappedValue.lineSpacing >= 0 ? String(format: "%.1f", style.wrappedValue.lineSpacing) : String(localized: "Global", comment: "Value label"))
@@ -2352,6 +2416,29 @@ struct LayoutEditorSheet: View {
                             .frame(width: 42)
                     }
                     .help(String(localized: "Spațierea dintre rânduri — Global = setarea generală", comment: "Tooltip"))
+
+                    labeledRow(String(localized: "Litere:", comment: "Setting label")) {
+                        Slider(
+                            value: Binding(
+                                get: { style.wrappedValue.tracking ?? pm.letterTracking },
+                                set: { style.wrappedValue.tracking = $0 }
+                            ),
+                            in: -2...30, step: 0.5
+                        )
+                        .controlSize(.small)
+                        Text(style.wrappedValue.tracking != nil
+                             ? String(format: "%.1f", style.wrappedValue.tracking!)
+                             : String(localized: "Global", comment: "Value label"))
+                            .font(.caption.monospacedDigit())
+                            .frame(width: 42)
+                        Button(String(localized: "G", comment: "Reset-to-global button")) {
+                            style.wrappedValue.tracking = nil
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.mini)
+                        .help(String(localized: "Revino la spațierea globală a literelor", comment: "Tooltip"))
+                    }
+                    .help(String(localized: "Spațierea dintre litere — Global = setarea generală", comment: "Tooltip"))
 
                     labeledRow(String(localized: "Transform.:", comment: "Setting label")) {
                         Picker("", selection: Binding(
@@ -2375,7 +2462,7 @@ struct LayoutEditorSheet: View {
                                 get: { style.wrappedValue.padding },
                                 set: { style.wrappedValue.padding = $0 }
                             ),
-                            in: -1...100, step: 1
+                            in: -1...300, step: 1
                         )
                         .controlSize(.small)
                         Text(style.wrappedValue.padding >= 0 ? "\(Int(style.wrappedValue.padding))" : String(localized: "Global", comment: "Value label"))
@@ -2401,12 +2488,24 @@ struct LayoutEditorSheet: View {
 
                     if style.wrappedValue.shadowMode == "on" {
                         labeledRow("") {
+                            ColorPicker("", selection: Binding(
+                                get: {
+                                    let hex = style.wrappedValue.shadowColorHex.isEmpty
+                                        ? pm.shadowColorHex
+                                        : style.wrappedValue.shadowColorHex
+                                    return Color(hex: hex) ?? Color.black.opacity(0.7)
+                                },
+                                set: { style.wrappedValue.shadowColorHex = $0.toHexWithAlpha() }
+                            ), supportsOpacity: true)
+                            .labelsHidden()
+                            .controlSize(.small)
+                            .help(String(localized: "Culoarea umbrei acestei casete — opacitatea ei dă intensitatea", comment: "Tooltip"))
                             Slider(
                                 value: Binding(
                                     get: { style.wrappedValue.shadowRadius >= 0 ? style.wrappedValue.shadowRadius : pm.shadowRadius },
                                     set: { style.wrappedValue.shadowRadius = $0 }
                                 ),
-                                in: 0...20, step: 0.5
+                                in: 0...50, step: 0.5
                             )
                             .controlSize(.small)
                             Text(String(format: "%.0f", style.wrappedValue.shadowRadius >= 0 ? style.wrappedValue.shadowRadius : pm.shadowRadius))
@@ -2585,7 +2684,7 @@ struct LayoutEditorSheet: View {
                         get: { binding.wrappedValue.displayOnRaw },
                         set: { binding.wrappedValue.displayOnRaw = $0 }
                     )) {
-                        ForEach(PresentationManager.displayScopeOptions, id: \.raw) { option in
+                        ForEach(PresentationManager.displayScopeOptions(for: pm.activeProfileKey), id: \.raw) { option in
                             Text(option.label).tag(option.raw)
                         }
                     }
@@ -2714,21 +2813,31 @@ struct LayoutEditorSheet: View {
                     .help(String(localized: "Alinierea verticală implicită în interiorul casetelor", comment: "Tooltip"))
 
                     labeledRow(String(localized: "Opacitate:", comment: "Setting label")) {
-                        Slider(value: pmBinding.globalTextOpacity, in: 0.05...1.0, step: 0.05)
+                        Slider(value: pmBinding.globalTextOpacity, in: 0...1, step: 0.01)
                             .controlSize(.small)
-                        Text("\(Int(pm.globalTextOpacity * 100))%")
+                        Text("\(Int((pm.globalTextOpacity * 100).rounded()))%")
                             .font(.caption.monospacedDigit())
                             .frame(width: 35)
                     }
                     .help(String(localized: "Opacitatea de bază a textului — se combină cu opacitatea fiecărei casete", comment: "Tooltip"))
 
                     labeledRow(String(localized: "Spațiere:", comment: "Setting label")) {
-                        Slider(value: pmBinding.lineSpacing, in: 0.8...3.0, step: 0.1)
+                        Slider(value: pmBinding.lineSpacing, in: 0...5, step: 0.1)
                             .controlSize(.small)
                         Text(String(format: "%.1f", pm.lineSpacing))
                             .font(.caption.monospacedDigit())
                             .frame(width: 28)
                     }
+                    .help(String(localized: "Spațiul dintre rânduri", comment: "Tooltip"))
+
+                    labeledRow(String(localized: "Litere:", comment: "Setting label")) {
+                        Slider(value: pmBinding.letterTracking, in: -2...30, step: 0.5)
+                            .controlSize(.small)
+                        Text(String(format: "%.1f", pm.letterTracking))
+                            .font(.caption.monospacedDigit())
+                            .frame(width: 28)
+                    }
+                    .help(String(localized: "Spațierea dintre litere (tracking, la referința 1080p)", comment: "Tooltip"))
 
                     labeledRow(String(localized: "Transform.:", comment: "Setting label")) {
                         Picker("", selection: Binding(
@@ -2749,7 +2858,7 @@ struct LayoutEditorSheet: View {
                     .help(String(localized: "Transformarea implicită a textului pentru TOATE casetele acestui prezentator — personalizabilă per casetă mai jos", comment: "Tooltip"))
 
                     labeledRow(String(localized: "Padding:", comment: "Setting label")) {
-                        Slider(value: pmBinding.padding, in: 10...100, step: 5)
+                        Slider(value: pmBinding.padding, in: 0...300, step: 5)
                             .controlSize(.small)
                         Text("\(Int(pm.padding))")
                             .font(.caption.monospacedDigit())
@@ -2762,7 +2871,14 @@ struct LayoutEditorSheet: View {
                             .labelsHidden()
                             .controlSize(.small)
                         if pm.shadowEnabled {
-                            Slider(value: pmBinding.shadowRadius, in: 0...20, step: 0.5)
+                            ColorPicker("", selection: Binding(
+                                get: { Color(hex: pm.shadowColorHex) ?? Color.black.opacity(0.7) },
+                                set: { pm.shadowColorHex = $0.toHexWithAlpha() }
+                            ), supportsOpacity: true)
+                            .labelsHidden()
+                            .controlSize(.small)
+                            .help(String(localized: "Culoarea umbrei — opacitatea ei dă intensitatea", comment: "Tooltip"))
+                            Slider(value: pmBinding.shadowRadius, in: 0...50, step: 0.5)
                                 .controlSize(.small)
                             Text(String(format: "%.0f", pm.shadowRadius))
                                 .font(.caption.monospacedDigit())

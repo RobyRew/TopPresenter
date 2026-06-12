@@ -19,8 +19,13 @@ struct PresentationOutputView: View {
     var body: some View {
         ZStack {
             if !pm.isBlackScreen {
-                // Background layer — per-content override or global
-                backgroundLayer
+                // Background layer — part of the Intrare/Ieșire story: it fades
+                // in from transparency with the first Show and fades back out on
+                // Hide/Clear/ESC (the show/clear methods drive the animation).
+                if pm.liveContent.isLive {
+                    backgroundLayer
+                        .transition(.opacity)
+                }
 
                 // Unified box layer: media + text boxes in ONE user-controlled
                 // stacking order (pm.orderedBoxTokens). Always mounted — media
@@ -222,9 +227,10 @@ struct PresentationOutputView: View {
             .foregroundStyle(style.color.opacity(style.opacity))
             .multilineTextAlignment(style.hAlign)
             .lineSpacing(style.lineSpacing * size * 0.1)
+            .tracking(style.tracking * fontScale)
             .minimumScaleFactor(fittedSize == nil ? 0.3 : 1.0)
             .shadow(
-                color: style.shadowEnabled ? .black.opacity(0.7) : .clear,
+                color: style.shadowEnabled ? style.shadowColor : .clear,
                 radius: style.shadowEnabled ? style.shadowRadius * fontScale : 0,
                 x: 0,
                 y: style.shadowEnabled ? 2 * fontScale : 0

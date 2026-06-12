@@ -242,13 +242,9 @@ struct ProjectionSettingsTab: View {
             }
 
             Section(String(localized: "Comportament", comment: "Settings section")) {
-                HStack {
-                    Text(String(localized: "Tranziție:", comment: "Setting label"))
-                    Slider(value: $pmBinding.transitionDuration, in: 0...2, step: 0.1)
-                    Text(String(format: "%.1fs", pm.transitionDuration))
-                        .monospacedDigit()
-                        .frame(width: 36)
-                }
+                Text(String(localized: "Tranzițiile (efecte și durate pentru Intrare / Intermediar / Ieșire) se setează per prezentator în Editor de Teme ▸ Tranziții.", comment: "Settings hint"))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
 
                 Picker(String(localized: "La deconectarea ecranului:", comment: "Setting label"), selection: Binding(
                     get: { pm.screenDisconnectAction.rawValue },

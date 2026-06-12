@@ -6,7 +6,7 @@
 
 <p align="center">
   <strong>Professional Bible &amp; worship presentation for macOS</strong><br>
-  Project scripture, lyrics, media, and custom slides to any screen — built with native SwiftUI &amp; SwiftData.
+  Project scripture, lyrics, media, and custom slides to any screen — with a full per-presenter theme engine, built in native SwiftUI &amp; SwiftData.
 </p>
 
 <p align="center">
@@ -14,6 +14,7 @@
   <img src="https://img.shields.io/badge/Swift-5.0+-F05138?logo=swift&logoColor=white" alt="Swift 5.0+">
   <img src="https://img.shields.io/badge/SwiftUI-Native-6C47FF" alt="SwiftUI">
   <img src="https://img.shields.io/badge/SwiftData-Persistence-34C759" alt="SwiftData">
+  <img src="https://img.shields.io/badge/Version-0.1.0--alpha-orange" alt="0.1.0-alpha">
   <img src="https://img.shields.io/badge/License-Apache%202.0-yellow" alt="License">
 </p>
 
@@ -22,98 +23,83 @@
 ## Highlights
 
 - **100% native macOS** — SwiftUI interface, SwiftData persistence, no Electron, no web views
-- **Transparent output window** — invisible on the projector when idle, no forced black screen
-- **Multi-format Bible import** — 6 formats including OSIS, Zefania, MySword, USFM, and more
-- **Song lyrics from PowerPoint** — import PPTX/PPT files directly, one slide per verse
-- **Smart auto-fill** — automatically fits as many verses as the screen allows
-- **Universal drag & drop** — drop any file and the app figures out what to do with it
-- **Runs on a single screen or with a projector** — adapts automatically
+- **Theme engine (Editor de Teme)** — a full design studio: per-presenter layouts, text boxes, media overlays, backgrounds, and a three-phase transition system
+- **Per-presenter profiles** — Bible, Songs, and Slides each have their own boxes, styles, backgrounds, and transitions; the output always renders the live content's profile
+- **Universal themes** — one theme snapshots the entire look of all presenters; portable `.tptheme` packages travel between machines with all media embedded
+- **Transparent output window** — invisible on the projector when idle; content fades in from transparency and back out
+- **Multi-window tabs** (⌘T) — different modules and Bible translations per tab, one shared output
+- **Multi-format import** — 6 Bible formats, OpenSong/OpenLyrics/PowerPoint songs, universal drag &amp; drop
+- **Resolution adaptive** — layouts are defined in percentages and fonts scale from a 1080p reference; any projector resolution, aspect ratio, or PPI just works
+
+---
+
+## Starter Resources
+
+Download from the [**Resurse** release](https://github.com/RobyRew/TopPresenter/releases/tag/resources-1):
+
+- **6 starter themes** (`.tptheme.zip`) — photo and video backgrounds with preconfigured layouts and transitions: *Cer Nepal, Flori, Galaxie, Minimal, Particule, Plaja*. Unzip, then import from the **Teme** gallery (⤓ button) — selecting the whole folder imports everything inside.
+- **Biblia EDC100** — Ediția Dumitru Cornilescu Centenară (Romanian, 66 books, 31,102 verses) in TopPresenter Bible JSON. Import from the Bible module or drag &amp; drop.
+  > © British and Foreign Bible Society (BFBS) &amp; Societatea Biblică Interconfesională din România (SBIR), 1924/2024. Distributed for personal and liturgical use.
 
 ---
 
 ## Features
 
+### 🎨 Theme Engine — *Editor de Teme*
+
+The design studio behind everything you see on screen:
+
+- **Per-presenter layout profiles** — Biblie / Cântece / Slide-uri are edited independently (segmented picker in the editor header, with one-click copy between presenters). Songs have song boxes (*Versuri, Titlu Cântec, Etichetă Strofă*), not Bible ones.
+- **Fixed text boxes** — boxes never move or resize with their content; text flows inside them. Drag/resize on the canvas, arrow-key nudge (⇧ = 5%), numeric X/Y/W/H fields, quick-align toggles.
+- **Custom text boxes &amp; media boxes** — add static text (church name, CCLI, "Amin."), live-fed boxes, clocks, slide counters, or image/GIF/video overlays with opacity, corner radius, edge feather, and fit/fill.
+- **Unified z-order** — one stacking order for every box; drag rows in the always-visible *Casete* list or use the Ordonare context menu. Boxes are recolorable (click the swatch), removable, hideable.
+- **Data sources per box** — every box can pull from any live field (lyrics, title, reference, translation, strofă label), static text, date, time, or slide number ("2 / 7"), with per-presenter source catalogs.
+- **Slide scope (Afișare)** — show a box on all/first/last slides; songs add **Refren** / **Strofe** (chorus detection from section labels). Song title on the first slide, "Amin." on the last — done.
+- **Complete text styling, twice** — Text Global and per-box *Personalizează* share the same 12 options in the same order: Font, Size (≤200pt), Weight, Color, Alignment, Vertical, Opacity, Line spacing, Letter spacing, Transform (MAJUSCULE/minuscule), Padding, Shadow (color + radius), Auto-fit. Every per-box option has a *Global* inherit.
+- **Backgrounds** — global + per-presenter overrides; photos, animated GIFs, or looping muted videos.
+- **Three-phase transitions** — *Intrare* (transparency → content), *Intermediar* (slide → slide), *Ieșire* (content → transparency on Hide/Clear/ESC). 14 effects (fade, zoom, slides, blur, blur+zoom, fall, 3D flip…), per-phase durations (0–3 s, 0 = instant), per-box overrides with stagger delay, and click-to-preview on the editor canvas.
+- **Undo/redo** for every layout change, coalesced per gesture.
+
+### 🖼 Themes
+
+- A theme snapshots the **entire look** — all three presenter profiles plus global text/background settings. Selecting one restyles every presenter at once.
+- **Thumbnail gallery** in every panel footer — click to apply, hover to live-preview (never while live), right-click to update/rename/export/delete. Drag sideways to pan.
+- **`.tptheme` packages** — directory bundles with `theme.json` + every referenced media file embedded. Export/import is fully portable across machines; importing a folder imports every package inside it.
+
 ### 📖 Bible
 
 - **6 import formats** — TopPresenter JSON, OSIS XML, Zefania XML, MySword SQLite, USFM, Unbound Bible
-- **Full-text & reference search** — type `John 3:16` or `Gen 1:1-3` to jump directly
-- **List view & Grid view** — classic sidebar or BibleShow-style button grid with breadcrumbs
-- **10 color-coded book categories** — Law, History, Wisdom, Prophets, Gospels, Epistles, etc.
-- **Multi-verse selection** (⌘+Click) and **auto-fill** based on available screen space
-- **Block navigation** — ← → skip by block size; cross-chapter/book boundaries seamlessly
-- **Double-click** any verse to send it live instantly
+- **Full-text &amp; reference search** — type `John 3:16` or `Gen 1:1-3` to jump directly
+- **List view &amp; Grid view** with color-coded book categories
+- **Multi-verse selection** (⌘+Click) and **auto-fill** that measures the actual verse box
+- **Block navigation** crossing chapter/book boundaries; double-click to go live
 - **Export** as TopPresenter JSON, Plain Text, or CSV
 
-### 🎵 Songs & Lyrics
+### 🎵 Songs &amp; Lyrics
 
-- **4 import formats** — OpenSong XML, OpenLyrics XML, PowerPoint (PPTX & PPT)
-- **PowerPoint import** — each slide becomes a verse, auto-detects sections (Verse, Chorus, Bridge)
-- **Collection-based organization** with directory import
-- **Full-text search** by title or lyrics content
-- **Section navigation** with quick-jump tabs and ← → keyboard arrows
+- **4 import formats** — OpenSong XML, OpenLyrics XML, PowerPoint (PPTX &amp; PPT — sandbox-safe, in-process parsing)
+- Multi-select file/folder import with auto-detection; each PowerPoint slide becomes a verse with section detection (Verse, Chorus, Bridge)
+- **Section quick-jump tabs**, ← → navigation, live slide position (first/last/chorus aware)
 - **Export** as TopPresenter JSON, OpenLyrics XML, or Plain Text
 
 ### 🖥 Presentation Output
 
-- **Auto-opens on the target screen** — transparent, borderless, fullscreen overlay
-- **Screen selector** — pick which connected display to project on
-- **Window level control** — Normal, Floating, Always on Top, or Behind Desktop
-- **Live preview** matching the target screen's aspect ratio and resolution
-- **Black screen** (⌘B), **Freeze** (⌘F), and **Clear** (Escape) controls
-- **Auto-hide on built-in screen** — when presenting on the laptop's own display, Escape hides the window entirely; it reappears when new content is sent
-- **Smooth transitions** with configurable duration
-- **All settings persist** across sessions
+- **Transparent, borderless, fullscreen overlay** — auto-opens on the target screen
+- **Single-screen mode** — the window hides after the exit transition and returns on Show
+- **Black screen** (⌘B), **Freeze** (⌘F), **Clear/ESC**, split Clear button with Force Touch
+- **Ieșire panel** in the right bar: screen, window level, disconnect behavior
+- Live clocks tick on screen; full-screen video playback with transport controls
 
-### 🎨 Styling & Layout
+### 🪟 Multi-Window Tabs
 
-- **Font family, size, color** per section (verse text, reference, subtitle)
-- **Background color** and **background image** with opacity control
-- **Text shadow**, **alignment**, **line spacing**, and **padding**
-- **Inline settings panel** — collapsible, context-aware per content type
+⌘T opens native tabs — each with its own module, Bible translation, and selection. One output, driven by whichever tab presses Show.
 
-### 🔧 Context-Sensitive Preview Panel
+### 📂 Universal Drag &amp; Drop, Media, Schedule, Quick Search
 
-| Content | Panel |
-|---------|-------|
-| **Bible** | Preview, verse nav, auto-fill, Show/Hide, Black/Freeze, style settings |
-| **Songs** | Preview, section nav with quick-jump tabs, Show/Hide, Black/Freeze, style settings |
-| **Media** | Preview, Use as Background / Play, Black, minimal settings |
-| **Schedule** | Preview, item nav, Go Live/Hide, running order, Black/Freeze |
-| **Custom Slides** | Preview, slide nav, Show/Hide, Black/Freeze, style settings |
-
-### 🖱 Native macOS Toolbar
-
-Toolbar items adapt to the active content type — module/collection picker, search, import/delete, screen selector, Black, and Clear are always available.
-
-### 📂 Universal Drag & Drop
-
-Drop files onto the window — the app auto-classifies:
-- **Bible files** (JSON, XML, SQLite, USFM, TXT) → Bible import
-- **Song files** (XML, PPTX, PPT) → Song import
-- **Media files** (images, audio, video) → Media Library
-- **Mixed drops** → Media imports silently; Bible/Songs open the batch import dialog
-
-### 🔲 Split Clear Button
-
-- **Click** to clear the output
-- **▼ Dropdown** — Clear Screen, Clear & Go Black, Clear & Go to Bible/Songs/Media, Clear All
-- **Right-click** — same options as context menu
-- **Force Touch** — configurable action with haptic feedback
-
-### 🎵 Audio & Video
-
-- Built-in audio player with volume, speed (0.5×–2×), seek, and skip (±10s)
-- Video playback (MP4, MOV, MKV, AVI, WebM) with loop control
-
-### 📋 Schedule, Custom Slides & Media Library
-
-- **Service schedules** with date, running order, and double-click to go live
-- **Custom text slides** with title and subtitle
-- **Media library** with grid view, type filter, thumbnails, and security-scoped bookmarks
-
-### ⚡ Quick Search (⌘K)
-
-Global search overlay — search across Bible, songs, and slides from anywhere. Keyboard navigation + Return to present.
+- Drop any file — Bibles, songs, media auto-classify (mixed drops handled)
+- Media library with grid, type filter, thumbnails; audio player (speed, seek), video looping
+- Service schedules with running order and go-live; custom text slides
+- **⌘K Quick Search** across Bible, songs, and slides
 
 ---
 
@@ -122,49 +108,44 @@ Global search overlay — search across Bible, songs, and slides from anywhere. 
 | Shortcut | Action |
 |----------|--------|
 | `⌘K` | Quick search |
+| `⌘T` | New tab |
 | `⌘B` | Black screen |
 | `⌘F` | Freeze / Unfreeze |
 | `Return` | Show / Hide content |
 | `← →` | Navigate verses / slides |
-| `Escape` | Clear output (hides window on built-in screen) |
+| `Escape` | Clear output (plays the Ieșire transition) |
 | `⌘+Click` | Multi-select verses |
 | `⇧⌘Escape` | Clear All |
 | `Double-Click` | Instant present |
-| `Force Touch` | Configurable action |
 
 ---
 
 ## Supported Formats
 
-### Bible Import
-| Format | Extensions |
-|--------|-----------|
-| TopPresenter JSON | `.json` |
-| OSIS XML | `.xml`, `.osis` |
-| Zefania XML | `.xml`, `.zef` |
-| MySword SQLite | `.mybible`, `.bbl.mybible` |
-| USFM | `.usfm`, `.sfm` |
-| Unbound Bible | `.txt`, `.utf8` |
+| | Formats |
+|---|---|
+| **Bible import** | TopPresenter JSON · OSIS XML · Zefania XML · MySword SQLite · USFM · Unbound Bible |
+| **Song import** | OpenSong XML · OpenLyrics XML · PowerPoint (`.pptx`, `.ppt`) |
+| **Media** | Images (jpg, png, gif, heic, tiff, bmp, webp, svg) · Audio (mp3, wav, aac, m4a, flac, ogg, aiff) · Video (mp4, mov, avi, mkv, webm, m4v) |
+| **Themes** | `.tptheme` packages (theme.json + embedded media) |
+| **Export** | Bible: TopPresenter JSON, TXT, CSV · Songs: TopPresenter JSON, OpenLyrics, TXT · Themes: `.tptheme` |
 
-### Song Import
-| Format | Extensions |
-|--------|-----------|
-| OpenSong XML | `.xml` |
-| OpenLyrics XML | `.xml` |
-| PowerPoint | `.pptx`, `.ppt` |
+---
 
-### Media (drag & drop)
-| Type | Extensions |
-|------|-----------|
-| Images | jpg, png, gif, heic, tiff, bmp, webp, svg |
-| Audio | mp3, wav, aac, m4a, flac, ogg, aiff |
-| Video | mp4, mov, avi, mkv, webm, m4v |
+## eBiblia.ro Exporter (userscript)
 
-### Export
-| Content | Formats |
-|---------|---------|
-| Bible | TopPresenter JSON, Plain Text, CSV |
-| Songs | TopPresenter JSON, OpenLyrics XML, Plain Text |
+[`eBiblia-Scraper.user.js`](eBiblia-Scraper.user.js) is a Tampermonkey/Violentmonkey userscript that exports complete Bible translations from [eBiblia.ro](https://ebiblia.ro) into the **TopPresenter Bible JSON** format.
+
+**How it works:**
+
+1. Install the script in Tampermonkey and open ebiblia.ro — a draggable exporter panel appears with every translation your account can access.
+2. For each of the 66 books it walks chapter by chapter (1,189 total), first trying the site's own in-page data layer, then falling back to the `a1–a3.ebiblia.net` API endpoints with retries — throttled (~0.8 s/chapter, 1.5 s/book) to stay polite to the server.
+3. Each verse is cleaned from raw HTML into plain text, keeping `rawHtml`, a diacritic-free `textNormalized` (for search), cross-references, footnotes, and section headings with levels.
+4. The result is a single JSON file (`schemaVersion 1.0.0`, `format: "TopPresenter Bible"`) with translation metadata (code, name, language, copyright) and export stats — downloaded via `GM_download`, ready for direct import into TopPresenter.
+
+The schema is documented in [`TopPresenterBibleImporter.swift`](TopPresenter/Services/Import/TopPresenterBibleImporter.swift); the importer also accepts partial files (any JSON with a `books` array).
+
+> Please respect each translation's copyright — export only for personal and congregational use.
 
 ---
 
@@ -172,31 +153,24 @@ Global search overlay — search across Bible, songs, and slides from anywhere. 
 
 ```
 TopPresenter/
-├── Core/                        # App state, commands, constants, migration
+├── Core/                        # PresentationManager (state, profiles, themes,
+│                                #   transitions), commands, constants, migration
 ├── Models/                      # BibleModule, Song, MediaItem, Schedule, LiveContent
 ├── Services/
-│   ├── Import/                  # 9 importers + drag-drop handler
+│   ├── Import/                  # 9 importers, in-process ZIP reader, drag-drop
 │   ├── Export/                  # Multi-format export service
-│   ├── Audio/                   # AVAudioPlayer wrapper
-│   └── Video/                   # AVPlayer wrapper
+│   ├── Audio/ & Video/          # AVFoundation wrappers
 ├── Views/
-│   ├── Main/                    # Window, toolbar, sidebar, preview panels
-│   ├── Bible/                   # List & grid views, export sheet
-│   ├── Songs/                   # Collections, search, lyrics
-│   ├── Media/                   # Grid, thumbnails, filters
-│   ├── Schedule/                # Service order management
-│   ├── CustomSlides/            # Text slide editor
-│   ├── Presentation/            # Transparent fullscreen output + verse renderer
-│   ├── Import/                  # Batch import/export sheets
-│   └── Settings/                # Preferences, keyboard shortcuts
+│   ├── Main/                    # Window, toolbar, sidebar, preview panels, tabs
+│   ├── Bible/ Songs/ Media/     # Modules
+│   ├── Schedule/ CustomSlides/
+│   ├── Presentation/            # Output window, Editor de Teme, text-box engine,
+│   │                            #   media boxes, theme gallery
+│   └── Settings/                # Preferences, projection, shortcuts
 └── TopPresenterApp.swift        # @main entry point
 ```
 
----
-
-## eBiblia.ro Scraper
-
-Included: `eBiblia-Scraper.user.js` — a Tampermonkey userscript that scrapes Bible text from [eBiblia.ro](https://ebiblia.ro) and exports it in TopPresenter JSON format for direct import.
+Key design decisions live in [`AGENTS.md`](AGENTS.md) — fixed text boxes (content never moves a box), per-presenter `LayoutProfile`s, snapshot-based undo, resilient Codable everywhere (stored data survives model growth), and a sandbox-safe bookmark layer.
 
 ---
 
@@ -212,30 +186,17 @@ Select the **TopPresenter** scheme → Build and Run (`⌘R`).
 
 **Requirements:** macOS 15.7+, Xcode 16.3+, Swift 5.0+
 
-## Releases
-
-- Every push to `main` now creates a new GitHub **alpha pre-release** with a unique version such as `v0.0.1-alpha.12`.
-- These pre-releases do **not** overwrite older ones; each build is kept as its own release.
-- Stable releases are reserved for final tags like `v1.0.0`, `v1.1.0`, and later.
-
-### How To Make A Stable Release
-
-1. Bump `MARKETING_VERSION` in the Xcode project from `0.0.1` to the final version you want, for example `1.0.0`.
-2. Commit and push that version change to `main`.
-3. Create a Git tag for the same version and push it:
+Run the unit suite (70+ tests) with:
 
 ```bash
-git tag v1.0.0
-git push origin v1.0.0
+xcodebuild -scheme TopPresenter -destination 'platform=macOS' test -only-testing:TopPresenterTests
 ```
 
-4. GitHub Actions will build the app and publish a normal release named `TopPresenter v1.0.0`.
+## Releases
 
-### How To Keep Shipping Pre-Releases
-
-1. Leave the app on a pre-1.0 version like `0.0.1`, `0.0.2`, or `0.1.0`.
-2. Push commits to `main`.
-3. Each push creates a new alpha release automatically, for example `v0.0.1-alpha.13`.
+- Every push to `main` publishes an **alpha pre-release**; the alpha number counts **per version**, so bumping `MARKETING_VERSION` restarts the series (e.g. `v0.1.0-alpha.1`).
+- Stable releases come from final tags (`v1.0.0`): bump `MARKETING_VERSION`, push, then `git tag v1.0.0 && git push origin v1.0.0`.
+- The [Resurse release](https://github.com/RobyRew/TopPresenter/releases/tag/resources-1) hosts the starter themes and the EDC100 Bible.
 
 ## License
 

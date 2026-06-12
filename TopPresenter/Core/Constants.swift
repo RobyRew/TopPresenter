@@ -205,7 +205,7 @@ enum SupportedSongExportFormat: String, CaseIterable, Identifiable {
 enum PresentationDefaults {
     static let fontSize: Double = 48.0
     static let minFontSize: Double = 12.0
-    static let maxFontSize: Double = 120.0
+    static let maxFontSize: Double = 200.0
     static let backgroundOpacity: Double = 0.7
     static let textColor = "FFFFFF"
     static let backgroundColor = "000000"

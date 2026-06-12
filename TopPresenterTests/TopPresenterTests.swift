@@ -1166,6 +1166,98 @@ struct PresentationManagerTests {
         #expect(PresentationManager.mediaType(forExtension: "MOV") == "video")
     }
 
+    @Test func verticalAlignFollowsGlobalWhenNotCustomized() {
+        let pm = PresentationManager()
+        let originalStyle = pm.boxStyle(for: .reference, in: "bible")
+        let originalVAlign = pm.globalVAlignRaw
+        defer {
+            pm.setBoxStyle(originalStyle, for: .reference, in: "bible")
+            pm.globalVAlignRaw = originalVAlign
+        }
+
+        // Customize (seeds vAlign), then un-customize — the stale seeded value
+        // must NOT stick; the box follows the global again.
+        pm.globalVAlignRaw = "top"
+        pm.enableStyleCustomization(for: .reference, in: "bible")
+        var style = pm.boxStyle(for: .reference, in: "bible")
+        style.vAlignRaw = "bottom"
+        pm.setBoxStyle(style, for: .reference, in: "bible")
+        #expect(pm.resolvedStyle(for: .reference, in: "bible").vAlignRaw == "bottom")
+
+        style.isCustomized = false
+        pm.setBoxStyle(style, for: .reference, in: "bible")
+        pm.globalVAlignRaw = "center"
+        #expect(pm.resolvedStyle(for: .reference, in: "bible").vAlignRaw == "center")
+    }
+
+    @Test func trackingAndShadowColorResolve() {
+        let pm = PresentationManager()
+        let originalStyle = pm.boxStyle(for: .verseContent, in: "bible")
+        let originalTracking = pm.letterTracking
+        let originalShadowHex = pm.shadowColorHex
+        defer {
+            pm.setBoxStyle(originalStyle, for: .verseContent, in: "bible")
+            pm.letterTracking = originalTracking
+            pm.shadowColorHex = originalShadowHex
+        }
+
+        pm.letterTracking = 4
+        var inherited = pm.resolvedStyle(for: .verseContent, in: "bible")
+        #expect(inherited.tracking == 4)
+
+        var style = pm.boxStyle(for: .verseContent, in: "bible")
+        style.isCustomized = true
+        style.tracking = 10
+        style.shadowColorHex = "FF0000FF"
+        pm.setBoxStyle(style, for: .verseContent, in: "bible")
+        let overridden = pm.resolvedStyle(for: .verseContent, in: "bible")
+        #expect(overridden.tracking == 10)
+
+        // Un-set per-box tracking → back to global
+        style.tracking = nil
+        pm.setBoxStyle(style, for: .verseContent, in: "bible")
+        inherited = pm.resolvedStyle(for: .verseContent, in: "bible")
+        #expect(inherited.tracking == 4)
+    }
+
+    @Test func chorusScopeMatchesRefrenLabels() {
+        let pm = PresentationManager()
+        pm.liveContent.setSongVerse(text: "v", title: "T", verseLabel: "Refren 2", slideIndex: 1, slideCount: 4)
+        #expect(pm.scopeMatchesLiveSlide("chorus"))
+        #expect(!pm.scopeMatchesLiveSlide("verses"))
+
+        pm.liveContent.setSongVerse(text: "v", title: "T", verseLabel: "Strofa 1", slideIndex: 0, slideCount: 4)
+        #expect(!pm.scopeMatchesLiveSlide("chorus"))
+        #expect(pm.scopeMatchesLiveSlide("verses"))
+
+        pm.liveContent.setSongVerse(text: "v", title: "T", verseLabel: "CHORUS", slideIndex: 2, slideCount: 4)
+        #expect(pm.scopeMatchesLiveSlide("chorus"))
+        pm.liveContent.clear()
+
+        // Song-only options exist just for the song profile
+        let songRaws = PresentationManager.displayScopeOptions(for: "song").map(\.raw)
+        #expect(songRaws.contains("chorus") && songRaws.contains("verses"))
+        #expect(!PresentationManager.displayScopeOptions(for: "bible").map(\.raw).contains("chorus"))
+    }
+
+    @Test func payloadRoundTripsTrackingAndShadowColor() throws {
+        var payload = PresentationManager.ThemePayload()
+        payload.letterTracking = 7.5
+        payload.shadowColorHex = "112233CC"
+        let data = try JSONEncoder().encode(payload)
+        let decoded = try JSONDecoder().decode(PresentationManager.ThemePayload.self, from: data)
+        #expect(decoded.letterTracking == 7.5)
+        #expect(decoded.shadowColorHex == "112233CC")
+
+        // Legacy payloads without the fields fall back to defaults
+        let legacy = try JSONDecoder().decode(
+            PresentationManager.ThemePayload.self,
+            from: #"{"fontSize": 60}"#.data(using: .utf8)!
+        )
+        #expect(legacy.letterTracking == 0)
+        #expect(legacy.shadowColorHex == "000000B3")
+    }
+
     @Test func perBoxPaddingShadowAutoFitResolve() {
         let pm = PresentationManager()
         let original = pm.boxStyle(for: .reference, in: "song")

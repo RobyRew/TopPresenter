@@ -245,6 +245,14 @@ final class LiveContent {
 
     var isFirstSlide: Bool { slideIndex <= 0 }
     var isLastSlide: Bool { slideIndex >= slideCount - 1 }
+    /// Whether the current slide is a chorus, judged by its section label
+    /// ("Refren", "Refren 2", "Chorus", "Cor" — case/diacritic-insensitive).
+    var isChorusSlide: Bool {
+        let label = subtitle
+            .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: nil)
+            .trimmingCharacters(in: .whitespaces)
+        return ["refren", "chorus", "cor"].contains { label.hasPrefix($0) }
+    }
     /// "2 / 7" — the "slideNumber" box source.
     var slideNumberText: String { "\(min(slideIndex, slideCount - 1) + 1) / \(max(slideCount, 1))" }
 
@@ -342,5 +350,15 @@ extension Color {
         let g = Int((nsColor.greenComponent * 255).rounded())
         let b = Int((nsColor.blueComponent * 255).rounded())
         return String(format: "%02X%02X%02X", r, g, b)
+    }
+
+    /// 8-digit RRGGBBAA hex — used where the alpha matters (shadow color).
+    func toHexWithAlpha() -> String {
+        guard let nsColor = NSColor(self).usingColorSpace(.sRGB) else { return "000000B3" }
+        let r = Int((nsColor.redComponent * 255).rounded())
+        let g = Int((nsColor.greenComponent * 255).rounded())
+        let b = Int((nsColor.blueComponent * 255).rounded())
+        let a = Int((nsColor.alphaComponent * 255).rounded())
+        return String(format: "%02X%02X%02X%02X", r, g, b, a)
     }
 }

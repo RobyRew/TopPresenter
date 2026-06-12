@@ -551,6 +551,14 @@ final class PresentationManager {
     var shadowRadius: Double {
         didSet { UserDefaults.standard.set(shadowRadius, forKey: "pm_shadowRadius") }
     }
+    /// Shadow color (RRGGBBAA — alpha carries the intensity).
+    var shadowColorHex: String {
+        didSet { UserDefaults.standard.set(shadowColorHex, forKey: "pm_shadowColorHex") }
+    }
+    /// Letter spacing in points at the 1080p reference height.
+    var letterTracking: Double {
+        didSet { UserDefaults.standard.set(letterTracking, forKey: "pm_letterTracking") }
+    }
     var transitionDuration: Double {
         didSet { UserDefaults.standard.set(transitionDuration, forKey: "pm_transitionDuration") }
     }
@@ -877,7 +885,9 @@ final class PresentationManager {
         var padding: Double = -1        // -1 = global inner inset (pt @1080p)
         var shadowMode: String = ""     // "" = global | "on" | "off"
         var shadowRadius: Double = -1   // -1 = global radius
+        var shadowColorHex: String = "" // "" = global shadow color (RRGGBBAA)
         var autoFitMode: String = ""    // "" = global behavior | "on" | "off"
+        var tracking: Double? = nil     // nil = global letter spacing (pt @1080p)
 
         init() {}
 
@@ -897,7 +907,9 @@ final class PresentationManager {
             padding = try c.decodeIfPresent(Double.self, forKey: .padding) ?? -1
             shadowMode = try c.decodeIfPresent(String.self, forKey: .shadowMode) ?? ""
             shadowRadius = try c.decodeIfPresent(Double.self, forKey: .shadowRadius) ?? -1
+            shadowColorHex = try c.decodeIfPresent(String.self, forKey: .shadowColorHex) ?? ""
             autoFitMode = try c.decodeIfPresent(String.self, forKey: .autoFitMode) ?? ""
+            tracking = try c.decodeIfPresent(Double.self, forKey: .tracking)
         }
 
         static func weight(fromRaw raw: String, fallback: Font.Weight) -> Font.Weight {
@@ -932,7 +944,9 @@ final class PresentationManager {
         var padding: Double = 0            // inner horizontal inset (pt @1080p)
         var shadowEnabled: Bool = true
         var shadowRadius: Double = 3
+        var shadowColor: Color = Color.black.opacity(0.7)
         var autoFit: Bool = false          // shrink font until the text fits the box
+        var tracking: Double = 0           // letter spacing (pt @1080p)
 
         /// The render-ready text: every box runs its resolved transform.
         func display(_ text: String) -> String {
@@ -940,9 +954,11 @@ final class PresentationManager {
         }
 
         func font(at scaledSize: CGFloat) -> Font {
+            // .weight on the custom font too — otherwise Greutate is a no-op
+            // for every non-System font.
             (fontName.isEmpty || fontName == "System")
                 ? .system(size: scaledSize, weight: weight)
-                : .custom(fontName, size: scaledSize)
+                : .custom(fontName, size: scaledSize).weight(weight)
         }
 
         var frameAlignment: Alignment {
@@ -996,7 +1012,11 @@ final class PresentationManager {
         let inheritedWeight: Font.Weight = (defaultWeight == .regular)
             ? BoxTextStyle.weight(fromRaw: globalWeightRaw, fallback: .regular)
             : defaultWeight
+        let globalShadowColor = Color(hex: shadowColorHex) ?? Color.black.opacity(0.7)
         guard style.isCustomized else {
+            // A NOT-customized box inherits EVERYTHING global — including the
+            // vertical alignment (a stale seeded vAlignRaw used to stick here
+            // and made the global Vertical picker look broken).
             return ResolvedBoxStyle(
                 fontName: globalFontName,
                 fontSize: fontSize * sizeFactor,
@@ -1004,13 +1024,15 @@ final class PresentationManager {
                 color: textColor,
                 opacity: defaultOpacity * globalTextOpacity,
                 hAlign: textAlignment,
-                vAlignRaw: style.vAlignRaw.isEmpty ? globalVAlignRaw : style.vAlignRaw,
+                vAlignRaw: globalVAlignRaw,
                 lineSpacing: lineSpacing,
                 transformRaw: defaultTransform,
                 padding: padding,
                 shadowEnabled: shadowEnabled,
                 shadowRadius: shadowRadius,
-                autoFit: defaultAutoFit
+                shadowColor: globalShadowColor,
+                autoFit: defaultAutoFit,
+                tracking: letterTracking
             )
         }
         return ResolvedBoxStyle(
@@ -1026,7 +1048,9 @@ final class PresentationManager {
             padding: style.padding >= 0 ? style.padding : padding,
             shadowEnabled: style.shadowMode.isEmpty ? shadowEnabled : style.shadowMode == "on",
             shadowRadius: style.shadowRadius >= 0 ? style.shadowRadius : shadowRadius,
-            autoFit: style.autoFitMode.isEmpty ? defaultAutoFit : style.autoFitMode == "on"
+            shadowColor: style.shadowColorHex.isEmpty ? globalShadowColor : (Color(hex: style.shadowColorHex) ?? globalShadowColor),
+            autoFit: style.autoFitMode.isEmpty ? defaultAutoFit : style.autoFitMode == "on",
+            tracking: style.tracking ?? letterTracking
         )
     }
 
@@ -1559,6 +1583,8 @@ final class PresentationManager {
         var padding: Double = PresentationDefaults.padding
         var shadowEnabled: Bool = true
         var shadowRadius: Double = 3.0
+        var shadowColorHex: String = "000000B3"
+        var letterTracking: Double = 0
         var autoFitVerseFont: Bool = false
         var globalWeightRaw: String = "regular"
         var globalVAlignRaw: String = "center"
@@ -1585,6 +1611,8 @@ final class PresentationManager {
             padding = try c.decodeIfPresent(Double.self, forKey: .padding) ?? PresentationDefaults.padding
             shadowEnabled = try c.decodeIfPresent(Bool.self, forKey: .shadowEnabled) ?? true
             shadowRadius = try c.decodeIfPresent(Double.self, forKey: .shadowRadius) ?? 3.0
+            shadowColorHex = try c.decodeIfPresent(String.self, forKey: .shadowColorHex) ?? "000000B3"
+            letterTracking = try c.decodeIfPresent(Double.self, forKey: .letterTracking) ?? 0
             autoFitVerseFont = try c.decodeIfPresent(Bool.self, forKey: .autoFitVerseFont) ?? false
             globalWeightRaw = try c.decodeIfPresent(String.self, forKey: .globalWeightRaw) ?? "regular"
             globalVAlignRaw = try c.decodeIfPresent(String.self, forKey: .globalVAlignRaw) ?? "center"
@@ -1654,6 +1682,8 @@ final class PresentationManager {
         p.padding = padding
         p.shadowEnabled = shadowEnabled
         p.shadowRadius = shadowRadius
+        p.shadowColorHex = shadowColorHex
+        p.letterTracking = letterTracking
         p.autoFitVerseFont = autoFitVerseFont
         p.globalWeightRaw = globalWeightRaw
         p.globalVAlignRaw = globalVAlignRaw
@@ -1956,6 +1986,8 @@ final class PresentationManager {
         padding = p.padding
         shadowEnabled = p.shadowEnabled
         shadowRadius = p.shadowRadius
+        shadowColorHex = p.shadowColorHex
+        letterTracking = p.letterTracking
         autoFitVerseFont = p.autoFitVerseFont
         globalWeightRaw = p.globalWeightRaw
         globalVAlignRaw = p.globalVAlignRaw
@@ -2238,6 +2270,8 @@ final class PresentationManager {
         self.padding = d.object(forKey: "pm_padding") as? Double ?? PresentationDefaults.padding
         self.shadowEnabled = d.object(forKey: "pm_shadowEnabled") as? Bool ?? true
         self.shadowRadius = d.object(forKey: "pm_shadowRadius") as? Double ?? 3.0
+        self.shadowColorHex = d.string(forKey: "pm_shadowColorHex") ?? "000000B3"
+        self.letterTracking = d.object(forKey: "pm_letterTracking") as? Double ?? 0
         self.transitionDuration = d.object(forKey: "pm_transitionDuration") as? Double ?? PresentationDefaults.transitionDuration
         self.globalWeightRaw = d.string(forKey: "pm_globalWeightRaw") ?? "regular"
         self.globalVAlignRaw = d.string(forKey: "pm_globalVAlignRaw") ?? "center"
@@ -2402,12 +2436,22 @@ final class PresentationManager {
 
     func clearOutput() {
         contentChangeKind = "clear"
-        liveContent.clear()
-        isBlackScreen = false
-        isFrozen = false
+        // Resolve the exit duration BEFORE clearing (it needs the live profile).
+        let exitDuration = resolvedTransitionDuration(phase: "clear", in: outputProfileKey)
+        withAnimation(.easeInOut(duration: exitDuration)) {
+            liveContent.clear()
+            isBlackScreen = false
+            isFrozen = false
+        }
         videoService?.stop()
         if isSingleScreenMode {
-            hidePresentationWindow()
+            // Let the Ieșire transition play to transparency first — hiding the
+            // window immediately would cut the animation (and leave the old
+            // boxes uncommitted, so the next Show looked like an Intermediar).
+            DispatchQueue.main.asyncAfter(deadline: .now() + exitDuration + 0.15) { [weak self] in
+                guard let self, !self.liveContent.isLive else { return }
+                self.hidePresentationWindow()
+            }
         }
     }
 
@@ -2416,43 +2460,68 @@ final class PresentationManager {
         contentChangeKind = (liveContent.isLive && !isBlackScreen) ? "change" : "appear"
     }
 
+    /// Stages a content change so its transition actually renders: if the
+    /// output window was hidden (single-screen idle), show it and let it
+    /// commit one transparent frame FIRST — only then mount the content, so
+    /// Intrare animates from transparency instead of popping fully formed.
+    private func presentContent(_ apply: @escaping () -> Void) {
+        let window = presentationWindow
+        let wasHidden = !(window?.isVisible ?? true) // nil window (tests) = immediate
+        showPresentationWindow()
+
+        let animated = { [weak self] in
+            guard let self else { return }
+            registerContentChange()
+            let duration = resolvedTransitionDuration(phase: contentChangeKind, in: outputProfileKey)
+            withAnimation(.easeInOut(duration: duration)) {
+                apply()
+            }
+        }
+        if wasHidden {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.06) { animated() }
+        } else {
+            animated()
+        }
+    }
+
     func showBibleVerse(text: String, reference: String, translationName: String = "", slideIndex: Int = 0, slideCount: Int = 1) {
         guard !isFrozen else { return }
-        showPresentationWindow()
-        registerContentChange()
-        liveContent.setBibleVerse(text: text, reference: reference, translationName: translationName, slideIndex: slideIndex, slideCount: slideCount)
-        lastLiveProfileKey = "bible"
-        liveContent.isLive = true
-        isBlackScreen = false
+        presentContent { [self] in
+            liveContent.setBibleVerse(text: text, reference: reference, translationName: translationName, slideIndex: slideIndex, slideCount: slideCount)
+            lastLiveProfileKey = "bible"
+            liveContent.isLive = true
+            isBlackScreen = false
+        }
     }
 
     func showSongVerse(text: String, title: String, verseLabel: String, slideIndex: Int = 0, slideCount: Int = 1) {
         guard !isFrozen else { return }
-        showPresentationWindow()
-        registerContentChange()
-        liveContent.setSongVerse(text: text, title: title, verseLabel: verseLabel, slideIndex: slideIndex, slideCount: slideCount)
-        lastLiveProfileKey = "song"
-        liveContent.isLive = true
-        isBlackScreen = false
+        presentContent { [self] in
+            liveContent.setSongVerse(text: text, title: title, verseLabel: verseLabel, slideIndex: slideIndex, slideCount: slideCount)
+            lastLiveProfileKey = "song"
+            liveContent.isLive = true
+            isBlackScreen = false
+        }
     }
 
     func showCustomText(text: String, title: String, slideIndex: Int = 0, slideCount: Int = 1) {
         guard !isFrozen else { return }
-        showPresentationWindow()
-        registerContentChange()
-        liveContent.setCustomText(text: text, title: title, slideIndex: slideIndex, slideCount: slideCount)
-        lastLiveProfileKey = "text"
-        liveContent.isLive = true
-        isBlackScreen = false
+        presentContent { [self] in
+            liveContent.setCustomText(text: text, title: title, slideIndex: slideIndex, slideCount: slideCount)
+            lastLiveProfileKey = "text"
+            liveContent.isLive = true
+            isBlackScreen = false
+        }
     }
 
     /// Marks the output as showing full-screen video.
     func showVideo() {
         guard !isFrozen else { return }
-        showPresentationWindow()
-        liveContent.setVideo()
-        liveContent.isLive = true
-        isBlackScreen = false
+        presentContent { [self] in
+            liveContent.setVideo()
+            liveContent.isLive = true
+            isBlackScreen = false
+        }
     }
 
     /// Sets the global background from any supported media: image, GIF, or video.
@@ -2716,6 +2785,16 @@ final class PresentationManager {
         ("last", String(localized: "Ultimul", comment: "Slide scope")),
     ]
 
+    /// Songs additionally scope by section kind: only on the chorus (Refren /
+    /// Chorus / Cor labels) or only on the verses.
+    static func displayScopeOptions(for key: String) -> [(raw: String, label: String)] {
+        guard key == "song" else { return displayScopeOptions }
+        return displayScopeOptions + [
+            ("chorus", String(localized: "Refren", comment: "Slide scope")),
+            ("verses", String(localized: "Strofe", comment: "Slide scope")),
+        ]
+    }
+
     func displayScope(for section: TextBoxSection, in key: String? = nil) -> String {
         profile(key).displayOn[section.rawValue] ?? "all"
     }
@@ -2729,6 +2808,8 @@ final class PresentationManager {
         switch raw {
         case "first": return liveContent.isFirstSlide
         case "last": return liveContent.isLastSlide
+        case "chorus": return liveContent.isChorusSlide
+        case "verses": return !liveContent.isChorusSlide
         default: return true
         }
     }

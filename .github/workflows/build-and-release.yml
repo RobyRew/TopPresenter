@@ -80,13 +80,18 @@ jobs:
           # Get version info
           VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$APP_PATH/Contents/Info.plist" 2>/dev/null || echo "1.0")
           BUILD=$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$APP_PATH/Contents/Info.plist" 2>/dev/null || echo "1")
+
+          # Alpha counter is PER VERSION: bumping MARKETING_VERSION restarts at alpha.1
+          git fetch --tags --force --quiet
+          ALPHA_N=$(( $(git tag -l "v$VERSION-alpha.*" | wc -l | tr -d ' ') + 1 ))
+
           echo "VERSION=$VERSION" >> $GITHUB_ENV
           echo "BUILD=$BUILD" >> $GITHUB_ENV
-          echo "PRERELEASE_VERSION=$VERSION-alpha.${GITHUB_RUN_NUMBER}" >> $GITHUB_ENV
-          echo "PRERELEASE_TAG=v$VERSION-alpha.${GITHUB_RUN_NUMBER}" >> $GITHUB_ENV
+          echo "PRERELEASE_VERSION=$VERSION-alpha.${ALPHA_N}" >> $GITHUB_ENV
+          echo "PRERELEASE_TAG=v$VERSION-alpha.${ALPHA_N}" >> $GITHUB_ENV
           echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
-          echo "PRERELEASE_VERSION=$VERSION-alpha.${GITHUB_RUN_NUMBER}" >> $GITHUB_OUTPUT
-          echo "PRERELEASE_TAG=v$VERSION-alpha.${GITHUB_RUN_NUMBER}" >> $GITHUB_OUTPUT
+          echo "PRERELEASE_VERSION=$VERSION-alpha.${ALPHA_N}" >> $GITHUB_OUTPUT
+          echo "PRERELEASE_TAG=v$VERSION-alpha.${ALPHA_N}" >> $GITHUB_OUTPUT
 
           # Create ZIP
           cd "build/Build/Products/Release"
