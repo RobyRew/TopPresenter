@@ -90,6 +90,16 @@ struct MainControlView: View {
             }
         }
         .animation(.easeInOut(duration: 0.15), value: showQuickSearch)
+        // The module you're in decides which layout profile the right bar,
+        // preview Edit Mode and Editor de Teme operate on.
+        .onChange(of: appState.selectedSidebarItem, initial: true) {
+            switch appState.selectedSidebarItem {
+            case .bible: presentationManager.activeProfileKey = "bible"
+            case .songs: presentationManager.activeProfileKey = "song"
+            case .customSlides: presentationManager.activeProfileKey = "text"
+            default: break // Media/Schedule keep the last edited profile
+            }
+        }
         .onAppear {
             // Auto-open the presentation output window on app launch
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
@@ -346,10 +356,7 @@ struct MainControlView: View {
             if appState.selectedSidebarItem == .media {
                 Picker(
                     String(localized: "Filter", comment: "Toolbar picker"),
-                    selection: Binding(
-                        get: { UserDefaults.standard.string(forKey: "mediaTypeFilter") ?? "all" },
-                        set: { UserDefaults.standard.set($0, forKey: "mediaTypeFilter") }
-                    )
+                    selection: $mediaTypeFilter
                 ) {
                     Text(String(localized: "All", comment: "Filter option")).tag("all")
                     Text(String(localized: "Images", comment: "Filter option")).tag("image")
@@ -438,6 +445,20 @@ struct MainControlView: View {
 
         ToolbarItem(placement: .primaryAction) {
             Button {
+                presentationManager.toggleFreeze()
+            } label: {
+                Label(
+                    presentationManager.isFrozen
+                        ? String(localized: "Unfreeze", comment: "Toolbar button")
+                        : String(localized: "Freeze", comment: "Toolbar button"),
+                    systemImage: presentationManager.isFrozen ? "lock.fill" : "lock.open"
+                )
+            }
+            .help(String(localized: "Îngheață ieșirea — modifici liber fără să se vadă pe ecran", comment: "Toolbar tooltip"))
+        }
+
+        ToolbarItem(placement: .primaryAction) {
+            Button {
                 presentationManager.clearOutput()
             } label: {
                 Label(
@@ -479,6 +500,7 @@ struct MainControlView: View {
 
     // MARK: - Bible Toolbar View Helpers
 
+    @AppStorage("mediaTypeFilter") private var mediaTypeFilter: String = "all"
     @Query(sort: \BibleModule.name) private var modules: [BibleModule]
     @Query(sort: \SongCollection.name) private var songCollections: [SongCollection]
     @AppStorage("bibleViewMode") private var bibleViewMode: String = "list"

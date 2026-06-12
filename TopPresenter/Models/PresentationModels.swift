@@ -238,6 +238,15 @@ final class LiveContent {
     var translationName: String = ""
     var contentType: ContentType = .blank
     var isLive: Bool = false
+    /// Position of this slide within its set (verse within song, slide within
+    /// deck, item within schedule) — drives "show only on first/last slide".
+    var slideIndex: Int = 0
+    var slideCount: Int = 1
+
+    var isFirstSlide: Bool { slideIndex <= 0 }
+    var isLastSlide: Bool { slideIndex >= slideCount - 1 }
+    /// "2 / 7" — the "slideNumber" box source.
+    var slideNumberText: String { "\(min(slideIndex, slideCount - 1) + 1) / \(max(slideCount, 1))" }
 
     enum ContentType: String {
         case bible
@@ -254,30 +263,38 @@ final class LiveContent {
         translationName = ""
         contentType = .blank
         isLive = false
+        slideIndex = 0
+        slideCount = 1
     }
 
-    func setBibleVerse(text: String, reference: String, translationName: String = "") {
+    func setBibleVerse(text: String, reference: String, translationName: String = "", slideIndex: Int = 0, slideCount: Int = 1) {
         self.mainText = text
         self.reference = reference
         self.translationName = translationName
         self.subtitle = ""
         self.contentType = .bible
+        self.slideIndex = slideIndex
+        self.slideCount = max(slideCount, 1)
     }
 
-    func setSongVerse(text: String, title: String, verseLabel: String) {
+    func setSongVerse(text: String, title: String, verseLabel: String, slideIndex: Int = 0, slideCount: Int = 1) {
         self.mainText = text
         self.reference = title
         self.subtitle = verseLabel
         self.translationName = ""
         self.contentType = .song
+        self.slideIndex = slideIndex
+        self.slideCount = max(slideCount, 1)
     }
 
-    func setCustomText(text: String, title: String) {
+    func setCustomText(text: String, title: String, slideIndex: Int = 0, slideCount: Int = 1) {
         self.mainText = text
         self.reference = title
         self.subtitle = ""
         self.translationName = ""
         self.contentType = .text
+        self.slideIndex = slideIndex
+        self.slideCount = max(slideCount, 1)
     }
 
     func setVideo() {

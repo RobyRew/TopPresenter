@@ -28,12 +28,21 @@ enum TextBoxSection: String, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
-    var label: String {
-        switch self {
-        case .verseContent: return String(localized: "Conținut Verset", comment: "Text box name")
-        case .reference: return String(localized: "Referință / Titlu", comment: "Text box name")
-        case .translationName: return String(localized: "Traducere", comment: "Text box name — Bible translation name")
-        case .subtitle: return String(localized: "Subtitlu", comment: "Text box name — verse label / subtitle")
+    var label: String { label(for: "bible") }
+
+    /// PER-PRESENTER names — in Songs the main box holds lyrics, the
+    /// reference box holds the song title, the subtitle box the strofă label.
+    func label(for key: String) -> String {
+        switch (self, key) {
+        case (.verseContent, "song"): return String(localized: "Versuri", comment: "Text box name — song lyrics")
+        case (.verseContent, "text"): return String(localized: "Conținut Slide", comment: "Text box name — slide body")
+        case (.verseContent, _): return String(localized: "Conținut Verset", comment: "Text box name")
+        case (.reference, "song"): return String(localized: "Titlu Cântec", comment: "Text box name — song title")
+        case (.reference, "text"): return String(localized: "Titlu Slide", comment: "Text box name — slide title")
+        case (.reference, _): return String(localized: "Referință", comment: "Text box name — Bible reference")
+        case (.translationName, _): return String(localized: "Traducere", comment: "Text box name — Bible translation name")
+        case (.subtitle, "song"): return String(localized: "Etichetă Strofă", comment: "Text box name — Strofa 1 / Refren / Cor")
+        case (.subtitle, _): return String(localized: "Subtitlu", comment: "Text box name — verse label / subtitle")
         }
     }
 
@@ -217,12 +226,21 @@ func boxIdentity(fromToken token: String) -> BoxIdentity? {
 
 // MARK: - Box display helpers
 
-func boxColor(for identity: BoxIdentity) -> Color {
+func defaultBoxColor(for identity: BoxIdentity) -> Color {
     switch identity {
     case .section(let section): return section.boxColor
     case .custom: return .mint
     case .media: return .pink
     }
+}
+
+/// The box's accent color — the user's custom pick, else the kind's default.
+func boxColor(for identity: BoxIdentity, pm: PresentationManager) -> Color {
+    if let hex = pm.boxColorHex(forToken: boxToken(for: identity)),
+       let custom = Color(hex: hex) {
+        return custom
+    }
+    return defaultBoxColor(for: identity)
 }
 
 func boxIcon(for identity: BoxIdentity, pm: PresentationManager) -> String {
@@ -241,7 +259,7 @@ func boxIcon(for identity: BoxIdentity, pm: PresentationManager) -> String {
 func boxLabel(for identity: BoxIdentity, pm: PresentationManager) -> String {
     switch identity {
     case .section(let section):
-        return section.label
+        return section.label(for: pm.activeProfileKey)
     case .custom(let id):
         guard let box = pm.customTextBox(id: id) else {
             return String(localized: "Casetă text", comment: "Generic custom text box name")
@@ -258,6 +276,57 @@ func boxLabel(for identity: BoxIdentity, pm: PresentationManager) -> String {
         if !box.name.isEmpty { return box.name }
         if box.fileName.isEmpty { return String(localized: "Media", comment: "Generic media box name") }
         return box.fileName.count > 16 ? String(box.fileName.prefix(16)) + "…" : box.fileName
+    }
+}
+
+/// The little color square of a box row — CLICK it to recolor the box
+/// (editor chrome only: list swatch + canvas border). Hover shows a ring.
+struct BoxColorSwatch: View {
+    @Environment(PresentationManager.self) private var pm
+    let identity: BoxIdentity
+
+    @State private var showsPicker = false
+    @State private var hovering = false
+
+    var body: some View {
+        let token = boxToken(for: identity)
+
+        Button {
+            showsPicker = true
+        } label: {
+            RoundedRectangle(cornerRadius: 2)
+                .fill(boxColor(for: identity, pm: pm).opacity(0.85))
+                .frame(width: 10, height: 10)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 2)
+                        .strokeBorder(.white.opacity(hovering ? 0.9 : 0), lineWidth: 1)
+                )
+                .scaleEffect(hovering ? 1.25 : 1.0)
+                .animation(.easeOut(duration: 0.12), value: hovering)
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .pointerStyle(.link)
+        .help(String(localized: "Schimbă culoarea casetei (doar în editor)", comment: "Tooltip"))
+        .popover(isPresented: $showsPicker, arrowEdge: .bottom) {
+            VStack(spacing: 10) {
+                ColorPicker(
+                    String(localized: "Culoarea casetei", comment: "Color picker label"),
+                    selection: Binding(
+                        get: { boxColor(for: identity, pm: pm) },
+                        set: { pm.setBoxColorHex($0.toHex(), forToken: token) }
+                    ),
+                    supportsOpacity: false
+                )
+                .controlSize(.small)
+
+                Button(String(localized: "Culoarea implicită", comment: "Button")) {
+                    pm.setBoxColorHex(nil, forToken: token)
+                }
+                .controlSize(.small)
+            }
+            .padding(12)
+        }
     }
 }
 
@@ -303,7 +372,7 @@ func boxSourceDescription(for identity: BoxIdentity, pm: PresentationManager) ->
     switch identity {
     case .section(let section):
         let raw = pm.sourceRaw(for: section)
-        return raw == "auto" ? section.sourceDescription : PresentationManager.sourceOptionLabel(raw)
+        return raw == "auto" ? section.sourceDescription : PresentationManager.sourceOptionLabel(raw, for: pm.activeProfileKey)
     case .custom(let id):
         return pm.customTextBox(id: id)?.sourceLabel ?? ""
     case .media(let id):
@@ -326,8 +395,6 @@ struct TextBoxEditOverlay: View {
     @Environment(PresentationManager.self) private var pm
 
     let canvasSize: CGSize
-    /// Show the translation box (only meaningful for Bible content).
-    var showsBibleBoxes: Bool = true
     /// When false (preview card), hidden boxes are not drawn at all — no dashed
     /// border ghosts in the previewer. The editor keeps them visible for editing.
     var showsHiddenBoxes: Bool = true
@@ -338,11 +405,10 @@ struct TextBoxEditOverlay: View {
     /// feed back into the gesture when the box moves under the cursor (no jitter).
     static let canvasSpace = "textBoxEditCanvas"
 
+    /// The ACTIVE profile's boxes — already restricted to the sections relevant
+    /// to that presenter (Songs has no Bible translation box, etc.).
     private var identities: [BoxIdentity] {
         var result = pm.orderedBoxTokens().compactMap { boxIdentity(fromToken: $0) }
-        if !showsBibleBoxes {
-            result.removeAll { $0 == .section(.translationName) }
-        }
         if !showsHiddenBoxes {
             result = result.filter { pm.isBoxVisible($0) }
         }
@@ -398,7 +464,7 @@ private struct TextBoxHandle: View {
     var body: some View {
         let frame = pm.boxFrame(for: identity)
         let rect = frame.rect(in: canvasSize)
-        let color = boxColor(for: identity)
+        let color = boxColor(for: identity, pm: pm)
 
         ZStack {
             // Box body — faint fill + colored border; drag to move, click to select
@@ -524,6 +590,14 @@ private struct TextBoxHandle: View {
             }
         }
 
+        if case .section(let section) = identity {
+            Button(role: .destructive) {
+                pm.setSectionVisible(false, for: section)
+            } label: {
+                Label(String(localized: "Elimină", comment: "Context menu"), systemImage: "trash")
+            }
+        }
+
         // Z-order — available for EVERY box (sections, custom, media)
         Menu {
             Button(String(localized: "Adu în față", comment: "Z-order")) { pm.moveBoxTokenToEdge(boxToken(for: identity), front: true) }
@@ -597,7 +671,7 @@ private struct TextBoxHandle: View {
         let handleSize: CGFloat = 9
         RoundedRectangle(cornerRadius: 2)
             .fill(.white)
-            .overlay(RoundedRectangle(cornerRadius: 2).strokeBorder(boxColor(for: identity), lineWidth: 1.5))
+            .overlay(RoundedRectangle(cornerRadius: 2).strokeBorder(boxColor(for: identity, pm: pm), lineWidth: 1.5))
             .frame(width: handleSize, height: handleSize)
             .contentShape(Rectangle().inset(by: -5))
             .pointerStyle(.frameResize(position: corner.resizePosition))
@@ -922,8 +996,19 @@ private struct ThemeCard: View {
     let onRename: () -> Void
 
     @State private var thumbnail: NSImage?
+    /// Hover-preview trigger — fires after a short rest so scanning the
+    /// gallery doesn't thrash the live look.
+    @State private var hoverTask: Task<Void, Never>?
 
     private var payload: PresentationManager.ThemePayload { theme.payload }
+
+    /// The profile this card sketches: the theme's own format, else Bible.
+    private var sketchKey: String {
+        PresentationManager.profileKeys.contains(theme.formatRaw) ? theme.formatRaw : "bible"
+    }
+    private var sketch: PresentationManager.LayoutProfile {
+        payload.profiles[sketchKey] ?? .defaultProfile(for: sketchKey)
+    }
 
     var body: some View {
         VStack(spacing: 3) {
@@ -940,15 +1025,15 @@ private struct ThemeCard: View {
                 // Miniature layout sketch from the payload's frames
                 GeometryReader { geo in
                     ZStack(alignment: .topLeading) {
-                        ForEach(TextBoxSection.allCases) { section in
-                            if payload.visibility[section.rawValue] ?? true {
-                                let frame = payload.frames[section.rawValue] ?? PresentationManager.TextBoxFrame.defaultVerse
+                        ForEach(PresentationManager.relevantSections(for: sketchKey)) { section in
+                            if sketch.visibility[section.rawValue] ?? true {
+                                let frame = sketch.frames[section.rawValue] ?? PresentationManager.TextBoxFrame.defaultVerse
                                 let rect = frame.rect(in: geo.size)
                                 if section == .verseContent {
                                     Text("Aa")
                                         .font(.system(size: max(rect.height * 0.42, 7), weight: .semibold))
                                         .foregroundStyle(
-                                            (Color(hex: payload.styles[section.rawValue]?.colorHex ?? "") ?? (Color(hex: payload.textColorHex) ?? .white))
+                                            (Color(hex: sketch.styles[section.rawValue]?.colorHex ?? "") ?? (Color(hex: payload.textColorHex) ?? .white))
                                         )
                                         .frame(width: rect.width, height: rect.height)
                                         .position(x: rect.midX, y: rect.midY)
@@ -1004,7 +1089,26 @@ private struct ThemeCard: View {
         }
         .contentShape(Rectangle())
         .onTapGesture {
+            hoverTask?.cancel()
             pm.applyTheme(id: theme.id)
+        }
+        // Rest the cursor on a card → the preview shows that theme; move away
+        // → the real look comes back. Disabled while live (no projector flicker).
+        .onHover { hovering in
+            hoverTask?.cancel()
+            if hovering {
+                hoverTask = Task {
+                    try? await Task.sleep(for: .milliseconds(350))
+                    guard !Task.isCancelled else { return }
+                    pm.beginThemeHoverPreview(id: theme.id)
+                }
+            } else {
+                pm.endThemeHoverPreview()
+            }
+        }
+        .onDisappear {
+            hoverTask?.cancel()
+            pm.endThemeHoverPreview()
         }
         .help("\(theme.name) — \(PresentationManager.Theme.formatLabel(theme.formatRaw))")
         .task(id: payload.backgroundImageBookmark) {
@@ -1104,9 +1208,13 @@ struct LayoutEditorSheet: View {
     }()
     @State private var renameTarget: BoxIdentity?
     @State private var renameText = ""
+    /// Canvas demo of a transition effect: changing the tick re-inserts the
+    /// sample content with `transitionPreviewRaw` as its transition.
+    @State private var transitionPreviewTick = 0
+    @State private var transitionPreviewRaw: String?
 
     private enum EditorTab: String, CaseIterable, Identifiable {
-        case layout, text, background, output
+        case layout, text, background, presenter
 
         var id: String { rawValue }
 
@@ -1115,7 +1223,7 @@ struct LayoutEditorSheet: View {
             case .layout: return String(localized: "Layout", comment: "Editor tab")
             case .text: return String(localized: "Text", comment: "Editor tab")
             case .background: return String(localized: "Fundal", comment: "Editor tab")
-            case .output: return String(localized: "Ieșire", comment: "Editor tab")
+            case .presenter: return String(localized: "Tranziții", comment: "Editor tab")
             }
         }
     }
@@ -1128,8 +1236,6 @@ struct LayoutEditorSheet: View {
         VStack(spacing: 0) {
             header
             Divider()
-            quickActionsBar
-            Divider()
 
             HSplitView {
                 canvas
@@ -1141,6 +1247,20 @@ struct LayoutEditorSheet: View {
             }
         }
         .frame(minWidth: 1030, idealWidth: 1190, minHeight: 640, idealHeight: 720)
+        .onAppear {
+            // Open on the profile of the module the editor was launched from.
+            switch appState.selectedSidebarItem {
+            case .bible: pm.activeProfileKey = "bible"
+            case .songs: pm.activeProfileKey = "song"
+            case .customSlides: pm.activeProfileKey = "text"
+            default: break
+            }
+        }
+        .onChange(of: pm.activeProfileKey) {
+            // Box ids are per-profile — the old selection means nothing here.
+            selection = .section(.verseContent)
+            quickActionMemory = [:]
+        }
         .alert(
             String(localized: "Redenumește caseta", comment: "Rename alert title"),
             isPresented: Binding(
@@ -1164,15 +1284,44 @@ struct LayoutEditorSheet: View {
     // MARK: Header
 
     private var header: some View {
-        HStack {
+        @Bindable var pmBinding = pm
+
+        return HStack {
             Label(
                 String(localized: "Editor de Teme", comment: "Theme editor title"),
                 systemImage: "paintbrush.pointed.fill"
             )
             .font(.headline)
 
+            // PER-PRESENTER profiles: the editor edits exactly one at a time.
+            Picker("", selection: $pmBinding.activeProfileKey) {
+                ForEach(PresentationManager.profileKeys, id: \.self) { key in
+                    Text(PresentationManager.contentKeyLabel(key)).tag(key)
+                }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .fixedSize()
+            .padding(.leading, 8)
+            .help(String(localized: "Fiecare prezentator (Biblie, Cântece, Slide-uri) are propriul layout: casete, fundal și tranziții", comment: "Tooltip"))
+
+            Menu {
+                ForEach(PresentationManager.profileKeys.filter { $0 != pm.activeProfileKey }, id: \.self) { source in
+                    Button {
+                        pm.copyProfile(from: source, to: pm.activeProfileKey)
+                    } label: {
+                        Text(PresentationManager.contentKeyLabel(source))
+                    }
+                }
+            } label: {
+                Image(systemName: "doc.on.doc")
+            }
+            .menuStyle(.borderlessButton)
+            .fixedSize()
+            .help(String(localized: "Copiază layout-ul altui prezentator în cel curent", comment: "Tooltip"))
+
             ThemeMenuControl()
-                .padding(.leading, 8)
+                .padding(.leading, 4)
 
             Spacer()
 
@@ -1215,113 +1364,6 @@ struct LayoutEditorSheet: View {
         }
     }
 
-    private var quickActionsBar: some View {
-        HStack(spacing: 10) {
-            Button {
-                let box = pm.addCustomTextBox()
-                selection = .custom(box.id)
-                activeTab = .layout
-            } label: {
-                Label(
-                    String(localized: "Casetă Text", comment: "Add text box button"),
-                    systemImage: "plus.rectangle"
-                )
-            }
-            .buttonStyle(.bordered)
-            .help(String(localized: "Adaugă o casetă de text nouă (text static sau sursă live)", comment: "Tooltip"))
-
-            Button {
-                addMediaFromPanel()
-            } label: {
-                Label(
-                    String(localized: "Casetă Media", comment: "Add media box button"),
-                    systemImage: "photo.badge.plus"
-                )
-            }
-            .buttonStyle(.bordered)
-            .help(String(localized: "Adaugă o imagine, un GIF sau un video (logo, decor…)", comment: "Tooltip"))
-
-            Divider().frame(height: 16)
-
-            // Quick-align toggles for the selected box — press again to undo
-            Group {
-                Button {
-                    toggleQuickAction("centerH") { pm.centerBoxHorizontally($0) }
-                } label: {
-                    Image(systemName: "align.horizontal.center")
-                }
-                .help(String(localized: "Centrează orizontal (apasă din nou pentru a reveni)", comment: "Quick align tooltip"))
-
-                Button {
-                    toggleQuickAction("centerV") { pm.centerBoxVertically($0) }
-                } label: {
-                    Image(systemName: "align.vertical.center")
-                }
-                .help(String(localized: "Centrează vertical (apasă din nou pentru a reveni)", comment: "Quick align tooltip"))
-
-                Button {
-                    toggleQuickAction("centerBoth") {
-                        pm.centerBoxHorizontally($0)
-                        pm.centerBoxVertically($0)
-                    }
-                } label: {
-                    Image(systemName: "plus.viewfinder")
-                }
-                .help(String(localized: "Centrează pe ecran (apasă din nou pentru a reveni)", comment: "Quick align tooltip"))
-
-                Button {
-                    toggleQuickAction("fullW") { pm.makeBoxFullWidth($0) }
-                } label: {
-                    Image(systemName: "arrow.left.and.right")
-                }
-                .help(String(localized: "Lățime completă (apasă din nou pentru a reveni)", comment: "Quick align tooltip"))
-
-                Button {
-                    toggleQuickAction("fullH") { pm.makeBoxFullHeight($0) }
-                } label: {
-                    Image(systemName: "arrow.up.and.down")
-                }
-                .help(String(localized: "Înălțime completă (apasă din nou pentru a reveni)", comment: "Quick align tooltip"))
-
-                Button {
-                    if let selection {
-                        pm.resetBox(for: selection)
-                        quickActionMemory[selection] = nil
-                    }
-                } label: {
-                    Image(systemName: "arrow.counterclockwise")
-                }
-                .help(String(localized: "Resetează caseta la poziția implicită", comment: "Quick align tooltip"))
-            }
-            .buttonStyle(.bordered)
-            .disabled(selection == nil)
-
-            Spacer()
-
-            if let selection {
-                HStack(spacing: 5) {
-                    RoundedRectangle(cornerRadius: 2)
-                        .fill(boxColor(for: selection).opacity(0.8))
-                        .frame(width: 10, height: 10)
-                    Text(boxLabel(for: selection, pm: pm))
-                        .font(.caption.bold())
-                }
-                .foregroundStyle(.secondary)
-                .help(boxSourceDescription(for: selection, pm: pm))
-            }
-
-            Button(String(localized: "Resetează Layout", comment: "Reset layout button"), role: .destructive) {
-                pm.resetAllBoxFrames()
-                quickActionMemory = [:]
-            }
-            .buttonStyle(.bordered)
-            .help(String(localized: "Readuce toate casetele la pozițiile implicite", comment: "Tooltip"))
-        }
-        .controlSize(.small)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-    }
-
     private func addMediaFromPanel() {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [.image, .movie]
@@ -1348,7 +1390,7 @@ struct LayoutEditorSheet: View {
                     ZStack(alignment: .topLeading) {
                         // Background: black stand-in + the configured background
                         Rectangle().fill(.black)
-                        let bg = pm.activeBackground(for: pm.liveContent.contentType, frozen: false)
+                        let bg = pm.activeBackground(forKey: pm.activeProfileKey, frozen: false)
                         if bg.showColor {
                             bg.color
                         }
@@ -1358,11 +1400,14 @@ struct LayoutEditorSheet: View {
                                 .clipped()
                         }
 
-                        // Content + media rendered in the unified stacking order
+                        // Content + media rendered in the unified stacking order.
+                        // The id/transition pair powers the Tranziții demo.
                         sampleContent(size: size)
+                            .id(transitionPreviewTick)
+                            .transition(PresentationManager.transitionPart(transitionPreviewRaw ?? "fade"))
 
                         // Interactive box overlay — always on in the editor
-                        TextBoxEditOverlay(canvasSize: size, showsBibleBoxes: true, showsHiddenBoxes: false, selection: $selection)
+                        TextBoxEditOverlay(canvasSize: size, showsHiddenBoxes: false, selection: $selection)
                     }
                     .frame(width: size.width, height: size.height)
                     .clipShape(RoundedRectangle(cornerRadius: 8))
@@ -1401,36 +1446,60 @@ struct LayoutEditorSheet: View {
 
     // MARK: Sample content (mirrors the output rendering, scaled)
 
+    /// Live content only stands in as sample when it matches the edited profile —
+    /// editing the Songs layout while a Bible verse is live shows song samples.
+    private var liveMatchesProfile: Bool {
+        pm.liveContent.isLive
+            && PresentationManager.contentKey(for: pm.liveContent.contentType) == pm.activeProfileKey
+    }
+
     private var sampleVerse: String {
-        if pm.liveContent.isLive, !pm.liveContent.mainText.isEmpty {
+        if liveMatchesProfile, !pm.liveContent.mainText.isEmpty {
             return pm.liveContent.mainText
         }
-        if !libraryManager.selectedVerses.isEmpty {
-            return libraryManager.selectedVersesText
+        switch pm.activeProfileKey {
+        case "song":
+            return String(localized: "Ce mare ești Tu, Doamne!\nCât de minunate sunt lucrările Tale,\nÎntreg pământul cântă slava Ta.", comment: "Layout editor sample song lyrics")
+        case "text":
+            return String(localized: "Bine ați venit!\nVă așteptăm duminică la ora 10:00.", comment: "Layout editor sample slide text")
+        default:
+            if !libraryManager.selectedVerses.isEmpty {
+                return libraryManager.selectedVersesText
+            }
+            return String(localized: "Fiindcă atât de mult a iubit Dumnezeu lumea, că a dat pe singurul Lui Fiu, pentru ca oricine crede în El să nu piară, ci să aibă viața veșnică.", comment: "Layout editor sample verse")
         }
-        return String(localized: "Fiindcă atât de mult a iubit Dumnezeu lumea, că a dat pe singurul Lui Fiu, pentru ca oricine crede în El să nu piară, ci să aibă viața veșnică.", comment: "Layout editor sample verse")
     }
 
     private var sampleReference: String {
-        if pm.liveContent.isLive, !pm.liveContent.reference.isEmpty {
+        if liveMatchesProfile, !pm.liveContent.reference.isEmpty {
             return pm.liveContent.reference
         }
-        if !libraryManager.selectedVerses.isEmpty {
-            return libraryManager.selectedVersesReference
+        switch pm.activeProfileKey {
+        case "song":
+            return String(localized: "Ce mare ești Tu", comment: "Layout editor sample song title")
+        case "text":
+            return String(localized: "Anunțuri", comment: "Layout editor sample slide title")
+        default:
+            if !libraryManager.selectedVerses.isEmpty {
+                return libraryManager.selectedVersesReference
+            }
+            return String(localized: "Ioan 3:16", comment: "Layout editor sample reference")
         }
-        return String(localized: "Ioan 3:16", comment: "Layout editor sample reference")
     }
 
     private var sampleTranslation: String {
-        pm.liveContent.translationName.isEmpty
-            ? (libraryManager.selectedBibleModule?.abbreviation ?? "VDC")
-            : pm.liveContent.translationName
+        guard pm.activeProfileKey == "bible" else { return "" }
+        if liveMatchesProfile, !pm.liveContent.translationName.isEmpty {
+            return pm.liveContent.translationName
+        }
+        return libraryManager.selectedBibleModule?.abbreviation ?? "VDC"
     }
 
     private var sampleSubtitle: String {
-        pm.liveContent.subtitle.isEmpty
-            ? String(localized: "Strofa 1", comment: "Layout editor sample subtitle")
-            : pm.liveContent.subtitle
+        if liveMatchesProfile, !pm.liveContent.subtitle.isEmpty {
+            return pm.liveContent.subtitle
+        }
+        return String(localized: "Strofa 1", comment: "Layout editor sample subtitle")
     }
 
     @ViewBuilder
@@ -1438,7 +1507,11 @@ struct LayoutEditorSheet: View {
         let targetScale = pm.targetFontScale
         let canvasScale = size.width / max(metrics.points.width, 1)
         let fontScale = targetScale * canvasScale
-        let scaledPadding = pm.padding * fontScale
+
+        // Transforms (MAJUSCULE etc.) are part of each box's resolved style —
+        // they show on the canvas the moment they're toggled in the Text tab.
+        let fields = (main: sampleVerse, reference: sampleReference,
+                      translation: sampleTranslation, subtitle: sampleSubtitle)
 
         ZStack(alignment: .topLeading) {
             // Unified stacking order — exactly what the output renders
@@ -1448,35 +1521,37 @@ struct LayoutEditorSheet: View {
                     if pm.isSectionVisible(section) {
                         let text = pm.sectionText(
                             section,
-                            main: sampleVerse, reference: sampleReference,
-                            translation: sampleTranslation, subtitle: sampleSubtitle
+                            main: fields.main, reference: fields.reference,
+                            translation: fields.translation, subtitle: fields.subtitle,
+                            slideNumber: "1 / 4"
                         )
                         if !text.isEmpty {
                             let rect = pm.boxFrame(for: section).rect(in: size)
                             let style = pm.resolvedStyle(for: section)
-                            let fitted: CGFloat? = (section == .verseContent)
+                            let fitted: CGFloat? = style.autoFit
                                 ? pm.fittedVerseFontSize(
                                     text: text,
                                     boxSize: pm.boxFrame(for: section).rect(in: metrics.points).size,
                                     maxSize: CGFloat(style.fontSize) * targetScale,
-                                    padding: pm.padding * targetScale,
+                                    padding: CGFloat(style.padding) * targetScale,
                                     fontName: style.fontName,
                                     lineSpacing: style.lineSpacing
                                   ) * canvasScale
                                 : nil
-                            sampleBoxText(text, style: style, rect: rect, fontScale: fontScale, scaledPadding: scaledPadding, fittedSize: fitted)
+                            sampleBoxText(text, style: style, rect: rect, fontScale: fontScale, fittedSize: fitted)
                         }
                     }
                 case .custom(let id):
                     if let box = pm.customTextBox(id: id), box.isVisible {
                         let resolved = box.resolvedText(
-                            main: sampleVerse, reference: sampleReference,
-                            translation: sampleTranslation, subtitle: sampleSubtitle
+                            main: fields.main, reference: fields.reference,
+                            translation: fields.translation, subtitle: fields.subtitle,
+                            slideNumber: "1 / 4"
                         )
                         let text = resolved.isEmpty ? box.sourceLabel : resolved
                         let rect = box.frame.rect(in: size)
                         let style = pm.resolvedCustomStyle(box)
-                        sampleBoxText(text, style: style, rect: rect, fontScale: fontScale, scaledPadding: scaledPadding, fittedSize: nil)
+                        sampleBoxText(text, style: style, rect: rect, fontScale: fontScale, fittedSize: nil)
                     }
                 case .media(let id):
                     // Editor shows every visible media box, ignoring content filters
@@ -1495,17 +1570,17 @@ struct LayoutEditorSheet: View {
     private func sampleBoxText(
         _ text: String,
         style: PresentationManager.ResolvedBoxStyle,
-        rect: CGRect, fontScale: CGFloat, scaledPadding: CGFloat,
+        rect: CGRect, fontScale: CGFloat,
         fittedSize: CGFloat?
     ) -> some View {
         let size = fittedSize ?? CGFloat(style.fontSize) * fontScale
-        Text(text)
+        Text(style.display(text))
             .font(style.font(at: size))
             .foregroundStyle(style.color.opacity(style.opacity))
             .multilineTextAlignment(style.hAlign)
             .lineSpacing(style.lineSpacing * size * 0.1)
             .minimumScaleFactor(fittedSize == nil ? 0.2 : 1.0)
-            .padding(.horizontal, scaledPadding)
+            .padding(.horizontal, CGFloat(style.padding) * fontScale)
             .frame(width: rect.width, height: rect.height, alignment: style.frameAlignment)
             .position(x: rect.midX, y: rect.midY)
             .allowsHitTesting(false)
@@ -1515,6 +1590,13 @@ struct LayoutEditorSheet: View {
 
     private var inspector: some View {
         VStack(spacing: 0) {
+            // Casete are THE working set — always visible, above the tabs.
+            caseteGroup
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
+
+            Divider()
+
             Picker("", selection: $activeTab) {
                 ForEach(EditorTab.allCases) { tab in
                     Text(tab.title).tag(tab)
@@ -1534,10 +1616,88 @@ struct LayoutEditorSheet: View {
                     textTab
                 case .background:
                     backgroundTab
-                case .output:
-                    outputTab
+                case .presenter:
+                    presenterTab
                 }
             }
+        }
+    }
+
+    // MARK: Casete Group (pinned above the inspector tabs)
+
+    @ViewBuilder
+    private var caseteGroup: some View {
+        let tokens = pm.orderedBoxTokens()
+        // The list shows ~3.5 rows and scrolls for the rest — no dead space
+        // when there are few boxes.
+        let rowHeight: CGFloat = 27
+        let listHeight = min(CGFloat(tokens.count), 3.5) * rowHeight
+
+        GroupBox {
+            VStack(spacing: 2) {
+                // Unified stacking order — first row = on top of the screen.
+                // Drag any row to reorder; right-click for layer actions.
+                ScrollView {
+                    VStack(spacing: 2) {
+                        ForEach(tokens.reversed(), id: \.self) { token in
+                            if let identity = boxIdentity(fromToken: token) {
+                                boxListRow(identity: identity)
+                                    .frame(height: rowHeight - 2)
+                            }
+                        }
+                    }
+                }
+                .frame(height: listHeight)
+
+                HStack(spacing: 6) {
+                    Button {
+                        let box = pm.addCustomTextBox()
+                        selection = .custom(box.id)
+                        activeTab = .layout
+                    } label: {
+                        Label(String(localized: "Casetă Text", comment: "Add box button"), systemImage: "plus.rectangle")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .help(String(localized: "Adaugă o casetă de text nouă", comment: "Tooltip"))
+
+                    Button {
+                        addMediaFromPanel()
+                    } label: {
+                        Label(String(localized: "Casetă Media", comment: "Add media button"), systemImage: "photo.badge.plus")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .help(String(localized: "Adaugă imagine, GIF sau video", comment: "Tooltip"))
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .padding(.top, 6)
+            }
+        } label: {
+            HStack {
+                Label(String(localized: "Casete", comment: "Inspector group"), systemImage: "square.3.layers.3d")
+                    .font(.caption.bold())
+                Spacer()
+                Button {
+                    pm.undoLayout()
+                } label: {
+                    Image(systemName: "arrow.uturn.backward")
+                        .font(.caption)
+                }
+                .buttonStyle(.borderless)
+                .disabled(!pm.canUndoLayout)
+                .help(String(localized: "Anulează ultima modificare a casetelor", comment: "Tooltip"))
+
+                Button {
+                    pm.redoLayout()
+                } label: {
+                    Image(systemName: "arrow.uturn.forward")
+                        .font(.caption)
+                }
+                .buttonStyle(.borderless)
+                .disabled(!pm.canRedoLayout)
+                .help(String(localized: "Refă modificarea anulată", comment: "Tooltip"))
+            }
+            .frame(maxWidth: .infinity)
         }
     }
 
@@ -1546,66 +1706,6 @@ struct LayoutEditorSheet: View {
     @ViewBuilder
     private var layoutTab: some View {
         VStack(alignment: .leading, spacing: 10) {
-            GroupBox {
-                VStack(spacing: 2) {
-                    // Unified stacking order — first row = on top of the screen.
-                    // Drag any row to reorder; right-click for layer actions.
-                    ForEach(pm.orderedBoxTokens().reversed(), id: \.self) { token in
-                        if let identity = boxIdentity(fromToken: token) {
-                            boxListRow(identity: identity)
-                        }
-                    }
-
-                    HStack(spacing: 6) {
-                        Button {
-                            let box = pm.addCustomTextBox()
-                            selection = .custom(box.id)
-                        } label: {
-                            Label(String(localized: "Casetă Text", comment: "Add box button"), systemImage: "plus.rectangle")
-                                .frame(maxWidth: .infinity)
-                        }
-                        .help(String(localized: "Adaugă o casetă de text nouă", comment: "Tooltip"))
-
-                        Button {
-                            addMediaFromPanel()
-                        } label: {
-                            Label(String(localized: "Casetă Media", comment: "Add media button"), systemImage: "photo.badge.plus")
-                                .frame(maxWidth: .infinity)
-                        }
-                        .help(String(localized: "Adaugă imagine, GIF sau video", comment: "Tooltip"))
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-                    .padding(.top, 6)
-                }
-            } label: {
-                HStack {
-                    Label(String(localized: "Casete", comment: "Inspector group"), systemImage: "square.3.layers.3d")
-                        .font(.caption.bold())
-                    Spacer()
-                    Button {
-                        pm.undoLayout()
-                    } label: {
-                        Image(systemName: "arrow.uturn.backward")
-                            .font(.caption)
-                    }
-                    .buttonStyle(.borderless)
-                    .disabled(!pm.canUndoLayout)
-                    .help(String(localized: "Anulează ultima modificare a casetelor", comment: "Tooltip"))
-
-                    Button {
-                        pm.redoLayout()
-                    } label: {
-                        Image(systemName: "arrow.uturn.forward")
-                            .font(.caption)
-                    }
-                    .buttonStyle(.borderless)
-                    .disabled(!pm.canRedoLayout)
-                    .help(String(localized: "Refă modificarea anulată", comment: "Tooltip"))
-                }
-                .frame(maxWidth: .infinity)
-            }
-
             if let selection {
                 selectedBoxDetail(for: selection)
             } else {
@@ -1613,6 +1713,17 @@ struct LayoutEditorSheet: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+
+            Spacer(minLength: 4)
+
+            Button(String(localized: "Resetează Layout", comment: "Reset layout button"), role: .destructive) {
+                pm.resetAllBoxFrames()
+                quickActionMemory = [:]
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .frame(maxWidth: .infinity)
+            .help(String(localized: "Readuce toate casetele la pozițiile implicite", comment: "Tooltip"))
         }
         .padding(12)
     }
@@ -1629,23 +1740,13 @@ struct LayoutEditorSheet: View {
     private func boxListRow(identity: BoxIdentity) -> some View {
         let isSelected = selection == identity
         let isVisible = pm.isBoxVisible(identity)
-        let canDelete: Bool = {
-            if case .section(let section) = identity {
-                // Translation & subtitle are optional decorations — the side
-                // button "removes" them (hides; built-ins can't be deleted)
-                return section == .translationName || section == .subtitle
-            }
-            return true
-        }()
 
         let row = HStack(spacing: 6) {
             Image(systemName: "line.3.horizontal")
                 .font(.system(size: 8))
                 .foregroundStyle(.tertiary)
                 .help(String(localized: "Trage pentru a reordona (primul = deasupra pe ecran)", comment: "Tooltip"))
-            RoundedRectangle(cornerRadius: 2)
-                .fill(boxColor(for: identity).opacity(0.8))
-                .frame(width: 10, height: 10)
+            BoxColorSwatch(identity: identity)
             Text(boxLabel(for: identity, pm: pm))
                 .font(.caption)
                 .lineLimit(1)
@@ -1660,21 +1761,19 @@ struct LayoutEditorSheet: View {
             .buttonStyle(.borderless)
             .help(String(localized: "Afișează / ascunde caseta", comment: "Tooltip"))
 
-            if canDelete {
-                Button(role: .destructive) {
-                    removeOrHide(identity)
-                } label: {
-                    Image(systemName: "trash")
-                        .font(.caption2)
-                }
-                .buttonStyle(.borderless)
-                .help({
-                    if case .section = identity {
-                        return String(localized: "Elimină caseta (o poți reactiva cu ochiul)", comment: "Tooltip")
-                    }
-                    return String(localized: "Șterge caseta", comment: "Tooltip")
-                }())
+            Button(role: .destructive) {
+                removeOrHide(identity)
+            } label: {
+                Image(systemName: "trash")
+                    .font(.caption2)
             }
+            .buttonStyle(.borderless)
+            .help({
+                if case .section = identity {
+                    return String(localized: "Elimină caseta (o poți reactiva cu ochiul)", comment: "Tooltip")
+                }
+                return String(localized: "Șterge caseta", comment: "Tooltip")
+            }())
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 5)
@@ -1762,19 +1861,16 @@ struct LayoutEditorSheet: View {
         Button(String(localized: "Mai în spate", comment: "Z-order")) { pm.moveBoxToken(boxToken(for: identity), offset: -1) }
         Button(String(localized: "Trimite în spate", comment: "Z-order")) { pm.moveBoxTokenToEdge(boxToken(for: identity), front: false) }
 
-        if case .custom = identity {
-            Divider()
-            Button(role: .destructive) {
-                removeOrHide(identity)
-            } label: {
-                Label(String(localized: "Șterge", comment: "Context menu"), systemImage: "trash")
-            }
-        }
-        if case .media = identity {
-            Divider()
-            Button(role: .destructive) {
-                removeOrHide(identity)
-            } label: {
+        Divider()
+
+        // EVERY box is removable — built-ins hide (the eye brings them back),
+        // custom & media are deleted.
+        Button(role: .destructive) {
+            removeOrHide(identity)
+        } label: {
+            if case .section = identity {
+                Label(String(localized: "Elimină", comment: "Context menu"), systemImage: "trash")
+            } else {
                 Label(String(localized: "Șterge", comment: "Context menu"), systemImage: "trash")
             }
         }
@@ -1788,6 +1884,61 @@ struct LayoutEditorSheet: View {
         GroupBox {
             VStack(alignment: .leading, spacing: 8) {
                 BoxFrameFields(identity: identity)
+
+                Divider()
+
+                // Quick aligns — toggles: pressing again restores the frame
+                HStack(spacing: 6) {
+                    Button {
+                        toggleQuickAction("centerH") { pm.centerBoxHorizontally($0) }
+                    } label: {
+                        Image(systemName: "align.horizontal.center")
+                    }
+                    .help(String(localized: "Centrează orizontal (apasă din nou pentru a reveni)", comment: "Quick align tooltip"))
+
+                    Button {
+                        toggleQuickAction("centerV") { pm.centerBoxVertically($0) }
+                    } label: {
+                        Image(systemName: "align.vertical.center")
+                    }
+                    .help(String(localized: "Centrează vertical (apasă din nou pentru a reveni)", comment: "Quick align tooltip"))
+
+                    Button {
+                        toggleQuickAction("centerBoth") {
+                            pm.centerBoxHorizontally($0)
+                            pm.centerBoxVertically($0)
+                        }
+                    } label: {
+                        Image(systemName: "plus.viewfinder")
+                    }
+                    .help(String(localized: "Centrează pe ecran (apasă din nou pentru a reveni)", comment: "Quick align tooltip"))
+
+                    Button {
+                        toggleQuickAction("fullW") { pm.makeBoxFullWidth($0) }
+                    } label: {
+                        Image(systemName: "arrow.left.and.right")
+                    }
+                    .help(String(localized: "Lățime completă (apasă din nou pentru a reveni)", comment: "Quick align tooltip"))
+
+                    Button {
+                        toggleQuickAction("fullH") { pm.makeBoxFullHeight($0) }
+                    } label: {
+                        Image(systemName: "arrow.up.and.down")
+                    }
+                    .help(String(localized: "Înălțime completă (apasă din nou pentru a reveni)", comment: "Quick align tooltip"))
+
+                    Spacer()
+
+                    Button {
+                        pm.resetBox(for: identity)
+                        quickActionMemory[identity] = nil
+                    } label: {
+                        Image(systemName: "arrow.counterclockwise")
+                    }
+                    .help(String(localized: "Resetează caseta la poziția implicită", comment: "Quick align tooltip"))
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
             }
         } label: {
             Label(String(localized: "Poziție și Dimensiune", comment: "Inspector group"), systemImage: "arrow.up.left.and.arrow.down.right")
@@ -1797,7 +1948,32 @@ struct LayoutEditorSheet: View {
         switch identity {
         case .section(let section):
             sectionContentGroup(section)
+            Text(String(localized: "Stilul textului (font, mărime, culoare…) se editează în tab-ul Text.", comment: "Inspector hint"))
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+        case .custom(let id):
+            if pm.customTextBox(id: id) != nil {
+                customContentGroup(pm.customTextBox(id: id)!)
+                Text(String(localized: "Stilul textului (font, mărime, culoare…) se editează în tab-ul Text.", comment: "Inspector hint"))
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            }
+        case .media(let id):
+            if let box = pm.mediaBox(id: id) {
+                mediaFileGroup(box)
+                mediaAspectGroup(box)
+                mediaBehaviorGroup(box)
+            }
+        }
+    }
+
+    /// The selected box's per-box text style — hosted in the TEXT tab.
+    @ViewBuilder
+    private func selectedBoxStyleGroup(_ identity: BoxIdentity) -> some View {
+        switch identity {
+        case .section(let section):
             textStyleGroup(
+                title: boxLabel(for: identity, pm: pm),
                 style: Binding(
                     get: { pm.boxStyle(for: section) },
                     set: { pm.setBoxStyle($0, for: section) }
@@ -1806,8 +1982,8 @@ struct LayoutEditorSheet: View {
             )
         case .custom(let id):
             if let box = pm.customTextBox(id: id) {
-                customContentGroup(box)
                 textStyleGroup(
+                    title: boxLabel(for: identity, pm: pm),
                     style: Binding(
                         get: { (pm.customTextBox(id: id) ?? box).style },
                         set: { newStyle in
@@ -1827,12 +2003,10 @@ struct LayoutEditorSheet: View {
                     }
                 )
             }
-        case .media(let id):
-            if let box = pm.mediaBox(id: id) {
-                mediaFileGroup(box)
-                mediaAspectGroup(box)
-                mediaBehaviorGroup(box)
-            }
+        case .media:
+            Text(String(localized: "Casetele media nu au setări de text.", comment: "Inspector hint"))
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
         }
     }
 
@@ -1849,19 +2023,31 @@ struct LayoutEditorSheet: View {
                     )) {
                         Text(String(localized: "Implicit (auto)", comment: "Box source option")).tag("auto")
                         Divider()
-                        Text(String(localized: "Text verset (live)", comment: "Box source option")).tag("mainText")
-                        Text(String(localized: "Referință (live)", comment: "Box source option")).tag("reference")
-                        Text(String(localized: "Traducere (live)", comment: "Box source option")).tag("translation")
-                        Text(String(localized: "Subtitlu (live)", comment: "Box source option")).tag("subtitle")
-                        Divider()
-                        Text(String(localized: "Text static", comment: "Box source option")).tag("static")
-                        Text(String(localized: "Data curentă", comment: "Box source option")).tag("date")
-                        Text(String(localized: "Ora curentă", comment: "Box source option")).tag("time")
+                        // Source choices + labels follow the EDITED presenter
+                        ForEach(PresentationManager.sourceOptions(for: pm.activeProfileKey), id: \.raw) { option in
+                            Text(option.label).tag(option.raw)
+                        }
                     }
                     .labelsHidden()
                     .controlSize(.small)
                 }
                 .help(String(localized: "De unde vine conținutul casetei — Implicit = câmpul ei natural", comment: "Tooltip"))
+
+                labeledRow(String(localized: "Afișare:", comment: "Setting label")) {
+                    Picker("", selection: Binding(
+                        get: { pm.displayScope(for: section) },
+                        set: { pm.setDisplayScope($0, for: section) }
+                    )) {
+                        ForEach(PresentationManager.displayScopeOptions, id: \.raw) { option in
+                            Text(option.label).tag(option.raw)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .controlSize(.small)
+                }
+                .help(String(localized: "Pe ce slide-uri apare caseta — ex. titlul cântecului doar pe primul, „Amin.” doar pe ultimul", comment: "Tooltip"))
+
 
                 if pm.sourceRaw(for: section) == "static" {
                     TextField(
@@ -1926,18 +2112,34 @@ struct LayoutEditorSheet: View {
                     )) {
                         Text(String(localized: "Text static", comment: "Box source option")).tag("static")
                         Divider()
-                        Text(String(localized: "Text verset (live)", comment: "Box source option")).tag("mainText")
-                        Text(String(localized: "Referință (live)", comment: "Box source option")).tag("reference")
-                        Text(String(localized: "Traducere (live)", comment: "Box source option")).tag("translation")
-                        Text(String(localized: "Subtitlu (live)", comment: "Box source option")).tag("subtitle")
-                        Divider()
-                        Text(String(localized: "Data curentă", comment: "Box source option")).tag("date")
-                        Text(String(localized: "Ora curentă", comment: "Box source option")).tag("time")
+                        // Source choices + labels follow the EDITED presenter
+                        ForEach(
+                            PresentationManager.sourceOptions(for: pm.activeProfileKey).filter { $0.raw != "static" },
+                            id: \.raw
+                        ) { option in
+                            Text(option.label).tag(option.raw)
+                        }
                     }
                     .labelsHidden()
                     .controlSize(.small)
                 }
                 .help(String(localized: "De unde vine textul: scris de tine sau preluat live", comment: "Tooltip"))
+
+                labeledRow(String(localized: "Afișare:", comment: "Setting label")) {
+                    Picker("", selection: Binding(
+                        get: { binding.wrappedValue.displayOnRaw },
+                        set: { binding.wrappedValue.displayOnRaw = $0 }
+                    )) {
+                        ForEach(PresentationManager.displayScopeOptions, id: \.raw) { option in
+                            Text(option.label).tag(option.raw)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .controlSize(.small)
+                }
+                .help(String(localized: "Pe ce slide-uri apare caseta — ex. „Amin.” doar pe ultimul slide", comment: "Tooltip"))
+
 
                 if binding.wrappedValue.sourceRaw == "static" {
                     TextField(
@@ -2000,6 +2202,7 @@ struct LayoutEditorSheet: View {
     /// Off = the box inherits the global text settings.
     @ViewBuilder
     private func textStyleGroup(
+        title: String = String(localized: "Text", comment: "Inspector group"),
         style: Binding<PresentationManager.BoxTextStyle>,
         onEnable: @escaping () -> Void
     ) -> some View {
@@ -2025,22 +2228,7 @@ struct LayoutEditorSheet: View {
                 if style.wrappedValue.isCustomized {
                     Divider()
 
-                    labeledRow(String(localized: "Vertical:", comment: "Setting label")) {
-                        Picker("", selection: Binding(
-                            get: { style.wrappedValue.vAlignRaw },
-                            set: { style.wrappedValue.vAlignRaw = $0 }
-                        )) {
-                            Text(String(localized: "Global", comment: "Alignment option")).tag("")
-                            Image(systemName: "arrow.up.to.line").tag("top")
-                            Image(systemName: "arrow.down.and.line.horizontal.and.arrow.up").tag("center")
-                            Image(systemName: "arrow.down.to.line").tag("bottom")
-                        }
-                        .pickerStyle(.segmented)
-                        .labelsHidden()
-                        .controlSize(.small)
-                    }
-                    .help(String(localized: "Alinierea verticală în casetă — Global = setarea generală", comment: "Tooltip"))
-
+                    // SAME options, SAME order as Text Global.
                     labeledRow(String(localized: "Font:", comment: "Setting label")) {
                         Picker("", selection: Binding(
                             get: { style.wrappedValue.fontName },
@@ -2120,6 +2308,36 @@ struct LayoutEditorSheet: View {
                         .controlSize(.small)
                     }
 
+                    labeledRow(String(localized: "Vertical:", comment: "Setting label")) {
+                        Picker("", selection: Binding(
+                            get: { style.wrappedValue.vAlignRaw },
+                            set: { style.wrappedValue.vAlignRaw = $0 }
+                        )) {
+                            Text(String(localized: "Global", comment: "Alignment option")).tag("")
+                            Image(systemName: "arrow.up.to.line").tag("top")
+                            Image(systemName: "arrow.down.and.line.horizontal.and.arrow.up").tag("center")
+                            Image(systemName: "arrow.down.to.line").tag("bottom")
+                        }
+                        .pickerStyle(.segmented)
+                        .labelsHidden()
+                        .controlSize(.small)
+                    }
+                    .help(String(localized: "Alinierea verticală în casetă — Global = setarea generală", comment: "Tooltip"))
+
+                    labeledRow(String(localized: "Opacitate:", comment: "Setting label")) {
+                        Slider(
+                            value: Binding(
+                                get: { style.wrappedValue.opacity },
+                                set: { style.wrappedValue.opacity = $0 }
+                            ),
+                            in: 0.05...1.0, step: 0.05
+                        )
+                        .controlSize(.small)
+                        Text("\(Int(style.wrappedValue.opacity * 100))%")
+                            .font(.caption.monospacedDigit())
+                            .frame(width: 35)
+                    }
+
                     labeledRow(String(localized: "Spațiere:", comment: "Setting label")) {
                         Slider(
                             value: Binding(
@@ -2135,23 +2353,87 @@ struct LayoutEditorSheet: View {
                     }
                     .help(String(localized: "Spațierea dintre rânduri — Global = setarea generală", comment: "Tooltip"))
 
-                    labeledRow(String(localized: "Opacitate:", comment: "Setting label")) {
+                    labeledRow(String(localized: "Transform.:", comment: "Setting label")) {
+                        Picker("", selection: Binding(
+                            get: { style.wrappedValue.transformRaw },
+                            set: { style.wrappedValue.transformRaw = $0 }
+                        )) {
+                            Text(String(localized: "Global", comment: "Text transform")).tag("")
+                            Divider()
+                            Text(String(localized: "Normal", comment: "Text transform")).tag("none")
+                            Text(String(localized: "MAJUSCULE", comment: "Text transform")).tag("upper")
+                            Text(String(localized: "minuscule", comment: "Text transform")).tag("lower")
+                        }
+                        .labelsHidden()
+                        .controlSize(.small)
+                    }
+                    .help(String(localized: "Transformarea textului acestei casete — Global = setarea generală a prezentatorului", comment: "Tooltip"))
+
+                    labeledRow(String(localized: "Padding:", comment: "Setting label")) {
                         Slider(
                             value: Binding(
-                                get: { style.wrappedValue.opacity },
-                                set: { style.wrappedValue.opacity = $0 }
+                                get: { style.wrappedValue.padding },
+                                set: { style.wrappedValue.padding = $0 }
                             ),
-                            in: 0.05...1.0, step: 0.05
+                            in: -1...100, step: 1
                         )
                         .controlSize(.small)
-                        Text("\(Int(style.wrappedValue.opacity * 100))%")
+                        Text(style.wrappedValue.padding >= 0 ? "\(Int(style.wrappedValue.padding))" : String(localized: "Global", comment: "Value label"))
                             .font(.caption.monospacedDigit())
-                            .frame(width: 35)
+                            .frame(width: 42)
                     }
+                    .help(String(localized: "Spațiul interior orizontal al casetei — Global = setarea generală", comment: "Tooltip"))
+
+                    labeledRow(String(localized: "Umbră:", comment: "Setting label")) {
+                        Picker("", selection: Binding(
+                            get: { style.wrappedValue.shadowMode },
+                            set: { style.wrappedValue.shadowMode = $0 }
+                        )) {
+                            Text(String(localized: "Global", comment: "Shadow option")).tag("")
+                            Text(String(localized: "Pornită", comment: "Shadow option")).tag("on")
+                            Text(String(localized: "Oprită", comment: "Shadow option")).tag("off")
+                        }
+                        .pickerStyle(.segmented)
+                        .labelsHidden()
+                        .controlSize(.small)
+                    }
+                    .help(String(localized: "Umbra textului acestei casete — Global = setarea generală", comment: "Tooltip"))
+
+                    if style.wrappedValue.shadowMode == "on" {
+                        labeledRow("") {
+                            Slider(
+                                value: Binding(
+                                    get: { style.wrappedValue.shadowRadius >= 0 ? style.wrappedValue.shadowRadius : pm.shadowRadius },
+                                    set: { style.wrappedValue.shadowRadius = $0 }
+                                ),
+                                in: 0...20, step: 0.5
+                            )
+                            .controlSize(.small)
+                            Text(String(format: "%.0f", style.wrappedValue.shadowRadius >= 0 ? style.wrappedValue.shadowRadius : pm.shadowRadius))
+                                .font(.caption.monospacedDigit())
+                                .frame(width: 24)
+                        }
+                    }
+
+                    labeledRow(String(localized: "Auto-fit:", comment: "Setting label")) {
+                        Picker("", selection: Binding(
+                            get: { style.wrappedValue.autoFitMode },
+                            set: { style.wrappedValue.autoFitMode = $0 }
+                        )) {
+                            Text(String(localized: "Global", comment: "Auto-fit option")).tag("")
+                            Text(String(localized: "Pornit", comment: "Auto-fit option")).tag("on")
+                            Text(String(localized: "Oprit", comment: "Auto-fit option")).tag("off")
+                        }
+                        .pickerStyle(.segmented)
+                        .labelsHidden()
+                        .controlSize(.small)
+                    }
+                    .help(String(localized: "Micșorează automat fontul ca textul să încapă în casetă — Global = comportamentul general", comment: "Tooltip"))
                 }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
         } label: {
-            Label(String(localized: "Text", comment: "Inspector group"), systemImage: "textformat")
+            Label(title, systemImage: "textformat")
                 .font(.caption.bold())
         }
     }
@@ -2298,6 +2580,22 @@ struct LayoutEditorSheet: View {
                 }
                 .help(String(localized: "Când apare pe ecran — ex. un decor doar pentru versetele biblice", comment: "Tooltip"))
 
+                labeledRow(String(localized: "Afișare:", comment: "Setting label")) {
+                    Picker("", selection: Binding(
+                        get: { binding.wrappedValue.displayOnRaw },
+                        set: { binding.wrappedValue.displayOnRaw = $0 }
+                    )) {
+                        ForEach(PresentationManager.displayScopeOptions, id: \.raw) { option in
+                            Text(option.label).tag(option.raw)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .controlSize(.small)
+                }
+                .help(String(localized: "Pe ce slide-uri apare — ex. un logo doar pe primul slide", comment: "Tooltip"))
+
+
                 if box.mediaTypeRaw == "video" {
                     Text(String(localized: "Videoclipurile rulează în buclă, fără sunet, doar pe ecranul de proiecție.", comment: "Inspector hint"))
                         .font(.caption2)
@@ -2389,7 +2687,10 @@ struct LayoutEditorSheet: View {
                             set: { pm.textColorHex = $0.toHex() }
                         ))
                         .labelsHidden()
-                        Spacer()
+                        .controlSize(.small)
+                    }
+
+                    labeledRow(String(localized: "Aliniere:", comment: "Setting label")) {
                         Picker("", selection: pmBinding.textAlignment) {
                             Image(systemName: "text.alignleft").tag(TextAlignment.leading)
                             Image(systemName: "text.aligncenter").tag(TextAlignment.center)
@@ -2398,7 +2699,6 @@ struct LayoutEditorSheet: View {
                         .pickerStyle(.segmented)
                         .labelsHidden()
                         .controlSize(.small)
-                        .frame(width: 100)
                     }
 
                     labeledRow(String(localized: "Vertical:", comment: "Setting label")) {
@@ -2430,6 +2730,24 @@ struct LayoutEditorSheet: View {
                             .frame(width: 28)
                     }
 
+                    labeledRow(String(localized: "Transform.:", comment: "Setting label")) {
+                        Picker("", selection: Binding(
+                            get: { pm.contentOptions(for: pm.activeProfileKey).textTransformRaw },
+                            set: { raw in
+                                var o = pm.contentOptions(for: pm.activeProfileKey)
+                                o.textTransformRaw = raw
+                                pm.setContentOptions(o, for: pm.activeProfileKey)
+                            }
+                        )) {
+                            Text(String(localized: "Normal", comment: "Text transform")).tag("none")
+                            Text(String(localized: "MAJUSCULE", comment: "Text transform")).tag("upper")
+                            Text(String(localized: "minuscule", comment: "Text transform")).tag("lower")
+                        }
+                        .labelsHidden()
+                        .controlSize(.small)
+                    }
+                    .help(String(localized: "Transformarea implicită a textului pentru TOATE casetele acestui prezentator — personalizabilă per casetă mai jos", comment: "Tooltip"))
+
                     labeledRow(String(localized: "Padding:", comment: "Setting label")) {
                         Slider(value: pmBinding.padding, in: 10...100, step: 5)
                             .controlSize(.small)
@@ -2460,14 +2778,21 @@ struct LayoutEditorSheet: View {
                     .controlSize(.small)
                     .help(String(localized: "Micșorează automat fontul ca textul să încapă în caseta lui", comment: "Tooltip"))
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
             } label: {
                 Label(String(localized: "Text Global", comment: "Inspector group"), systemImage: "textformat")
                     .font(.caption.bold())
             }
 
-            Text(String(localized: "Stilul individual al fiecărei casete se editează în tab-ul Layout: selectează caseta și activează „Personalizează textul”.", comment: "Inspector hint"))
-                .font(.caption2)
-                .foregroundStyle(.secondary)
+            // Per-box text style — select a box on the canvas, customize here.
+            if let selection {
+                selectedBoxStyleGroup(selection)
+            } else {
+                Text(String(localized: "Selectează o casetă pe canvas pentru a-i personaliza textul.", comment: "Inspector hint"))
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+
         }
         .padding(12)
     }
@@ -2546,24 +2871,11 @@ struct LayoutEditorSheet: View {
                     .font(.caption.bold())
             }
 
-            // Per-content overrides — only the one relevant to the module you're
-            // in (Bible module → just the Biblie override), all three otherwise.
-            ForEach(relevantBackgroundKeys, id: \.self) { key in
-                contentBackgroundGroup(key: key)
-            }
+            // The EDITED profile's own background — switch profiles in the
+            // header to set the others.
+            contentBackgroundGroup(key: pm.activeProfileKey)
         }
         .padding(12)
-    }
-
-    /// Which per-presenter background overrides to show, based on the module
-    /// the editor was opened from.
-    private var relevantBackgroundKeys: [String] {
-        switch appState.selectedSidebarItem {
-        case .bible: return ["bible"]
-        case .songs: return ["song"]
-        case .customSlides: return ["text"]
-        default: return ["bible", "song", "text"]
-        }
     }
 
     @ViewBuilder
@@ -2678,108 +2990,247 @@ struct LayoutEditorSheet: View {
         }
     }
 
-    // MARK: Output Tab
+    // MARK: Tranziții Tab (per-presenter enter / between-slides / exit effects)
+    // Selecting any effect (or pressing play) demos it live on the canvas.
 
     @ViewBuilder
-    private var outputTab: some View {
-        let pmBinding = Bindable(pm)
-
+    private var presenterTab: some View {
         VStack(alignment: .leading, spacing: 10) {
             GroupBox {
                 VStack(alignment: .leading, spacing: 8) {
-                    labeledRow(String(localized: "Ecran:", comment: "Setting label")) {
-                        Picker("", selection: pmBinding.presentationScreenIndex) {
-                            Text(String(localized: "Auto", comment: "Picker option"))
-                                .tag(nil as Int?)
-                            ForEach(Array(pm.availableScreens.enumerated()), id: \.offset) { index, screen in
-                                Text(screen.localizedName).tag(index as Int?)
-                            }
-                        }
-                        .labelsHidden()
-                        .controlSize(.small)
+                    // Intrare = transparență → conținut (prima afișare)
+                    transitionRow(
+                        label: String(localized: "Intrare:", comment: "Setting label"),
+                        help: String(localized: "Efectul cu care textul APARE pe ecran — de la transparență la conținut", comment: "Tooltip"),
+                        get: { pm.transitionInRaw() },
+                        set: { pm.setTransitionIn($0) }
+                    )
+                    phaseDurationSlider(phase: "appear")
 
-                        Button {
-                            pm.refreshScreens()
-                        } label: {
-                            Image(systemName: "arrow.clockwise")
-                                .font(.caption2)
-                        }
-                        .buttonStyle(.borderless)
-                        .help(String(localized: "Reîmprospătează lista de ecrane", comment: "Button tooltip"))
-                    }
-                    .help(String(localized: "Pe ce ecran se proiectează — Auto alege ecranul extern", comment: "Tooltip"))
+                    Divider()
 
-                    labeledRow(String(localized: "Fereastră:", comment: "Setting label")) {
-                        Picker("", selection: pmBinding.windowLevel) {
-                            Text(String(localized: "Normal", comment: "Window level option")).tag("normal")
-                            Text(String(localized: "Floating", comment: "Window level option")).tag("floating")
-                            Text(String(localized: "Always on Top", comment: "Window level option")).tag("alwaysOnTop")
-                            Text(String(localized: "Behind Desktop", comment: "Window level option")).tag("behindDesktop")
-                        }
-                        .labelsHidden()
-                        .controlSize(.small)
-                    }
-                    .help(String(localized: "Nivelul ferestrei de proiecție față de alte ferestre", comment: "Tooltip"))
+                    transitionRow(
+                        label: String(localized: "Intermediar:", comment: "Setting label"),
+                        help: String(localized: "Efectul ÎNTRE slide-uri (verset → verset, strofă → strofă)", comment: "Tooltip"),
+                        get: { pm.transitionChangeRaw() },
+                        set: { pm.setTransitionChange($0) }
+                    )
+                    phaseDurationSlider(phase: "change")
 
-                    labeledRow(String(localized: "Tranziție:", comment: "Setting label")) {
-                        Slider(value: pmBinding.transitionDuration, in: 0...2, step: 0.1)
-                            .controlSize(.small)
-                        Text(String(format: "%.1fs", pm.transitionDuration))
-                            .font(.caption.monospacedDigit())
-                            .frame(width: 30)
-                    }
-                    .help(String(localized: "Durata tranziției între versete/slide-uri", comment: "Tooltip"))
+                    Divider()
 
-                    labeledRow(String(localized: "Deconectare:", comment: "Setting label")) {
-                        Picker("", selection: Binding(
-                            get: { pm.screenDisconnectAction.rawValue },
-                            set: { pm.screenDisconnectAction = PresentationManager.ScreenDisconnectAction(rawValue: $0) ?? .ask }
-                        )) {
-                            Text(String(localized: "Întreabă", comment: "Disconnect option")).tag("ask")
-                            Text(String(localized: "Mută pe alt ecran", comment: "Disconnect option")).tag("moveToAvailable")
-                            Text(String(localized: "Ecran negru", comment: "Disconnect option")).tag("goBlack")
-                            Text(String(localized: "Nu face nimic", comment: "Disconnect option")).tag("doNothing")
-                        }
-                        .labelsHidden()
-                        .controlSize(.small)
-                    }
-                    .help(String(localized: "Ce se întâmplă dacă ecranul de proiecție se deconectează", comment: "Tooltip"))
+                    // Ieșire = conținut → transparență (Hide / Clear / ESC)
+                    transitionRow(
+                        label: String(localized: "Ieșire:", comment: "Setting label"),
+                        help: String(localized: "Efectul cu care textul DISPARE — de la conținut la transparență (Hide, Clear, ESC)", comment: "Tooltip"),
+                        get: { pm.transitionOutRaw() },
+                        set: { pm.setTransitionOut($0) }
+                    )
+                    phaseDurationSlider(phase: "clear")
                 }
             } label: {
-                Label(String(localized: "Ecran de Proiecție", comment: "Inspector group"), systemImage: "display")
+                Label(String(localized: "Global", comment: "Inspector group"), systemImage: "wand.and.stars")
                     .font(.caption.bold())
             }
 
-            GroupBox {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(String(localized: "Layout-ul se adaptează automat la orice rezoluție, raport de aspect sau PPI: casetele sunt definite procentual, iar fonturile se scalează față de o înălțime de referință de 1080p.", comment: "Adaptive layout explanation"))
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-
-                    let m = pm.targetScreenMetrics
-                    HStack(spacing: 6) {
-                        Image(systemName: "display")
-                            .font(.caption2)
-                        Text("\(Int(m.resolution.width))×\(Int(m.resolution.height))")
-                            .font(.caption2.monospacedDigit())
-                        Text("•")
-                        Text(m.aspectRatioLabel)
-                            .font(.caption2.bold())
-                        Text("•")
-                        Text("\(Int(m.ppi)) PPI")
-                            .font(.caption2.monospacedDigit())
-                        Text("•")
-                        Text(String(format: "×%.2f font", pm.targetFontScale))
-                            .font(.caption2.monospacedDigit())
-                    }
+            // Per-casete override — General → Personalizează, like text styles.
+            if let selection {
+                boxTransitionGroup(selection)
+            } else {
+                Text(String(localized: "Selectează o casetă pentru a-i personaliza tranziția.", comment: "Inspector hint"))
+                    .font(.caption2)
                     .foregroundStyle(.secondary)
-                }
-            } label: {
-                Label(String(localized: "Adaptare Automată", comment: "Inspector group"), systemImage: "arrow.up.left.and.down.right.magnifyingglass")
-                    .font(.caption.bold())
             }
+
+            Text(String(
+                localized: "Tranziții pentru \(PresentationManager.contentKeyLabel(pm.activeProfileKey)) — alege un efect și îl vezi imediat pe canvas.",
+                comment: "Inspector hint"
+            ))
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
         }
         .padding(12)
+    }
+
+    /// Direct duration slider per phase: 0.0 = instant, up to 3 s.
+    @ViewBuilder
+    private func phaseDurationSlider(phase: String) -> some View {
+        labeledRow(String(localized: "Durată:", comment: "Setting label")) {
+            Slider(
+                value: Binding(
+                    get: { pm.resolvedTransitionDuration(phase: phase) },
+                    set: { pm.setPhaseDurationOverride($0, phase) }
+                ),
+                in: 0...3
+            )
+            .controlSize(.small)
+            Text(String(format: "%.2fs", pm.resolvedTransitionDuration(phase: phase)))
+                .font(.caption.monospacedDigit())
+                .frame(width: 42)
+        }
+        .help(String(localized: "Durata acestei tranziții — 0 = instant", comment: "Tooltip"))
+    }
+
+    /// The selected box's own transition: effects, delay (stagger) and duration.
+    @ViewBuilder
+    private func boxTransitionGroup(_ identity: BoxIdentity) -> some View {
+        let token = boxToken(for: identity)
+        let override = Binding(
+            get: { pm.boxTransitionOverride(forToken: token) },
+            set: { pm.setBoxTransitionOverride($0, forToken: token) }
+        )
+
+        GroupBox {
+            VStack(alignment: .leading, spacing: 8) {
+                Toggle(isOn: Binding(
+                    get: { override.wrappedValue.isCustomized },
+                    set: { override.wrappedValue.isCustomized = $0 }
+                )) {
+                    Text(String(localized: "Personalizează tranziția", comment: "Customize toggle"))
+                        .font(.caption)
+                }
+                .toggleStyle(.switch)
+                .controlSize(.small)
+                .help(String(localized: "Dezactivat = caseta urmează tranzițiile generale ale prezentatorului", comment: "Tooltip"))
+
+                if override.wrappedValue.isCustomized {
+                    Divider()
+
+                    boxTransitionPicker(
+                        label: String(localized: "Intrare:", comment: "Setting label"),
+                        raw: Binding(get: { override.wrappedValue.inRaw }, set: { override.wrappedValue.inRaw = $0 }),
+                        fallback: pm.transitionInRaw()
+                    )
+                    boxTransitionPicker(
+                        label: String(localized: "Intermediar:", comment: "Setting label"),
+                        raw: Binding(get: { override.wrappedValue.changeRaw }, set: { override.wrappedValue.changeRaw = $0 }),
+                        fallback: pm.transitionChangeRaw()
+                    )
+                    boxTransitionPicker(
+                        label: String(localized: "Ieșire:", comment: "Setting label"),
+                        raw: Binding(get: { override.wrappedValue.outRaw }, set: { override.wrappedValue.outRaw = $0 }),
+                        fallback: pm.transitionOutRaw()
+                    )
+
+                    labeledRow(String(localized: "Întârziere:", comment: "Setting label")) {
+                        Slider(
+                            value: Binding(
+                                get: { override.wrappedValue.delay },
+                                set: { override.wrappedValue.delay = $0 }
+                            ),
+                            in: 0...3
+                        )
+                        .controlSize(.small)
+                        Text(String(format: "%.2fs", override.wrappedValue.delay))
+                            .font(.caption.monospacedDigit())
+                            .frame(width: 42)
+                    }
+                    .help(String(localized: "Întârzie tranziția acestei casete față de celelalte — efect în cascadă (titlul intră primul, versurile după)", comment: "Tooltip"))
+
+                    labeledRow(String(localized: "Durată:", comment: "Setting label")) {
+                        Slider(
+                            value: Binding(
+                                get: {
+                                    override.wrappedValue.duration >= 0
+                                        ? override.wrappedValue.duration
+                                        : pm.resolvedTransitionDuration(phase: "appear")
+                                },
+                                set: { override.wrappedValue.duration = $0 }
+                            ),
+                            in: 0...3
+                        )
+                        .controlSize(.small)
+                        Text(String(format: "%.2fs",
+                                    override.wrappedValue.duration >= 0
+                                        ? override.wrappedValue.duration
+                                        : pm.resolvedTransitionDuration(phase: "appear")))
+                            .font(.caption.monospacedDigit())
+                            .frame(width: 42)
+                    }
+                    .help(String(localized: "Durata tranziției acestei casete — 0 = instant", comment: "Tooltip"))
+                }
+            }
+        } label: {
+            Label(boxLabel(for: identity, pm: pm), systemImage: "wand.and.rays")
+                .font(.caption.bold())
+        }
+    }
+
+    /// Effect picker with a Global option + canvas demo on change.
+    @ViewBuilder
+    private func boxTransitionPicker(label: String, raw: Binding<String>, fallback: String) -> some View {
+        labeledRow(label) {
+            Picker("", selection: Binding(
+                get: { raw.wrappedValue },
+                set: { newRaw in
+                    raw.wrappedValue = newRaw
+                    playTransitionPreview(newRaw.isEmpty ? fallback : newRaw)
+                }
+            )) {
+                Text(String(localized: "Global", comment: "Transition option")).tag("")
+                Divider()
+                ForEach(PresentationManager.transitionOptions, id: \.raw) { option in
+                    Text(option.label).tag(option.raw)
+                }
+            }
+            .labelsHidden()
+            .controlSize(.small)
+
+            Button {
+                playTransitionPreview(raw.wrappedValue.isEmpty ? fallback : raw.wrappedValue)
+            } label: {
+                Image(systemName: "play.circle")
+            }
+            .buttonStyle(.borderless)
+            .controlSize(.small)
+            .help(String(localized: "Previzualizează efectul pe canvas", comment: "Tooltip"))
+        }
+    }
+
+    /// One transition picker row with a play button that demos the effect.
+    @ViewBuilder
+    private func transitionRow(
+        label: String, help: String,
+        get: @escaping () -> String, set: @escaping (String) -> Void
+    ) -> some View {
+        labeledRow(label) {
+            Picker("", selection: Binding(
+                get: get,
+                set: { raw in
+                    set(raw)
+                    playTransitionPreview(raw)
+                }
+            )) {
+                ForEach(PresentationManager.transitionOptions, id: \.raw) { option in
+                    Text(option.label).tag(option.raw)
+                }
+            }
+            .labelsHidden()
+            .controlSize(.small)
+
+            Button {
+                playTransitionPreview(get())
+            } label: {
+                Image(systemName: "play.circle")
+            }
+            .buttonStyle(.borderless)
+            .controlSize(.small)
+            .help(String(localized: "Previzualizează efectul pe canvas", comment: "Tooltip"))
+        }
+        .help(help)
+    }
+
+    /// Replays the sample content on the canvas with the given effect: the
+    /// content is torn down and re-inserted so the transition actually runs.
+    private func playTransitionPreview(_ raw: String) {
+        transitionPreviewRaw = raw
+        // Commit the new transition to the view tree FIRST, then animate the
+        // identity change — otherwise the removal still uses the old effect.
+        DispatchQueue.main.async {
+            withAnimation(.easeInOut(duration: max(pm.resolvedTransitionDuration(phase: "appear"), 0.25))) {
+                transitionPreviewTick += 1
+            }
+        }
     }
 
     // MARK: Shared inspector helpers

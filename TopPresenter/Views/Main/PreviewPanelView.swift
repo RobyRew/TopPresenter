@@ -72,6 +72,17 @@ struct PresentationPreviewCard: View {
     /// Pass `true` when rendering Bible content so the translation name is populated.
     var isBibleContent: Bool = false
 
+    /// Content key of the hosting panel ("bible"/"song"/"text") — used to apply
+    /// the right per-presenter options when previewing pending (not live) content.
+    var formatHint: String? = nil
+
+    private var activeContentKey: String {
+        if pm.liveContent.isLive {
+            return PresentationManager.contentKey(for: pm.liveContent.contentType)
+        }
+        return formatHint ?? (isBibleContent ? "bible" : "text")
+    }
+
     /// Content a non-Bible panel (songs, slides, schedule) wants previewed before it
     /// goes live. When nil, the card falls back to the Bible verse selection.
     struct PendingContent {
@@ -169,7 +180,7 @@ struct PresentationPreviewCard: View {
                 if pm.isBlackScreen {
                     // Full black — nothing else rendered
                 } else {
-                    let bg = pm.activeBackground(for: pm.liveContent.contentType, frozen: false)
+                    let bg = pm.activeBackground(forKey: activeContentKey, frozen: false)
                     if bg.showColor {
                         bg.color
                     }
@@ -183,7 +194,7 @@ struct PresentationPreviewCard: View {
 
                 // Edit Mode: box overlays — drag to move, corner handles to resize
                 if pm.isEditMode {
-                    TextBoxEditOverlay(canvasSize: size, showsBibleBoxes: isBibleContent, showsHiddenBoxes: false)
+                    TextBoxEditOverlay(canvasSize: size, showsHiddenBoxes: false)
                 }
 
                 // Badges overlay
@@ -207,53 +218,75 @@ struct PresentationPreviewCard: View {
         // `canvasScale` shrinks everything down to preview size.
         let targetScale = pm.targetFontScale
         let canvasScale = size.width / max(metrics.points.width, 1)
-        let scaledPadding = pm.padding * targetScale * canvasScale
         let dim = isPreviewOnly ? 0.6 : 1.0
+
+        // Transforms (MAJUSCULE etc.) are part of each box's resolved style.
+        let fields = (main: previewText, reference: previewReference,
+                      translation: previewTranslationName, subtitle: previewSubtitle)
+
+        // Render with the PANEL'S profile — the Songs panel previews the song
+        // layout even while a Bible verse is live on the output.
+        let key = activeContentKey
 
         ZStack(alignment: .topLeading) {
             // Unified stacking order — exactly what the output renders
-            ForEach(pm.orderedBoxTokens(), id: \.self) { token in
+            ForEach(pm.orderedBoxTokens(in: key), id: \.self) { token in
                 switch boxIdentity(fromToken: token) {
                 case .section(let section):
-                    if pm.isSectionVisible(section) {
+                    if pm.isSectionVisible(section, in: key),
+                       !pm.liveContent.isLive || pm.scopeMatchesLiveSlide(pm.displayScope(for: section, in: key)) {
                         let text = pm.sectionText(
                             section,
-                            main: previewText, reference: previewReference,
-                            translation: previewTranslationName, subtitle: previewSubtitle
+                            main: fields.main, reference: fields.reference,
+                            translation: fields.translation, subtitle: fields.subtitle,
+                            slideNumber: pm.liveContent.slideNumberText,
+                            in: key
                         )
                         if !text.isEmpty {
-                            let rect = pm.boxFrame(for: section).rect(in: size)
-                            let style = pm.resolvedStyle(for: section)
+                            let rect = pm.boxFrame(for: section, in: key).rect(in: size)
+                            let style = pm.resolvedStyle(for: section, in: key)
 
                             // Auto-fit: computed at FULL resolution then scaled — same math as output
-                            let fitted: CGFloat? = (section == .verseContent)
+                            let fitted: CGFloat? = style.autoFit
                                 ? pm.fittedVerseFontSize(
                                     text: text,
-                                    boxSize: pm.boxFrame(for: section).rect(in: metrics.points).size,
+                                    boxSize: pm.boxFrame(for: section, in: key).rect(in: metrics.points).size,
                                     maxSize: CGFloat(style.fontSize) * targetScale,
-                                    padding: pm.padding * targetScale,
+                                    padding: CGFloat(style.padding) * targetScale,
                                     fontName: style.fontName,
                                     lineSpacing: style.lineSpacing
                                   ) * canvasScale
                                 : nil
 
-                            previewBoxText(text, style: style, rect: rect, fontScale: targetScale * canvasScale, scaledPadding: scaledPadding, fittedSize: fitted, dim: dim)
+                            previewBoxText(text, style: style, rect: rect, fontScale: targetScale * canvasScale, fittedSize: fitted, dim: dim)
                         }
                     }
                 case .custom(let id):
-                    if let box = pm.customTextBox(id: id), box.isVisible {
+                    if let box = pm.customTextBox(id: id, in: key), box.isVisible,
+                       !pm.liveContent.isLive || pm.scopeMatchesLiveSlide(box.displayOnRaw) {
                         let text = box.resolvedText(
-                            main: previewText, reference: previewReference,
-                            translation: previewTranslationName, subtitle: previewSubtitle
+                            main: fields.main, reference: fields.reference,
+                            translation: fields.translation, subtitle: fields.subtitle,
+                            slideNumber: pm.liveContent.slideNumberText
                         )
                         if !text.isEmpty {
                             let rect = box.frame.rect(in: size)
-                            let style = pm.resolvedCustomStyle(box)
-                            previewBoxText(text, style: style, rect: rect, fontScale: targetScale * canvasScale, scaledPadding: scaledPadding, fittedSize: nil, dim: dim)
+                            let style = pm.resolvedCustomStyle(box, in: key)
+                            let fitted: CGFloat? = style.autoFit
+                                ? pm.fittedVerseFontSize(
+                                    text: text,
+                                    boxSize: box.frame.rect(in: metrics.points).size,
+                                    maxSize: CGFloat(style.fontSize) * targetScale,
+                                    padding: CGFloat(style.padding) * targetScale,
+                                    fontName: style.fontName,
+                                    lineSpacing: style.lineSpacing
+                                  ) * canvasScale
+                                : nil
+                            previewBoxText(text, style: style, rect: rect, fontScale: targetScale * canvasScale, fittedSize: fitted, dim: dim)
                         }
                     }
                 case .media(let id):
-                    if let box = pm.mediaBox(id: id),
+                    if let box = pm.mediaBox(id: id, in: key),
                        box.isVisible,
                        box.showsFor(contentType: pm.liveContent.contentType, isLive: pm.liveContent.isLive) {
                         MediaBoxContent(box: box, canvasSize: size, playsVideo: false)
@@ -270,23 +303,23 @@ struct PresentationPreviewCard: View {
     private func previewBoxText(
         _ text: String,
         style: PresentationManager.ResolvedBoxStyle,
-        rect: CGRect, fontScale: CGFloat, scaledPadding: CGFloat,
+        rect: CGRect, fontScale: CGFloat,
         fittedSize: CGFloat?, dim: Double
     ) -> some View {
         let size = fittedSize ?? CGFloat(style.fontSize) * fontScale
-        Text(text)
+        Text(style.display(text))
             .font(style.font(at: size))
             .foregroundStyle(style.color.opacity(style.opacity * dim))
             .multilineTextAlignment(style.hAlign)
             .lineSpacing(style.lineSpacing * size * 0.1)
             .minimumScaleFactor(fittedSize == nil ? 0.3 : 1.0)
             .shadow(
-                color: pm.shadowEnabled ? .black.opacity(0.7) : .clear,
-                radius: pm.shadowEnabled ? pm.shadowRadius * fontScale : 0,
+                color: style.shadowEnabled ? .black.opacity(0.7) : .clear,
+                radius: style.shadowEnabled ? style.shadowRadius * fontScale : 0,
                 x: 0,
-                y: pm.shadowEnabled ? 2 * fontScale : 0
+                y: style.shadowEnabled ? 2 * fontScale : 0
             )
-            .padding(.horizontal, scaledPadding)
+            .padding(.horizontal, CGFloat(style.padding) * fontScale)
             .frame(width: rect.width, height: rect.height, alignment: style.frameAlignment)
             .position(x: rect.midX, y: rect.midY)
     }
@@ -645,7 +678,7 @@ struct VerseSlideControlsBar: View {
             updateLiveOutput()
         }
         // Re-fill when the verse text box is moved/resized in Edit Mode
-        .onChange(of: pm.verseBoxFrame) {
+        .onChange(of: pm.boxFrame(for: .verseContent, in: "bible")) {
             if libraryManager.isAutoFillActive { runAutoFill() }
             updateLiveOutput()
         }
@@ -1153,15 +1186,17 @@ struct StyleQuickSettings: View {
     var sections: Set<SettingsSection> = SettingsSection.allSet
 
     enum SettingsSection: Hashable {
-        case multiVerse, general
+        case multiVerse, general, output
 
-        static let allSet: Set<SettingsSection> = [.multiVerse, .general]
+        static let allSet: Set<SettingsSection> = [.multiVerse, .general, .output]
     }
 
     @Environment(\.openSettings) private var openSettings
+    @Environment(PresentationManager.self) private var pm
 
     @AppStorage("settingsExpanded_multiVerse") private var multiVerseExpanded: Bool = false
     @AppStorage("settingsExpanded_general") private var generalExpanded: Bool = false
+    @AppStorage("settingsExpanded_output") private var outputExpanded: Bool = false
 
     // General settings
     @AppStorage("showVerseNumbers") private var showVerseNumbers: Bool = true
@@ -1192,6 +1227,17 @@ struct StyleQuickSettings: View {
                         isExpanded: $generalExpanded
                     ) {
                         generalSection
+                    }
+                }
+
+                if sections.contains(.output) {
+                    // ─── Ieșire (output hardware) ───
+                    settingsSection(
+                        title: String(localized: "Ieșire", comment: "Settings section"),
+                        icon: "tv",
+                        isExpanded: $outputExpanded
+                    ) {
+                        outputSection
                     }
                 }
 
@@ -1271,6 +1317,90 @@ struct StyleQuickSettings: View {
             Toggle(String(localized: "Show verse number prefix", comment: "Setting label"), isOn: $showVerseNumberPrefix)
                 .font(.caption)
                 .controlSize(.small)
+        }
+    }
+
+    // MARK: - Ieșire Section (output screen, compact)
+
+    @ViewBuilder
+    private var outputSection: some View {
+        @Bindable var pmBinding = pm
+
+        HStack {
+            Text(String(localized: "Ecran:", comment: "Setting label"))
+                .font(.caption)
+                .frame(width: 55, alignment: .trailing)
+            Picker("", selection: $pmBinding.presentationScreenIndex) {
+                Text(String(localized: "Auto", comment: "Picker option")).tag(nil as Int?)
+                ForEach(Array(pm.availableScreens.enumerated()), id: \.offset) { index, screen in
+                    Text(screen.localizedName).tag(index as Int?)
+                }
+            }
+            .labelsHidden()
+            .controlSize(.small)
+        }
+        .help(String(localized: "Ecranul pe care se proiectează", comment: "Tooltip"))
+
+        HStack {
+            Text(String(localized: "Nivel:", comment: "Setting label"))
+                .font(.caption)
+                .frame(width: 55, alignment: .trailing)
+            Picker("", selection: $pmBinding.windowLevel) {
+                Text(String(localized: "Normal", comment: "Window level option")).tag("normal")
+                Text(String(localized: "Floating", comment: "Window level option")).tag("floating")
+                Text(String(localized: "Always on Top", comment: "Window level option")).tag("alwaysOnTop")
+                Text(String(localized: "Behind Desktop", comment: "Window level option")).tag("behindDesktop")
+            }
+            .labelsHidden()
+            .controlSize(.small)
+        }
+        .help(String(localized: "Nivelul ferestrei de proiecție", comment: "Tooltip"))
+
+        HStack {
+            Text(String(localized: "Tranziție:", comment: "Setting label"))
+                .font(.caption)
+                .frame(width: 55, alignment: .trailing)
+            Slider(value: $pmBinding.transitionDuration, in: 0...2, step: 0.1)
+                .controlSize(.small)
+            Text(String(format: "%.1fs", pm.transitionDuration))
+                .font(.caption.monospacedDigit())
+                .frame(width: 30)
+        }
+        .help(String(localized: "Durata globală a tranzițiilor — efectele per prezentator se aleg în Editor de Teme ▸ Tranziții", comment: "Tooltip"))
+
+        HStack {
+            Text(String(localized: "Deconect.:", comment: "Setting label"))
+                .font(.caption)
+                .frame(width: 55, alignment: .trailing)
+            Picker("", selection: Binding(
+                get: { pm.screenDisconnectAction.rawValue },
+                set: { pm.screenDisconnectAction = PresentationManager.ScreenDisconnectAction(rawValue: $0) ?? .ask }
+            )) {
+                Text(String(localized: "Întreabă", comment: "Disconnect option")).tag("ask")
+                Text(String(localized: "Mută pe alt ecran", comment: "Disconnect option")).tag("moveToAvailable")
+                Text(String(localized: "Ecran negru", comment: "Disconnect option")).tag("goBlack")
+                Text(String(localized: "Nu face nimic", comment: "Disconnect option")).tag("doNothing")
+            }
+            .labelsHidden()
+            .controlSize(.small)
+        }
+        .help(String(localized: "Ce se întâmplă când ecranul de proiecție se deconectează", comment: "Tooltip"))
+
+        // Link to full projection settings
+        HStack {
+            Spacer()
+            Button {
+                openSettings()
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "tv")
+                        .font(.caption2)
+                    Text(String(localized: "Toate setările de proiecție...", comment: "Button"))
+                        .font(.caption)
+                }
+            }
+            .buttonStyle(.borderless)
+            .foregroundStyle(.secondary)
         }
     }
 

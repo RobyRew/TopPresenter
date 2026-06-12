@@ -32,7 +32,7 @@ struct CustomSlidesPreviewPanel: View {
             Divider()
 
             // Preview display — previews the selected slide before it goes live
-            PresentationPreviewCard(pendingContent: .init(
+            PresentationPreviewCard(formatHint: "text", pendingContent: .init(
                 text: currentSlide?.content ?? "",
                 reference: currentSlide?.title ?? ""
             ))
@@ -111,7 +111,10 @@ struct CustomSlidesPreviewPanel: View {
                     if isLive {
                         pm.clearOutput()
                     } else if let slide = currentSlide {
-                        pm.showCustomText(text: slide.content, title: slide.title)
+                        pm.showCustomText(
+                            text: slide.content, title: slide.title,
+                            slideIndex: currentSlideIndex, slideCount: slides.count
+                        )
                     }
                 } label: {
                     Label(

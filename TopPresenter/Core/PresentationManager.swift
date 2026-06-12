@@ -9,6 +9,32 @@ import SwiftUI
 import Observation
 import AppKit
 
+/// View modifier backing the blur-family transitions (blur, blurZoom, fall).
+struct BlurFadeModifier: ViewModifier {
+    let radius: CGFloat
+    let opacity: Double
+    var scale: CGFloat = 1
+
+    func body(content: Content) -> some View {
+        content
+            .blur(radius: radius)
+            .opacity(opacity)
+            .scaleEffect(scale)
+    }
+}
+
+/// View modifier backing the "flip" (3D rotation) transition.
+struct FlipFadeModifier: ViewModifier {
+    let angle: Double
+    let opacity: Double
+
+    func body(content: Content) -> some View {
+        content
+            .rotation3DEffect(.degrees(angle), axis: (x: 1, y: 0, z: 0), perspective: 0.6)
+            .opacity(opacity)
+    }
+}
+
 @Observable
 final class PresentationManager {
     // MARK: - Live Content
@@ -129,12 +155,13 @@ final class PresentationManager {
         }
     }
 
+    /// Compat view over the per-profile backgrounds.
     var contentBackgrounds: [String: BackgroundConfig] {
-        didSet {
-            if let data = try? JSONEncoder().encode(contentBackgrounds) {
-                UserDefaults.standard.set(data, forKey: "pm_contentBackgrounds")
-            }
+        var result: [String: BackgroundConfig] = [:]
+        for key in Self.profileKeys {
+            result[key] = profile(key).background
         }
+        return result
     }
     /// Decoded still images for per-content backgrounds (image type only).
     var contentBackgroundImages: [String: NSImage] = [:]
@@ -158,11 +185,11 @@ final class PresentationManager {
     }
 
     func backgroundConfig(for key: String) -> BackgroundConfig {
-        contentBackgrounds[key] ?? BackgroundConfig()
+        profile(key).background
     }
 
     func setBackgroundConfig(_ config: BackgroundConfig, for key: String) {
-        contentBackgrounds[key] = config
+        mutateProfile(key) { $0.background = config }
     }
 
     func setContentBackgroundMedia(url: URL, for key: String) {
@@ -172,7 +199,7 @@ final class PresentationManager {
         config.imageName = url.lastPathComponent
         config.useImage = true
         config.mediaTypeRaw = Self.mediaType(forExtension: url.pathExtension)
-        contentBackgrounds[key] = config
+        setBackgroundConfig(config, for: key)
         contentBackgroundURLs[key] = url
         contentBackgroundImages[key] = config.mediaTypeRaw == "image" ? NSImage(contentsOf: url) : nil
     }
@@ -183,13 +210,14 @@ final class PresentationManager {
         config.imageName = ""
         config.useImage = false
         config.mediaTypeRaw = "image"
-        contentBackgrounds[key] = config
+        setBackgroundConfig(config, for: key)
         contentBackgroundImages[key] = nil
         contentBackgroundURLs[key] = nil
     }
 
     private func loadContentBackgroundImages() {
-        for (key, config) in contentBackgrounds {
+        for key in Self.profileKeys {
+            let config = profile(key).background
             guard let bookmark = config.imageBookmark,
                   let url = Self.resolveBookmark(bookmark) else { continue }
             contentBackgroundURLs[key] = url
@@ -210,8 +238,12 @@ final class PresentationManager {
     }
 
     func activeBackground(for type: LiveContent.ContentType, frozen: Bool) -> ActiveBackground {
-        let key = Self.contentKey(for: type)
-        if let config = contentBackgrounds[key], config.enabled {
+        activeBackground(forKey: Self.contentKey(for: type), frozen: frozen)
+    }
+
+    func activeBackground(forKey key: String, frozen: Bool) -> ActiveBackground {
+        let config = profile(key).background
+        if config.enabled {
             return ActiveBackground(
                 showColor: config.showColor,
                 color: Color(hex: config.colorHex) ?? .black,
@@ -242,6 +274,253 @@ final class PresentationManager {
             mediaURL: backgroundMediaURL,
             image: backgroundImage
         )
+    }
+
+    // MARK: - Per-Presenter Content Options
+    /// Presentation behavior per content type ("bible"/"song"/"text") — travels
+    /// with themes. Extend here when a presenter needs a new option.
+    struct ContentOptions: Codable, Equatable {
+        /// "none" | "upper" | "lower" — applied to the main text at render time.
+        var textTransformRaw: String = "none"
+        /// Render the reference/title in uppercase (e.g. "IOAN 3:16").
+        var referenceUppercase: Bool = false
+
+        init() {}
+
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            textTransformRaw = try c.decodeIfPresent(String.self, forKey: .textTransformRaw) ?? "none"
+            referenceUppercase = try c.decodeIfPresent(Bool.self, forKey: .referenceUppercase) ?? false
+        }
+    }
+
+    /// Compat view over the per-profile options.
+    var contentOptions: [String: ContentOptions] {
+        get {
+            var result: [String: ContentOptions] = [:]
+            for key in Self.profileKeys {
+                result[key] = profile(key).options
+            }
+            return result
+        }
+        set {
+            for (key, options) in newValue where Self.profileKeys.contains(key) {
+                mutateProfile(key) { $0.options = options }
+            }
+        }
+    }
+
+    func contentOptions(for key: String) -> ContentOptions {
+        profile(key).options
+    }
+
+    func setContentOptions(_ options: ContentOptions, for key: String) {
+        mutateProfile(key) { $0.options = options }
+    }
+
+    static func transformText(_ text: String, raw: String) -> String {
+        switch raw {
+        case "upper": return text.uppercased()
+        case "lower": return text.lowercased()
+        default: return text
+        }
+    }
+
+
+    // MARK: - Media Module Output Preferences
+    /// Whether "Play Video" loops by default (Media module).
+    var videoLoopsByDefault: Bool {
+        didSet { UserDefaults.standard.set(videoLoopsByDefault, forKey: "pm_videoLoopsByDefault") }
+    }
+    /// Full-screen video gravity: "fit" | "fill".
+    var fullscreenVideoFillRaw: String {
+        didSet { UserDefaults.standard.set(fullscreenVideoFillRaw, forKey: "pm_fullscreenVideoFillRaw") }
+    }
+
+    /// Per-box transition override: OFF = the box follows the profile's
+    /// transitions; ON = its own effects, delay (stagger) and duration.
+    struct BoxTransition: Codable, Equatable {
+        var isCustomized: Bool = false
+        var inRaw: String = ""        // "" = profile effect
+        var changeRaw: String = ""
+        var outRaw: String = ""
+        var delay: Double = 0         // seconds after the others (stagger)
+        var duration: Double = -1     // -1 = phase/profile duration
+
+        init() {}
+
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            isCustomized = try c.decodeIfPresent(Bool.self, forKey: .isCustomized) ?? false
+            inRaw = try c.decodeIfPresent(String.self, forKey: .inRaw) ?? ""
+            changeRaw = try c.decodeIfPresent(String.self, forKey: .changeRaw) ?? ""
+            outRaw = try c.decodeIfPresent(String.self, forKey: .outRaw) ?? ""
+            delay = try c.decodeIfPresent(Double.self, forKey: .delay) ?? 0
+            duration = try c.decodeIfPresent(Double.self, forKey: .duration) ?? -1
+        }
+    }
+
+    // MARK: - Layout Profiles (PER-PRESENTER layouts)
+    /// EVERYTHING layout-related is per presenter: Bible, Songs and Slides each
+    /// have their own boxes, styles, sources, order, background, options and
+    /// transitions. The editor edits ONE profile; the output renders the live
+    /// content's profile. Keys: "bible" | "song" | "text".
+    struct LayoutProfile: Codable, Equatable {
+        var frames: [String: TextBoxFrame] = [:]
+        var visibility: [String: Bool] = [:]
+        var styles: [String: BoxTextStyle] = [:]
+        var sources: [String: String] = [:]
+        var sourceFormats: [String: String] = [:]
+        var staticTexts: [String: String] = [:]
+        var customTextBoxes: [CustomTextBox] = []
+        var mediaBoxes: [MediaBox] = []
+        var boxOrder: [String] = []
+        var background: BackgroundConfig = BackgroundConfig()
+        var options: ContentOptions = ContentOptions()
+        /// Text transitions (raw values from `transitionOptions`):
+        /// in = first appearance, change = slide → slide, out = clear.
+        var transitionInRaw: String = "fade"
+        var transitionChangeRaw: String = "fade"
+        var transitionOutRaw: String = "fade"
+        /// -1 = use the global transition duration.
+        var transitionDurationOverride: Double = -1
+        /// Per-PHASE duration overrides; -1 = the profile/general duration.
+        var transitionInDuration: Double = -1
+        var transitionChangeDuration: Double = -1
+        var transitionOutDuration: Double = -1
+        /// Per-section slide scope: "all" | "first" | "last" (e.g. show the
+        /// song title only on the first slide). Keyed by section rawValue.
+        var displayOn: [String: String] = [:]
+        /// Per-box transition overrides (general → personalizează, like text
+        /// styles). Keyed by z-order token.
+        var boxTransitionOverrides: [String: BoxTransition] = [:]
+        /// Custom accent colors for the editor chrome (list swatch, canvas
+        /// border). Keyed by z-order token; absent = the kind's default color.
+        var boxColors: [String: String] = [:]
+
+        init() {}
+
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            frames = try c.decodeIfPresent([String: TextBoxFrame].self, forKey: .frames) ?? [:]
+            visibility = try c.decodeIfPresent([String: Bool].self, forKey: .visibility) ?? [:]
+            styles = try c.decodeIfPresent([String: BoxTextStyle].self, forKey: .styles) ?? [:]
+            sources = try c.decodeIfPresent([String: String].self, forKey: .sources) ?? [:]
+            sourceFormats = try c.decodeIfPresent([String: String].self, forKey: .sourceFormats) ?? [:]
+            staticTexts = try c.decodeIfPresent([String: String].self, forKey: .staticTexts) ?? [:]
+            customTextBoxes = try c.decodeIfPresent([CustomTextBox].self, forKey: .customTextBoxes) ?? []
+            mediaBoxes = try c.decodeIfPresent([MediaBox].self, forKey: .mediaBoxes) ?? []
+            boxOrder = try c.decodeIfPresent([String].self, forKey: .boxOrder) ?? []
+            background = try c.decodeIfPresent(BackgroundConfig.self, forKey: .background) ?? BackgroundConfig()
+            options = try c.decodeIfPresent(ContentOptions.self, forKey: .options) ?? ContentOptions()
+            transitionInRaw = try c.decodeIfPresent(String.self, forKey: .transitionInRaw) ?? "fade"
+            transitionChangeRaw = try c.decodeIfPresent(String.self, forKey: .transitionChangeRaw) ?? "fade"
+            transitionOutRaw = try c.decodeIfPresent(String.self, forKey: .transitionOutRaw) ?? "fade"
+            transitionDurationOverride = try c.decodeIfPresent(Double.self, forKey: .transitionDurationOverride) ?? -1
+            transitionInDuration = try c.decodeIfPresent(Double.self, forKey: .transitionInDuration) ?? -1
+            transitionChangeDuration = try c.decodeIfPresent(Double.self, forKey: .transitionChangeDuration) ?? -1
+            transitionOutDuration = try c.decodeIfPresent(Double.self, forKey: .transitionOutDuration) ?? -1
+            displayOn = try c.decodeIfPresent([String: String].self, forKey: .displayOn) ?? [:]
+            boxTransitionOverrides = try c.decodeIfPresent([String: BoxTransition].self, forKey: .boxTransitionOverrides) ?? [:]
+            boxColors = try c.decodeIfPresent([String: String].self, forKey: .boxColors) ?? [:]
+        }
+
+        /// Sensible starting layout per presenter.
+        static func defaultProfile(for key: String) -> LayoutProfile {
+            var p = LayoutProfile()
+            p.frames = [
+                TextBoxSection.verseContent.rawValue: .defaultVerse,
+                TextBoxSection.reference.rawValue: .defaultReference,
+                TextBoxSection.translationName.rawValue: .defaultTranslation,
+                TextBoxSection.subtitle.rawValue: .defaultSubtitle,
+            ]
+            switch key {
+            case "song":
+                // Songs: lyrics + title + verse label. No Bible translation.
+                p.visibility = [
+                    TextBoxSection.verseContent.rawValue: true,
+                    TextBoxSection.reference.rawValue: true,
+                    TextBoxSection.translationName.rawValue: false,
+                    TextBoxSection.subtitle.rawValue: true,
+                ]
+            case "text":
+                p.visibility = [
+                    TextBoxSection.verseContent.rawValue: true,
+                    TextBoxSection.reference.rawValue: true,
+                    TextBoxSection.translationName.rawValue: false,
+                    TextBoxSection.subtitle.rawValue: false,
+                ]
+            default: // bible
+                p.visibility = [
+                    TextBoxSection.verseContent.rawValue: true,
+                    TextBoxSection.reference.rawValue: true,
+                    TextBoxSection.translationName.rawValue: false,
+                    TextBoxSection.subtitle.rawValue: false,
+                ]
+            }
+            return p
+        }
+    }
+
+    /// Which built-in boxes make sense per presenter — Songs has no Bible
+    /// translation box, Slides has neither translation nor verse label.
+    static func relevantSections(for key: String) -> [TextBoxSection] {
+        switch key {
+        case "song": return [.verseContent, .reference, .subtitle]
+        case "text": return [.verseContent, .reference]
+        default: return TextBoxSection.allCases
+        }
+    }
+
+    static let profileKeys = ["bible", "song", "text"]
+
+    var profiles: [String: LayoutProfile] {
+        didSet {
+            if let data = try? JSONEncoder().encode(profiles) {
+                UserDefaults.standard.set(data, forKey: "pm_layoutProfiles")
+            }
+        }
+    }
+
+    /// The profile currently being EDITED (editor, preview overlay, right bar).
+    /// Follows the focused module; the OUTPUT always uses the live content's key.
+    var activeProfileKey: String = "bible"
+
+    private func resolvedKey(_ key: String?) -> String {
+        let k = key ?? activeProfileKey
+        return Self.profileKeys.contains(k) ? k : "bible"
+    }
+
+    func profile(_ key: String? = nil) -> LayoutProfile {
+        let k = resolvedKey(key)
+        return profiles[k] ?? .defaultProfile(for: k)
+    }
+
+    /// All profile mutations route through here: registers undo + persists.
+    func mutateProfile(_ key: String? = nil, _ body: (inout LayoutProfile) -> Void) {
+        registerLayoutUndo()
+        let k = resolvedKey(key)
+        var p = profiles[k] ?? .defaultProfile(for: k)
+        body(&p)
+        profiles[k] = p
+    }
+
+    /// Copies one presenter's entire layout onto another (undo-able).
+    func copyProfile(from source: String, to target: String) {
+        guard source != target else { return }
+        let snapshot = profile(source)
+        mutateProfile(target) { $0 = snapshot }
+    }
+
+    /// The profile that was last presented — after Hide/Clear/ESC the exit
+    /// transition (and idle "always" media) must keep using IT, not whatever
+    /// the operator is editing.
+    private var lastLiveProfileKey: String?
+
+    /// The output renders the LIVE content's profile.
+    var outputProfileKey: String {
+        if liveContent.isLive { return Self.contentKey(for: liveContent.contentType) }
+        return lastLiveProfileKey ?? activeProfileKey
     }
 
     // MARK: - Global Text Settings
@@ -594,6 +873,32 @@ final class PresentationManager {
         var hAlignRaw: String = ""      // "" = global alignment
         var vAlignRaw: String = ""      // "" = global vertical alignment
         var lineSpacing: Double = -1    // -1 = global
+        var transformRaw: String = ""   // "" = global transform | none | upper | lower
+        var padding: Double = -1        // -1 = global inner inset (pt @1080p)
+        var shadowMode: String = ""     // "" = global | "on" | "off"
+        var shadowRadius: Double = -1   // -1 = global radius
+        var autoFitMode: String = ""    // "" = global behavior | "on" | "off"
+
+        init() {}
+
+        // Resilient decoding — stored styles survive new fields.
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            isCustomized = try c.decodeIfPresent(Bool.self, forKey: .isCustomized) ?? false
+            fontName = try c.decodeIfPresent(String.self, forKey: .fontName) ?? ""
+            fontSize = try c.decodeIfPresent(Double.self, forKey: .fontSize) ?? 0
+            weightRaw = try c.decodeIfPresent(String.self, forKey: .weightRaw) ?? ""
+            colorHex = try c.decodeIfPresent(String.self, forKey: .colorHex) ?? ""
+            opacity = try c.decodeIfPresent(Double.self, forKey: .opacity) ?? 1.0
+            hAlignRaw = try c.decodeIfPresent(String.self, forKey: .hAlignRaw) ?? ""
+            vAlignRaw = try c.decodeIfPresent(String.self, forKey: .vAlignRaw) ?? ""
+            lineSpacing = try c.decodeIfPresent(Double.self, forKey: .lineSpacing) ?? -1
+            transformRaw = try c.decodeIfPresent(String.self, forKey: .transformRaw) ?? ""
+            padding = try c.decodeIfPresent(Double.self, forKey: .padding) ?? -1
+            shadowMode = try c.decodeIfPresent(String.self, forKey: .shadowMode) ?? ""
+            shadowRadius = try c.decodeIfPresent(Double.self, forKey: .shadowRadius) ?? -1
+            autoFitMode = try c.decodeIfPresent(String.self, forKey: .autoFitMode) ?? ""
+        }
 
         static func weight(fromRaw raw: String, fallback: Font.Weight) -> Font.Weight {
             switch raw {
@@ -623,6 +928,16 @@ final class PresentationManager {
         var hAlign: TextAlignment
         var vAlignRaw: String
         var lineSpacing: Double
+        var transformRaw: String = "none"  // none | upper | lower — applied at render
+        var padding: Double = 0            // inner horizontal inset (pt @1080p)
+        var shadowEnabled: Bool = true
+        var shadowRadius: Double = 3
+        var autoFit: Bool = false          // shrink font until the text fits the box
+
+        /// The render-ready text: every box runs its resolved transform.
+        func display(_ text: String) -> String {
+            PresentationManager.transformText(text, raw: transformRaw)
+        }
 
         func font(at scaledSize: CGFloat) -> Font {
             (fontName.isEmpty || fontName == "System")
@@ -647,54 +962,34 @@ final class PresentationManager {
 
     static let customBoxSizeFactor: Double = 0.5
 
+    // Compat: ACTIVE profile styles
     var verseStyle: BoxTextStyle {
-        didSet { persistStyle(verseStyle, key: "pm_verseStyle") }
+        get { boxStyle(for: .verseContent) }
+        set { setBoxStyle(newValue, for: .verseContent) }
     }
     var refStyle: BoxTextStyle {
-        didSet { persistStyle(refStyle, key: "pm_refStyle") }
+        get { boxStyle(for: .reference) }
+        set { setBoxStyle(newValue, for: .reference) }
     }
     var translationStyle: BoxTextStyle {
-        didSet { persistStyle(translationStyle, key: "pm_translationStyle") }
+        get { boxStyle(for: .translationName) }
+        set { setBoxStyle(newValue, for: .translationName) }
     }
     var subtitleStyle: BoxTextStyle {
-        didSet { persistStyle(subtitleStyle, key: "pm_subtitleStyle") }
+        get { boxStyle(for: .subtitle) }
+        set { setBoxStyle(newValue, for: .subtitle) }
     }
 
-    private func persistStyle(_ style: BoxTextStyle, key: String) {
-        if let data = try? JSONEncoder().encode(style) {
-            UserDefaults.standard.set(data, forKey: key)
-        }
+    func boxStyle(for section: TextBoxSection, in key: String? = nil) -> BoxTextStyle {
+        profile(key).styles[section.rawValue] ?? BoxTextStyle()
     }
 
-    private static func decodeStyle(from defaults: UserDefaults, key: String) -> BoxTextStyle {
-        guard let data = defaults.data(forKey: key),
-              let style = try? JSONDecoder().decode(BoxTextStyle.self, from: data) else {
-            return BoxTextStyle()
-        }
-        return style
-    }
-
-    func boxStyle(for section: TextBoxSection) -> BoxTextStyle {
-        switch section {
-        case .verseContent: return verseStyle
-        case .reference: return refStyle
-        case .translationName: return translationStyle
-        case .subtitle: return subtitleStyle
-        }
-    }
-
-    func setBoxStyle(_ style: BoxTextStyle, for section: TextBoxSection) {
-        registerLayoutUndo()
-        switch section {
-        case .verseContent: verseStyle = style
-        case .reference: refStyle = style
-        case .translationName: translationStyle = style
-        case .subtitle: subtitleStyle = style
-        }
+    func setBoxStyle(_ style: BoxTextStyle, for section: TextBoxSection, in key: String? = nil) {
+        mutateProfile(key) { $0.styles[section.rawValue] = style }
     }
 
     /// Resolves a BoxTextStyle against the globals + the given defaults.
-    private func resolve(_ style: BoxTextStyle, sizeFactor: Double, defaultWeight: Font.Weight, defaultOpacity: Double) -> ResolvedBoxStyle {
+    private func resolve(_ style: BoxTextStyle, sizeFactor: Double, defaultWeight: Font.Weight, defaultOpacity: Double, defaultTransform: String = "none", defaultAutoFit: Bool = false) -> ResolvedBoxStyle {
         let globalFontName = (fontName == "System") ? "" : fontName
         // Section defaults of .regular inherit the global weight baseline;
         // design defaults (reference = semibold) stay unless customized.
@@ -710,7 +1005,12 @@ final class PresentationManager {
                 opacity: defaultOpacity * globalTextOpacity,
                 hAlign: textAlignment,
                 vAlignRaw: style.vAlignRaw.isEmpty ? globalVAlignRaw : style.vAlignRaw,
-                lineSpacing: lineSpacing
+                lineSpacing: lineSpacing,
+                transformRaw: defaultTransform,
+                padding: padding,
+                shadowEnabled: shadowEnabled,
+                shadowRadius: shadowRadius,
+                autoFit: defaultAutoFit
             )
         }
         return ResolvedBoxStyle(
@@ -721,31 +1021,53 @@ final class PresentationManager {
             opacity: style.opacity,
             hAlign: style.hAlignRaw.isEmpty ? textAlignment : Self.alignment(fromRaw: style.hAlignRaw, fallback: textAlignment),
             vAlignRaw: style.vAlignRaw.isEmpty ? globalVAlignRaw : style.vAlignRaw,
-            lineSpacing: style.lineSpacing >= 0 ? style.lineSpacing : lineSpacing
+            lineSpacing: style.lineSpacing >= 0 ? style.lineSpacing : lineSpacing,
+            transformRaw: style.transformRaw.isEmpty ? defaultTransform : style.transformRaw,
+            padding: style.padding >= 0 ? style.padding : padding,
+            shadowEnabled: style.shadowMode.isEmpty ? shadowEnabled : style.shadowMode == "on",
+            shadowRadius: style.shadowRadius >= 0 ? style.shadowRadius : shadowRadius,
+            autoFit: style.autoFitMode.isEmpty ? defaultAutoFit : style.autoFitMode == "on"
         )
     }
 
-    func resolvedStyle(for section: TextBoxSection) -> ResolvedBoxStyle {
-        let defaults = Self.styleDefaults(for: section)
-        return resolve(boxStyle(for: section), sizeFactor: defaults.sizeFactor, defaultWeight: defaults.weight, defaultOpacity: defaults.opacity)
+    /// The transform a box inherits when it has none of its own: the profile's
+    /// global transform, plus the legacy "reference in caps" option.
+    private func defaultTransform(for section: TextBoxSection?, in key: String?) -> String {
+        let options = profile(key).options
+        if section == .reference && options.referenceUppercase { return "upper" }
+        return options.textTransformRaw
     }
 
-    func resolvedCustomStyle(_ box: CustomTextBox) -> ResolvedBoxStyle {
-        resolve(box.style, sizeFactor: Self.customBoxSizeFactor, defaultWeight: .regular, defaultOpacity: 1.0)
+    func resolvedStyle(for section: TextBoxSection, in key: String? = nil) -> ResolvedBoxStyle {
+        let defaults = Self.styleDefaults(for: section)
+        return resolve(
+            boxStyle(for: section, in: key),
+            sizeFactor: defaults.sizeFactor, defaultWeight: defaults.weight, defaultOpacity: defaults.opacity,
+            defaultTransform: defaultTransform(for: section, in: key),
+            defaultAutoFit: autoFitVerseFont && section == .verseContent
+        )
+    }
+
+    func resolvedCustomStyle(_ box: CustomTextBox, in key: String? = nil) -> ResolvedBoxStyle {
+        resolve(
+            box.style,
+            sizeFactor: Self.customBoxSizeFactor, defaultWeight: .regular, defaultOpacity: 1.0,
+            defaultTransform: defaultTransform(for: nil, in: key)
+        )
     }
 
     /// Turns customization on and seeds the editable fields with the current
     /// effective values, so the controls show reality instead of zeros.
-    func enableStyleCustomization(for section: TextBoxSection) {
-        var style = boxStyle(for: section)
+    func enableStyleCustomization(for section: TextBoxSection, in key: String? = nil) {
+        var style = boxStyle(for: section, in: key)
         guard !style.isCustomized else { return }
-        let resolved = resolvedStyle(for: section)
+        let resolved = resolvedStyle(for: section, in: key)
         style.isCustomized = true
         style.fontSize = resolved.fontSize
         style.weightRaw = BoxTextStyle.weightRaw(resolved.weight)
         style.opacity = resolved.opacity
         style.vAlignRaw = resolved.vAlignRaw
-        setBoxStyle(style, for: section)
+        setBoxStyle(style, for: section, in: key)
     }
 
     // MARK: - Custom Text Boxes
@@ -759,73 +1081,92 @@ final class PresentationManager {
         var frame: TextBoxFrame = TextBoxFrame(x: 0.30, y: 0.42, width: 0.40, height: 0.12)
         var style: BoxTextStyle = BoxTextStyle()
         var isVisible: Bool = true
-        /// "static" | "mainText" | "reference" | "translation" | "subtitle" | "date" | "time"
+        /// "static" | "mainText" | "reference" | "translation" | "subtitle"
+        /// | "date" | "time" | "slideNumber"
         var sourceRaw: String = "static"
         /// Format for date/time sources (see formattedClock).
         var sourceFormatRaw: String = ""
+        /// Slide scope: "all" | "first" | "last" (e.g. "Amin." only on the last slide).
+        var displayOnRaw: String = "all"
 
-        func resolvedText(main: String, reference: String, translation: String, subtitle: String, now: Date = .now) -> String {
+        init() {}
+
+        // Resilient decoding — stored profiles survive new fields.
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            id = try c.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+            name = try c.decodeIfPresent(String.self, forKey: .name) ?? ""
+            text = try c.decodeIfPresent(String.self, forKey: .text) ?? ""
+            frame = try c.decodeIfPresent(TextBoxFrame.self, forKey: .frame) ?? TextBoxFrame(x: 0.30, y: 0.42, width: 0.40, height: 0.12)
+            style = try c.decodeIfPresent(BoxTextStyle.self, forKey: .style) ?? BoxTextStyle()
+            isVisible = try c.decodeIfPresent(Bool.self, forKey: .isVisible) ?? true
+            sourceRaw = try c.decodeIfPresent(String.self, forKey: .sourceRaw) ?? "static"
+            sourceFormatRaw = try c.decodeIfPresent(String.self, forKey: .sourceFormatRaw) ?? ""
+            displayOnRaw = try c.decodeIfPresent(String.self, forKey: .displayOnRaw) ?? "all"
+        }
+
+        func resolvedText(main: String, reference: String, translation: String, subtitle: String, now: Date = .now, slideNumber: String = "") -> String {
             PresentationManager.resolveBoxSource(
                 sourceRaw, format: sourceFormatRaw, autoValue: text, staticText: text,
-                main: main, reference: reference, translation: translation, subtitle: subtitle, now: now
+                main: main, reference: reference, translation: translation, subtitle: subtitle,
+                now: now, slideNumber: slideNumber
             )
         }
 
         func resolvedText(live: LiveContent, now: Date = .now) -> String {
             resolvedText(
                 main: live.mainText, reference: live.reference,
-                translation: live.translationName, subtitle: live.subtitle, now: now
+                translation: live.translationName, subtitle: live.subtitle,
+                now: now, slideNumber: live.slideNumberText
             )
         }
 
         var sourceLabel: String { PresentationManager.sourceOptionLabel(sourceRaw) }
     }
 
+    // Compat: ACTIVE profile custom boxes
     var customTextBoxes: [CustomTextBox] {
-        didSet {
-            if let data = try? JSONEncoder().encode(customTextBoxes) {
-                UserDefaults.standard.set(data, forKey: "pm_customTextBoxes")
-            }
-        }
+        get { profile().customTextBoxes }
+        set { mutateProfile { $0.customTextBoxes = newValue } }
     }
 
-    func addCustomTextBox() -> CustomTextBox {
-        registerLayoutUndo()
+    @discardableResult
+    func addCustomTextBox(in key: String? = nil) -> CustomTextBox {
         var box = CustomTextBox()
         box.text = String(localized: "Text nou", comment: "Default text of a newly added custom text box")
-        let offset = Double(customTextBoxes.count % 5) * 0.04
+        let offset = Double(profile(key).customTextBoxes.count % 5) * 0.04
         box.frame = TextBoxFrame(x: 0.30 + offset, y: 0.42 + offset, width: 0.40, height: 0.12).clamped()
-        customTextBoxes.append(box)
+        mutateProfile(key) { $0.customTextBoxes.append(box) }
         return box
     }
 
-    func removeCustomTextBox(id: UUID) {
-        registerLayoutUndo()
-        customTextBoxes.removeAll { $0.id == id }
+    func removeCustomTextBox(id: UUID, in key: String? = nil) {
+        mutateProfile(key) { $0.customTextBoxes.removeAll { $0.id == id } }
     }
 
-    func customTextBox(id: UUID) -> CustomTextBox? {
-        customTextBoxes.first { $0.id == id }
+    func customTextBox(id: UUID, in key: String? = nil) -> CustomTextBox? {
+        profile(key).customTextBoxes.first { $0.id == id }
     }
 
-    func updateCustomTextBox(_ box: CustomTextBox) {
-        guard let idx = customTextBoxes.firstIndex(where: { $0.id == box.id }) else { return }
-        registerLayoutUndo()
-        var clamped = box
-        clamped.frame = box.frame.clamped()
-        customTextBoxes[idx] = clamped
+    func updateCustomTextBox(_ box: CustomTextBox, in key: String? = nil) {
+        mutateProfile(key) { p in
+            guard let idx = p.customTextBoxes.firstIndex(where: { $0.id == box.id }) else { return }
+            var clamped = box
+            clamped.frame = box.frame.clamped()
+            p.customTextBoxes[idx] = clamped
+        }
     }
 
     /// Duplicates a custom text box (new id, slightly offset frame).
-    func duplicateCustomTextBox(id: UUID) -> CustomTextBox? {
-        guard var copy = customTextBox(id: id) else { return nil }
-        registerLayoutUndo()
+    func duplicateCustomTextBox(id: UUID, in key: String? = nil) -> CustomTextBox? {
+        guard var copy = customTextBox(id: id, in: key) else { return nil }
         copy.id = UUID()
         copy.frame = TextBoxFrame(
             x: copy.frame.x + 0.03, y: copy.frame.y + 0.03,
             width: copy.frame.width, height: copy.frame.height
         ).clamped()
-        customTextBoxes.append(copy)
+        let snapshot = copy
+        mutateProfile(key) { $0.customTextBoxes.append(snapshot) }
         return copy
     }
 
@@ -847,7 +1188,29 @@ final class PresentationManager {
         var contentModeRaw: String = "fit"   // fit | fill
         /// When to show: "always" | "bible" | "song" | "text"
         var showOnRaw: String = "always"
+        /// Slide scope: "all" | "first" | "last".
+        var displayOnRaw: String = "all"
         var isVisible: Bool = true
+
+        init() {}
+
+        // Resilient decoding — stored profiles survive new fields.
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            id = try c.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+            name = try c.decodeIfPresent(String.self, forKey: .name) ?? ""
+            frame = try c.decodeIfPresent(TextBoxFrame.self, forKey: .frame) ?? TextBoxFrame(x: 0.74, y: 0.05, width: 0.20, height: 0.18)
+            fileName = try c.decodeIfPresent(String.self, forKey: .fileName) ?? ""
+            bookmarkData = try c.decodeIfPresent(Data.self, forKey: .bookmarkData)
+            mediaTypeRaw = try c.decodeIfPresent(String.self, forKey: .mediaTypeRaw) ?? "image"
+            opacity = try c.decodeIfPresent(Double.self, forKey: .opacity) ?? 1.0
+            cornerRadius = try c.decodeIfPresent(Double.self, forKey: .cornerRadius) ?? 0
+            edgeFeather = try c.decodeIfPresent(Double.self, forKey: .edgeFeather) ?? 0
+            contentModeRaw = try c.decodeIfPresent(String.self, forKey: .contentModeRaw) ?? "fit"
+            showOnRaw = try c.decodeIfPresent(String.self, forKey: .showOnRaw) ?? "always"
+            displayOnRaw = try c.decodeIfPresent(String.self, forKey: .displayOnRaw) ?? "all"
+            isVisible = try c.decodeIfPresent(Bool.self, forKey: .isVisible) ?? true
+        }
 
         func resolvedURL() -> URL? {
             guard let data = bookmarkData else { return nil }
@@ -873,44 +1236,42 @@ final class PresentationManager {
         }
     }
 
+    // Compat: ACTIVE profile media boxes
     var mediaBoxes: [MediaBox] {
-        didSet {
-            if let data = try? JSONEncoder().encode(mediaBoxes) {
-                UserDefaults.standard.set(data, forKey: "pm_mediaBoxes")
-            }
-        }
+        get { profile().mediaBoxes }
+        set { mutateProfile { $0.mediaBoxes = newValue } }
     }
 
     @discardableResult
-    func addMediaBox(url: URL) -> MediaBox? {
+    func addMediaBox(url: URL, in key: String? = nil) -> MediaBox? {
         guard let bookmark = Self.makeBookmark(for: url) else { return nil }
 
-        registerLayoutUndo()
         var box = MediaBox()
         box.fileName = url.lastPathComponent
         box.bookmarkData = bookmark
         box.mediaTypeRaw = Self.mediaType(forExtension: url.pathExtension)
-        let offset = Double(mediaBoxes.count % 4) * 0.04
+        let offset = Double(profile(key).mediaBoxes.count % 4) * 0.04
         box.frame = TextBoxFrame(x: 0.74 - offset, y: 0.05 + offset, width: 0.20, height: 0.18).clamped()
-        mediaBoxes.append(box)
+        let snapshot = box
+        mutateProfile(key) { $0.mediaBoxes.append(snapshot) }
         return box
     }
 
-    func removeMediaBox(id: UUID) {
-        registerLayoutUndo()
-        mediaBoxes.removeAll { $0.id == id }
+    func removeMediaBox(id: UUID, in key: String? = nil) {
+        mutateProfile(key) { $0.mediaBoxes.removeAll { $0.id == id } }
     }
 
-    func mediaBox(id: UUID) -> MediaBox? {
-        mediaBoxes.first { $0.id == id }
+    func mediaBox(id: UUID, in key: String? = nil) -> MediaBox? {
+        profile(key).mediaBoxes.first { $0.id == id }
     }
 
-    func updateMediaBox(_ box: MediaBox) {
-        guard let idx = mediaBoxes.firstIndex(where: { $0.id == box.id }) else { return }
-        registerLayoutUndo()
-        var clamped = box
-        clamped.frame = box.frame.clamped()
-        mediaBoxes[idx] = clamped
+    func updateMediaBox(_ box: MediaBox, in key: String? = nil) {
+        mutateProfile(key) { p in
+            guard let idx = p.mediaBoxes.firstIndex(where: { $0.id == box.id }) else { return }
+            var clamped = box
+            clamped.frame = box.frame.clamped()
+            p.mediaBoxes[idx] = clamped
+        }
     }
 
     // MARK: - Resolution-Adaptive Font Scaling
@@ -929,60 +1290,25 @@ final class PresentationManager {
         Self.fontScale(forHeight: targetScreenMetrics.points.height)
     }
 
-    // MARK: - Box Frames
+    // MARK: - Box Frames (compat: ACTIVE profile)
     var verseBoxFrame: TextBoxFrame {
-        didSet { verseBoxFrame.persist(to: UserDefaults.standard, key: "pm_verseBoxFrame") }
+        get { boxFrame(for: .verseContent) }
+        set { setBoxFrame(newValue, for: .verseContent) }
     }
     var refBoxFrame: TextBoxFrame {
-        didSet { refBoxFrame.persist(to: UserDefaults.standard, key: "pm_refBoxFrame") }
+        get { boxFrame(for: .reference) }
+        set { setBoxFrame(newValue, for: .reference) }
     }
     var translationBoxFrame: TextBoxFrame {
-        didSet { translationBoxFrame.persist(to: UserDefaults.standard, key: "pm_translationBoxFrame") }
+        get { boxFrame(for: .translationName) }
+        set { setBoxFrame(newValue, for: .translationName) }
     }
     var subtitleBoxFrame: TextBoxFrame {
-        didSet { subtitleBoxFrame.persist(to: UserDefaults.standard, key: "pm_subtitleBoxFrame") }
+        get { boxFrame(for: .subtitle) }
+        set { setBoxFrame(newValue, for: .subtitle) }
     }
 
-    // MARK: - Box Content Sources
-    /// Per-section content source override. "auto" (default) = the box's natural field.
-    var verseSourceRaw: String {
-        didSet { UserDefaults.standard.set(verseSourceRaw, forKey: "pm_verseSourceRaw") }
-    }
-    var refSourceRaw: String {
-        didSet { UserDefaults.standard.set(refSourceRaw, forKey: "pm_refSourceRaw") }
-    }
-    var translationSourceRaw: String {
-        didSet { UserDefaults.standard.set(translationSourceRaw, forKey: "pm_translationSourceRaw") }
-    }
-    var subtitleSourceRaw: String {
-        didSet { UserDefaults.standard.set(subtitleSourceRaw, forKey: "pm_subtitleSourceRaw") }
-    }
-    /// Static text per section (used when the section's source is "static").
-    var verseStaticText: String {
-        didSet { UserDefaults.standard.set(verseStaticText, forKey: "pm_verseStaticText") }
-    }
-    var refStaticText: String {
-        didSet { UserDefaults.standard.set(refStaticText, forKey: "pm_refStaticText") }
-    }
-    var translationStaticText: String {
-        didSet { UserDefaults.standard.set(translationStaticText, forKey: "pm_translationStaticText") }
-    }
-    var subtitleStaticText: String {
-        didSet { UserDefaults.standard.set(subtitleStaticText, forKey: "pm_subtitleStaticText") }
-    }
-    /// Date/time display format per section (when source is "date"/"time").
-    var verseSourceFormat: String {
-        didSet { UserDefaults.standard.set(verseSourceFormat, forKey: "pm_verseSourceFormat") }
-    }
-    var refSourceFormat: String {
-        didSet { UserDefaults.standard.set(refSourceFormat, forKey: "pm_refSourceFormat") }
-    }
-    var translationSourceFormat: String {
-        didSet { UserDefaults.standard.set(translationSourceFormat, forKey: "pm_translationSourceFormat") }
-    }
-    var subtitleSourceFormat: String {
-        didSet { UserDefaults.standard.set(subtitleSourceFormat, forKey: "pm_subtitleSourceFormat") }
-    }
+    // MARK: - Box Content Sources (stored in the profiles)
 
     /// Formats the date/time sources. Date formats: "" (long) | "short" | "weekday".
     /// Time formats: "" (HH:MM) | "hms" (HH:MM:SS).
@@ -1011,7 +1337,8 @@ final class PresentationManager {
     /// Shared source resolution for built-in sections and custom boxes.
     static func resolveBoxSource(
         _ raw: String, format: String = "", autoValue: String, staticText: String,
-        main: String, reference: String, translation: String, subtitle: String, now: Date = .now
+        main: String, reference: String, translation: String, subtitle: String,
+        now: Date = .now, slideNumber: String = ""
     ) -> String {
         switch raw {
         case "mainText": return main
@@ -1020,52 +1347,83 @@ final class PresentationManager {
         case "subtitle": return subtitle
         case "static": return staticText
         case "date", "time": return formattedClock(source: raw, format: format, now: now)
+        case "slideNumber": return slideNumber
         default: return autoValue // "auto"
         }
     }
 
-    static func sourceOptionLabel(_ raw: String) -> String {
-        switch raw {
-        case "mainText": return String(localized: "Text verset (live)", comment: "Box source")
-        case "reference": return String(localized: "Referință (live)", comment: "Box source")
-        case "translation": return String(localized: "Traducere (live)", comment: "Box source")
-        case "subtitle": return String(localized: "Subtitlu (live)", comment: "Box source")
-        case "date": return String(localized: "Data curentă", comment: "Box source")
-        case "time": return String(localized: "Ora curentă", comment: "Box source")
-        case "static": return String(localized: "Text static", comment: "Box source")
-        default: return String(localized: "Implicit (auto)", comment: "Box source")
+    /// The source choices a presenter offers, with PER-PRESENTER labels —
+    /// Songs pull from lyrics/title/strofă, Slides from content/title, etc.
+    static func sourceOptions(for key: String) -> [(raw: String, label: String)] {
+        var live: [(String, String)]
+        switch key {
+        case "song":
+            live = [
+                ("mainText", String(localized: "Versuri (live)", comment: "Box source")),
+                ("reference", String(localized: "Titlu cântec (live)", comment: "Box source")),
+                ("subtitle", String(localized: "Etichetă strofă (live)", comment: "Box source")),
+            ]
+        case "text":
+            live = [
+                ("mainText", String(localized: "Conținut slide (live)", comment: "Box source")),
+                ("reference", String(localized: "Titlu slide (live)", comment: "Box source")),
+            ]
+        default:
+            live = [
+                ("mainText", String(localized: "Text verset (live)", comment: "Box source")),
+                ("reference", String(localized: "Referință (live)", comment: "Box source")),
+                ("translation", String(localized: "Traducere (live)", comment: "Box source")),
+                ("subtitle", String(localized: "Subtitlu (live)", comment: "Box source")),
+            ]
         }
+        return live + [
+            ("static", String(localized: "Text static", comment: "Box source")),
+            ("date", String(localized: "Data curentă", comment: "Box source")),
+            ("time", String(localized: "Ora curentă", comment: "Box source")),
+            ("slideNumber", String(localized: "Număr slide (2 / 7)", comment: "Box source")),
+        ]
+    }
+
+    static func sourceOptionLabel(_ raw: String, for key: String = "bible") -> String {
+        if raw == "auto" { return String(localized: "Implicit (auto)", comment: "Box source") }
+        return sourceOptions(for: key).first { $0.raw == raw }?.label
+            ?? String(localized: "Implicit (auto)", comment: "Box source")
     }
 
     /// How often the output needs to re-render for live clocks:
     /// nil = no clock boxes, 60 = minute precision, 1 = seconds shown.
     var clockTickInterval: TimeInterval? {
+        let key = outputProfileKey
         var interval: TimeInterval? = nil
         func consider(source: String, format: String) {
             if source == "time" && format == "hms" { interval = 1 }
             else if (source == "time" || source == "date") && interval == nil { interval = 60 }
         }
-        for section in TextBoxSection.allCases where isSectionVisible(section) {
-            consider(source: sourceRaw(for: section), format: sourceFormat(for: section))
+        for section in Self.relevantSections(for: key) where isSectionVisible(section, in: key) {
+            consider(source: sourceRaw(for: section, in: key), format: sourceFormat(for: section, in: key))
         }
-        for box in customTextBoxes where box.isVisible {
+        for box in profile(key).customTextBoxes where box.isVisible {
             consider(source: box.sourceRaw, format: box.sourceFormatRaw)
         }
         return interval
     }
 
-    // MARK: - Per-Section Visibility
+    // MARK: - Per-Section Visibility (compat: ACTIVE profile)
     var verseBoxVisible: Bool {
-        didSet { UserDefaults.standard.set(verseBoxVisible, forKey: "pm_verseBoxVisible") }
+        get { isSectionVisible(.verseContent) }
+        set { setSectionVisible(newValue, for: .verseContent) }
     }
     var refBoxVisible: Bool {
-        didSet { UserDefaults.standard.set(refBoxVisible, forKey: "pm_refBoxVisible") }
+        get { isSectionVisible(.reference) }
+        set { setSectionVisible(newValue, for: .reference) }
     }
     var translationBoxVisible: Bool {
-        didSet { UserDefaults.standard.set(translationBoxVisible, forKey: "pm_translationBoxVisible") }
+        get { isSectionVisible(.translationName) }
+        set { setSectionVisible(newValue, for: .translationName) }
     }
     var subtitleBoxVisible: Bool {
-        didSet { UserDefaults.standard.set(subtitleBoxVisible, forKey: "pm_subtitleBoxVisible") }
+        get { isSectionVisible(.subtitle) }
+        set { setSectionVisible(newValue, for: .subtitle) }
     }
 
     /// Maps a horizontal TextAlignment + vertical raw value to a frame Alignment.
@@ -1087,63 +1445,65 @@ final class PresentationManager {
     /// ONE stacking order for every box — built-in sections, custom text boxes,
     /// and media boxes. Tokens: "section:<raw>" / "custom:<uuid>" / "media:<uuid>".
     /// Earlier in the list = further back; the last token renders on top.
+    // Compat: ACTIVE profile stacking order
     var boxOrder: [String] {
-        didSet { UserDefaults.standard.set(boxOrder, forKey: "pm_boxOrder") }
+        get { profile().boxOrder }
+        set { mutateProfile { $0.boxOrder = newValue } }
     }
 
-    /// All valid tokens for the current boxes, in canonical default order
-    /// (media at the back, then the four sections, then custom boxes).
-    private var canonicalTokens: [String] {
-        mediaBoxes.map { "media:" + $0.id.uuidString }
-            + TextBoxSection.allCases.map { "section:" + $0.rawValue }
-            + customTextBoxes.map { "custom:" + $0.id.uuidString }
+    /// All valid tokens for a profile's boxes, in canonical default order
+    /// (media at the back, then the RELEVANT sections, then custom boxes).
+    private func canonicalTokens(in key: String?) -> [String] {
+        let k = resolvedKey(key)
+        let p = profile(k)
+        return p.mediaBoxes.map { "media:" + $0.id.uuidString }
+            + Self.relevantSections(for: k).map { "section:" + $0.rawValue }
+            + p.customTextBoxes.map { "custom:" + $0.id.uuidString }
     }
 
     /// The reconciled render order: stored order minus stale tokens, plus any
     /// new boxes appended on top. Pure — never mutates state (safe in view body).
-    func orderedBoxTokens() -> [String] {
-        let valid = Set(canonicalTokens)
-        var result = boxOrder.filter { valid.contains($0) }
+    func orderedBoxTokens(in key: String? = nil) -> [String] {
+        let valid = Set(canonicalTokens(in: key))
+        var result = profile(key).boxOrder.filter { valid.contains($0) }
         let present = Set(result)
-        for token in canonicalTokens where !present.contains(token) {
+        for token in canonicalTokens(in: key) where !present.contains(token) {
             result.append(token)
         }
         return result
     }
 
-    private func normalizeBoxOrder() {
-        let ordered = orderedBoxTokens()
-        if ordered != boxOrder { boxOrder = ordered }
-    }
-
-    func moveBoxToken(_ token: String, offset: Int) {
-        registerLayoutUndo()
-        normalizeBoxOrder()
-        guard let idx = boxOrder.firstIndex(of: token) else { return }
-        let newIdx = min(max(idx + offset, 0), boxOrder.count - 1)
+    func moveBoxToken(_ token: String, offset: Int, in key: String? = nil) {
+        let ordered = orderedBoxTokens(in: key)
+        guard let idx = ordered.firstIndex(of: token) else { return }
+        let newIdx = min(max(idx + offset, 0), ordered.count - 1)
         guard newIdx != idx else { return }
-        boxOrder.remove(at: idx)
-        boxOrder.insert(token, at: newIdx)
+        var next = ordered
+        next.remove(at: idx)
+        next.insert(token, at: newIdx)
+        mutateProfile(key) { $0.boxOrder = next }
     }
 
-    func moveBoxTokenToEdge(_ token: String, front: Bool) {
-        registerLayoutUndo()
-        normalizeBoxOrder()
-        guard let idx = boxOrder.firstIndex(of: token) else { return }
-        boxOrder.remove(at: idx)
-        if front { boxOrder.append(token) } else { boxOrder.insert(token, at: 0) }
+    func moveBoxTokenToEdge(_ token: String, front: Bool, in key: String? = nil) {
+        var ordered = orderedBoxTokens(in: key)
+        guard let idx = ordered.firstIndex(of: token) else { return }
+        ordered.remove(at: idx)
+        if front { ordered.append(token) } else { ordered.insert(token, at: 0) }
+        let next = ordered
+        mutateProfile(key) { $0.boxOrder = next }
     }
 
     /// Places `token` directly ABOVE `target` in the stacking order
     /// (list drops: the dragged row takes the visual slot above the target).
-    func reorderBoxToken(_ token: String, above target: String) {
+    func reorderBoxToken(_ token: String, above target: String, in key: String? = nil) {
         guard token != target else { return }
-        registerLayoutUndo()
-        normalizeBoxOrder()
-        guard let from = boxOrder.firstIndex(of: token) else { return }
-        boxOrder.remove(at: from)
-        let to = boxOrder.firstIndex(of: target).map { $0 + 1 } ?? boxOrder.count
-        boxOrder.insert(token, at: to)
+        var ordered = orderedBoxTokens(in: key)
+        guard let from = ordered.firstIndex(of: token) else { return }
+        ordered.remove(at: from)
+        let to = ordered.firstIndex(of: target).map { $0 + 1 } ?? ordered.count
+        ordered.insert(token, at: to)
+        let next = ordered
+        mutateProfile(key) { $0.boxOrder = next }
     }
 
     // MARK: - Edit Mode
@@ -1210,17 +1570,8 @@ final class PresentationManager {
         var useBackgroundImage: Bool = false
         var backgroundImageBookmark: Data? = nil
         var backgroundMediaTypeRaw: String = "image"
-        var contentBackgrounds: [String: BackgroundConfig] = [:]
-        // Boxes
-        var frames: [String: TextBoxFrame] = [:]
-        var visibility: [String: Bool] = [:]
-        var styles: [String: BoxTextStyle] = [:]
-        var sources: [String: String] = [:]
-        var sourceFormats: [String: String] = [:]
-        var staticTexts: [String: String] = [:]
-        var customTextBoxes: [CustomTextBox] = []
-        var mediaBoxes: [MediaBox] = []
-        var boxOrder: [String] = []
+        /// All presenter layouts (bible/song/text) — the whole look travels.
+        var profiles: [String: LayoutProfile] = [:]
 
         init() {}
 
@@ -1244,16 +1595,40 @@ final class PresentationManager {
             useBackgroundImage = try c.decodeIfPresent(Bool.self, forKey: .useBackgroundImage) ?? false
             backgroundImageBookmark = try c.decodeIfPresent(Data.self, forKey: .backgroundImageBookmark)
             backgroundMediaTypeRaw = try c.decodeIfPresent(String.self, forKey: .backgroundMediaTypeRaw) ?? "image"
-            contentBackgrounds = try c.decodeIfPresent([String: BackgroundConfig].self, forKey: .contentBackgrounds) ?? [:]
-            frames = try c.decodeIfPresent([String: TextBoxFrame].self, forKey: .frames) ?? [:]
-            visibility = try c.decodeIfPresent([String: Bool].self, forKey: .visibility) ?? [:]
-            styles = try c.decodeIfPresent([String: BoxTextStyle].self, forKey: .styles) ?? [:]
-            sources = try c.decodeIfPresent([String: String].self, forKey: .sources) ?? [:]
-            sourceFormats = try c.decodeIfPresent([String: String].self, forKey: .sourceFormats) ?? [:]
-            staticTexts = try c.decodeIfPresent([String: String].self, forKey: .staticTexts) ?? [:]
-            customTextBoxes = try c.decodeIfPresent([CustomTextBox].self, forKey: .customTextBoxes) ?? []
-            mediaBoxes = try c.decodeIfPresent([MediaBox].self, forKey: .mediaBoxes) ?? []
-            boxOrder = try c.decodeIfPresent([String].self, forKey: .boxOrder) ?? []
+            profiles = try c.decodeIfPresent([String: LayoutProfile].self, forKey: .profiles) ?? [:]
+            if profiles.isEmpty {
+                // Legacy (pre-profiles) payloads stored ONE flat layout shared
+                // by every presenter — rebuild it as per-presenter profiles.
+                let l = try decoder.container(keyedBy: LegacyKeys.self)
+                var base = LayoutProfile()
+                base.frames = try l.decodeIfPresent([String: TextBoxFrame].self, forKey: .frames) ?? [:]
+                base.visibility = try l.decodeIfPresent([String: Bool].self, forKey: .visibility) ?? [:]
+                base.styles = try l.decodeIfPresent([String: BoxTextStyle].self, forKey: .styles) ?? [:]
+                base.sources = try l.decodeIfPresent([String: String].self, forKey: .sources) ?? [:]
+                base.sourceFormats = try l.decodeIfPresent([String: String].self, forKey: .sourceFormats) ?? [:]
+                base.staticTexts = try l.decodeIfPresent([String: String].self, forKey: .staticTexts) ?? [:]
+                base.customTextBoxes = try l.decodeIfPresent([CustomTextBox].self, forKey: .customTextBoxes) ?? []
+                base.mediaBoxes = try l.decodeIfPresent([MediaBox].self, forKey: .mediaBoxes) ?? []
+                base.boxOrder = try l.decodeIfPresent([String].self, forKey: .boxOrder) ?? []
+                let backgrounds = try l.decodeIfPresent([String: BackgroundConfig].self, forKey: .contentBackgrounds) ?? [:]
+                let contentOptions = try l.decodeIfPresent([String: ContentOptions].self, forKey: .contentOptions) ?? [:]
+                if base != LayoutProfile() || !backgrounds.isEmpty || !contentOptions.isEmpty {
+                    for key in PresentationManager.profileKeys {
+                        var prof = base
+                        if prof.visibility.isEmpty {
+                            prof.visibility = LayoutProfile.defaultProfile(for: key).visibility
+                        }
+                        prof.background = backgrounds[key] ?? BackgroundConfig()
+                        prof.options = contentOptions[key] ?? ContentOptions()
+                        profiles[key] = prof
+                    }
+                }
+            }
+        }
+
+        private enum LegacyKeys: String, CodingKey {
+            case frames, visibility, styles, sources, sourceFormats, staticTexts
+            case customTextBoxes, mediaBoxes, boxOrder, contentBackgrounds, contentOptions
         }
     }
 
@@ -1270,20 +1645,6 @@ final class PresentationManager {
 
     /// Captures the entire current look into a payload.
     private func captureThemePayload() -> ThemePayload {
-        var frames: [String: TextBoxFrame] = [:]
-        var visibility: [String: Bool] = [:]
-        var styles: [String: BoxTextStyle] = [:]
-        var sources: [String: String] = [:]
-        var formats: [String: String] = [:]
-        var statics: [String: String] = [:]
-        for section in TextBoxSection.allCases {
-            frames[section.rawValue] = boxFrame(for: section)
-            visibility[section.rawValue] = isSectionVisible(section)
-            styles[section.rawValue] = boxStyle(for: section)
-            sources[section.rawValue] = sourceRaw(for: section)
-            formats[section.rawValue] = sourceFormat(for: section)
-            statics[section.rawValue] = staticText(for: section)
-        }
         var p = ThemePayload()
         p.fontSize = fontSize
         p.fontName = fontName
@@ -1303,16 +1664,7 @@ final class PresentationManager {
         p.useBackgroundImage = useBackgroundImage
         p.backgroundImageBookmark = UserDefaults.standard.data(forKey: "pm_backgroundImageBookmark")
         p.backgroundMediaTypeRaw = backgroundMediaTypeRaw
-        p.contentBackgrounds = contentBackgrounds
-        p.frames = frames
-        p.visibility = visibility
-        p.styles = styles
-        p.sources = sources
-        p.sourceFormats = formats
-        p.staticTexts = statics
-        p.customTextBoxes = customTextBoxes
-        p.mediaBoxes = mediaBoxes
-        p.boxOrder = orderedBoxTokens()
+        p.profiles = profiles
         return p
     }
 
@@ -1352,10 +1704,36 @@ final class PresentationManager {
     }
 
     func applyTheme(id: UUID) {
+        // A hover preview may be showing — fall back to the REAL look first so
+        // the undo snapshot captures the true previous state.
+        endThemeHoverPreview()
         guard let theme = themes.first(where: { $0.id == id }) else { return }
         registerLayoutUndo()
         applyPayload(theme.payload)
         activeThemeID = id
+    }
+
+    // MARK: - Theme Hover Preview
+    // Resting the cursor on a theme card temporarily shows that theme in the
+    // operator preview; moving away restores the real look. Never while LIVE —
+    // the projector must not flicker — and never registers undo.
+    @ObservationIgnored private var hoverPreviewSnapshot: ThemePayload?
+
+    var isHoverPreviewingTheme: Bool { hoverPreviewSnapshot != nil }
+
+    func beginThemeHoverPreview(id: UUID) {
+        guard !liveContent.isLive,
+              let theme = themes.first(where: { $0.id == id }) else { return }
+        if hoverPreviewSnapshot == nil {
+            hoverPreviewSnapshot = captureThemePayload()
+        }
+        applyPayload(theme.payload)
+    }
+
+    func endThemeHoverPreview() {
+        guard let snapshot = hoverPreviewSnapshot else { return }
+        hoverPreviewSnapshot = nil
+        applyPayload(snapshot)
     }
 
     // MARK: - Theme Import / Export (.tptheme packages)
@@ -1466,29 +1844,28 @@ final class PresentationManager {
         ) {
             payload.backgroundImageBookmark = nil
         }
-        // Per-content backgrounds
-        for (key, var config) in payload.contentBackgrounds {
+        // Per-profile backgrounds + media boxes
+        for (key, var prof) in payload.profiles {
             if copyAsset(
-                bookmark: config.imageBookmark,
-                slot: "contentBackground:\(key)",
-                mediaType: config.mediaTypeRaw,
-                preferredName: config.imageName
+                bookmark: prof.background.imageBookmark,
+                slot: "profileBackground:\(key)",
+                mediaType: prof.background.mediaTypeRaw,
+                preferredName: prof.background.imageName
             ) {
-                config.imageBookmark = nil
-                payload.contentBackgrounds[key] = config
+                prof.background.imageBookmark = nil
             }
-        }
-        // Media boxes
-        for idx in payload.mediaBoxes.indices {
-            let box = payload.mediaBoxes[idx]
-            if copyAsset(
-                bookmark: box.bookmarkData,
-                slot: "mediaBox:\(box.id.uuidString)",
-                mediaType: box.mediaTypeRaw,
-                preferredName: box.fileName
-            ) {
-                payload.mediaBoxes[idx].bookmarkData = nil
+            for idx in prof.mediaBoxes.indices {
+                let box = prof.mediaBoxes[idx]
+                if copyAsset(
+                    bookmark: box.bookmarkData,
+                    slot: "mediaBox:\(key):\(box.id.uuidString)",
+                    mediaType: box.mediaTypeRaw,
+                    preferredName: box.fileName
+                ) {
+                    prof.mediaBoxes[idx].bookmarkData = nil
+                }
             }
+            payload.profiles[key] = prof
         }
 
         archive.payload = payload
@@ -1531,23 +1908,31 @@ final class PresentationManager {
                 payload.backgroundImageBookmark = bookmark
                 payload.backgroundMediaTypeRaw = asset.mediaType
                 payload.useBackgroundImage = true
-            } else if asset.slot.hasPrefix("contentBackground:") {
-                let key = String(asset.slot.dropFirst("contentBackground:".count))
-                var config = payload.contentBackgrounds[key] ?? BackgroundConfig()
-                config.imageBookmark = bookmark
-                config.imageName = asset.file
-                config.mediaTypeRaw = asset.mediaType
-                config.useImage = true
-                payload.contentBackgrounds[key] = config
+            } else if asset.slot.hasPrefix("profileBackground:") || asset.slot.hasPrefix("contentBackground:") {
+                // "contentBackground:" is the legacy (v1) name for the same slot.
+                let key = String(asset.slot.drop(while: { $0 != ":" }).dropFirst())
+                var prof = payload.profiles[key] ?? .defaultProfile(for: key)
+                prof.background.imageBookmark = bookmark
+                prof.background.imageName = asset.file
+                prof.background.mediaTypeRaw = asset.mediaType
+                prof.background.useImage = true
+                payload.profiles[key] = prof
             } else if asset.slot.hasPrefix("mediaBox:") {
-                let idString = String(asset.slot.dropFirst("mediaBox:".count))
-                if let boxID = UUID(uuidString: idString),
-                   let idx = payload.mediaBoxes.firstIndex(where: { $0.id == boxID }) {
-                    payload.mediaBoxes[idx].bookmarkData = bookmark
-                    payload.mediaBoxes[idx].mediaTypeRaw = asset.mediaType
-                    if payload.mediaBoxes[idx].fileName.isEmpty {
-                        payload.mediaBoxes[idx].fileName = asset.file
+                // "mediaBox:<key>:<uuid>" — legacy v1 had no profile key, so
+                // fall back to searching every profile for the box id.
+                let rest = String(asset.slot.dropFirst("mediaBox:".count))
+                let parts = rest.split(separator: ":", maxSplits: 1).map(String.init)
+                let keys = parts.count == 2 ? [parts[0]] : Array(payload.profiles.keys)
+                guard let boxID = UUID(uuidString: parts.last ?? "") else { continue }
+                for key in keys {
+                    guard var prof = payload.profiles[key],
+                          let idx = prof.mediaBoxes.firstIndex(where: { $0.id == boxID }) else { continue }
+                    prof.mediaBoxes[idx].bookmarkData = bookmark
+                    prof.mediaBoxes[idx].mediaTypeRaw = asset.mediaType
+                    if prof.mediaBoxes[idx].fileName.isEmpty {
+                        prof.mediaBoxes[idx].fileName = asset.file
                     }
+                    payload.profiles[key] = prof
                 }
             }
         }
@@ -1589,19 +1974,10 @@ final class PresentationManager {
             backgroundImagePath = nil
             UserDefaults.standard.removeObject(forKey: "pm_backgroundImageBookmark")
         }
-        contentBackgrounds = p.contentBackgrounds
-        loadContentBackgroundImages()
-        for section in TextBoxSection.allCases {
-            if let frame = p.frames[section.rawValue] { setBoxFrame(frame, for: section) }
-            if let visible = p.visibility[section.rawValue] { setSectionVisible(visible, for: section) }
-            if let style = p.styles[section.rawValue] { setBoxStyle(style, for: section) }
-            if let source = p.sources[section.rawValue] { setSourceRaw(source, for: section) }
-            if let format = p.sourceFormats[section.rawValue] { setSourceFormat(format, for: section) }
-            if let text = p.staticTexts[section.rawValue] { setStaticText(text, for: section) }
+        if !p.profiles.isEmpty {
+            profiles = p.profiles
         }
-        customTextBoxes = p.customTextBoxes
-        mediaBoxes = p.mediaBoxes
-        boxOrder = p.boxOrder
+        loadContentBackgroundImages()
     }
 
     // MARK: - Layout Undo / Redo
@@ -1682,17 +2058,173 @@ final class PresentationManager {
     var outputBackgroundColor: Color { Color(hex: outputBackgroundColorHex) ?? .black }
 
     func outputBoxFrame(for section: TextBoxSection) -> TextBoxFrame {
-        isFrozen ? (frozenFrames[section.rawValue] ?? boxFrame(for: section)) : boxFrame(for: section)
+        isFrozen
+            ? (frozenFrames[section.rawValue] ?? boxFrame(for: section, in: outputProfileKey))
+            : boxFrame(for: section, in: outputProfileKey)
     }
 
     func outputStyle(for section: TextBoxSection) -> ResolvedBoxStyle {
-        isFrozen ? (frozenStyles[section.rawValue] ?? resolvedStyle(for: section)) : resolvedStyle(for: section)
+        isFrozen
+            ? (frozenStyles[section.rawValue] ?? resolvedStyle(for: section, in: outputProfileKey))
+            : resolvedStyle(for: section, in: outputProfileKey)
     }
 
-    var outputCustomTextBoxes: [CustomTextBox] { isFrozen ? frozenCustomBoxes : customTextBoxes }
-    var outputMediaBoxes: [MediaBox] { isFrozen ? frozenMediaBoxes : mediaBoxes }
+    var outputCustomTextBoxes: [CustomTextBox] { isFrozen ? frozenCustomBoxes : profile(outputProfileKey).customTextBoxes }
+    var outputMediaBoxes: [MediaBox] { isFrozen ? frozenMediaBoxes : profile(outputProfileKey).mediaBoxes }
+    /// The render order of the OUTPUT profile.
+    func outputOrderedBoxTokens() -> [String] { orderedBoxTokens(in: outputProfileKey) }
     // Visibility (not frozen — hiding a box mid-freeze is an operator action)
-    func outputSectionVisible(_ section: TextBoxSection) -> Bool { isSectionVisible(section) }
+    func outputSectionVisible(_ section: TextBoxSection) -> Bool { isSectionVisible(section, in: outputProfileKey) }
+
+    // MARK: - Transitions (per-profile text enter/exit)
+
+    func transitionInRaw(in key: String? = nil) -> String { profile(key).transitionInRaw }
+    func transitionChangeRaw(in key: String? = nil) -> String { profile(key).transitionChangeRaw }
+    func transitionOutRaw(in key: String? = nil) -> String { profile(key).transitionOutRaw }
+    func setTransitionIn(_ raw: String, in key: String? = nil) { mutateProfile(key) { $0.transitionInRaw = raw } }
+    func setTransitionChange(_ raw: String, in key: String? = nil) { mutateProfile(key) { $0.transitionChangeRaw = raw } }
+    func setTransitionOut(_ raw: String, in key: String? = nil) { mutateProfile(key) { $0.transitionOutRaw = raw } }
+
+    /// How the last content change happened — picks which transition plays:
+    /// "appear" (nothing → live), "change" (slide → slide), "clear" (live → nothing).
+    private(set) var contentChangeKind: String = "appear"
+
+    /// Per-PHASE duration: stored raw (-1 = inherit profile/general).
+    func phaseDurationOverride(_ phase: String, in key: String? = nil) -> Double {
+        let p = profile(key)
+        switch phase {
+        case "change": return p.transitionChangeDuration
+        case "clear": return p.transitionOutDuration
+        default: return p.transitionInDuration
+        }
+    }
+
+    func setPhaseDurationOverride(_ value: Double, _ phase: String, in key: String? = nil) {
+        mutateProfile(key) {
+            switch phase {
+            case "change": $0.transitionChangeDuration = value
+            case "clear": $0.transitionOutDuration = value
+            default: $0.transitionInDuration = value
+            }
+        }
+    }
+
+    /// The duration that actually plays for a phase:
+    /// phase override → profile override → global.
+    func resolvedTransitionDuration(phase: String? = nil, in key: String? = nil) -> Double {
+        let override = phaseDurationOverride(phase ?? contentChangeKind, in: key)
+        return override >= 0 ? override : transitionDuration(in: key)
+    }
+
+    func boxColorHex(forToken token: String, in key: String? = nil) -> String? {
+        profile(key).boxColors[token]
+    }
+
+    func setBoxColorHex(_ hex: String?, forToken token: String, in key: String? = nil) {
+        mutateProfile(key) { $0.boxColors[token] = (hex?.isEmpty == false) ? hex : nil }
+    }
+
+    func boxTransitionOverride(forToken token: String, in key: String? = nil) -> BoxTransition {
+        profile(key).boxTransitionOverrides[token] ?? BoxTransition()
+    }
+
+    func setBoxTransitionOverride(_ override: BoxTransition, forToken token: String, in key: String? = nil) {
+        mutateProfile(key) {
+            // A pristine override is noise — drop the entry entirely.
+            $0.boxTransitionOverrides[token] = (override == BoxTransition()) ? nil : override
+        }
+    }
+    func transitionDuration(in key: String? = nil) -> Double {
+        let override = profile(key).transitionDurationOverride
+        return override >= 0 ? override : transitionDuration
+    }
+    func setTransitionDurationOverride(_ value: Double, in key: String? = nil) {
+        mutateProfile(key) { $0.transitionDurationOverride = value }
+    }
+
+    static let transitionOptions: [(raw: String, label: String)] = [
+        ("none", String(localized: "Fără", comment: "Transition")),
+        ("fade", String(localized: "Estompare", comment: "Transition")),
+        ("zoomIn", String(localized: "Zoom +", comment: "Transition")),
+        ("zoomOut", String(localized: "Zoom −", comment: "Transition")),
+        ("slideUp", String(localized: "Glisare sus", comment: "Transition")),
+        ("slideDown", String(localized: "Glisare jos", comment: "Transition")),
+        ("slideLeft", String(localized: "Glisare stânga", comment: "Transition")),
+        ("slideRight", String(localized: "Glisare dreapta", comment: "Transition")),
+        ("riseSoft", String(localized: "Ridicare fină", comment: "Transition")),
+        ("dropSoft", String(localized: "Coborâre fină", comment: "Transition")),
+        ("blur", String(localized: "Blur", comment: "Transition")),
+        ("blurZoom", String(localized: "Blur + Zoom", comment: "Transition")),
+        ("fall", String(localized: "Cădere", comment: "Transition")),
+        ("flip", String(localized: "Rotire 3D", comment: "Transition")),
+    ]
+
+    static func transitionPart(_ raw: String) -> AnyTransition {
+        switch raw {
+        case "none": return .identity
+        case "zoomIn": return .scale(scale: 0.85).combined(with: .opacity)
+        case "zoomOut": return .scale(scale: 1.15).combined(with: .opacity)
+        case "slideUp": return .move(edge: .bottom).combined(with: .opacity)
+        case "slideDown": return .move(edge: .top).combined(with: .opacity)
+        case "slideLeft": return .move(edge: .trailing).combined(with: .opacity)
+        case "slideRight": return .move(edge: .leading).combined(with: .opacity)
+        case "riseSoft": return .offset(y: 36).combined(with: .opacity)
+        case "dropSoft": return .offset(y: -36).combined(with: .opacity)
+        case "blur": return .modifier(
+            active: BlurFadeModifier(radius: 12, opacity: 0),
+            identity: BlurFadeModifier(radius: 0, opacity: 1)
+        )
+        case "blurZoom": return .modifier(
+            active: BlurFadeModifier(radius: 14, opacity: 0, scale: 0.92),
+            identity: BlurFadeModifier(radius: 0, opacity: 1, scale: 1)
+        )
+        case "fall": return .modifier(
+            active: BlurFadeModifier(radius: 10, opacity: 0, scale: 1.25),
+            identity: BlurFadeModifier(radius: 0, opacity: 1, scale: 1)
+        )
+        case "flip": return .modifier(
+            active: FlipFadeModifier(angle: 75, opacity: 0),
+            identity: FlipFadeModifier(angle: 0, opacity: 1)
+        )
+        default: return .opacity
+        }
+    }
+
+    static func transitionLabel(_ raw: String) -> String {
+        transitionOptions.first { $0.raw == raw }?.label ?? raw
+    }
+
+    /// The transition for the given profile, honoring HOW the content changed:
+    /// slide → slide uses the Intermediar effect for both out and in; first
+    /// appearance uses Intrare; clearing uses Ieșire.
+    func boxTransition(in key: String? = nil, token: String? = nil) -> AnyTransition {
+        let override = token.map { boxTransitionOverride(forToken: $0, in: key) } ?? BoxTransition()
+        let custom = override.isCustomized
+
+        func effective(_ own: String, _ profileRaw: String) -> String {
+            custom && !own.isEmpty ? own : profileRaw
+        }
+
+        let base: AnyTransition
+        if contentChangeKind == "change" {
+            let part = Self.transitionPart(effective(override.changeRaw, transitionChangeRaw(in: key)))
+            base = .asymmetric(insertion: part, removal: part)
+        } else {
+            base = .asymmetric(
+                insertion: Self.transitionPart(effective(override.inRaw, transitionInRaw(in: key))),
+                removal: Self.transitionPart(effective(override.outRaw, transitionOutRaw(in: key)))
+            )
+        }
+        // A box with its own delay or duration carries its own animation clock.
+        let delay = custom ? override.delay : 0
+        let duration = (custom && override.duration >= 0)
+            ? override.duration
+            : resolvedTransitionDuration(in: key)
+        if delay > 0 || (custom && override.duration >= 0) {
+            return base.animation(.easeInOut(duration: duration).delay(delay))
+        }
+        return base
+    }
 
     // MARK: - Init (restore from UserDefaults)
     init() {
@@ -1716,28 +2248,8 @@ final class PresentationManager {
         self.backgroundEnabled = d.bool(forKey: "pm_backgroundEnabled") // defaults to false = transparent
         self.windowLevel = d.string(forKey: "pm_windowLevel") ?? "alwaysOnTop"
         self.autoFitVerseFont = d.bool(forKey: "pm_autoFitVerseFont")
-        self.boxOrder = d.stringArray(forKey: "pm_boxOrder") ?? []
-        // Custom text boxes
-        if let data = d.data(forKey: "pm_customTextBoxes"),
-           let boxes = try? JSONDecoder().decode([CustomTextBox].self, from: data) {
-            self.customTextBoxes = boxes
-        } else {
-            self.customTextBoxes = []
-        }
-        // Media boxes
-        if let data = d.data(forKey: "pm_mediaBoxes"),
-           let boxes = try? JSONDecoder().decode([MediaBox].self, from: data) {
-            self.mediaBoxes = boxes
-        } else {
-            self.mediaBoxes = []
-        }
-        // Per-content backgrounds
-        if let data = d.data(forKey: "pm_contentBackgrounds"),
-           let configs = try? JSONDecoder().decode([String: BackgroundConfig].self, from: data) {
-            self.contentBackgrounds = configs
-        } else {
-            self.contentBackgrounds = [:]
-        }
+        self.videoLoopsByDefault = d.object(forKey: "pm_videoLoopsByDefault") as? Bool ?? true
+        self.fullscreenVideoFillRaw = d.string(forKey: "pm_fullscreenVideoFillRaw") ?? "fit"
         // Themes
         if let data = d.data(forKey: "pm_themes"),
            let decoded = try? JSONDecoder().decode([Theme].self, from: data) {
@@ -1750,35 +2262,59 @@ final class PresentationManager {
         } else {
             self.activeThemeID = nil
         }
-        // Section visibility — translation & subtitle hidden by default
-        self.verseBoxVisible = d.object(forKey: "pm_verseBoxVisible") as? Bool ?? true
-        self.refBoxVisible = d.object(forKey: "pm_refBoxVisible") as? Bool ?? true
-        self.translationBoxVisible = d.object(forKey: "pm_translationBoxVisible") as? Bool ?? false
-        self.subtitleBoxVisible = d.object(forKey: "pm_subtitleBoxVisible") as? Bool ?? false
-        // Section content sources ("auto" = natural field)
-        self.verseSourceRaw = d.string(forKey: "pm_verseSourceRaw") ?? "auto"
-        self.refSourceRaw = d.string(forKey: "pm_refSourceRaw") ?? "auto"
-        self.translationSourceRaw = d.string(forKey: "pm_translationSourceRaw") ?? "auto"
-        self.subtitleSourceRaw = d.string(forKey: "pm_subtitleSourceRaw") ?? "auto"
-        self.verseStaticText = d.string(forKey: "pm_verseStaticText") ?? ""
-        self.refStaticText = d.string(forKey: "pm_refStaticText") ?? ""
-        self.translationStaticText = d.string(forKey: "pm_translationStaticText") ?? ""
-        self.subtitleStaticText = d.string(forKey: "pm_subtitleStaticText") ?? ""
-        self.verseSourceFormat = d.string(forKey: "pm_verseSourceFormat") ?? ""
-        self.refSourceFormat = d.string(forKey: "pm_refSourceFormat") ?? ""
-        self.translationSourceFormat = d.string(forKey: "pm_translationSourceFormat") ?? ""
-        self.subtitleSourceFormat = d.string(forKey: "pm_subtitleSourceFormat") ?? ""
-        // Fixed text boxes
-        self.verseBoxFrame = TextBoxFrame.decode(from: d, key: "pm_verseBoxFrame", fallback: .defaultVerse)
-        self.refBoxFrame = TextBoxFrame.decode(from: d, key: "pm_refBoxFrame", fallback: .defaultReference)
-        self.translationBoxFrame = TextBoxFrame.decode(from: d, key: "pm_translationBoxFrame", fallback: .defaultTranslation)
-        self.subtitleBoxFrame = TextBoxFrame.decode(from: d, key: "pm_subtitleBoxFrame", fallback: .defaultSubtitle)
-        // Uniform box styles
-        self.verseStyle = Self.decodeStyle(from: d, key: "pm_verseStyle")
-        self.refStyle = Self.decodeStyle(from: d, key: "pm_refStyle")
-        self.translationStyle = Self.decodeStyle(from: d, key: "pm_translationStyle")
-        self.subtitleStyle = Self.decodeStyle(from: d, key: "pm_subtitleStyle")
 
+        // Layout profiles — per-presenter layouts. Migrate from the old flat
+        // single-layout keys on first run so the existing look is preserved.
+        if let data = d.data(forKey: "pm_layoutProfiles"),
+           let decoded = try? JSONDecoder().decode([String: LayoutProfile].self, from: data),
+           !decoded.isEmpty {
+            self.profiles = decoded
+        } else {
+            var migrated: [String: LayoutProfile] = [:]
+            // Legacy flat state (if any)
+            var legacy = LayoutProfile()
+            legacy.frames = [
+                TextBoxSection.verseContent.rawValue: TextBoxFrame.decode(from: d, key: "pm_verseBoxFrame", fallback: .defaultVerse),
+                TextBoxSection.reference.rawValue: TextBoxFrame.decode(from: d, key: "pm_refBoxFrame", fallback: .defaultReference),
+                TextBoxSection.translationName.rawValue: TextBoxFrame.decode(from: d, key: "pm_translationBoxFrame", fallback: .defaultTranslation),
+                TextBoxSection.subtitle.rawValue: TextBoxFrame.decode(from: d, key: "pm_subtitleBoxFrame", fallback: .defaultSubtitle),
+            ]
+            if let stylesData = d.data(forKey: "pm_verseStyle"),
+               let style = try? JSONDecoder().decode(BoxTextStyle.self, from: stylesData) {
+                legacy.styles[TextBoxSection.verseContent.rawValue] = style
+            }
+            if let stylesData = d.data(forKey: "pm_refStyle"),
+               let style = try? JSONDecoder().decode(BoxTextStyle.self, from: stylesData) {
+                legacy.styles[TextBoxSection.reference.rawValue] = style
+            }
+            if let boxesData = d.data(forKey: "pm_customTextBoxes"),
+               let boxes = try? JSONDecoder().decode([CustomTextBox].self, from: boxesData) {
+                legacy.customTextBoxes = boxes
+            }
+            if let mediaData = d.data(forKey: "pm_mediaBoxes"),
+               let boxes = try? JSONDecoder().decode([MediaBox].self, from: mediaData) {
+                legacy.mediaBoxes = boxes
+            }
+            legacy.boxOrder = d.stringArray(forKey: "pm_boxOrder") ?? []
+            // Legacy per-content backgrounds fold into each profile
+            var legacyBackgrounds: [String: BackgroundConfig] = [:]
+            if let bgData = d.data(forKey: "pm_contentBackgrounds"),
+               let configs = try? JSONDecoder().decode([String: BackgroundConfig].self, from: bgData) {
+                legacyBackgrounds = configs
+            }
+            for key in Self.profileKeys {
+                var p = legacy
+                p.visibility = LayoutProfile.defaultProfile(for: key).visibility
+                if let visible = d.object(forKey: "pm_verseBoxVisible") as? Bool {
+                    p.visibility[TextBoxSection.verseContent.rawValue] = visible
+                }
+                if let bg = legacyBackgrounds[key] {
+                    p.background = bg
+                }
+                migrated[key] = p
+            }
+            self.profiles = migrated
+        }
         // Restore background image — security-scoped bookmark first (required in the
         // sandbox after relaunch), raw path as fallback for pre-bookmark installs.
         if let bookmark = d.data(forKey: "pm_backgroundImageBookmark") {
@@ -1855,15 +2391,17 @@ final class PresentationManager {
         frozenBackgroundImage = backgroundImage
         frozenTextAlignment = textAlignment
         frozenBackgroundEnabled = backgroundEnabled
+        let key = outputProfileKey
         for section in TextBoxSection.allCases {
-            frozenFrames[section.rawValue] = boxFrame(for: section)
-            frozenStyles[section.rawValue] = resolvedStyle(for: section)
+            frozenFrames[section.rawValue] = boxFrame(for: section, in: key)
+            frozenStyles[section.rawValue] = resolvedStyle(for: section, in: key)
         }
-        frozenCustomBoxes = customTextBoxes
-        frozenMediaBoxes = mediaBoxes
+        frozenCustomBoxes = profile(key).customTextBoxes
+        frozenMediaBoxes = profile(key).mediaBoxes
     }
 
     func clearOutput() {
+        contentChangeKind = "clear"
         liveContent.clear()
         isBlackScreen = false
         isFrozen = false
@@ -1873,26 +2411,37 @@ final class PresentationManager {
         }
     }
 
-    func showBibleVerse(text: String, reference: String, translationName: String = "") {
+    /// Marks whether this show is a fresh appearance or a slide-to-slide change.
+    private func registerContentChange() {
+        contentChangeKind = (liveContent.isLive && !isBlackScreen) ? "change" : "appear"
+    }
+
+    func showBibleVerse(text: String, reference: String, translationName: String = "", slideIndex: Int = 0, slideCount: Int = 1) {
         guard !isFrozen else { return }
         showPresentationWindow()
-        liveContent.setBibleVerse(text: text, reference: reference, translationName: translationName)
+        registerContentChange()
+        liveContent.setBibleVerse(text: text, reference: reference, translationName: translationName, slideIndex: slideIndex, slideCount: slideCount)
+        lastLiveProfileKey = "bible"
         liveContent.isLive = true
         isBlackScreen = false
     }
 
-    func showSongVerse(text: String, title: String, verseLabel: String) {
+    func showSongVerse(text: String, title: String, verseLabel: String, slideIndex: Int = 0, slideCount: Int = 1) {
         guard !isFrozen else { return }
         showPresentationWindow()
-        liveContent.setSongVerse(text: text, title: title, verseLabel: verseLabel)
+        registerContentChange()
+        liveContent.setSongVerse(text: text, title: title, verseLabel: verseLabel, slideIndex: slideIndex, slideCount: slideCount)
+        lastLiveProfileKey = "song"
         liveContent.isLive = true
         isBlackScreen = false
     }
 
-    func showCustomText(text: String, title: String) {
+    func showCustomText(text: String, title: String, slideIndex: Int = 0, slideCount: Int = 1) {
         guard !isFrozen else { return }
         showPresentationWindow()
-        liveContent.setCustomText(text: text, title: title)
+        registerContentChange()
+        liveContent.setCustomText(text: text, title: title, slideIndex: slideIndex, slideCount: slideCount)
+        lastLiveProfileKey = "text"
         liveContent.isLive = true
         isBlackScreen = false
     }
@@ -2078,87 +2627,51 @@ final class PresentationManager {
     /// (used by auto-fill to decide how many verses fit).
     var verseBoxPointSize: CGSize {
         let screen = targetScreenMetrics.points
-        let box = outputBoxFrame(for: .verseContent)
+        let box = boxFrame(for: .verseContent, in: "bible")
         return CGSize(width: screen.width * box.width, height: screen.height * box.height)
     }
 
     // MARK: - Box Frame / Source / Visibility Access (by section)
 
-    func boxFrame(for section: TextBoxSection) -> TextBoxFrame {
+    static func defaultFrame(for section: TextBoxSection) -> TextBoxFrame {
         switch section {
-        case .verseContent: return verseBoxFrame
-        case .reference: return refBoxFrame
-        case .translationName: return translationBoxFrame
-        case .subtitle: return subtitleBoxFrame
+        case .verseContent: return .defaultVerse
+        case .reference: return .defaultReference
+        case .translationName: return .defaultTranslation
+        case .subtitle: return .defaultSubtitle
         }
     }
 
-    func setBoxFrame(_ frame: TextBoxFrame, for section: TextBoxSection) {
-        registerLayoutUndo()
-        let clamped = frame.clamped()
-        switch section {
-        case .verseContent: verseBoxFrame = clamped
-        case .reference: refBoxFrame = clamped
-        case .translationName: translationBoxFrame = clamped
-        case .subtitle: subtitleBoxFrame = clamped
-        }
+    func boxFrame(for section: TextBoxSection, in key: String? = nil) -> TextBoxFrame {
+        profile(key).frames[section.rawValue] ?? Self.defaultFrame(for: section)
     }
 
-    func sourceRaw(for section: TextBoxSection) -> String {
-        switch section {
-        case .verseContent: return verseSourceRaw
-        case .reference: return refSourceRaw
-        case .translationName: return translationSourceRaw
-        case .subtitle: return subtitleSourceRaw
-        }
+    func setBoxFrame(_ frame: TextBoxFrame, for section: TextBoxSection, in key: String? = nil) {
+        mutateProfile(key) { $0.frames[section.rawValue] = frame.clamped() }
     }
 
-    func setSourceRaw(_ raw: String, for section: TextBoxSection) {
-        registerLayoutUndo()
-        switch section {
-        case .verseContent: verseSourceRaw = raw
-        case .reference: refSourceRaw = raw
-        case .translationName: translationSourceRaw = raw
-        case .subtitle: subtitleSourceRaw = raw
-        }
+    func sourceRaw(for section: TextBoxSection, in key: String? = nil) -> String {
+        profile(key).sources[section.rawValue] ?? "auto"
     }
 
-    func sourceFormat(for section: TextBoxSection) -> String {
-        switch section {
-        case .verseContent: return verseSourceFormat
-        case .reference: return refSourceFormat
-        case .translationName: return translationSourceFormat
-        case .subtitle: return subtitleSourceFormat
-        }
+    func setSourceRaw(_ raw: String, for section: TextBoxSection, in key: String? = nil) {
+        mutateProfile(key) { $0.sources[section.rawValue] = raw }
     }
 
-    func setSourceFormat(_ format: String, for section: TextBoxSection) {
-        registerLayoutUndo()
-        switch section {
-        case .verseContent: verseSourceFormat = format
-        case .reference: refSourceFormat = format
-        case .translationName: translationSourceFormat = format
-        case .subtitle: subtitleSourceFormat = format
-        }
+    func sourceFormat(for section: TextBoxSection, in key: String? = nil) -> String {
+        profile(key).sourceFormats[section.rawValue] ?? ""
     }
 
-    func staticText(for section: TextBoxSection) -> String {
-        switch section {
-        case .verseContent: return verseStaticText
-        case .reference: return refStaticText
-        case .translationName: return translationStaticText
-        case .subtitle: return subtitleStaticText
-        }
+    func setSourceFormat(_ format: String, for section: TextBoxSection, in key: String? = nil) {
+        mutateProfile(key) { $0.sourceFormats[section.rawValue] = format }
     }
 
-    func setStaticText(_ text: String, for section: TextBoxSection) {
-        registerLayoutUndo()
-        switch section {
-        case .verseContent: verseStaticText = text
-        case .reference: refStaticText = text
-        case .translationName: translationStaticText = text
-        case .subtitle: subtitleStaticText = text
-        }
+    func staticText(for section: TextBoxSection, in key: String? = nil) -> String {
+        profile(key).staticTexts[section.rawValue] ?? ""
+    }
+
+    func setStaticText(_ text: String, for section: TextBoxSection, in key: String? = nil) {
+        mutateProfile(key) { $0.staticTexts[section.rawValue] = text }
     }
 
     /// Resolved text for a built-in section, honoring its source override.
@@ -2166,7 +2679,7 @@ final class PresentationManager {
     func sectionText(
         _ section: TextBoxSection,
         main: String, reference: String, translation: String, subtitle: String,
-        now: Date = .now
+        now: Date = .now, slideNumber: String = "", in key: String? = nil
     ) -> String {
         let autoValue: String
         switch section {
@@ -2176,48 +2689,57 @@ final class PresentationManager {
         case .subtitle: autoValue = subtitle
         }
         return Self.resolveBoxSource(
-            sourceRaw(for: section),
-            format: sourceFormat(for: section),
+            sourceRaw(for: section, in: key),
+            format: sourceFormat(for: section, in: key),
             autoValue: autoValue,
-            staticText: staticText(for: section),
+            staticText: staticText(for: section, in: key),
             main: main, reference: reference, translation: translation, subtitle: subtitle,
-            now: now
+            now: now, slideNumber: slideNumber
         )
     }
 
-    func isSectionVisible(_ section: TextBoxSection) -> Bool {
-        switch section {
-        case .verseContent: return verseBoxVisible
-        case .reference: return refBoxVisible
-        case .translationName: return translationBoxVisible
-        case .subtitle: return subtitleBoxVisible
+    func isSectionVisible(_ section: TextBoxSection, in key: String? = nil) -> Bool {
+        let k = resolvedKey(key)
+        return profile(k).visibility[section.rawValue]
+            ?? LayoutProfile.defaultProfile(for: k).visibility[section.rawValue]
+            ?? true
+    }
+
+    func setSectionVisible(_ visible: Bool, for section: TextBoxSection, in key: String? = nil) {
+        mutateProfile(key) { $0.visibility[section.rawValue] = visible }
+    }
+
+    // MARK: - Slide Display Scope ("Amin." only on the last slide, title on the first)
+    static let displayScopeOptions: [(raw: String, label: String)] = [
+        ("all", String(localized: "Toate", comment: "Slide scope")),
+        ("first", String(localized: "Primul", comment: "Slide scope")),
+        ("last", String(localized: "Ultimul", comment: "Slide scope")),
+    ]
+
+    func displayScope(for section: TextBoxSection, in key: String? = nil) -> String {
+        profile(key).displayOn[section.rawValue] ?? "all"
+    }
+
+    func setDisplayScope(_ raw: String, for section: TextBoxSection, in key: String? = nil) {
+        mutateProfile(key) { $0.displayOn[section.rawValue] = raw }
+    }
+
+    /// Whether a scope is satisfied by the CURRENT live slide position.
+    func scopeMatchesLiveSlide(_ raw: String) -> Bool {
+        switch raw {
+        case "first": return liveContent.isFirstSlide
+        case "last": return liveContent.isLastSlide
+        default: return true
         }
     }
 
-    func setSectionVisible(_ visible: Bool, for section: TextBoxSection) {
-        registerLayoutUndo()
-        switch section {
-        case .verseContent: verseBoxVisible = visible
-        case .reference: refBoxVisible = visible
-        case .translationName: translationBoxVisible = visible
-        case .subtitle: subtitleBoxVisible = visible
-        }
+    func resetBoxFrame(for section: TextBoxSection, in key: String? = nil) {
+        mutateProfile(key) { $0.frames[section.rawValue] = Self.defaultFrame(for: section) }
     }
 
-    func resetBoxFrame(for section: TextBoxSection) {
-        registerLayoutUndo()
-        switch section {
-        case .verseContent: verseBoxFrame = .defaultVerse
-        case .reference: refBoxFrame = .defaultReference
-        case .translationName: translationBoxFrame = .defaultTranslation
-        case .subtitle: subtitleBoxFrame = .defaultSubtitle
-        }
-    }
-
-    func resetAllBoxFrames() {
-        registerLayoutUndo()
+    func resetAllBoxFrames(in key: String? = nil) {
         for section in TextBoxSection.allCases {
-            resetBoxFrame(for: section)
+            resetBoxFrame(for: section, in: key)
         }
     }
 

@@ -265,17 +265,19 @@ struct SchedulePreviewPanel: View {
             pm.clearOutput()
             return
         }
+        let index = currentItemIndex
+        let count = max(sortedItems.count, 1)
         switch item.itemType {
         case "bible":
-            pm.showBibleVerse(text: item.content, reference: item.subtitle)
+            pm.showBibleVerse(text: item.content, reference: item.subtitle, slideIndex: index, slideCount: count)
         case "song":
-            pm.showSongVerse(text: item.content, title: item.title, verseLabel: item.subtitle)
+            pm.showSongVerse(text: item.content, title: item.title, verseLabel: item.subtitle, slideIndex: index, slideCount: count)
         case "text":
-            pm.showCustomText(text: item.content, title: item.title)
+            pm.showCustomText(text: item.content, title: item.title, slideIndex: index, slideCount: count)
         case "blank":
             pm.goBlack()
         default:
-            pm.showCustomText(text: item.content, title: item.title)
+            pm.showCustomText(text: item.content, title: item.title, slideIndex: index, slideCount: count)
         }
     }
 

@@ -20,7 +20,7 @@ struct BiblePreviewPanel: View {
             Divider()
 
             // Preview display (16:9 aspect ratio)
-            PresentationPreviewCard(isBibleContent: true)
+            PresentationPreviewCard(isBibleContent: true, formatHint: "bible")
                 .padding()
 
             Divider()
@@ -48,7 +48,7 @@ struct BiblePreviewPanel: View {
             }
 
             // Operational quick settings (styling lives in the Layout Editor)
-            StyleQuickSettings(sections: [.multiVerse, .general])
+            StyleQuickSettings(sections: [.multiVerse, .general, .output])
 
             Divider()
 

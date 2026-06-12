@@ -20,7 +20,7 @@ struct SongsPreviewPanel: View {
             Divider()
 
             // Preview display — previews the selected song verse before it goes live
-            PresentationPreviewCard(pendingContent: .init(
+            PresentationPreviewCard(formatHint: "song", pendingContent: .init(
                 text: libraryManager.selectedSongVerse?.text ?? "",
                 reference: libraryManager.selectedSong?.title ?? "",
                 subtitle: libraryManager.selectedSongVerse?.label ?? ""
@@ -133,7 +133,9 @@ struct SongVerseControlsBar: View {
                         pm.showSongVerse(
                             text: verse.text,
                             title: song.title,
-                            verseLabel: verse.label
+                            verseLabel: verse.label,
+                            slideIndex: currentIndex ?? 0,
+                            slideCount: sortedVerses.count
                         )
                     }
                 } label: {
@@ -176,7 +178,9 @@ struct SongVerseControlsBar: View {
                                     pm.showSongVerse(
                                         text: verse.text,
                                         title: song.title,
-                                        verseLabel: verse.label
+                                        verseLabel: verse.label,
+                                        slideIndex: sortedVerses.firstIndex(where: { $0.id == verse.id }) ?? 0,
+                                        slideCount: sortedVerses.count
                                     )
                                 }
                             } label: {
@@ -216,7 +220,10 @@ struct SongVerseControlsBar: View {
         let verse = sortedVerses[newIdx]
         libraryManager.selectSongVerse(verse)
         if wasLive, let song = currentSong {
-            pm.showSongVerse(text: verse.text, title: song.title, verseLabel: verse.label)
+            pm.showSongVerse(
+                text: verse.text, title: song.title, verseLabel: verse.label,
+                slideIndex: newIdx, slideCount: sortedVerses.count
+            )
         }
     }
 }

@@ -202,6 +202,7 @@ struct MediaActionBar: View {
                     if item.mediaType == "video" {
                         Button {
                             if let url = item.resolvedURL {
+                                videoPlayerService.isLooping = pm.videoLoopsByDefault
                                 videoPlayerService.loadVideo(url: url)
                                 videoPlayerService.play()
                                 pm.showVideo()

@@ -150,17 +150,20 @@ struct ScheduleView: View {
     }
 
     private func showScheduleItem(_ item: ScheduleItem) {
+        let items = selectedSchedule?.sortedItems ?? []
+        let index = items.firstIndex(where: { $0.id == item.id }) ?? 0
+        let count = max(items.count, 1)
         switch item.itemType {
         case "bible":
-            presentationManager.showBibleVerse(text: item.content, reference: item.subtitle)
+            presentationManager.showBibleVerse(text: item.content, reference: item.subtitle, slideIndex: index, slideCount: count)
         case "song":
-            presentationManager.showSongVerse(text: item.content, title: item.title, verseLabel: item.subtitle)
+            presentationManager.showSongVerse(text: item.content, title: item.title, verseLabel: item.subtitle, slideIndex: index, slideCount: count)
         case "text":
-            presentationManager.showCustomText(text: item.content, title: item.title)
+            presentationManager.showCustomText(text: item.content, title: item.title, slideIndex: index, slideCount: count)
         case "blank":
             presentationManager.goBlack()
         default:
-            presentationManager.showCustomText(text: item.content, title: item.title)
+            presentationManager.showCustomText(text: item.content, title: item.title, slideIndex: index, slideCount: count)
         }
     }
 }

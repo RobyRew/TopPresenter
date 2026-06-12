@@ -674,18 +674,242 @@ struct PresentationManagerTests {
         #expect(rect.height == 200)
     }
 
-    @Test func setBoxFrameClampsAndPersistsRoundTrip() {
+    @Test func setBoxFrameClampsAndPersistsRoundTrip() throws {
         let pm = PresentationManager()
-        pm.setBoxFrame(.init(x: 0.95, y: 0.1, width: 0.3, height: 0.2), for: .verseContent)
+        let original = pm.boxFrame(for: .verseContent, in: "bible")
+        pm.setBoxFrame(.init(x: 0.95, y: 0.1, width: 0.3, height: 0.2), for: .verseContent, in: "bible")
+        defer { pm.setBoxFrame(original, for: .verseContent, in: "bible") }
 
         // x clamped so the box stays fully on screen
-        #expect(pm.verseBoxFrame.x + pm.verseBoxFrame.width <= 1.0)
+        let frame = pm.boxFrame(for: .verseContent, in: "bible")
+        #expect(frame.x + frame.width <= 1.0)
 
-        // Persisted value decodes back to the same frame
-        let decoded = PresentationManager.TextBoxFrame.decode(
-            from: .standard, key: "pm_verseBoxFrame", fallback: .defaultVerse
+        // Profiles persist as ONE blob — decode it back and compare
+        let data = try #require(UserDefaults.standard.data(forKey: "pm_layoutProfiles"))
+        let profiles = try JSONDecoder().decode(
+            [String: PresentationManager.LayoutProfile].self, from: data
         )
-        #expect(decoded == pm.verseBoxFrame)
+        #expect(profiles["bible"]?.frames[TextBoxSection.verseContent.rawValue] == frame)
+    }
+
+    @Test func profilesAreIndependentPerPresenter() {
+        let pm = PresentationManager()
+        let originalSong = pm.boxFrame(for: .verseContent, in: "song")
+        let originalBible = pm.boxFrame(for: .verseContent, in: "bible")
+        defer {
+            pm.setBoxFrame(originalSong, for: .verseContent, in: "song")
+            pm.setBoxFrame(originalBible, for: .verseContent, in: "bible")
+        }
+
+        let frame = PresentationManager.TextBoxFrame(x: 0.11, y: 0.12, width: 0.5, height: 0.3)
+        pm.setBoxFrame(frame, for: .verseContent, in: "song")
+        #expect(pm.boxFrame(for: .verseContent, in: "song") == frame)
+        // The Bible layout is untouched by a Songs edit
+        #expect(pm.boxFrame(for: .verseContent, in: "bible") == originalBible)
+    }
+
+    @Test func relevantSectionsFilterPerPresenter() {
+        // Songs have no Bible translation box; slides have neither extra box
+        #expect(!PresentationManager.relevantSections(for: "song").contains(.translationName))
+        #expect(!PresentationManager.relevantSections(for: "text").contains(.subtitle))
+        #expect(PresentationManager.relevantSections(for: "bible") == TextBoxSection.allCases)
+
+        // The unified z-order only offers a profile's relevant boxes
+        let pm = PresentationManager()
+        #expect(!pm.orderedBoxTokens(in: "song").contains("section:translationName"))
+        #expect(pm.orderedBoxTokens(in: "bible").contains("section:translationName"))
+    }
+
+    @Test func transitionCatalogResolvesEveryOption() {
+        #expect(PresentationManager.transitionOptions.count >= 14)
+        for option in PresentationManager.transitionOptions {
+            _ = PresentationManager.transitionPart(option.raw) // must not crash
+            #expect(PresentationManager.transitionLabel(option.raw) == option.label)
+        }
+    }
+
+    @Test func copyProfileClonesLayoutBetweenPresenters() {
+        let pm = PresentationManager()
+        let originalSong = pm.profile("song")
+        let originalBibleRef = pm.boxFrame(for: .reference, in: "bible")
+        defer {
+            pm.mutateProfile("song") { $0 = originalSong }
+            pm.setBoxFrame(originalBibleRef, for: .reference, in: "bible")
+        }
+
+        let frame = PresentationManager.TextBoxFrame(x: 0.2, y: 0.25, width: 0.4, height: 0.2)
+        pm.setBoxFrame(frame, for: .reference, in: "bible")
+        pm.copyProfile(from: "bible", to: "song")
+        #expect(pm.boxFrame(for: .reference, in: "song") == frame)
+    }
+
+    @Test func slideScopeMatchesFirstAndLast() {
+        let pm = PresentationManager()
+        pm.liveContent.setSongVerse(text: "v1", title: "T", verseLabel: "Strofa 1", slideIndex: 0, slideCount: 3)
+        #expect(pm.scopeMatchesLiveSlide("all"))
+        #expect(pm.scopeMatchesLiveSlide("first"))
+        #expect(!pm.scopeMatchesLiveSlide("last"))
+
+        pm.liveContent.setSongVerse(text: "v3", title: "T", verseLabel: "Strofa 3", slideIndex: 2, slideCount: 3)
+        #expect(!pm.scopeMatchesLiveSlide("first"))
+        #expect(pm.scopeMatchesLiveSlide("last"))
+
+        // Single slide counts as both first AND last
+        pm.liveContent.setCustomText(text: "x", title: "t")
+        #expect(pm.scopeMatchesLiveSlide("first"))
+        #expect(pm.scopeMatchesLiveSlide("last"))
+        pm.liveContent.clear()
+    }
+
+    @Test func sourceOptionsArePerPresenter() {
+        let songRaws = PresentationManager.sourceOptions(for: "song").map(\.raw)
+        #expect(!songRaws.contains("translation")) // songs have no Bible translation
+        #expect(songRaws.contains("slideNumber"))
+        let bibleRaws = PresentationManager.sourceOptions(for: "bible").map(\.raw)
+        #expect(bibleRaws.contains("translation"))
+        #expect(PresentationManager.sourceOptionLabel("reference", for: "song")
+                != PresentationManager.sourceOptionLabel("reference", for: "bible"))
+    }
+
+    @Test func slideNumberSourceResolves() {
+        let resolved = PresentationManager.resolveBoxSource(
+            "slideNumber", autoValue: "", staticText: "",
+            main: "", reference: "", translation: "", subtitle: "",
+            slideNumber: "2 / 7"
+        )
+        #expect(resolved == "2 / 7")
+
+        let live = LiveContent()
+        live.setSongVerse(text: "v", title: "T", verseLabel: "S1", slideIndex: 1, slideCount: 7)
+        #expect(live.slideNumberText == "2 / 7")
+    }
+
+    @Test func boxColorPersistsPerToken() {
+        let pm = PresentationManager()
+        let token = "section:reference"
+        defer { pm.setBoxColorHex(nil, forToken: token, in: "song") }
+
+        #expect(pm.boxColorHex(forToken: token, in: "song") == nil)
+        pm.setBoxColorHex("FF8800", forToken: token, in: "song")
+        #expect(pm.boxColorHex(forToken: token, in: "song") == "FF8800")
+        #expect(pm.boxColorHex(forToken: token, in: "bible") == nil) // per profile
+
+        pm.setBoxColorHex(nil, forToken: token, in: "song") // reset drops the entry
+        #expect(pm.boxColorHex(forToken: token, in: "song") == nil)
+    }
+
+    @Test func outputKeepsLastLiveProfileAfterClear() {
+        let pm = PresentationManager()
+        pm.activeProfileKey = "bible"
+        pm.showSongVerse(text: "v", title: "T", verseLabel: "S1")
+        #expect(pm.outputProfileKey == "song")
+
+        // After Hide/Clear/ESC the EXIT transition must still use the song
+        // profile, not whatever the operator is editing.
+        pm.clearOutput()
+        #expect(pm.outputProfileKey == "song")
+        #expect(pm.contentChangeKind == "clear")
+    }
+
+    @Test func contentChangeKindTracksAppearChangeClear() {
+        let pm = PresentationManager()
+        pm.clearOutput()
+        pm.showSongVerse(text: "v1", title: "T", verseLabel: "S1", slideIndex: 0, slideCount: 2)
+        #expect(pm.contentChangeKind == "appear")
+        pm.showSongVerse(text: "v2", title: "T", verseLabel: "S2", slideIndex: 1, slideCount: 2)
+        #expect(pm.contentChangeKind == "change")
+        pm.clearOutput()
+        #expect(pm.contentChangeKind == "clear")
+    }
+
+    @Test func boxTransitionOverrideIsPerTokenAndProfile() {
+        let pm = PresentationManager()
+        let token = "section:verseContent"
+        let original = pm.boxTransitionOverride(forToken: token, in: "song")
+        defer { pm.setBoxTransitionOverride(original, forToken: token, in: "song") }
+
+        var override = PresentationManager.BoxTransition()
+        override.isCustomized = true
+        override.inRaw = "blurZoom"
+        override.delay = 0.3
+        override.duration = 0.8
+        pm.setBoxTransitionOverride(override, forToken: token, in: "song")
+
+        let stored = pm.boxTransitionOverride(forToken: token, in: "song")
+        #expect(stored.inRaw == "blurZoom")
+        #expect(abs(stored.delay - 0.3) < 0.001)
+        // Independent per profile
+        #expect(!pm.boxTransitionOverride(forToken: token, in: "bible").isCustomized)
+        _ = pm.boxTransition(in: "song", token: token) // builds without crashing
+
+        // Resetting to a pristine override drops the stored entry
+        pm.setBoxTransitionOverride(PresentationManager.BoxTransition(), forToken: token, in: "song")
+        #expect(pm.boxTransitionOverride(forToken: token, in: "song") == PresentationManager.BoxTransition())
+    }
+
+    @Test func phaseDurationOverridesResolveInOrder() {
+        let pm = PresentationManager()
+        let originalChange = pm.phaseDurationOverride("change", in: "song")
+        let originalGeneral = pm.profile("song").transitionDurationOverride
+        defer {
+            pm.setPhaseDurationOverride(originalChange, "change", in: "song")
+            pm.setTransitionDurationOverride(originalGeneral, in: "song")
+        }
+
+        // No overrides → global duration
+        pm.setPhaseDurationOverride(-1, "change", in: "song")
+        pm.setTransitionDurationOverride(-1, in: "song")
+        #expect(pm.resolvedTransitionDuration(phase: "change", in: "song") == pm.transitionDuration)
+
+        // Profile general override wins over global
+        pm.setTransitionDurationOverride(0.9, in: "song")
+        #expect(abs(pm.resolvedTransitionDuration(phase: "change", in: "song") - 0.9) < 0.001)
+
+        // Phase override wins over the general one
+        pm.setPhaseDurationOverride(0.2, "change", in: "song")
+        #expect(abs(pm.resolvedTransitionDuration(phase: "change", in: "song") - 0.2) < 0.001)
+        // Other phases keep the general duration
+        #expect(abs(pm.resolvedTransitionDuration(phase: "appear", in: "song") - 0.9) < 0.001)
+    }
+
+    @Test func themeHoverPreviewAppliesAndRestores() {
+        let pm = PresentationManager()
+        pm.clearOutput()
+        let originalFont = pm.fontSize
+        defer { pm.fontSize = originalFont }
+
+        pm.fontSize = 99
+        let theme = pm.saveCurrentAsTheme(named: "Hover Test", formatRaw: "all")
+        defer { pm.deleteTheme(id: theme.id) }
+        pm.fontSize = originalFont
+
+        pm.beginThemeHoverPreview(id: theme.id)
+        #expect(pm.isHoverPreviewingTheme)
+        #expect(pm.fontSize == 99)
+        pm.endThemeHoverPreview()
+        #expect(!pm.isHoverPreviewingTheme)
+        #expect(pm.fontSize == originalFont)
+
+        // While LIVE the hover preview is a no-op (projector must not flicker)
+        pm.showCustomText(text: "x", title: "t")
+        pm.beginThemeHoverPreview(id: theme.id)
+        #expect(!pm.isHoverPreviewingTheme)
+        #expect(pm.fontSize == originalFont)
+        pm.clearOutput()
+    }
+
+    @Test func themePayloadCarriesPerProfileTransitions() {
+        let pm = PresentationManager()
+        let originalIn = pm.transitionInRaw(in: "song")
+        defer { pm.setTransitionIn(originalIn, in: "song") }
+
+        pm.setTransitionIn("blurZoom", in: "song")
+        let theme = pm.saveCurrentAsTheme(named: "Trans Test", formatRaw: "song")
+        defer { pm.deleteTheme(id: theme.id) }
+
+        pm.setTransitionIn("fade", in: "song")
+        pm.applyTheme(id: theme.id)
+        #expect(pm.transitionInRaw(in: "song") == "blurZoom")
     }
 
     @Test func resetAllBoxFramesRestoresDefaults() {
@@ -773,24 +997,24 @@ struct PresentationManagerTests {
 
     @Test func sectionSourceOverrideResolvesText() {
         let pm = PresentationManager()
-        let originalSource = pm.refSourceRaw
-        let originalStatic = pm.refStaticText
+        let originalSource = pm.sourceRaw(for: .reference)
+        let originalStatic = pm.staticText(for: .reference)
 
         // Default "auto" → the box's natural field
-        pm.refSourceRaw = "auto"
+        pm.setSourceRaw("auto", for: .reference)
         #expect(pm.sectionText(.reference, main: "M", reference: "R", translation: "T", subtitle: "S") == "R")
 
         // Override to another live field
-        pm.refSourceRaw = "translation"
+        pm.setSourceRaw("translation", for: .reference)
         #expect(pm.sectionText(.reference, main: "M", reference: "R", translation: "T", subtitle: "S") == "T")
 
         // Static text
-        pm.refSourceRaw = "static"
-        pm.refStaticText = "Biserica Sion"
+        pm.setSourceRaw("static", for: .reference)
+        pm.setStaticText("Biserica Sion", for: .reference)
         #expect(pm.sectionText(.reference, main: "M", reference: "R", translation: "T", subtitle: "S") == "Biserica Sion")
 
-        pm.refSourceRaw = originalSource
-        pm.refStaticText = originalStatic
+        pm.setSourceRaw(originalSource, for: .reference)
+        pm.setStaticText(originalStatic, for: .reference)
     }
 
     @Test func sectionVisibilityToggles() {
@@ -882,9 +1106,11 @@ struct PresentationManagerTests {
         )
         #expect(payload.fontSize == 72)
         #expect(payload.backgroundMediaTypeRaw == "video")
-        #expect(payload.frames["verseContent"]?.width == 0.8)
+        // Legacy flat layout fields are rebuilt as per-presenter profiles
+        #expect(payload.profiles["bible"]?.frames["verseContent"]?.width == 0.8)
+        #expect(payload.profiles["song"]?.frames["verseContent"]?.width == 0.8)
         #expect(payload.fontName == PresentationDefaults.fontName) // default filled in
-        #expect(payload.customTextBoxes.isEmpty)
+        #expect(payload.profiles["bible"]?.customTextBoxes.isEmpty == true)
     }
 
     @Test func themeImportExportRoundTrip() throws {
@@ -938,6 +1164,79 @@ struct PresentationManagerTests {
         #expect(PresentationManager.mediaType(forExtension: "GIF") == "gif")
         #expect(PresentationManager.mediaType(forExtension: "mp4") == "video")
         #expect(PresentationManager.mediaType(forExtension: "MOV") == "video")
+    }
+
+    @Test func perBoxPaddingShadowAutoFitResolve() {
+        let pm = PresentationManager()
+        let original = pm.boxStyle(for: .reference, in: "song")
+        defer { pm.setBoxStyle(original, for: .reference, in: "song") }
+
+        // Not customized → inherits the globals
+        var style = PresentationManager.BoxTextStyle()
+        pm.setBoxStyle(style, for: .reference, in: "song")
+        let inherited = pm.resolvedStyle(for: .reference, in: "song")
+        #expect(inherited.padding == pm.padding)
+        #expect(inherited.shadowEnabled == pm.shadowEnabled)
+        #expect(inherited.autoFit == false) // global auto-fit only targets the verse box
+
+        // Customized overrides win
+        style.isCustomized = true
+        style.padding = 5
+        style.shadowMode = "off"
+        style.autoFitMode = "on"
+        pm.setBoxStyle(style, for: .reference, in: "song")
+        let overridden = pm.resolvedStyle(for: .reference, in: "song")
+        #expect(overridden.padding == 5)
+        #expect(overridden.shadowEnabled == false)
+        #expect(overridden.autoFit == true)
+    }
+
+    @Test func transformResolvesGlobalAndPerBox() {
+        let pm = PresentationManager()
+        let originalOptions = pm.contentOptions(for: "song")
+        let originalStyle = pm.boxStyle(for: .verseContent, in: "song")
+        defer {
+            pm.setContentOptions(originalOptions, for: "song")
+            pm.setBoxStyle(originalStyle, for: .verseContent, in: "song")
+        }
+
+        // Profile-global transform → every non-customized box inherits it
+        var options = PresentationManager.ContentOptions()
+        options.textTransformRaw = "upper"
+        pm.setContentOptions(options, for: "song")
+        let inherited = pm.resolvedStyle(for: .verseContent, in: "song")
+        #expect(inherited.transformRaw == "upper")
+        #expect(inherited.display("la la la") == "LA LA LA")
+
+        // A per-box override beats the global default
+        var style = pm.boxStyle(for: .verseContent, in: "song")
+        style.isCustomized = true
+        style.transformRaw = "lower"
+        pm.setBoxStyle(style, for: .verseContent, in: "song")
+        let overridden = pm.resolvedStyle(for: .verseContent, in: "song")
+        #expect(overridden.transformRaw == "lower")
+        #expect(overridden.display("La La") == "la la")
+
+        // Other presenters are unaffected
+        #expect(pm.resolvedStyle(for: .verseContent, in: "bible").transformRaw
+                == pm.contentOptions(for: "bible").textTransformRaw)
+    }
+
+    @Test func contentOptionsTravelWithThemes() {
+        let pm = PresentationManager()
+        let originalOptions = pm.contentOptions
+
+        var options = PresentationManager.ContentOptions()
+        options.textTransformRaw = "upper"
+        pm.setContentOptions(options, for: "song")
+        let theme = pm.saveCurrentAsTheme(named: "Opt Test", formatRaw: "song")
+
+        pm.setContentOptions(PresentationManager.ContentOptions(), for: "song")
+        pm.applyTheme(id: theme.id)
+        #expect(pm.contentOptions(for: "song").textTransformRaw == "upper")
+
+        pm.deleteTheme(id: theme.id)
+        pm.contentOptions = originalOptions
     }
 
     @Test func themesFilterByFormat() {

@@ -299,10 +299,13 @@ struct SongVerseDisplay: View {
 
                 // Show on screen
                 Button {
+                    let sorted = libraryManager.selectedSong?.sortedVerses ?? []
                     presentationManager.showSongVerse(
                         text: verse.text,
                         title: songTitle,
-                        verseLabel: verse.label
+                        verseLabel: verse.label,
+                        slideIndex: sorted.firstIndex(where: { $0.id == verse.id }) ?? 0,
+                        slideCount: max(sorted.count, 1)
                     )
                 } label: {
                     Label(

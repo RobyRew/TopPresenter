@@ -17,16 +17,32 @@ struct SettingsView: View {
             InterfaceSettingsTab()
                 .tabItem {
                     Label(String(localized: "Interfață", comment: "Settings tab"), systemImage: "paintbrush")
+                    ProjectionSettingsTab()
+                .tabItem {
+                    Label(String(localized: "Proiecție", comment: "Settings tab"), systemImage: "display")
                 }
+        }
 
             BibleSettingsTab()
                 .tabItem {
                     Label(String(localized: "Biblie", comment: "Settings tab"), systemImage: "book.closed")
+                    ProjectionSettingsTab()
+                .tabItem {
+                    Label(String(localized: "Proiecție", comment: "Settings tab"), systemImage: "display")
                 }
+        }
 
             ImportExportSettingsTab()
                 .tabItem {
                     Label(String(localized: "Import / Export", comment: "Settings tab"), systemImage: "arrow.up.arrow.down")
+                    ProjectionSettingsTab()
+                .tabItem {
+                    Label(String(localized: "Proiecție", comment: "Settings tab"), systemImage: "display")
+                }
+        }
+            ProjectionSettingsTab()
+                .tabItem {
+                    Label(String(localized: "Proiecție", comment: "Settings tab"), systemImage: "display")
                 }
         }
         .frame(width: 550, height: 480)
@@ -191,5 +207,83 @@ struct ImportExportSettingsTab: View {
         }
         .formStyle(.grouped)
         .padding()
+    }
+}
+
+// MARK: - Projection Settings Tab
+// Output/screen hardware settings — moved here from the Theme Editor: they
+// configure the device, not the look, so they don't belong in themes.
+struct ProjectionSettingsTab: View {
+    @Environment(PresentationManager.self) private var pm
+
+    var body: some View {
+        @Bindable var pmBinding = pm
+
+        Form {
+            Section(String(localized: "Ecran de Proiecție", comment: "Settings section")) {
+                Picker(String(localized: "Ecran:", comment: "Setting label"), selection: $pmBinding.presentationScreenIndex) {
+                    Text(String(localized: "Auto", comment: "Picker option"))
+                        .tag(nil as Int?)
+                    ForEach(Array(pm.availableScreens.enumerated()), id: \.offset) { index, screen in
+                        Text(screen.localizedName).tag(index as Int?)
+                    }
+                }
+
+                Button(String(localized: "Reîmprospătează ecranele", comment: "Button")) {
+                    pm.refreshScreens()
+                }
+
+                Picker(String(localized: "Nivel fereastră:", comment: "Setting label"), selection: $pmBinding.windowLevel) {
+                    Text(String(localized: "Normal", comment: "Window level option")).tag("normal")
+                    Text(String(localized: "Floating", comment: "Window level option")).tag("floating")
+                    Text(String(localized: "Always on Top", comment: "Window level option")).tag("alwaysOnTop")
+                    Text(String(localized: "Behind Desktop", comment: "Window level option")).tag("behindDesktop")
+                }
+            }
+
+            Section(String(localized: "Comportament", comment: "Settings section")) {
+                HStack {
+                    Text(String(localized: "Tranziție:", comment: "Setting label"))
+                    Slider(value: $pmBinding.transitionDuration, in: 0...2, step: 0.1)
+                    Text(String(format: "%.1fs", pm.transitionDuration))
+                        .monospacedDigit()
+                        .frame(width: 36)
+                }
+
+                Picker(String(localized: "La deconectarea ecranului:", comment: "Setting label"), selection: Binding(
+                    get: { pm.screenDisconnectAction.rawValue },
+                    set: { pm.screenDisconnectAction = PresentationManager.ScreenDisconnectAction(rawValue: $0) ?? .ask }
+                )) {
+                    Text(String(localized: "Întreabă", comment: "Disconnect option")).tag("ask")
+                    Text(String(localized: "Mută pe alt ecran", comment: "Disconnect option")).tag("moveToAvailable")
+                    Text(String(localized: "Ecran negru", comment: "Disconnect option")).tag("goBlack")
+                    Text(String(localized: "Nu face nimic", comment: "Disconnect option")).tag("doNothing")
+                }
+            }
+
+            Section(String(localized: "Media (video pe tot ecranul)", comment: "Settings section")) {
+                Toggle(String(localized: "Video în buclă implicit", comment: "Setting label"), isOn: $pmBinding.videoLoopsByDefault)
+
+                Picker(String(localized: "Încadrare video:", comment: "Setting label"), selection: $pmBinding.fullscreenVideoFillRaw) {
+                    Text(String(localized: "Încadrează", comment: "Content mode")).tag("fit")
+                    Text(String(localized: "Umple", comment: "Content mode")).tag("fill")
+                }
+            }
+
+            Section(String(localized: "Adaptare Automată", comment: "Settings section")) {
+                Text(String(localized: "Layout-ul se adaptează automat la orice rezoluție, raport de aspect sau PPI: casetele sunt definite procentual, iar fonturile se scalează față de o înălțime de referință de 1080p.", comment: "Adaptive layout explanation"))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                let m = pm.targetScreenMetrics
+                LabeledContent(String(localized: "Ecran țintă", comment: "Setting label")) {
+                    Text("\(Int(m.resolution.width))×\(Int(m.resolution.height)) • \(m.aspectRatioLabel) • \(Int(m.ppi)) PPI")
+                        .monospacedDigit()
+                }
+            }
+        }
+        .formStyle(.grouped)
+        .frame(width: 520)
+        .padding(.vertical, 8)
     }
 }

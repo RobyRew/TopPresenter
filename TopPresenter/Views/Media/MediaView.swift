@@ -18,7 +18,7 @@ struct MediaView: View {
 
     @Query(sort: \MediaItem.importDate, order: .reverse) private var mediaItems: [MediaItem]
 
-    @State private var selectedMediaType: MediaTypeFilter = .all
+    @AppStorage("mediaTypeFilter") private var mediaTypeFilterRaw: String = "all"
     @State private var selectedItem: MediaItem?
     @State private var videoService = VideoPlayerService()
 
@@ -38,43 +38,19 @@ struct MediaView: View {
         }
     }
 
+    // Driven by the TOOLBAR filter (shared @AppStorage key)
     private var filteredItems: [MediaItem] {
-        switch selectedMediaType {
-        case .all: return mediaItems
-        case .image: return mediaItems.filter { $0.mediaType == "image" }
-        case .audio: return mediaItems.filter { $0.mediaType == "audio" }
-        case .video: return mediaItems.filter { $0.mediaType == "video" }
+        switch mediaTypeFilterRaw {
+        case "image": return mediaItems.filter { $0.mediaType == "image" }
+        case "audio": return mediaItems.filter { $0.mediaType == "audio" }
+        case "video": return mediaItems.filter { $0.mediaType == "video" }
+        default: return mediaItems
         }
     }
 
     var body: some View {
         VStack(spacing: 0) {
-            // Top bar
-            HStack {
-                Picker("", selection: $selectedMediaType) {
-                    ForEach(MediaTypeFilter.allCases, id: \.rawValue) { type in
-                        Text(type.localizedName).tag(type)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .frame(maxWidth: 400)
-
-                Spacer()
-
-                Button {
-                    importMedia()
-                } label: {
-                    Label(
-                        String(localized: "Add Media", comment: "Button"),
-                        systemImage: "plus"
-                    )
-                }
-                .controlSize(.small)
-            }
-            .padding(.horizontal)
-            .padding(.vertical, 8)
-
-            Divider()
+            // Filtering + Add Media live in the WINDOW TOOLBAR (shared filter key)
 
             if filteredItems.isEmpty {
                 VStack(spacing: 16) {

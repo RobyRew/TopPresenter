@@ -26,7 +26,10 @@ struct PresentationOutputView: View {
                 // stacking order (pm.orderedBoxTokens). Always mounted — media
                 // marked "always" shows even when nothing is live.
                 unifiedLayer
-                    .animation(.easeInOut(duration: pm.transitionDuration), value: pm.liveContent.mainText)
+                    .animation(
+                        .easeInOut(duration: pm.resolvedTransitionDuration(in: pm.outputProfileKey)),
+                        value: liveFingerprint
+                    )
             }
 
             // Full-screen video layer (Media module → Play Video).
@@ -35,7 +38,7 @@ struct PresentationOutputView: View {
             if pm.liveContent.isLive,
                pm.liveContent.contentType == .media,
                let player = videoService.player {
-                OutputVideoView(player: player)
+                OutputVideoView(player: player, fills: pm.fullscreenVideoFillRaw == "fill")
                     .ignoresSafeArea()
                     .transition(.opacity)
             }
@@ -58,6 +61,13 @@ struct PresentationOutputView: View {
         .onChange(of: pm.presentationScreenIndex) { _, _ in
             pm.applyScreenPosition()
         }
+    }
+
+    /// One string that changes whenever the on-screen text should transition —
+    /// drives the enter/exit animations of every box.
+    private var liveFingerprint: String {
+        let l = pm.liveContent
+        return "\(l.isLive)|\(l.contentType)|\(l.mainText)|\(l.reference)|\(l.subtitle)|\(l.translationName)|\(l.slideIndex)/\(l.slideCount)"
     }
 
     // MARK: - Background Layer
@@ -98,15 +108,15 @@ struct PresentationOutputView: View {
     private func orderedBoxes(now: Date) -> some View {
         GeometryReader { geo in
             let fontScale = PresentationManager.fontScale(forHeight: geo.size.height)
-            let scaledPadding = pm.outputPadding * fontScale
             let live = pm.liveContent
             // Text boxes only render with live (non-video) content; "always"
             // media renders even when idle.
             let textVisible = live.isLive && live.contentType != .media
 
             ZStack(alignment: .topLeading) {
-                ForEach(pm.orderedBoxTokens(), id: \.self) { token in
-                    orderedBox(token: token, now: now, textVisible: textVisible, canvasSize: geo.size, fontScale: fontScale, scaledPadding: scaledPadding)
+                // The LIVE content's profile decides boxes, order and transitions
+                ForEach(pm.outputOrderedBoxTokens(), id: \.self) { token in
+                    orderedBox(token: token, now: now, textVisible: textVisible, canvasSize: geo.size, fontScale: fontScale)
                 }
             }
             .frame(width: geo.size.width, height: geo.size.height)
@@ -117,87 +127,109 @@ struct PresentationOutputView: View {
     @ViewBuilder
     private func orderedBox(
         token: String, now: Date, textVisible: Bool,
-        canvasSize: CGSize, fontScale: CGFloat, scaledPadding: CGFloat
+        canvasSize: CGSize, fontScale: CGFloat
     ) -> some View {
         let live = pm.liveContent
+        // Transforms (MAJUSCULE etc.) are part of each box's resolved style.
+        let fields = (main: live.mainText, reference: live.reference,
+                      translation: live.translationName, subtitle: live.subtitle)
+        // Per-profile enter/exit effect; changing .id forces an out+in pair.
+        // The token gives the box its own delay (stagger), if configured.
+        let boxTransition = pm.boxTransition(in: pm.outputProfileKey, token: token)
         switch boxIdentity(fromToken: token) {
         case .section(let section):
-            if textVisible, pm.outputSectionVisible(section) {
+            if textVisible, pm.outputSectionVisible(section),
+               pm.scopeMatchesLiveSlide(pm.displayScope(for: section, in: pm.outputProfileKey)) {
                 let text = pm.sectionText(
                     section,
-                    main: live.mainText, reference: live.reference,
-                    translation: live.translationName, subtitle: live.subtitle,
-                    now: now
+                    main: fields.main, reference: fields.reference,
+                    translation: fields.translation, subtitle: fields.subtitle,
+                    now: now, slideNumber: live.slideNumberText, in: pm.outputProfileKey
                 )
                 if !text.isEmpty {
-                    sectionBox(section, text: text, canvasSize: canvasSize, fontScale: fontScale, scaledPadding: scaledPadding)
+                    sectionBox(section, text: text, canvasSize: canvasSize, fontScale: fontScale)
+                        .id("\(token)|\(text)")
+                        .transition(boxTransition)
                 }
             }
         case .custom(let id):
-            if textVisible, let box = pm.outputCustomTextBoxes.first(where: { $0.id == id }), box.isVisible {
-                let text = box.resolvedText(live: live, now: now)
+            if textVisible, let box = pm.outputCustomTextBoxes.first(where: { $0.id == id }), box.isVisible,
+               pm.scopeMatchesLiveSlide(box.displayOnRaw) {
+                let text = box.resolvedText(
+                    main: fields.main, reference: fields.reference,
+                    translation: fields.translation, subtitle: fields.subtitle,
+                    now: now, slideNumber: live.slideNumberText
+                )
                 if !text.isEmpty {
                     let rect = box.frame.rect(in: canvasSize)
-                    let style = pm.resolvedCustomStyle(box)
-                    boxText(text, style: style, rect: rect, fontScale: fontScale, scaledPadding: scaledPadding, fittedSize: nil)
+                    let style = pm.resolvedCustomStyle(box, in: pm.outputProfileKey)
+                    boxText(text, style: style, rect: rect, fontScale: fontScale, fittedSize: fittedSize(text, style: style, rect: rect, fontScale: fontScale))
+                        .id("\(token)|\(text)")
+                        .transition(boxTransition)
                 }
             }
         case .media(let id):
             if let box = pm.outputMediaBoxes.first(where: { $0.id == id }),
                box.isVisible,
-               box.showsFor(contentType: live.contentType, isLive: live.isLive) {
+               box.showsFor(contentType: live.contentType, isLive: live.isLive),
+               !live.isLive || pm.scopeMatchesLiveSlide(box.displayOnRaw) {
                 MediaBoxContent(box: box, canvasSize: canvasSize, playsVideo: true)
                     .allowsHitTesting(false)
+                    .transition(.opacity)
             }
         case nil:
             EmptyView()
         }
     }
 
+    /// Auto-fit font size for any box whose style asks for it.
+    private func fittedSize(
+        _ text: String, style: PresentationManager.ResolvedBoxStyle,
+        rect: CGRect, fontScale: CGFloat
+    ) -> CGFloat? {
+        guard style.autoFit else { return nil }
+        return pm.fittedVerseFontSize(
+            text: text,
+            boxSize: rect.size,
+            maxSize: CGFloat(style.fontSize) * fontScale,
+            padding: CGFloat(style.padding) * fontScale,
+            fontName: style.fontName,
+            lineSpacing: style.lineSpacing
+        )
+    }
+
     @ViewBuilder
     private func sectionBox(
         _ section: TextBoxSection, text: String,
-        canvasSize: CGSize, fontScale: CGFloat, scaledPadding: CGFloat
+        canvasSize: CGSize, fontScale: CGFloat
     ) -> some View {
         let rect = pm.outputBoxFrame(for: section).rect(in: canvasSize)
         let style = pm.outputStyle(for: section)
-
-        // Auto-fit shrinks the VERSE font so the text fits its box.
-        let fitted: CGFloat? = (section == .verseContent)
-            ? pm.fittedVerseFontSize(
-                text: text,
-                boxSize: rect.size,
-                maxSize: CGFloat(style.fontSize) * fontScale,
-                padding: scaledPadding,
-                fontName: style.fontName,
-                lineSpacing: style.lineSpacing
-              )
-            : nil
-
-        boxText(text, style: style, rect: rect, fontScale: fontScale, scaledPadding: scaledPadding, fittedSize: fitted)
+        boxText(text, style: style, rect: rect, fontScale: fontScale, fittedSize: fittedSize(text, style: style, rect: rect, fontScale: fontScale))
     }
 
     @ViewBuilder
     private func boxText(
         _ text: String,
         style: PresentationManager.ResolvedBoxStyle,
-        rect: CGRect, fontScale: CGFloat, scaledPadding: CGFloat,
+        rect: CGRect, fontScale: CGFloat,
         fittedSize: CGFloat?
     ) -> some View {
+        // Padding + shadow are per-box resolved style — global by default.
         let size = fittedSize ?? CGFloat(style.fontSize) * fontScale
-        Text(text)
+        Text(style.display(text))
             .font(style.font(at: size))
             .foregroundStyle(style.color.opacity(style.opacity))
             .multilineTextAlignment(style.hAlign)
             .lineSpacing(style.lineSpacing * size * 0.1)
             .minimumScaleFactor(fittedSize == nil ? 0.3 : 1.0)
             .shadow(
-                color: pm.outputShadowEnabled ? .black.opacity(0.7) : .clear,
-                radius: pm.outputShadowEnabled ? pm.outputShadowRadius * fontScale : 0,
+                color: style.shadowEnabled ? .black.opacity(0.7) : .clear,
+                radius: style.shadowEnabled ? style.shadowRadius * fontScale : 0,
                 x: 0,
-                y: pm.outputShadowEnabled ? 2 * fontScale : 0
+                y: style.shadowEnabled ? 2 * fontScale : 0
             )
-            .padding(.horizontal, scaledPadding)
+            .padding(.horizontal, CGFloat(style.padding) * fontScale)
             .frame(width: rect.width, height: rect.height, alignment: style.frameAlignment)
             .position(x: rect.midX, y: rect.midY)
     }
@@ -208,12 +240,13 @@ struct PresentationOutputView: View {
 /// controls hidden (the operator controls playback from the Media panel).
 struct OutputVideoView: NSViewRepresentable {
     let player: AVPlayer
+    var fills: Bool = false
 
     func makeNSView(context: Context) -> AVPlayerView {
         let view = AVPlayerView()
         view.player = player
         view.controlsStyle = .none
-        view.videoGravity = .resizeAspect
+        view.videoGravity = fills ? .resizeAspectFill : .resizeAspect
         view.allowsPictureInPicturePlayback = false
         return view
     }
@@ -222,6 +255,7 @@ struct OutputVideoView: NSViewRepresentable {
         if nsView.player !== player {
             nsView.player = player
         }
+        nsView.videoGravity = fills ? .resizeAspectFill : .resizeAspect
     }
 }
 
