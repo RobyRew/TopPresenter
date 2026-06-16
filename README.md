@@ -214,6 +214,7 @@ xcodebuild -scheme TopPresenter -destination 'platform=macOS' test -only-testing
 - Every push to `main` publishes an **alpha pre-release**; the alpha number counts **per version**, so bumping `MARKETING_VERSION` restarts the series (e.g. `v0.1.0-alpha.1`).
 - Stable releases come from final tags (`v1.0.0`): bump `MARKETING_VERSION`, push, then `git tag v1.0.0 && git push origin v1.0.0`.
 - The [Resurse release](https://github.com/RobyRew/TopPresenter/releases/tag/resources-1) hosts the starter themes and the EDC100 Bible.
+- The [Bible Library release](https://github.com/RobyRew/TopPresenter/releases/tag/bibles-1) bundles **all 70 Bible translations** (17 languages) as TopPresenter JSON — red-letter, Strong's, headings, cross-references and metadata included.
 
 ## License
 
