@@ -103,16 +103,30 @@ final class TopPresenterBibleImporter: BibleImporter {
                     let cleanText = verseText.trimmingCharacters(in: .whitespacesAndNewlines)
                     if cleanText.isEmpty { continue }
 
+                    // GOAT v2: rich segments + footnotes + cross-references.
+                    let runs = Self.decodeRuns(verseJSON["runs"])
+                    let woc = (verseJSON["hasWordsOfChrist"] as? Bool ?? false)
+                        || runs.contains { $0.kind == "woc" }
+
                     importVerses.append(BibleImportVerse(
                         verseNumber: verseNumber,
-                        text: cleanText
+                        text: cleanText,
+                        runs: runs.isEmpty ? nil : runs,
+                        footnotes: Self.decodeFootnotes(verseJSON["footnotes"]),
+                        crossReferences: Self.decodeCrossRefs(verseJSON["crossReferences"]),
+                        hasWordsOfChrist: woc,
+                        poetryIndent: verseJSON["poetryIndent"] as? Int,
+                        gloss: (verseJSON["gloss"] as? String) ?? "",
+                        extensionsJSON: Self.encodeExtensions(verseJSON["_extensions"])
                     ))
                 }
 
                 if !importVerses.isEmpty {
                     importChapters.append(BibleImportChapter(
                         chapterNumber: chapterNumber,
-                        verses: importVerses
+                        verses: importVerses,
+                        headings: Self.decodeHeadings(chapterJSON["headings"]),
+                        extensionsJSON: Self.encodeExtensions(chapterJSON["_extensions"])
                     ))
                 }
             }
@@ -122,7 +136,11 @@ final class TopPresenterBibleImporter: BibleImporter {
                     name: bookName,
                     bookNumber: bookNumber,
                     testament: testament,
-                    chapters: importChapters
+                    chapters: importChapters,
+                    introduction: bookJSON["introduction"] as? String,
+                    nameEnglish: (bookJSON["nameEnglish"] as? String) ?? "",
+                    abbreviation: (bookJSON["abbreviation"] as? String) ?? "",
+                    extensionsJSON: Self.encodeExtensions(bookJSON["_extensions"])
                 ))
             }
         }
@@ -131,12 +149,86 @@ final class TopPresenterBibleImporter: BibleImporter {
             throw BibleImportError.parsingFailed("No books could be parsed from the JSON")
         }
 
-        return BibleImportResult(
+        // Year may arrive as Int or numeric String.
+        let year = (translation["year"] as? Int) ?? Int((translation["year"] as? String) ?? "")
+
+        var result = BibleImportResult(
             moduleName: moduleName,
             abbreviation: abbreviation,
             language: language,
             description: description,
-            books: importBooks
+            books: importBooks,
+            versification: translation["versification"] as? String,
+            canon: translation["canon"] as? String
         )
+        result.nameLocal = (translation["nameLocal"] as? String) ?? ""
+        result.languageName = (translation["languageName"] as? String) ?? ""
+        result.copyright = copyright
+        result.about = (translation["about"] as? String) ?? ""
+        result.textSource = (translation["source"] as? String) ?? ""
+        result.year = year
+        result.direction = (translation["direction"] as? String) ?? "ltr"
+        result.hasWordsOfChrist = (translation["hasWordsOfChrist"] as? Bool) ?? false
+        result.hasStrongs = (translation["hasStrongs"] as? Bool) ?? false
+        result.incomplete = (translation["incomplete"] as? Bool) ?? false
+        result.extensionsJSON = Self.encodeExtensions(json["_extensions"])
+        return result
+    }
+
+    // MARK: - Rich-field decoders (tolerant of missing/partial data)
+
+    private static func decodeRuns(_ raw: Any?) -> [VerseRun] {
+        guard let arr = raw as? [[String: Any]] else { return [] }
+        return arr.compactMap { r in
+            guard let t = r["text"] as? String, !t.isEmpty else { return nil }
+            return VerseRun(
+                text: t,
+                kind: (r["kind"] as? String) ?? "plain",
+                strong: r["strong"] as? String,
+                morph: r["morph"] as? String,
+                gloss: r["gloss"] as? String
+            )
+        }
+    }
+
+    /// Re-serialize an `_extensions` object to a compact JSON string (nil when empty).
+    private static func encodeExtensions(_ raw: Any?) -> String? {
+        guard let obj = raw as? [String: Any], !obj.isEmpty,
+              let data = try? JSONSerialization.data(withJSONObject: obj),
+              let s = String(data: data, encoding: .utf8) else { return nil }
+        return s
+    }
+
+    private static func decodeFootnotes(_ raw: Any?) -> [BibleFootnote]? {
+        guard let arr = raw as? [[String: Any]] else { return nil }
+        let notes = arr.compactMap { n -> BibleFootnote? in
+            guard let t = n["text"] as? String, !t.isEmpty else { return nil }
+            return BibleFootnote(marker: (n["marker"] as? String) ?? "", text: t)
+        }
+        return notes.isEmpty ? nil : notes
+    }
+
+    private static func decodeCrossRefs(_ raw: Any?) -> [BibleCrossRef]? {
+        guard let arr = raw as? [[String: Any]] else { return nil }
+        let refs = arr.compactMap { r -> BibleCrossRef? in
+            // Accept {targets:[…]} or {references:[…]} (eBiblia v1 shape).
+            let targets = (r["targets"] as? [String]) ?? (r["references"] as? [String]) ?? []
+            guard !targets.isEmpty else { return nil }
+            return BibleCrossRef(label: r["label"] as? String, targets: targets)
+        }
+        return refs.isEmpty ? nil : refs
+    }
+
+    private static func decodeHeadings(_ raw: Any?) -> [BibleHeading]? {
+        guard let arr = raw as? [[String: Any]] else { return nil }
+        let hs = arr.compactMap { h -> BibleHeading? in
+            guard let t = h["text"] as? String, !t.isEmpty else { return nil }
+            return BibleHeading(
+                beforeVerse: (h["beforeVerse"] as? Int) ?? 1,
+                level: (h["level"] as? Int) ?? 1,
+                text: t
+            )
+        }
+        return hs.isEmpty ? nil : hs
     }
 }

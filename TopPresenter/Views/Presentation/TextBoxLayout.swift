@@ -2216,6 +2216,25 @@ struct LayoutEditorSheet: View {
                     )
                     .textFieldStyle(.roundedBorder)
                     .lineLimit(2...5)
+                } else if binding.wrappedValue.supportsAffixes {
+                    // Static text wrapped around the live value (e.g. "Ref: " + reference).
+                    labeledRow(String(localized: "Înainte:", comment: "Box prefix label")) {
+                        TextField(
+                            String(localized: "ex. „Ref: ”", comment: "Box prefix placeholder"),
+                            text: Binding(get: { binding.wrappedValue.prefix }, set: { binding.wrappedValue.prefix = $0 })
+                        )
+                        .textFieldStyle(.roundedBorder)
+                        .controlSize(.small)
+                    }
+                    labeledRow(String(localized: "După:", comment: "Box suffix label")) {
+                        TextField(
+                            String(localized: "ex. „ (NTR)”", comment: "Box suffix placeholder"),
+                            text: Binding(get: { binding.wrappedValue.suffix }, set: { binding.wrappedValue.suffix = $0 })
+                        )
+                        .textFieldStyle(.roundedBorder)
+                        .controlSize(.small)
+                    }
+                    .help(String(localized: "Text fix adăugat în jurul valorii live (gol când valoarea lipsește)", comment: "Tooltip"))
                 }
 
                 clockFormatPicker(
@@ -2898,6 +2917,45 @@ struct LayoutEditorSheet: View {
             } label: {
                 Label(String(localized: "Text Global", comment: "Inspector group"), systemImage: "textformat")
                     .font(.caption.bold())
+            }
+
+            // Red-letter — words of Jesus Christ (Bible presenter only).
+            if pm.activeProfileKey == "bible" {
+                GroupBox {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Toggle(isOn: pmBinding.wocStyleEnabled) {
+                            Text(String(localized: "Evidențiază cuvintele lui Isus", comment: "Setting label"))
+                                .font(.caption)
+                        }
+                        .toggleStyle(.switch)
+                        .controlSize(.small)
+                        .help(String(localized: "Afișează cu altă culoare cuvintele rostite de Isus (red-letter). Funcționează cu Biblii care marchează aceste cuvinte — ex. OSIS / USFM.", comment: "Tooltip"))
+
+                        if pm.wocStyleEnabled {
+                            labeledRow(String(localized: "Culoare:", comment: "Setting label")) {
+                                ColorPicker("", selection: Binding(
+                                    get: { pm.wocColor },
+                                    set: { pm.wocColorHex = $0.toHex() }
+                                ))
+                                .labelsHidden()
+                                .controlSize(.small)
+                                Spacer()
+                                Button(String(localized: "Roșu clasic", comment: "Button")) {
+                                    pm.wocColorHex = "C0392B"
+                                }
+                                .buttonStyle(.bordered)
+                                .controlSize(.mini)
+                            }
+                            Text(String(localized: "Doar Bibliile care conțin marcajul „cuvinte ale lui Isus” vor fi colorate; celelalte rămân normale.", comment: "Inspector hint"))
+                                .font(.caption2)
+                                .foregroundStyle(.tertiary)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                } label: {
+                    Label(String(localized: "Cuvintele lui Isus", comment: "Inspector group"), systemImage: "quote.bubble")
+                        .font(.caption.bold())
+                }
             }
 
             // Per-box text style — select a box on the canvas, customize here.

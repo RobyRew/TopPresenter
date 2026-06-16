@@ -505,27 +505,108 @@ struct MainControlView: View {
     @Query(sort: \SongCollection.name) private var songCollections: [SongCollection]
     @AppStorage("bibleViewMode") private var bibleViewMode: String = "list"
 
+    @State private var showModulePopover = false
+
+    /// Friendly language name for a module language code.
+    private func languageName(_ code: String) -> String {
+        let names = ["ro": "Română", "en": "English", "de": "Deutsch", "fr": "Français",
+                     "es": "Español", "it": "Italiano", "hu": "Magyar", "ru": "Русский",
+                     "gr": "Ελληνικά", "ebr": "עברית", "lat": "Latina", "ukr": "Українська",
+                     "nl": "Nederlands", "pg": "Português", "arab": "العربية",
+                     "sb": "Srpski", "roma": "Romani"]
+        return names[code] ?? code.uppercased()
+    }
+
+    /// Modules grouped by language (Romanian + English first, then alphabetical).
+    private var moduleLanguageGroups: [(code: String, name: String, modules: [BibleModule])] {
+        let grouped = Dictionary(grouping: modules) { $0.language }
+        let rank: (String) -> Int = { $0 == "ro" ? 0 : ($0 == "en" ? 1 : 2) }
+        return grouped.keys
+            .sorted { (rank($0), languageName($0)) < (rank($1), languageName($1)) }
+            .map { code in
+                (code, languageName(code), grouped[code]!.sorted { $0.name < $1.name })
+            }
+    }
+
+    /// Canon/scope badge for a module: NT / OT / Full / Orthodox (+ partial).
+    private func moduleScope(_ m: BibleModule) -> (label: String, color: Color) {
+        let nums = m.books.map { $0.bookNumber }
+        let hasOT = nums.contains { $0 <= 39 }, hasNT = nums.contains { $0 >= 40 && $0 <= 66 }, hasDC = nums.contains { $0 > 66 }
+        let base: (String, Color)
+        if hasDC { base = (String(localized: "Orthodox", comment: "Canon badge"), .purple) }
+        else if hasOT && hasNT { base = (String(localized: "Full", comment: "Canon badge"), .green) }
+        else if hasNT { base = (String(localized: "NT", comment: "Canon badge"), .blue) }
+        else if hasOT { base = (String(localized: "OT", comment: "Canon badge"), .orange) }
+        else { base = ("—", .secondary) }
+        return m.incomplete ? (base.0 + " ·", base.1) : base
+    }
+
+    @ViewBuilder
+    private func scopeBadge(_ m: BibleModule) -> some View {
+        let s = moduleScope(m)
+        Text(s.label)
+            .font(.caption2.weight(.semibold))
+            .padding(.horizontal, 6).padding(.vertical, 2)
+            .background(s.color.opacity(0.15), in: Capsule())
+            .foregroundStyle(s.color)
+    }
+
     @ViewBuilder
     private var bibleModulePicker: some View {
-        Picker(
-            String(localized: "Module", comment: "Toolbar picker label"),
-            selection: Binding(
-                get: { libraryManager.selectedBibleModule?.id },
-                set: { newID in
-                    if let id = newID, let module = modules.first(where: { $0.id == id }) {
-                        libraryManager.selectModule(module)
+        Button {
+            showModulePopover.toggle()
+        } label: {
+            HStack(spacing: 5) {
+                Image(systemName: "books.vertical")
+                Text(libraryManager.selectedBibleModule.map { $0.abbreviation.isEmpty ? $0.name : $0.abbreviation }
+                     ?? String(localized: "Select Module", comment: "Picker placeholder"))
+                    .lineLimit(1)
+                Image(systemName: "chevron.down").font(.caption2)
+            }
+            .frame(minWidth: 120)
+        }
+        .popover(isPresented: $showModulePopover, arrowEdge: .bottom) {
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 0, pinnedViews: [.sectionHeaders]) {
+                    ForEach(moduleLanguageGroups, id: \.code) { group in
+                        Section {
+                            ForEach(group.modules) { module in
+                                Button {
+                                    libraryManager.selectModule(module)
+                                    showModulePopover = false
+                                } label: {
+                                    HStack(spacing: 8) {
+                                        Image(systemName: libraryManager.selectedBibleModule?.id == module.id ? "checkmark.circle.fill" : "circle")
+                                            .foregroundStyle(libraryManager.selectedBibleModule?.id == module.id ? Color.accentColor : Color.secondary.opacity(0.4))
+                                            .font(.caption)
+                                        VStack(alignment: .leading, spacing: 1) {
+                                            Text(module.abbreviation.isEmpty ? module.name : module.abbreviation)
+                                                .font(.callout.weight(.medium))
+                                            if !module.name.isEmpty, module.name != module.abbreviation {
+                                                Text(module.name).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+                                            }
+                                        }
+                                        Spacer(minLength: 10)
+                                        scopeBadge(module)
+                                    }
+                                    .contentShape(Rectangle())
+                                    .padding(.horizontal, 10).padding(.vertical, 5)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        } header: {
+                            Text(group.name)
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.horizontal, 10).padding(.vertical, 4)
+                                .background(.regularMaterial)
+                        }
                     }
                 }
-            )
-        ) {
-            Text(String(localized: "Select Module", comment: "Picker placeholder"))
-                .tag(nil as UUID?)
-            ForEach(modules) { module in
-                Text(module.abbreviation.isEmpty ? module.name : "\(module.abbreviation) - \(module.name)")
-                    .tag(module.id as UUID?)
             }
+            .frame(width: 300, height: min(460, CGFloat(modules.count) * 38 + 120))
         }
-        .frame(minWidth: 140, maxWidth: 280)
     }
 
     @ViewBuilder

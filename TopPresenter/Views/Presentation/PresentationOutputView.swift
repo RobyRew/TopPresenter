@@ -160,11 +160,7 @@ struct PresentationOutputView: View {
         case .custom(let id):
             if textVisible, let box = pm.outputCustomTextBoxes.first(where: { $0.id == id }), box.isVisible,
                pm.scopeMatchesLiveSlide(box.displayOnRaw) {
-                let text = box.resolvedText(
-                    main: fields.main, reference: fields.reference,
-                    translation: fields.translation, subtitle: fields.subtitle,
-                    now: now, slideNumber: live.slideNumberText
-                )
+                let text = box.resolvedText(live: live, now: now)
                 if !text.isEmpty {
                     let rect = box.frame.rect(in: canvasSize)
                     let style = pm.resolvedCustomStyle(box, in: pm.outputProfileKey)
@@ -210,7 +206,26 @@ struct PresentationOutputView: View {
     ) -> some View {
         let rect = pm.outputBoxFrame(for: section).rect(in: canvasSize)
         let style = pm.outputStyle(for: section)
-        boxText(text, style: style, rect: rect, fontScale: fontScale, fittedSize: fittedSize(text, style: style, rect: rect, fontScale: fontScale))
+        // Red-letter: only the main verse box, only when enabled and the live
+        // verse actually carries words-of-Christ runs.
+        let runs: [VerseRun] = (section == .verseContent && pm.wocStyleEnabled
+                                && pm.outputProfileKey == "bible"
+                                && pm.liveContent.mainRuns.contains { $0.kind == "woc" })
+            ? pm.liveContent.mainRuns : []
+        boxText(text, style: style, rect: rect, fontScale: fontScale,
+                fittedSize: fittedSize(text, style: style, rect: rect, fontScale: fontScale),
+                runs: runs)
+    }
+
+    /// Composes a verse from rich runs, coloring `woc` segments with the
+    /// theme's words-of-Christ color. Concatenation reproduces the full text.
+    private func composedRunText(_ runs: [VerseRun], style: PresentationManager.ResolvedBoxStyle) -> Text {
+        // Color EVERY run explicitly — an outer .foregroundColor over a
+        // concatenated Text overrides per-segment colors, so woc would be lost.
+        runs.reduce(Text("")) { acc, run in
+            let c = (run.kind == "woc") ? pm.wocColor : style.color
+            return acc + Text(style.display(run.text)).foregroundColor(c.opacity(style.opacity))
+        }
     }
 
     @ViewBuilder
@@ -218,16 +233,21 @@ struct PresentationOutputView: View {
         _ text: String,
         style: PresentationManager.ResolvedBoxStyle,
         rect: CGRect, fontScale: CGFloat,
-        fittedSize: CGFloat?
+        fittedSize: CGFloat?,
+        runs: [VerseRun] = []
     ) -> some View {
         // Padding + shadow are per-box resolved style — global by default.
         let size = fittedSize ?? CGFloat(style.fontSize) * fontScale
-        Text(style.display(text))
+        // Build the Text first (tracking/foreground are Text-level); woc runs
+        // carry their own color, the rest inherit the box color.
+        let composed: Text = runs.isEmpty
+            ? Text(style.display(text)).foregroundColor(style.color.opacity(style.opacity))
+            : composedRunText(runs, style: style)   // each run already carries its color
+        composed
+            .tracking(style.tracking * fontScale)
             .font(style.font(at: size))
-            .foregroundStyle(style.color.opacity(style.opacity))
             .multilineTextAlignment(style.hAlign)
             .lineSpacing(style.lineSpacing * size * 0.1)
-            .tracking(style.tracking * fontScale)
             .minimumScaleFactor(fittedSize == nil ? 0.3 : 1.0)
             .shadow(
                 color: style.shadowEnabled ? style.shadowColor : .clear,

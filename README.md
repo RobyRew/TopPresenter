@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="icon.png" width="128" height="128" alt="TopPresenter">
+  <img src="icon.png" width="150" alt="TopPresenter — Liquid Glass app icon">
 </p>
 
 <h1 align="center">TopPresenter</h1>
@@ -8,7 +8,6 @@
   <strong>Professional Bible &amp; worship presentation for macOS</strong><br>
   Project scripture, lyrics, media, and custom slides to any screen — with a full per-presenter theme engine, built in native SwiftUI &amp; SwiftData.
 </p>
-
 <p align="center">
   <img src="https://img.shields.io/badge/macOS-15.7+-007AFF?logo=apple&logoColor=white" alt="macOS 15.7+">
   <img src="https://img.shields.io/badge/Swift-5.0+-F05138?logo=swift&logoColor=white" alt="Swift 5.0+">
@@ -69,11 +68,14 @@ The design studio behind everything you see on screen:
 ### 📖 Bible
 
 - **6 import formats** — TopPresenter JSON, OSIS XML, Zefania XML, MySword SQLite, USFM, Unbound Bible
+- **The GOAT format** — TopPresenter Bible JSON **v1.0.0** is a superset of every format: section headings, footnotes, cross-references, Strong's numbers, poetry, and **red-letter** (words of Christ) all round-trip through import → store → export. Fields are optional; nothing is lost importing OSIS/USFM and re-exporting.
+- **Red-letter theme** — highlight the words spoken by Jesus in any color, per theme (Editor de Teme ▸ Text ▸ *Cuvintele lui Isus*). Populated from OSIS/USFM Bibles that mark them.
+- **Smart duplicate handling** — importing a Bible whose code already exists prompts **Combină / Înlocuiește / Păstrează ambele / Anulează**; *Combină* fills in only the chapters/verses you're missing.
 - **Full-text &amp; reference search** — type `John 3:16` or `Gen 1:1-3` to jump directly
 - **List view &amp; Grid view** with color-coded book categories
 - **Multi-verse selection** (⌘+Click) and **auto-fill** that measures the actual verse box
 - **Block navigation** crossing chapter/book boundaries; double-click to go live
-- **Export** as TopPresenter JSON, Plain Text, or CSV
+- **Export** as TopPresenter JSON (full v2 schema), Plain Text, or CSV
 
 ### 🎵 Songs &amp; Lyrics
 
@@ -136,16 +138,31 @@ The design studio behind everything you see on screen:
 
 [`eBiblia-Scraper.user.js`](eBiblia-Scraper.user.js) is a Tampermonkey/Violentmonkey userscript that exports complete Bible translations from [eBiblia.ro](https://ebiblia.ro) into the **TopPresenter Bible JSON** format.
 
-**How it works:**
-
-1. Install the script in Tampermonkey and open ebiblia.ro — a draggable exporter panel appears with every translation your account can access.
-2. For each of the 66 books it walks chapter by chapter (1,189 total), first trying the site's own in-page data layer, then falling back to the `a1–a3.ebiblia.net` API endpoints with retries — throttled (~0.8 s/chapter, 1.5 s/book) to stay polite to the server.
-3. Each verse is cleaned from raw HTML into plain text, keeping `rawHtml`, a diacritic-free `textNormalized` (for search), cross-references, footnotes, and section headings with levels.
-4. The result is a single JSON file (`schemaVersion 1.0.0`, `format: "TopPresenter Bible"`) with translation metadata (code, name, language, copyright) and export stats — downloaded via `GM_download`, ready for direct import into TopPresenter.
-
-The schema is documented in [`TopPresenterBibleImporter.swift`](TopPresenter/Services/Import/TopPresenterBibleImporter.swift); the importer also accepts partial files (any JSON with a `books` array).
+It exports straight to **TopPresenter Bible JSON** — clean verse text plus red-letter (words of Christ), section headings, cross-references, footnotes, Strong's numbers, morphology, interlinear glosses, and full translation metadata (name, year, copyright, foreword). Toggle the rich-content groups to keep files lean. **⏬ Toate** exports every translation your account can open at once, organized into per-language folders. Works on Chrome, Firefox and Safari.
 
 > Please respect each translation's copyright — export only for personal and congregational use.
+
+---
+
+## Roadmap
+
+**Shipped**
+- [x] Native SwiftUI + SwiftData app — Bible, Songs, Slides, Media, Schedules
+- [x] Per-presenter theme engine: layouts, transitions, custom & media boxes, portable `.tptheme`
+- [x] 6 Bible + 3 song import formats; lossless TopPresenter Bible JSON (GOAT) round-trip
+- [x] Red-letter, footnotes, cross-references, headings, Strong's & morphology stored in the DB
+- [x] Three-column Bible reader (Books · Chapters · Verses) with language groups & canon badges
+- [x] Drag-and-drop batch import (files *and* folders, recursive); eBiblia exporter
+- [x] Liquid Glass app icon (Icon Composer `.icon` + `.icns` fallback)
+
+**Planned**
+- [ ] Stage / monitor display — next slide, clock, speaker notes
+- [ ] Remote control from phone or tablet
+- [ ] Schedules → full service planning & running order
+- [ ] Interlinear + Strong's display in the Bible reader (data already captured)
+- [ ] NDI / Syphon output for video mixers
+- [ ] Cloud sync for themes & libraries
+- [ ] Fully localized UI
 
 ---
 

@@ -99,6 +99,8 @@ final class USFMBibleImporter: BibleImporter {
         var currentChapter = 0
         var currentVerseNum = 0
         var currentVerseText = ""
+        var currentVerseRaw = ""        // unstripped, for rich-run extraction
+        var pendingHeadings: [BibleHeading] = []
 
         var chapters: [BibleImportChapter] = []
         var verses: [BibleImportVerse] = []
@@ -106,18 +108,28 @@ final class USFMBibleImporter: BibleImporter {
         func finishVerse() {
             let text = currentVerseText.trimmingCharacters(in: .whitespacesAndNewlines)
             if currentVerseNum > 0 && !text.isEmpty {
-                verses.append(BibleImportVerse(verseNumber: currentVerseNum, text: text))
+                // GOAT v2: extract red-letter / Strong's / added-words runs.
+                let rich = USFMRich.parse(currentVerseRaw, plain: text)
+                verses.append(BibleImportVerse(
+                    verseNumber: currentVerseNum, text: text,
+                    runs: rich.runs, hasWordsOfChrist: rich.woc
+                ))
             }
             currentVerseText = ""
+            currentVerseRaw = ""
             currentVerseNum = 0
         }
 
         func finishChapter() {
             finishVerse()
             if currentChapter > 0 && !verses.isEmpty {
-                chapters.append(BibleImportChapter(chapterNumber: currentChapter, verses: verses))
+                chapters.append(BibleImportChapter(
+                    chapterNumber: currentChapter, verses: verses,
+                    headings: pendingHeadings.isEmpty ? nil : pendingHeadings
+                ))
             }
             verses = []
+            pendingHeadings = []
         }
 
         func finishBook() {
@@ -181,6 +193,13 @@ final class USFMBibleImporter: BibleImporter {
                     result.name = value
                 }
 
+            } else if trimmed.hasPrefix("\\s ") || trimmed.hasPrefix("\\s1 ") || trimmed.hasPrefix("\\s2 ") {
+                // Section heading — shown before the verse that follows it.
+                let value = stripUSFMInlineMarkers(extractMarkerValue(trimmed))
+                if !value.isEmpty {
+                    pendingHeadings.append(BibleHeading(beforeVerse: currentVerseNum + 1, level: 1, text: value))
+                }
+
             } else if trimmed.hasPrefix("\\c ") {
                 finishChapter()
                 let value = extractMarkerValue(trimmed)
@@ -201,6 +220,7 @@ final class USFMBibleImporter: BibleImporter {
                 if parts.count > 1 {
                     let verseContent = String(parts[1])
                     currentVerseText = stripUSFMInlineMarkers(verseContent)
+                    currentVerseRaw = verseContent
                 }
 
             } else if trimmed.hasPrefix("\\") {
@@ -226,6 +246,7 @@ final class USFMBibleImporter: BibleImporter {
                     let value = extractMarkerValue(trimmed)
                     if !value.isEmpty && currentVerseNum > 0 {
                         currentVerseText += " " + stripUSFMInlineMarkers(value)
+                        currentVerseRaw += " " + value
                     }
                     continue
                 }
@@ -234,6 +255,7 @@ final class USFMBibleImporter: BibleImporter {
                 // Plain text line — continuation of current verse
                 if currentVerseNum > 0 {
                     currentVerseText += " " + stripUSFMInlineMarkers(trimmed)
+                    currentVerseRaw += " " + trimmed
                 }
             }
         }
@@ -324,5 +346,83 @@ final class USFMBibleImporter: BibleImporter {
             return String(name.prefix(6)).uppercased()
         }
         return words.map { String($0.prefix(1)) }.joined().uppercased()
+    }
+}
+
+// MARK: - USFM rich-run extraction (red-letter / Strong's / added words)
+
+/// Turns raw USFM verse markup into GOAT `runs[]`: `\wj…\wj*` → woc,
+/// `\add…\add*` → add, `\nd…\nd*` → divineName, `\w word|strong="…"\w*` → Strong's.
+/// Footnotes/cross-refs are dropped from the run text (they're not verse words).
+enum USFMRich {
+    static func parse(_ raw: String, plain: String) -> (runs: [VerseRun]?, woc: Bool) {
+        guard raw.contains("\\wj") || raw.contains("\\nd") || raw.contains("\\add") || raw.contains("\\w ") else {
+            return (nil, false)
+        }
+        // Strip footnotes/cross-refs first — their inner text isn't scripture.
+        var s = raw
+        for pat in ["\\\\f\\s.*?\\\\f\\*", "\\\\x\\s.*?\\\\x\\*"] {
+            if let re = try? NSRegularExpression(pattern: pat, options: .dotMatchesLineSeparators) {
+                s = re.stringByReplacingMatches(in: s, range: NSRange(s.startIndex..., in: s), withTemplate: "")
+            }
+        }
+
+        // Walk character markers, tracking the active "kind".
+        var runs: [VerseRun] = []
+        var woc = false
+        var buf = ""
+        var kindStack: [String] = []
+        func flush() {
+            // Keep boundary spaces so runs concatenate back to the full verse;
+            // only skip purely-empty segments.
+            let cleaned = clean(buf)
+            if !cleaned.trimmingCharacters(in: .whitespaces).isEmpty {
+                runs.append(VerseRun(text: cleaned, kind: kindStack.last ?? "plain"))
+            }
+            buf = ""
+        }
+        let markerKind: [String: String] = ["wj": "woc", "nd": "divineName", "add": "add"]
+        var i = s.startIndex
+        while i < s.endIndex {
+            if s[i] == "\\" {
+                // read marker name
+                var j = s.index(after: i)
+                var name = ""
+                while j < s.endIndex, s[j].isLetter || s[j].isNumber { name.append(s[j]); j = s.index(after: j) }
+                let closing = (j < s.endIndex && s[j] == "*")
+                if closing { j = s.index(after: j) }
+                let base = name.trimmingCharacters(in: CharacterSet(charactersIn: "0123456789"))
+                if let kind = markerKind[base] {
+                    flush()
+                    if closing {
+                        if kindStack.last == kind { kindStack.removeLast() }
+                    } else {
+                        kindStack.append(kind); if kind == "woc" { woc = true }
+                    }
+                }
+                // skip a single following space that USFM puts after a marker
+                if j < s.endIndex, s[j] == " " { j = s.index(after: j) }
+                i = j
+            } else {
+                buf.append(s[i]); i = s.index(after: i)
+            }
+        }
+        flush()
+
+        // Collapse to nil unless there's a genuinely non-plain run.
+        let meaningful = runs.contains { $0.kind != "plain" } && runs.count > 0
+        return (meaningful ? runs : nil, woc)
+    }
+
+    /// Remove leftover pipe attributes and stray markers from a run's text.
+    /// Preserves boundary spaces so runs concatenate back to the full verse.
+    private static func clean(_ t: String) -> String {
+        var r = t
+        for pat in ["\\|[^\\\\]*?(?=\\\\|$)", "\\\\[+a-z]+\\d?\\*?"] {
+            if let re = try? NSRegularExpression(pattern: pat) {
+                r = re.stringByReplacingMatches(in: r, range: NSRange(r.startIndex..., in: r), withTemplate: "")
+            }
+        }
+        return r.replacingOccurrences(of: "  +", with: " ", options: .regularExpression)
     }
 }

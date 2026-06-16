@@ -31,3 +31,8 @@ Pods/
 
 # Archives
 *.xcarchive
+
+# Bible library — distributed as a GitHub release, not committed (~856 MB)
+ExtraAssets/Bibles/
+# Icon Composer raster exports (regenerable from the .icon / .svg)
+Logo/Icon-Exports/

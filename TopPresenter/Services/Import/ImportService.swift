@@ -46,10 +46,41 @@ final class ImportService {
     // MARK: - Bible Import
 
     /// Import a Bible file in the specified format
+    /// What to do when a Bible with the same code is already in the library.
+    enum BibleConflictResolution {
+        case ask          // surface a BibleConflict for the UI to resolve
+        case replace      // delete existing, import fresh
+        case merge        // fill in missing books/chapters/verses
+        case keepBoth     // import as a separate module (disambiguated name)
+        case cancel       // skip
+    }
+
+    /// Thrown by `importBible(resolution: .ask)` when a same-code module exists,
+    /// so the UI can present the Replace/Merge/Keep-both/Cancel dialog.
+    struct BibleConflict: Error {
+        let code: String
+        let existingName: String
+        let existingVerses: Int
+        let incomingName: String
+        let incomingVerses: Int
+    }
+
+    /// Cancelled by the user — callers should ignore silently.
+    struct BibleImportCancelled: Error {}
+
+    /// Finds an already-imported module by code (case-insensitive abbreviation).
+    static func existingBibleModule(code: String, modelContext: ModelContext) -> BibleModule? {
+        let needle = code.lowercased()
+        guard !needle.isEmpty else { return nil }
+        let all = (try? modelContext.fetch(FetchDescriptor<BibleModule>())) ?? []
+        return all.first { $0.abbreviation.lowercased() == needle }
+    }
+
     static func importBible(
         fileURL: URL,
         format: SupportedBibleFormat,
         modelContext: ModelContext,
+        resolution: BibleConflictResolution = .keepBoth,
         progressHandler: ((Double, String) -> Void)? = nil
     ) async throws -> BibleModule {
         guard let importer = bibleImporters[format] else {
@@ -68,15 +99,55 @@ final class ImportService {
 
         let result = try await importer.parse(fileURL: fileURL)
 
+        // ── Duplicate handling (code already in the DB) ──
+        var resolvedName = result.moduleName
+        if let existing = existingBibleModule(code: result.abbreviation, modelContext: modelContext) {
+            switch resolution {
+            case .ask:
+                throw BibleConflict(
+                    code: result.abbreviation,
+                    existingName: existing.name,
+                    existingVerses: verseCount(of: existing),
+                    incomingName: result.moduleName,
+                    incomingVerses: verseCount(of: result)
+                )
+            case .cancel:
+                throw BibleImportCancelled()
+            case .merge:
+                progressHandler?(0.5, String(localized: "Merging...", comment: "Import progress"))
+                mergeBible(result, into: existing, modelContext: modelContext)
+                try modelContext.save()
+                progressHandler?(1.0, String(localized: "Complete!", comment: "Import progress"))
+                return existing
+            case .replace:
+                modelContext.delete(existing)
+            case .keepBoth:
+                resolvedName = uniqueModuleName(result.moduleName, modelContext: modelContext)
+            }
+        }
+
         progressHandler?(0.5, String(localized: "Importing books...", comment: "Import progress"))
 
         // Create SwiftData models
         let module = BibleModule(
-            name: result.moduleName,
+            name: resolvedName,
             abbreviation: result.abbreviation,
             language: result.language,
             sourceFormat: format.rawValue,
-            moduleDescription: result.description
+            moduleDescription: result.description,
+            versification: result.versification,
+            canon: result.canon,
+            nameLocal: result.nameLocal,
+            languageName: result.languageName,
+            copyright: result.copyright,
+            aboutText: result.about,
+            textSource: result.textSource,
+            year: result.year,
+            direction: result.direction,
+            hasWordsOfChrist: result.hasWordsOfChrist,
+            hasStrongs: result.hasStrongs,
+            incomplete: result.incomplete,
+            extensionsJSON: result.extensionsJSON
         )
         modelContext.insert(module)
 
@@ -86,18 +157,32 @@ final class ImportService {
             let book = BibleBook(
                 name: importBook.name,
                 bookNumber: importBook.bookNumber,
-                testament: importBook.testament
+                testament: importBook.testament,
+                nameEnglish: importBook.nameEnglish,
+                abbreviation: importBook.abbreviation,
+                introduction: importBook.introduction ?? "",
+                extensionsJSON: importBook.extensionsJSON
             )
             book.module = module
 
             for importChapter in importBook.chapters {
-                let chapter = BibleChapter(chapterNumber: importChapter.chapterNumber)
+                let chapter = BibleChapter(
+                    chapterNumber: importChapter.chapterNumber,
+                    headingsJSON: BibleRichData.encode(importChapter.headings),
+                    extensionsJSON: importChapter.extensionsJSON
+                )
                 chapter.book = book
 
                 for importVerse in importChapter.verses {
                     let verse = BibleVerse(
                         verseNumber: importVerse.verseNumber,
-                        text: importVerse.text
+                        text: importVerse.text,
+                        runsJSON: BibleRichData.encode(importVerse.runs),
+                        footnotesJSON: BibleRichData.encode(importVerse.footnotes),
+                        crossRefsJSON: BibleRichData.encode(importVerse.crossReferences),
+                        hasWordsOfChrist: importVerse.hasWordsOfChrist,
+                        gloss: importVerse.gloss,
+                        extensionsJSON: importVerse.extensionsJSON
                     )
                     verse.chapter = chapter
                 }
@@ -112,6 +197,91 @@ final class ImportService {
         progressHandler?(1.0, String(localized: "Complete!", comment: "Import progress"))
 
         return module
+    }
+
+    /// Total verse count of a parsed result (for the conflict dialog stats).
+    static func verseCount(of result: BibleImportResult) -> Int {
+        result.books.reduce(0) { $0 + $1.chapters.reduce(0) { $0 + $1.verses.count } }
+    }
+
+    static func verseCount(of module: BibleModule) -> Int {
+        module.books.reduce(0) { $0 + $1.chapters.reduce(0) { $0 + $1.verses.count } }
+    }
+
+    /// Disambiguated name when keeping both ("Name", "Name (2)", "Name (3)"…).
+    private static func uniqueModuleName(_ base: String, modelContext: ModelContext) -> String {
+        let all = (try? modelContext.fetch(FetchDescriptor<BibleModule>())) ?? []
+        let names = Set(all.map { $0.name })
+        if !names.contains(base) { return base }
+        var n = 2
+        while names.contains("\(base) (\(n))") { n += 1 }
+        return "\(base) (\(n))"
+    }
+
+    /// Fills in only what the existing module is MISSING: new books, new
+    /// chapters in existing books, and new verses in existing chapters. Verses
+    /// already present are left untouched (the existing copy wins).
+    private static func mergeBible(_ result: BibleImportResult, into module: BibleModule, modelContext: ModelContext) {
+        // Fill in module-level metadata the existing copy is missing.
+        if module.aboutText.isEmpty { module.aboutText = result.about }
+        if module.copyright.isEmpty { module.copyright = result.copyright }
+        if module.textSource.isEmpty { module.textSource = result.textSource }
+        if module.nameLocal.isEmpty { module.nameLocal = result.nameLocal }
+        if module.languageName.isEmpty { module.languageName = result.languageName }
+        if module.year == nil { module.year = result.year }
+        if module.versification == nil { module.versification = result.versification }
+        if module.canon == nil { module.canon = result.canon }
+        if result.hasWordsOfChrist { module.hasWordsOfChrist = true }
+        if result.hasStrongs { module.hasStrongs = true }
+        if module.extensionsJSON == nil { module.extensionsJSON = result.extensionsJSON }
+
+        var booksByNumber = Dictionary(module.books.map { ($0.bookNumber, $0) }, uniquingKeysWith: { a, _ in a })
+
+        for ib in result.books {
+            let book: BibleBook
+            if let existing = booksByNumber[ib.bookNumber] {
+                book = existing
+                if book.introduction.isEmpty, let intro = ib.introduction { book.introduction = intro }
+                if book.nameEnglish.isEmpty { book.nameEnglish = ib.nameEnglish }
+                if book.abbreviation.isEmpty { book.abbreviation = ib.abbreviation }
+            } else {
+                book = BibleBook(name: ib.name, bookNumber: ib.bookNumber, testament: ib.testament,
+                                 nameEnglish: ib.nameEnglish, abbreviation: ib.abbreviation,
+                                 introduction: ib.introduction ?? "", extensionsJSON: ib.extensionsJSON)
+                book.module = module
+                booksByNumber[ib.bookNumber] = book
+            }
+            var chaptersByNumber = Dictionary(book.chapters.map { ($0.chapterNumber, $0) }, uniquingKeysWith: { a, _ in a })
+
+            for ic in ib.chapters {
+                let chapter: BibleChapter
+                if let existing = chaptersByNumber[ic.chapterNumber] {
+                    chapter = existing
+                    if chapter.headingsJSON == nil, let h = ic.headings {
+                        chapter.headingsJSON = BibleRichData.encode(h)
+                    }
+                } else {
+                    chapter = BibleChapter(chapterNumber: ic.chapterNumber,
+                                           headingsJSON: BibleRichData.encode(ic.headings),
+                                           extensionsJSON: ic.extensionsJSON)
+                    chapter.book = book
+                    chaptersByNumber[ic.chapterNumber] = chapter
+                }
+                let presentVerses = Set(chapter.verses.map { $0.verseNumber })
+                for iv in ic.verses where !presentVerses.contains(iv.verseNumber) {
+                    let verse = BibleVerse(
+                        verseNumber: iv.verseNumber, text: iv.text,
+                        runsJSON: BibleRichData.encode(iv.runs),
+                        footnotesJSON: BibleRichData.encode(iv.footnotes),
+                        crossRefsJSON: BibleRichData.encode(iv.crossReferences),
+                        hasWordsOfChrist: iv.hasWordsOfChrist,
+                        gloss: iv.gloss,
+                        extensionsJSON: iv.extensionsJSON
+                    )
+                    verse.chapter = chapter
+                }
+            }
+        }
     }
 
     /// Auto-detect Bible format from file content and extension.

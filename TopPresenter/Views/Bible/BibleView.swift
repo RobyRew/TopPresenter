@@ -30,6 +30,12 @@ struct BibleView: View {
     @AppStorage("defaultBibleModuleName") private var defaultBibleModuleName: String = ""
     @State private var didRestoreModule = false
 
+    // Reading-pane content toggles (shared with BibleVerseRow via @AppStorage).
+    @AppStorage("bibleShowHeadings") private var showHeadings: Bool = true
+    @AppStorage("bibleShowFootnotes") private var showFootnotes: Bool = false
+    @AppStorage("bibleShowCrossRefs") private var showCrossRefs: Bool = false
+    @AppStorage("bibleShowStrong") private var showStrong: Bool = false
+
     var body: some View {
         VStack(spacing: 0) {
             if modules.isEmpty {
@@ -38,14 +44,16 @@ struct BibleView: View {
                 // Grid navigation: Books → Chapters → Verses as button grids
                 BibleGridNavigationView()
             } else {
+                // Three columns — Books │ Chapters │ Verses — under a toggle bar.
+                bibleToggleBar
+                Divider()
                 HSplitView {
-                    // Left: Book/Chapter navigation
                     BibleNavigationPanel()
-                        .frame(minWidth: 200, maxWidth: 250)
-
-                    // Right: Verse list or search results
+                        .frame(minWidth: 150, idealWidth: 190, maxWidth: 240)
+                    BibleChaptersPanel()
+                        .frame(minWidth: 80, idealWidth: 110, maxWidth: 160)
                     BibleContentPanel()
-                        .frame(minWidth: 400)
+                        .frame(minWidth: 340)
                 }
             }
         }
@@ -123,6 +131,49 @@ struct BibleView: View {
         .padding()
     }
 
+    /// Toolbar above the three columns — module label + reading-content toggles.
+    private var bibleToggleBar: some View {
+        HStack(spacing: 10) {
+            if let m = libraryManager.selectedBibleModule {
+                Label(m.abbreviation.isEmpty ? m.name : m.abbreviation, systemImage: "book.closed")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+            Spacer(minLength: 8)
+            toggleChip(String(localized: "Titluri", comment: "Toggle"), "text.alignleft", isOn: $showHeadings)
+            toggleChip(String(localized: "Note", comment: "Toggle"), "note.text", isOn: $showFootnotes)
+            toggleChip(String(localized: "Referințe", comment: "Toggle"), "link", isOn: $showCrossRefs)
+            toggleChip(String(localized: "Strong", comment: "Toggle"), "number", isOn: $showStrong)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+    }
+
+    private func toggleChip(_ title: String, _ icon: String, isOn: Binding<Bool>) -> some View {
+        Button {
+            isOn.wrappedValue.toggle()
+        } label: {
+            Label(title, systemImage: icon)
+                .font(.caption)
+                .padding(.horizontal, 9)
+                .padding(.vertical, 4)
+                .background(
+                    isOn.wrappedValue ? Color.accentColor.opacity(0.16) : Color.clear,
+                    in: Capsule()
+                )
+                .overlay(
+                    Capsule().stroke(
+                        isOn.wrappedValue ? Color.accentColor.opacity(0.5) : Color.secondary.opacity(0.3),
+                        lineWidth: 1
+                    )
+                )
+                .foregroundStyle(isOn.wrappedValue ? Color.accentColor : Color.secondary)
+        }
+        .buttonStyle(.plain)
+        .help(String(localized: "Afișează/ascunde în panoul de versete", comment: "Toggle tooltip"))
+    }
+
     private func deleteBibleModule(_ module: BibleModule) {
         if libraryManager.selectedBibleModule?.id == module.id {
             libraryManager.selectedBibleModule = nil
@@ -144,8 +195,11 @@ struct BibleNavigationPanel: View {
     var body: some View {
         VStack(spacing: 0) {
             if let module = libraryManager.selectedBibleModule {
-                let otBooks = module.books.filter { $0.testament == "OT" }.sorted { $0.bookNumber < $1.bookNumber }
-                let ntBooks = module.books.filter { $0.testament == "NT" }.sorted { $0.bookNumber < $1.bookNumber }
+                // Split by canonical book number so deuterocanonical books
+                // (67–83, e.g. BVB's Vulgata) are never hidden.
+                let otBooks = module.books.filter { $0.bookNumber <= 39 }.sorted { $0.bookNumber < $1.bookNumber }
+                let ntBooks = module.books.filter { $0.bookNumber >= 40 && $0.bookNumber <= 66 }.sorted { $0.bookNumber < $1.bookNumber }
+                let dcBooks = module.books.filter { $0.bookNumber > 66 }.sorted { $0.bookNumber < $1.bookNumber }
 
                 List(selection: Binding(
                     get: { libraryManager.selectedBook?.id },
@@ -171,14 +225,16 @@ struct BibleNavigationPanel: View {
                             }
                         }
                     }
+
+                    if !dcBooks.isEmpty {
+                        Section(String(localized: "Deuterocanonical / Apocrypha", comment: "Section header")) {
+                            ForEach(dcBooks) { book in
+                                bookRow(book)
+                            }
+                        }
+                    }
                 }
                 .listStyle(.sidebar)
-
-                // Chapter grid
-                if let book = libraryManager.selectedBook {
-                    Divider()
-                    chapterGrid(book: book)
-                }
             } else {
                 VStack {
                     Text(String(localized: "Select a module", comment: "Placeholder"))
@@ -217,44 +273,56 @@ struct BibleNavigationPanel: View {
         .contentShape(Rectangle())
     }
 
-    private func chapterGrid(book: BibleBook) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(String(localized: "Chapters", comment: "Section title"))
-                .font(.caption.bold())
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 8)
-                .padding(.top, 4)
+}
 
-            ScrollView {
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 4), count: 6), spacing: 4) {
-                    ForEach(book.sortedChapters) { chapter in
-                        Button {
-                            libraryManager.selectChapter(chapter)
-                        } label: {
-                            Text("\(chapter.chapterNumber)")
-                                .font(.system(.body, design: .monospaced))
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 4)
-                                .background(
-                                    libraryManager.selectedChapter?.id == chapter.id
-                                        ? Color.accentColor
-                                        : Color.clear,
-                                    in: RoundedRectangle(cornerRadius: 4)
-                                )
-                                .foregroundStyle(
-                                    libraryManager.selectedChapter?.id == chapter.id
-                                        ? .white
-                                        : .primary
-                                )
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-                .padding(.horizontal, 8)
+// MARK: - Bible Chapters Panel (middle column)
+struct BibleChaptersPanel: View {
+    @Environment(LibraryManager.self) private var libraryManager
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Text(libraryManager.selectedBook?.name ?? String(localized: "Chapters", comment: "Section title"))
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                Spacer()
             }
-            .frame(maxHeight: 200)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            Divider()
+
+            if let book = libraryManager.selectedBook {
+                ScrollView {
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 2), spacing: 6) {
+                        ForEach(book.sortedChapters) { chapter in
+                            let selected = libraryManager.selectedChapter?.id == chapter.id
+                            Button {
+                                libraryManager.selectChapter(chapter)
+                            } label: {
+                                Text("\(chapter.chapterNumber)")
+                                    .font(.system(.callout, design: .rounded).weight(.medium))
+                                    .frame(maxWidth: .infinity, minHeight: 30)
+                                    .background(
+                                        selected ? Color.accentColor : Color.gray.opacity(0.12),
+                                        in: RoundedRectangle(cornerRadius: 6)
+                                    )
+                                    .foregroundStyle(selected ? .white : .primary)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(10)
+                }
+            } else {
+                Spacer()
+                Text(String(localized: "Select a book", comment: "Placeholder"))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity)
+                Spacer()
+            }
         }
-        .padding(.bottom, 4)
     }
 }
 
@@ -262,6 +330,7 @@ struct BibleNavigationPanel: View {
 struct BibleContentPanel: View {
     @Environment(LibraryManager.self) private var libraryManager
     @Environment(PresentationManager.self) private var presentationManager
+    @AppStorage("bibleShowHeadings") private var showHeadings: Bool = true
 
     var body: some View {
         VStack(spacing: 0) {
@@ -329,6 +398,16 @@ struct BibleContentPanel: View {
         }
     }
 
+    @ViewBuilder
+    private func headingRow(_ h: BibleHeading) -> some View {
+        Text(h.text)
+            .font(h.level <= 1 ? .headline : .subheadline.weight(.semibold))
+            .foregroundStyle(.secondary)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.top, 8)
+            .listRowSeparator(.hidden)
+    }
+
     private func chapterVersesView(chapter: BibleChapter) -> some View {
         VStack(spacing: 0) {
             // Header
@@ -347,9 +426,28 @@ struct BibleContentPanel: View {
 
             Divider()
 
-            // Verses list
-            List(chapter.sortedVerses) { verse in
-                BibleVerseRow(verse: verse)
+            // Verses list — section headings (pericopes) interleaved before
+            // the verse they precede when the Titluri toggle is on.
+            let verses = chapter.sortedVerses
+            let allHeadings = chapter.headings
+            List {
+                ForEach(Array(verses.enumerated()), id: \.element.id) { idx, verse in
+                    if showHeadings {
+                        // A heading attaches to the first verse whose number is
+                        // ≥ its beforeVerse (robust to versification gaps).
+                        let prev = idx > 0 ? verses[idx - 1].verseNumber : Int.min
+                        ForEach(Array(allHeadings.filter { $0.beforeVerse > prev && $0.beforeVerse <= verse.verseNumber }.enumerated()), id: \.offset) { _, h in
+                            headingRow(h)
+                        }
+                    }
+                    BibleVerseRow(verse: verse)
+                }
+                // Headings positioned past the last verse.
+                if showHeadings, let last = verses.last {
+                    ForEach(Array(allHeadings.filter { $0.beforeVerse > last.verseNumber }.enumerated()), id: \.offset) { _, h in
+                        headingRow(h)
+                    }
+                }
             }
             .listStyle(.plain)
         }
@@ -363,8 +461,80 @@ struct BibleVerseRow: View {
     @Environment(LibraryManager.self) private var libraryManager
     @Environment(PresentationManager.self) private var presentationManager
 
+    @AppStorage("bibleShowFootnotes") private var showFootnotes: Bool = false
+    @AppStorage("bibleShowCrossRefs") private var showCrossRefs: Bool = false
+    @AppStorage("bibleShowStrong") private var showStrong: Bool = false
+
     private var isSelected: Bool {
         libraryManager.selectedVerses.contains { $0.id == verse.id }
+    }
+
+    /// Verse text with words-of-Christ colored (red-letter) — only when the runs
+    /// reconstruct the text exactly, otherwise plain.
+    private var verseText: Text {
+        let runs = verse.runs
+        guard !runs.isEmpty, runs.contains(where: { $0.kind == "woc" }) else {
+            return Text(verse.text)
+        }
+        return runs.reduce(Text("")) { acc, run in
+            acc + (run.kind == "woc"
+                ? Text(run.text).foregroundColor(presentationManager.wocColor)
+                : Text(run.text))
+        }
+    }
+
+    private var strongList: String { verse.runs.compactMap { $0.strong }.joined(separator: " ") }
+
+    /// Best-effort jump to a cross-reference like "Ioan 3:16" / "1 In 4:9".
+    private func jump(to ref: String) {
+        guard let module = libraryManager.selectedBibleModule else { return }
+        let segs = ref.split(separator: ":", maxSplits: 1)
+        let left = segs.first.map(String.init)?.trimmingCharacters(in: .whitespaces) ?? ""
+        let tokens = left.split(separator: " ")
+        guard tokens.count >= 2, let chap = Int(tokens.last!) else { return }
+        let name = tokens.dropLast().joined(separator: " ")
+        let verseNum = segs.count > 1 ? Int(segs[1].prefix(while: { $0.isNumber })) : nil
+        let lname = name.lowercased()
+        var book: BibleBook?
+        // Deuterocanon refs arrive as "Book 67 3:16" (no abbrev) → match by number.
+        if lname.hasPrefix("book "), let num = Int(name.dropFirst(5).trimmingCharacters(in: .whitespaces)) {
+            book = module.books.first { $0.bookNumber == num }
+        }
+        if book == nil {
+            book = module.books.first {
+                $0.abbreviation.lowercased() == lname
+                    || $0.name.lowercased() == lname
+                    || $0.name.lowercased().hasPrefix(lname)
+            }
+        }
+        guard let book, let chapter = book.sortedChapters.first(where: { $0.chapterNumber == chap }) else { return }
+        libraryManager.selectBook(book)
+        libraryManager.selectChapter(chapter)
+        if let vn = verseNum, let v = chapter.sortedVerses.first(where: { $0.verseNumber == vn }) {
+            libraryManager.selectVerse(v)
+        }
+    }
+
+    /// Projects this verse live with all its rich casete sources populated.
+    private func projectVerse() {
+        let footnote = verse.footnotes
+            .map { $0.marker.isEmpty ? $0.text : "\($0.marker) \($0.text)" }
+            .joined(separator: "\n")
+        let crossRef = verse.crossReferences
+            .flatMap { ref in [ref.label].compactMap { $0 } + ref.targets }
+            .joined(separator: "; ")
+        let heading = (verse.chapter?.headings ?? [])
+            .filter { $0.beforeVerse == verse.verseNumber }
+            .map { $0.text }.joined(separator: "\n")
+        let strongs = verse.runs.compactMap { $0.strong }.joined(separator: " ")
+        presentationManager.showBibleVerse(
+            text: verse.text,
+            reference: verse.fullReference,
+            translationName: libraryManager.selectedBibleModule?.abbreviation ?? "",
+            runs: verse.runs,
+            footnote: footnote, crossReference: crossRef, heading: heading,
+            gloss: verse.gloss, strongs: strongs
+        )
     }
 
     var body: some View {
@@ -374,9 +544,44 @@ struct BibleVerseRow: View {
                 .foregroundStyle(Color.accentColor)
                 .frame(width: 28, alignment: .trailing)
 
-            Text(verse.text)
-                .font(.body)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            VStack(alignment: .leading, spacing: 5) {
+                verseText
+                    .font(.body)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                if showStrong, !strongList.isEmpty {
+                    Text(strongList)
+                        .font(.caption2.monospaced())
+                        .foregroundStyle(.secondary)
+                }
+                if showFootnotes {
+                    ForEach(Array(verse.footnotes.enumerated()), id: \.offset) { _, fn in
+                        Label(fn.marker.isEmpty ? fn.text : "\(fn.marker) \(fn.text)", systemImage: "note.text")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .labelStyle(.titleAndIcon)
+                    }
+                }
+                if showCrossRefs, !verse.crossReferences.isEmpty {
+                    let targets = verse.crossReferences.flatMap { $0.targets }
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "link").font(.caption2).foregroundStyle(.secondary)
+                            ForEach(Array(targets.enumerated()), id: \.offset) { _, ref in
+                                Button { jump(to: ref) } label: {
+                                    Text(ref)
+                                        .font(.caption2)
+                                        .padding(.horizontal, 6).padding(.vertical, 2)
+                                        .background(Color.accentColor.opacity(0.12), in: Capsule())
+                                        .foregroundStyle(Color.accentColor)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(.vertical, 6)
         .padding(.horizontal, 8)
@@ -386,12 +591,7 @@ struct BibleVerseRow: View {
         )
         .contentShape(Rectangle())
         .onTapGesture(count: 2) {
-            // Double-click sends to presentation
-            presentationManager.showBibleVerse(
-                text: verse.text,
-                reference: verse.fullReference,
-                translationName: libraryManager.selectedBibleModule?.abbreviation ?? ""
-            )
+            projectVerse()   // double-click sends to presentation
         }
         .onTapGesture {
             if NSEvent.modifierFlags.contains(.command) {
@@ -402,11 +602,7 @@ struct BibleVerseRow: View {
         }
         .contextMenu {
             Button(String(localized: "Show on Screen", comment: "Context menu")) {
-                presentationManager.showBibleVerse(
-                    text: verse.text,
-                    reference: verse.fullReference,
-                    translationName: libraryManager.selectedBibleModule?.abbreviation ?? ""
-                )
+                projectVerse()
             }
             Button(String(localized: "Copy Text", comment: "Context menu")) {
                 NSPasteboard.general.clearContents()
@@ -713,7 +909,8 @@ struct BibleGridNavigationView: View {
                                     presentationManager.showBibleVerse(
                                         text: verse.text,
                                         reference: verse.fullReference,
-                                        translationName: libraryManager.selectedBibleModule?.abbreviation ?? ""
+                                        translationName: libraryManager.selectedBibleModule?.abbreviation ?? "",
+                                        runs: verse.runs
                                     )
                                 }
                                 Button(String(localized: "Copy Text", comment: "Context menu")) {
@@ -774,45 +971,53 @@ struct BibleImportSheet: View {
     @State private var selectedFormat: SupportedBibleFormat?
     @State private var selectedFileURL: URL?
     @State private var autoDetected = false
+    @State private var isDropTargeted = false
+    /// Duplicate-on-import: set when a same-code module already exists.
+    @State private var pendingConflict: ImportService.BibleConflict?
 
     var body: some View {
         VStack(spacing: 20) {
-            Text(String(localized: "Import Bible Module", comment: "Sheet title"))
-                .font(.title2.bold())
-
-            // File/folder selector — user picks first, format is auto-detected
-            VStack(alignment: .leading, spacing: 12) {
-                Text(String(localized: "Select a Bible file or folder to import:", comment: "Import instruction"))
+            VStack(spacing: 4) {
+                Text(String(localized: "Import Bible", comment: "Sheet title"))
+                    .font(.title2.bold())
+                Text(String(localized: "Drop files or folders, or click to browse. Folders are scanned — every Bible inside is imported.", comment: "Import subtitle"))
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
 
-                HStack {
+            // Drag-and-drop zone (click to browse). Handles single files,
+            // multi-selections, and whole folders (recursively).
+            Button { browse() } label: {
+                VStack(spacing: 10) {
+                    Image(systemName: isDropTargeted ? "tray.and.arrow.down.fill" : "square.and.arrow.down")
+                        .font(.system(size: 36, weight: .light))
+                        .foregroundStyle(isDropTargeted ? Color.accentColor : .secondary)
                     if let url = selectedFileURL {
-                        Image(systemName: fileIcon)
-                            .foregroundStyle(Color.accentColor)
-                        Text(url.lastPathComponent)
-                            .lineLimit(1)
-                            .truncationMode(.middle)
+                        HStack(spacing: 6) {
+                            Image(systemName: fileIcon).foregroundStyle(Color.accentColor)
+                            Text(url.lastPathComponent).lineLimit(1).truncationMode(.middle).fontWeight(.medium)
+                        }
+                        Text(String(localized: "Click Import below, or drop another to replace.", comment: "Drop hint"))
+                            .font(.caption).foregroundStyle(.secondary)
                     } else {
-                        Text(String(localized: "No file selected", comment: "Placeholder"))
-                            .foregroundStyle(.secondary)
-                    }
-
-                    Spacer()
-
-                    Menu {
-                        Button(String(localized: "Choose File...", comment: "Button")) {
-                            chooseFile()
-                        }
-                        Button(String(localized: "Choose Folder (USFM)...", comment: "Button")) {
-                            chooseFolder()
-                        }
-                    } label: {
-                        Text(String(localized: "Browse...", comment: "Button"))
+                        Text(String(localized: "Drop Bible files or folders here", comment: "Drop zone title"))
+                            .font(.callout.weight(.medium))
+                        Text(String(localized: "or click to browse", comment: "Drop zone subtitle"))
+                            .font(.caption).foregroundStyle(.secondary)
                     }
                 }
-                .padding()
-                .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
+                .frame(maxWidth: .infinity).frame(height: 156)
+                .background(RoundedRectangle(cornerRadius: 12)
+                    .fill(isDropTargeted ? Color.accentColor.opacity(0.08) : Color.secondary.opacity(0.06)))
+                .overlay(RoundedRectangle(cornerRadius: 12)
+                    .strokeBorder(isDropTargeted ? Color.accentColor : Color.secondary.opacity(0.35),
+                                  style: StrokeStyle(lineWidth: 1.5, dash: [7, 5])))
+            }
+            .buttonStyle(.plain)
+            .onDrop(of: [.fileURL], isTargeted: $isDropTargeted) { providers in
+                loadDroppedURLs(providers)
+                return true
             }
 
             // Detected format display
@@ -865,29 +1070,18 @@ struct BibleImportSheet: View {
                 .foregroundStyle(.secondary)
             }
 
-            // Supported formats info
+            // Supported formats — compact line.
             if selectedFileURL == nil {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(String(localized: "Supported formats:", comment: "Section header"))
-                        .font(.caption.bold())
+                VStack(spacing: 5) {
+                    Text(String(localized: "Supported formats", comment: "Section header"))
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(.tertiary)
+                    Text(SupportedBibleFormat.allCases.map { $0.displayName }.joined(separator: "  ·  "))
+                        .font(.caption)
                         .foregroundStyle(.secondary)
-
-                    ForEach(SupportedBibleFormat.allCases) { format in
-                        HStack(spacing: 6) {
-                            Image(systemName: "doc.text")
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                            Text(format.displayName)
-                                .font(.caption)
-                            Text("(\(format.fileExtensions.map { ".\($0)" }.joined(separator: ", ")))")
-                                .font(.caption2)
-                                .foregroundStyle(.tertiary)
-                        }
-                    }
+                        .multilineTextAlignment(.center)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(12)
-                .background(.quaternary.opacity(0.3), in: RoundedRectangle(cornerRadius: 8))
+                .frame(maxWidth: .infinity)
             }
 
             // Import progress
@@ -920,6 +1114,26 @@ struct BibleImportSheet: View {
         }
         .padding(24)
         .frame(width: 520)
+        .confirmationDialog(
+            pendingConflict.map {
+                String(localized: "„\($0.code)” există deja (\($0.existingName), \($0.existingVerses) versete). Noul fișier are \($0.incomingVerses) versete.", comment: "Duplicate import dialog")
+            } ?? "",
+            isPresented: Binding(get: { pendingConflict != nil }, set: { if !$0 { pendingConflict = nil } }),
+            titleVisibility: .visible
+        ) {
+            Button(String(localized: "Combină (completează ce lipsește)", comment: "Conflict action")) {
+                runImport(resolution: .merge)
+            }
+            Button(String(localized: "Înlocuiește complet", comment: "Conflict action"), role: .destructive) {
+                runImport(resolution: .replace)
+            }
+            Button(String(localized: "Păstrează ambele", comment: "Conflict action")) {
+                runImport(resolution: .keepBoth)
+            }
+            Button(String(localized: "Anulează", comment: "Conflict action"), role: .cancel) {
+                pendingConflict = nil
+            }
+        }
     }
 
     private var fileIcon: String {
@@ -967,6 +1181,34 @@ struct BibleImportSheet: View {
         }
     }
 
+    /// Batch import: pick any mix of files AND folders (multi-select). Folders are
+    /// scanned recursively — a folder of `.json` Bibles (or a tree of language
+    /// subfolders) imports each one; a per-book USFM folder imports as one Bible.
+    private func chooseBatch() {
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = true
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = true
+        panel.message = String(localized: "Select Bible files and/or folders — subfolders are scanned automatically", comment: "Open panel message")
+        panel.prompt = String(localized: "Import", comment: "Open panel button")
+
+        guard panel.runModal() == .OK else { return }
+        let pending = DragDropImportHandler.classifyExpanded(panel.urls)
+        guard !pending.isEmpty else {
+            appState.showError(
+                String(localized: "Nothing to import", comment: "Alert title"),
+                message: String(localized: "No recognizable Bible files were found in the selection.", comment: "Alert message")
+            )
+            return
+        }
+        dismiss()
+        NotificationCenter.default.post(
+            name: .batchImportFiles,
+            object: nil,
+            userInfo: ["files": pending]
+        )
+    }
+
     private func chooseFolder() {
         let panel = NSOpenPanel()
         panel.allowsMultipleSelection = false
@@ -1001,8 +1243,67 @@ struct BibleImportSheet: View {
         return nil
     }
 
+    /// Open a panel to pick any mix of files and folders, then route them.
+    private func browse() {
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = true
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = true
+        panel.message = String(localized: "Select Bible files and/or folders — subfolders are scanned automatically", comment: "Open panel message")
+        panel.prompt = String(localized: "Open", comment: "Open panel button")
+        guard panel.runModal() == .OK else { return }
+        handleSelectedURLs(panel.urls)
+    }
+
+    /// Load dropped file URLs asynchronously, then route them.
+    private func loadDroppedURLs(_ providers: [NSItemProvider]) {
+        let group = DispatchGroup()
+        let lock = NSLock()
+        var urls: [URL] = []
+        for p in providers where p.canLoadObject(ofClass: URL.self) {
+            group.enter()
+            _ = p.loadObject(ofClass: URL.self) { url, _ in
+                if let url { lock.lock(); urls.append(url); lock.unlock() }
+                group.leave()
+            }
+        }
+        group.notify(queue: .main) { handleSelectedURLs(urls) }
+    }
+
+    /// One file → inline single-import flow (detect/override format). Multiple
+    /// files or any folder → expand recursively and hand off to batch import.
+    private func handleSelectedURLs(_ urls: [URL]) {
+        guard !urls.isEmpty else { return }
+        let expanded = DragDropImportHandler.expandToImportableFiles(urls)
+        if expanded.count == 1, let url = expanded.first {
+            selectedFileURL = url
+            if let detected = ImportService.detectBibleFormat(fileURL: url) {
+                selectedFormat = detected; autoDetected = true
+            } else {
+                selectedFormat = guessFormatFromExtension(url); autoDetected = selectedFormat != nil
+            }
+            return
+        }
+        let pending = DragDropImportHandler.classifyExpanded(urls)
+        guard !pending.isEmpty else {
+            appState.showError(
+                String(localized: "Nothing to import", comment: "Alert title"),
+                message: String(localized: "No recognizable Bible files were found in the selection.", comment: "Alert message"))
+            return
+        }
+        dismiss()
+        NotificationCenter.default.post(name: .batchImportFiles, object: nil, userInfo: ["files": pending])
+    }
+
+    /// First attempt uses `.ask` — if a same-code module exists it surfaces the
+    /// conflict dialog; otherwise it imports straight away.
     private func performImport() {
+        runImport(resolution: .ask)
+    }
+
+    private func runImport(resolution: ImportService.BibleConflictResolution) {
         guard let fileURL = selectedFileURL, let format = selectedFormat else { return }
+        pendingConflict = nil
         isImporting = true
         importProgress = 0
         importStatusText = String(localized: "Starting import...", comment: "Import progress")
@@ -1012,7 +1313,8 @@ struct BibleImportSheet: View {
                 let module = try await ImportService.importBible(
                     fileURL: fileURL,
                     format: format,
-                    modelContext: modelContext
+                    modelContext: modelContext,
+                    resolution: resolution
                 ) { progress, status in
                     Task { @MainActor in
                         importProgress = progress
@@ -1029,6 +1331,14 @@ struct BibleImportSheet: View {
                     )
                     dismiss()
                 }
+            } catch let conflict as ImportService.BibleConflict {
+                // Same-code module exists → ask the operator what to do.
+                await MainActor.run {
+                    isImporting = false
+                    pendingConflict = conflict
+                }
+            } catch is ImportService.BibleImportCancelled {
+                await MainActor.run { isImporting = false }
             } catch {
                 await MainActor.run {
                     isImporting = false

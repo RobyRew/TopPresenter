@@ -68,7 +68,25 @@ private final class OSISParserDelegate: NSObject, XMLParserDelegate {
     private var isInNote = false
     private var noteDepth = 0
 
+    // GOAT v2: red-letter + section headings
+    private var wocDepth = 0
+    private var runBuf = ""
+    private var currentRuns: [VerseRun] = []
+    private var hasWoc = false
+    private var isInSectionTitle = false
+    private var sectionTitleText = ""
+    private var pendingHeadings: [BibleHeading] = []
+
     private var bookCounter = 0
+
+    /// Flush the active run buffer into `currentRuns` with the current kind.
+    private func flushRun() {
+        let t = runBuf.replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+        if !t.trimmingCharacters(in: .whitespaces).isEmpty {
+            currentRuns.append(VerseRun(text: t, kind: wocDepth > 0 ? "woc" : "plain"))
+        }
+        runBuf = ""
+    }
 
     func parser(
         _ parser: XMLParser,
@@ -87,6 +105,9 @@ private final class OSISParserDelegate: NSObject, XMLParserDelegate {
             if isInHeader {
                 isInTitle = true
                 currentText = ""
+            } else {
+                isInSectionTitle = true
+                sectionTitleText = ""
             }
 
         case "header":
@@ -147,6 +168,13 @@ private final class OSISParserDelegate: NSObject, XMLParserDelegate {
                 finishCurrentVerse()
             }
 
+        case "q":
+            if let who = attributeDict["who"], who.lowercased().contains("jesus") {
+                if isInVerse { flushRun() }
+                wocDepth += 1
+                hasWoc = true
+            }
+
         case "note":
             isInNote = true
             noteDepth += 1
@@ -159,8 +187,13 @@ private final class OSISParserDelegate: NSObject, XMLParserDelegate {
     func parser(_ parser: XMLParser, foundCharacters string: String) {
         if isInNote { return }
 
+        if isInSectionTitle {
+            sectionTitleText += string
+            return
+        }
         if isInVerse {
             currentText += string
+            runBuf += string
         } else if isInTitle && isInHeader {
             currentText += string
         } else if currentElement == "language" {
@@ -219,6 +252,22 @@ private final class OSISParserDelegate: NSObject, XMLParserDelegate {
         case "verse":
             finishCurrentVerse()
 
+        case "title":
+            if isInSectionTitle {
+                let t = sectionTitleText.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !t.isEmpty {
+                    pendingHeadings.append(BibleHeading(beforeVerse: currentVerseNumber + 1, level: 1, text: t))
+                }
+                isInSectionTitle = false
+                sectionTitleText = ""
+            }
+
+        case "q":
+            if wocDepth > 0 {
+                flushRun()
+                wocDepth -= 1
+            }
+
         case "note":
             noteDepth -= 1
             if noteDepth <= 0 {
@@ -237,18 +286,26 @@ private final class OSISParserDelegate: NSObject, XMLParserDelegate {
 
     private func finishCurrentVerse() {
         if isInVerse {
+            flushRun()
             let cleanText = currentText
                 .trimmingCharacters(in: .whitespacesAndNewlines)
                 .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
 
             if !cleanText.isEmpty {
+                let runs = hasWoc ? currentRuns.filter { !$0.text.trimmingCharacters(in: .whitespaces).isEmpty } : nil
                 verses.append(BibleImportVerse(
                     verseNumber: currentVerseNumber,
-                    text: cleanText
+                    text: cleanText,
+                    runs: runs,
+                    hasWordsOfChrist: hasWoc
                 ))
             }
             isInVerse = false
             currentText = ""
+            currentRuns = []
+            runBuf = ""
+            hasWoc = false
+            wocDepth = 0
         }
     }
 
@@ -256,9 +313,11 @@ private final class OSISParserDelegate: NSObject, XMLParserDelegate {
         if !verses.isEmpty {
             chapters.append(BibleImportChapter(
                 chapterNumber: currentChapterNumber,
-                verses: verses
+                verses: verses,
+                headings: pendingHeadings.isEmpty ? nil : pendingHeadings
             ))
             verses = []
+            pendingHeadings = []
         }
     }
 }

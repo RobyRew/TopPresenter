@@ -238,6 +238,14 @@ final class LiveContent {
     var translationName: String = ""
     var contentType: ContentType = .blank
     var isLive: Bool = false
+    /// Rich segments of the main text (red-letter / italic). Empty = plain.
+    var mainRuns: [VerseRun] = []
+    /// Rich Bible casete sources (populated for live verses; "" otherwise).
+    var footnote: String = ""
+    var crossReference: String = ""
+    var heading: String = ""
+    var gloss: String = ""
+    var strongs: String = ""
     /// Position of this slide within its set (verse within song, slide within
     /// deck, item within schedule) — drives "show only on first/last slide".
     var slideIndex: Int = 0
@@ -271,16 +279,31 @@ final class LiveContent {
         translationName = ""
         contentType = .blank
         isLive = false
+        mainRuns = []
+        clearRichSources()
         slideIndex = 0
         slideCount = 1
     }
 
-    func setBibleVerse(text: String, reference: String, translationName: String = "", slideIndex: Int = 0, slideCount: Int = 1) {
+    private func clearRichSources() {
+        footnote = ""; crossReference = ""; heading = ""; gloss = ""; strongs = ""
+    }
+
+    func setBibleVerse(text: String, reference: String, translationName: String = "", runs: [VerseRun] = [],
+                       footnote: String = "", crossReference: String = "", heading: String = "",
+                       gloss: String = "", strongs: String = "",
+                       slideIndex: Int = 0, slideCount: Int = 1) {
         self.mainText = text
         self.reference = reference
         self.translationName = translationName
         self.subtitle = ""
         self.contentType = .bible
+        self.mainRuns = runs
+        self.footnote = footnote
+        self.crossReference = crossReference
+        self.heading = heading
+        self.gloss = gloss
+        self.strongs = strongs
         self.slideIndex = slideIndex
         self.slideCount = max(slideCount, 1)
     }
@@ -291,6 +314,8 @@ final class LiveContent {
         self.subtitle = verseLabel
         self.translationName = ""
         self.contentType = .song
+        self.mainRuns = []
+        clearRichSources()
         self.slideIndex = slideIndex
         self.slideCount = max(slideCount, 1)
     }
@@ -301,6 +326,8 @@ final class LiveContent {
         self.subtitle = ""
         self.translationName = ""
         self.contentType = .text
+        self.mainRuns = []
+        clearRichSources()
         self.slideIndex = slideIndex
         self.slideCount = max(slideCount, 1)
     }
@@ -311,6 +338,8 @@ final class LiveContent {
         self.subtitle = ""
         self.translationName = ""
         self.contentType = .media
+        self.mainRuns = []
+        clearRichSources()
     }
 }
 

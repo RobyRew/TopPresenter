@@ -146,6 +146,30 @@ struct PresentationPreviewCard: View {
         return libraryManager.selectedBibleModule?.abbreviation ?? ""
     }
 
+    // Rich Bible casete sources for the preview (mirror the live values when
+    // live, else derive from the current selection so they show before going live).
+    private var previewFootnote: String {
+        pm.liveContent.isLive ? pm.liveContent.footnote : (isBibleContent ? libraryManager.selectedVersesFootnotes : "")
+    }
+    private var previewCrossReference: String {
+        pm.liveContent.isLive ? pm.liveContent.crossReference : (isBibleContent ? libraryManager.selectedVersesCrossRefs : "")
+    }
+    private var previewHeading: String {
+        pm.liveContent.isLive ? pm.liveContent.heading : (isBibleContent ? libraryManager.selectedVersesHeading : "")
+    }
+    private var previewGloss: String {
+        pm.liveContent.isLive ? pm.liveContent.gloss : (isBibleContent ? libraryManager.selectedVersesGloss : "")
+    }
+    private var previewStrongs: String {
+        pm.liveContent.isLive ? pm.liveContent.strongs : (isBibleContent ? libraryManager.selectedVersesStrongs : "")
+    }
+    /// Red-letter runs for the main verse box (woc styling). Empty unless the
+    /// theme has it enabled and the verse carries words-of-Christ.
+    private var previewRuns: [VerseRun] {
+        guard pm.wocStyleEnabled, isBibleContent else { return [] }
+        return pm.liveContent.isLive ? pm.liveContent.mainRuns : libraryManager.selectedVersesRuns
+    }
+
     private var hasContent: Bool { !previewText.isEmpty }
 
     private var isPreviewOnly: Bool {
@@ -258,7 +282,8 @@ struct PresentationPreviewCard: View {
                                   ) * canvasScale
                                 : nil
 
-                            previewBoxText(text, style: style, rect: rect, fontScale: targetScale * canvasScale, fittedSize: fitted, dim: dim)
+                            previewBoxText(text, style: style, rect: rect, fontScale: targetScale * canvasScale, fittedSize: fitted, dim: dim,
+                                           runs: section == .verseContent ? previewRuns : [])
                         }
                     }
                 case .custom(let id):
@@ -267,7 +292,9 @@ struct PresentationPreviewCard: View {
                         let text = box.resolvedText(
                             main: fields.main, reference: fields.reference,
                             translation: fields.translation, subtitle: fields.subtitle,
-                            slideNumber: pm.liveContent.slideNumberText
+                            slideNumber: pm.liveContent.slideNumberText,
+                            footnote: previewFootnote, crossReference: previewCrossReference,
+                            heading: previewHeading, gloss: previewGloss, strongs: previewStrongs
                         )
                         if !text.isEmpty {
                             let rect = box.frame.rect(in: size)
@@ -304,12 +331,22 @@ struct PresentationPreviewCard: View {
         _ text: String,
         style: PresentationManager.ResolvedBoxStyle,
         rect: CGRect, fontScale: CGFloat,
-        fittedSize: CGFloat?, dim: Double
+        fittedSize: CGFloat?, dim: Double,
+        runs: [VerseRun] = []
     ) -> some View {
         let size = fittedSize ?? CGFloat(style.fontSize) * fontScale
-        Text(style.display(text))
+        // Red-letter: compose from runs (coloring woc) whenever the run stream
+        // carries words-of-Christ. Runs reconstruct the verse, so the text stays
+        // correct; an exact string match was too strict (prefix/whitespace).
+        let useRuns = runs.contains { $0.kind == "woc" }
+        let composed: Text = useRuns
+            ? runs.reduce(Text("")) { acc, run in
+                let c = (run.kind == "woc") ? pm.wocColor : style.color
+                return acc + Text(style.display(run.text)).foregroundColor(c.opacity(style.opacity * dim))
+              }
+            : Text(style.display(text)).foregroundColor(style.color.opacity(style.opacity * dim))
+        return composed
             .font(style.font(at: size))
-            .foregroundStyle(style.color.opacity(style.opacity * dim))
             .multilineTextAlignment(style.hAlign)
             .lineSpacing(style.lineSpacing * size * 0.1)
             .tracking(style.tracking * fontScale)
@@ -438,7 +475,13 @@ struct VerseSlideControlsBar: View {
         pm.showBibleVerse(
             text: formattedText,
             reference: libraryManager.selectedVersesReference,
-            translationName: libraryManager.selectedBibleModule?.abbreviation ?? ""
+            translationName: libraryManager.selectedBibleModule?.abbreviation ?? "",
+            runs: libraryManager.selectedVersesRuns,
+            footnote: libraryManager.selectedVersesFootnotes,
+            crossReference: libraryManager.selectedVersesCrossRefs,
+            heading: libraryManager.selectedVersesHeading,
+            gloss: libraryManager.selectedVersesGloss,
+            strongs: libraryManager.selectedVersesStrongs
         )
     }
 
@@ -579,7 +622,13 @@ struct VerseSlideControlsBar: View {
                     pm.showBibleVerse(
                         text: formattedText,
                         reference: libraryManager.selectedVersesReference,
-                        translationName: libraryManager.selectedBibleModule?.abbreviation ?? ""
+                        translationName: libraryManager.selectedBibleModule?.abbreviation ?? "",
+                        runs: libraryManager.selectedVersesRuns,
+                        footnote: libraryManager.selectedVersesFootnotes,
+                        crossReference: libraryManager.selectedVersesCrossRefs,
+                        heading: libraryManager.selectedVersesHeading,
+                        gloss: libraryManager.selectedVersesGloss,
+                        strongs: libraryManager.selectedVersesStrongs
                     )
                 } label: {
                     Label(

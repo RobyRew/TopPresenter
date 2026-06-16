@@ -161,6 +161,70 @@ struct TopPresenterImporterTests {
         #expect(result.books[0].chapters[0].verses.count == 2)
     }
 
+    @Test func parsesGoatV2RichFields() async throws {
+        let json: [String: Any] = [
+            "schemaVersion": "2.0.0",
+            "format": "TopPresenter Bible",
+            "translation": ["code": "TEST", "name": "Test", "versification": "kjv", "canon": "protestant"],
+            "books": [[
+                "number": 40, "name": "Matthew", "testament": "NT",
+                "chapters": [[
+                    "number": 5,
+                    "headings": [["beforeVerse": 3, "level": 1, "text": "The Beatitudes"]],
+                    "verses": [[
+                        "number": 3, "text": "Blessed are the poor in spirit.",
+                        "runs": [["text": "Blessed are the poor in spirit.", "kind": "woc", "strong": "G3107"]],
+                        "footnotes": [["marker": "a", "text": "Or happy"]],
+                        "crossReferences": [["targets": ["Luke 6:20"]]]
+                    ]]
+                ]]
+            ]]
+        ]
+        let url = try writeJSON(json, filename: "test_goat_v2.json")
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let result = try await importer.parse(fileURL: url)
+        #expect(result.versification == "kjv")
+        #expect(result.canon == "protestant")
+        let ch = result.books[0].chapters[0]
+        #expect(ch.headings?.first?.text == "The Beatitudes")
+        let v = ch.verses[0]
+        #expect(v.hasWordsOfChrist)                       // inferred from run kind
+        #expect(v.runs?.first?.kind == "woc")
+        #expect(v.runs?.first?.strong == "G3107")
+        #expect(v.footnotes?.first?.text == "Or happy")
+        #expect(v.crossReferences?.first?.targets == ["Luke 6:20"])
+    }
+
+    @Test func usfmExtractsRedLetterRuns() {
+        // \wj …\wj* → words-of-Christ run; surrounding text stays plain.
+        let raw = "And \\wj I am the light of the world\\wj*, he said."
+        let r = USFMRich.parse(raw, plain: "And I am the light of the world, he said.")
+        #expect(r.woc)
+        let runs = try! #require(r.runs)
+        #expect(runs.contains { $0.kind == "woc" && $0.text.contains("light of the world") })
+        #expect(runs.contains { $0.kind == "plain" && $0.text.contains("And") })
+        // Plain verse → no runs.
+        #expect(USFMRich.parse("Just plain text.", plain: "Just plain text.").runs == nil)
+    }
+
+    @Test func acceptsLegacyCrossRefShape() async throws {
+        // eBiblia v1 used {references:[…]} — must still decode into targets.
+        let json: [String: Any] = [
+            "format": "TopPresenter Bible",
+            "translation": ["code": "T"],
+            "books": [["number": 1, "name": "Genesis", "chapters": [[
+                "number": 1,
+                "verses": [["number": 1, "text": "In the beginning.",
+                            "crossReferences": [["references": ["John 1:1"]]]]]
+            ]]]]
+        ]
+        let url = try writeJSON(json, filename: "test_legacy_xref.json")
+        defer { try? FileManager.default.removeItem(at: url) }
+        let result = try await importer.parse(fileURL: url)
+        #expect(result.books[0].chapters[0].verses[0].crossReferences?.first?.targets == ["John 1:1"])
+    }
+
     // MARK: - Helpers
 
     private func writeJSON(_ json: [String: Any], filename: String) throws -> URL {
@@ -1256,6 +1320,90 @@ struct PresentationManagerTests {
         )
         #expect(legacy.letterTracking == 0)
         #expect(legacy.shadowColorHex == "000000B3")
+        #expect(legacy.wocStyleEnabled == true)
+        #expect(legacy.wocColorHex == "C0392B")
+    }
+
+    @Test func redLetterThemeTravelsWithThemes() {
+        let pm = PresentationManager()
+        let originalEnabled = pm.wocStyleEnabled
+        let originalColor = pm.wocColorHex
+        defer { pm.wocStyleEnabled = originalEnabled; pm.wocColorHex = originalColor }
+
+        pm.wocStyleEnabled = true
+        pm.wocColorHex = "FF3300"
+        let theme = pm.saveCurrentAsTheme(named: "WOC Test", formatRaw: "all")
+        defer { pm.deleteTheme(id: theme.id) }
+
+        pm.wocStyleEnabled = false
+        pm.wocColorHex = "000000"
+        pm.applyTheme(id: theme.id)
+        #expect(pm.wocStyleEnabled)
+        #expect(pm.wocColorHex == "FF3300")
+    }
+
+    @Test func duplicateImportMergeFillsMissingChapters() async throws {
+        let container = try ModelContainer(
+            for: BibleModule.self, BibleBook.self, BibleChapter.self, BibleVerse.self,
+            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
+        )
+        let ctx = container.mainContext
+
+        func write(_ j: [String: Any], _ name: String) throws -> URL {
+            let u = FileManager.default.temporaryDirectory.appendingPathComponent(name)
+            try JSONSerialization.data(withJSONObject: j).write(to: u)
+            return u
+        }
+        // First import: Daniel with chapters 6 and 8 only (7 missing).
+        let v1: [String: Any] = ["format": "TopPresenter Bible", "translation": ["code": "DUP", "name": "Dup"],
+            "books": [["number": 27, "name": "Daniel", "testament": "OT", "chapters": [
+                ["number": 6, "verses": [["number": 1, "text": "six"]]],
+                ["number": 8, "verses": [["number": 1, "text": "eight"]]]]]]]
+        let m1 = try await ImportService.importBible(fileURL: try write(v1, "dup1.json"), format: .topPresenter, modelContext: ctx, resolution: .keepBoth)
+        #expect(m1.books.first?.chapters.count == 2)
+
+        // Second import (same code) supplying the missing chapter 7 → MERGE.
+        let v2: [String: Any] = ["format": "TopPresenter Bible", "translation": ["code": "DUP", "name": "Dup"],
+            "books": [["number": 27, "name": "Daniel", "testament": "OT", "chapters": [
+                ["number": 6, "verses": [["number": 1, "text": "SIX-overwrite-attempt"]]],
+                ["number": 7, "verses": [["number": 1, "text": "seven"]]]]]]]
+        let merged = try await ImportService.importBible(fileURL: try write(v2, "dup2.json"), format: .topPresenter, modelContext: ctx, resolution: .merge)
+
+        #expect(merged.id == m1.id)                                          // merged INTO existing
+        let daniel = try #require(merged.books.first)
+        #expect(Set(daniel.chapters.map { $0.chapterNumber }) == [6, 7, 8])  // 7 filled in
+        let ch6 = try #require(daniel.chapters.first { $0.chapterNumber == 6 })
+        #expect(ch6.verses.first?.text == "six")                             // existing verse kept
+        let mods = try ctx.fetch(FetchDescriptor<BibleModule>())
+        #expect(mods.filter { $0.abbreviation == "DUP" }.count == 1)         // no duplicate module
+    }
+
+    @Test func duplicateImportAskThrowsConflict() async throws {
+        let container = try ModelContainer(
+            for: BibleModule.self, BibleBook.self, BibleChapter.self, BibleVerse.self,
+            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
+        )
+        let ctx = container.mainContext
+        let j: [String: Any] = ["format": "TopPresenter Bible", "translation": ["code": "ASK", "name": "Ask"],
+            "books": [["number": 1, "name": "Genesis", "testament": "OT",
+                       "chapters": [["number": 1, "verses": [["number": 1, "text": "x"]]]]]]]
+        let u = FileManager.default.temporaryDirectory.appendingPathComponent("ask.json")
+        try JSONSerialization.data(withJSONObject: j).write(to: u)
+        _ = try await ImportService.importBible(fileURL: u, format: .topPresenter, modelContext: ctx, resolution: .keepBoth)
+        await #expect(throws: ImportService.BibleConflict.self) {
+            _ = try await ImportService.importBible(fileURL: u, format: .topPresenter, modelContext: ctx, resolution: .ask)
+        }
+    }
+
+    @Test func liveContentCarriesVerseRuns() {
+        let pm = PresentationManager()
+        pm.showBibleVerse(text: "I am the light.", reference: "John 8:12",
+                          runs: [VerseRun(text: "I am the light.", kind: "woc")])
+        #expect(pm.liveContent.mainRuns.contains { $0.kind == "woc" })
+        // A song clears the runs.
+        pm.showSongVerse(text: "la la", title: "T", verseLabel: "S1")
+        #expect(pm.liveContent.mainRuns.isEmpty)
+        pm.clearOutput()
     }
 
     @Test func perBoxPaddingShadowAutoFitResolve() {

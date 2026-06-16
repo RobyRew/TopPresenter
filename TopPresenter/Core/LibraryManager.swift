@@ -40,12 +40,45 @@ final class LibraryManager {
     var isSongSearching: Bool = false
 
     // MARK: - Bible Navigation
+    /// Switch translation while staying on the same passage where possible.
+    /// Fallback chain: same book+chapter+verse → same book, first verse →
+    /// first book, first verse. Missing pieces in the new module are dropped.
     func selectModule(_ module: BibleModule) {
+        let wantBook = selectedBook?.bookNumber
+        let wantChapter = selectedChapter?.chapterNumber
+        let wantVerses = selectedVerses.map { $0.verseNumber }
+
         selectedBibleModule = module
-        selectedBook = nil
-        selectedChapter = nil
-        selectedVerses = []
         isAutoFillActive = false
+
+        let books = module.books.sorted { $0.bookNumber < $1.bookNumber }
+        guard !books.isEmpty else {
+            selectedBook = nil; selectedChapter = nil; selectedVerses = []
+            return
+        }
+        // Same book number if present, else the first book.
+        let book = books.first { $0.bookNumber == wantBook } ?? books[0]
+        let keptBook = (book.bookNumber == wantBook)
+        selectedBook = book
+
+        let chapters = book.sortedChapters
+        guard !chapters.isEmpty else {
+            selectedChapter = nil; selectedVerses = []
+            return
+        }
+        // Same chapter only if we kept the same book, else first chapter.
+        let chapter = (keptBook ? chapters.first { $0.chapterNumber == wantChapter } : nil) ?? chapters[0]
+        let keptChapter = keptBook && (chapter.chapterNumber == wantChapter)
+        selectedChapter = chapter
+
+        let verses = chapter.sortedVerses
+        if keptChapter, !wantVerses.isEmpty {
+            let kept = verses.filter { wantVerses.contains($0.verseNumber) }
+            selectedVerses = kept.isEmpty ? Array(verses.prefix(1)) : kept
+        } else {
+            // Different book/chapter → land on the first available verse.
+            selectedVerses = Array(verses.prefix(1))
+        }
     }
 
     func selectBook(_ book: BibleBook) {
@@ -401,6 +434,45 @@ final class LibraryManager {
 
     var selectedVersesText: String {
         selectedVerses.map { $0.text }.joined(separator: " ")
+    }
+
+    /// Red-letter runs for the live verse — only when a SINGLE verse is
+    /// selected and it carries rich runs (multi-verse blocks stay plain).
+    var selectedVersesRuns: [VerseRun] {
+        guard selectedVerses.count == 1 else { return [] }
+        return selectedVerses[0].runs
+    }
+
+    // MARK: Rich casete sources for the live verse(s)
+    /// Footnotes of the selected verse(s), one per line ("marker text").
+    var selectedVersesFootnotes: String {
+        selectedVerses.flatMap { $0.footnotes }
+            .map { $0.marker.isEmpty ? $0.text : "\($0.marker) \($0.text)" }
+            .joined(separator: "\n")
+    }
+    /// Cross-reference targets of the selected verse(s), separated by "; ".
+    var selectedVersesCrossRefs: String {
+        selectedVerses.flatMap { $0.crossReferences }
+            .flatMap { ref in [ref.label].compactMap { $0 } + ref.targets }
+            .joined(separator: "; ")
+    }
+    /// Section heading(s) (pericope) sitting within the selected verse range.
+    var selectedVersesHeading: String {
+        guard let chapter = selectedChapter else { return "" }
+        let nums = Set(selectedVerses.map { $0.verseNumber })
+        let lo = nums.min() ?? 0, hi = nums.max() ?? 0
+        return chapter.headings
+            .filter { $0.beforeVerse >= lo && $0.beforeVerse <= hi }
+            .map { $0.text }.joined(separator: "\n")
+    }
+    /// Interlinear gloss (e.g. English under a Hebrew/Greek verse).
+    var selectedVersesGloss: String {
+        selectedVerses.map { $0.gloss }.filter { !$0.isEmpty }.joined(separator: " ")
+    }
+    /// Strong's numbers of a single selected verse, space-separated.
+    var selectedVersesStrongs: String {
+        guard selectedVerses.count == 1 else { return "" }
+        return selectedVerses[0].runs.compactMap { $0.strong }.joined(separator: " ")
     }
 
     var selectedVersesReference: String {

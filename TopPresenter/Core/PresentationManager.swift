@@ -559,6 +559,15 @@ final class PresentationManager {
     var letterTracking: Double {
         didSet { UserDefaults.standard.set(letterTracking, forKey: "pm_letterTracking") }
     }
+    /// Red-letter (words of Christ): when on, verse runs flagged `woc` render
+    /// in `wocColorHex`. Travels with themes; applies to the Bible output.
+    var wocStyleEnabled: Bool {
+        didSet { UserDefaults.standard.set(wocStyleEnabled, forKey: "pm_wocStyleEnabled") }
+    }
+    var wocColorHex: String {
+        didSet { UserDefaults.standard.set(wocColorHex, forKey: "pm_wocColorHex") }
+    }
+    var wocColor: Color { Color(hex: wocColorHex) ?? .red }
     var transitionDuration: Double {
         didSet { UserDefaults.standard.set(transitionDuration, forKey: "pm_transitionDuration") }
     }
@@ -1112,6 +1121,11 @@ final class PresentationManager {
         var sourceFormatRaw: String = ""
         /// Slide scope: "all" | "first" | "last" (e.g. "Amin." only on the last slide).
         var displayOnRaw: String = "all"
+        /// Static text wrapped around a LIVE source's value, e.g. prefix "Ref: "
+        /// → "Ref: Ioan 3:16", or suffix " (NTR)". Ignored for the "static"/"auto"
+        /// sources and when the live value is empty (so an empty box stays empty).
+        var prefix: String = ""
+        var suffix: String = ""
 
         init() {}
 
@@ -1127,21 +1141,33 @@ final class PresentationManager {
             sourceRaw = try c.decodeIfPresent(String.self, forKey: .sourceRaw) ?? "static"
             sourceFormatRaw = try c.decodeIfPresent(String.self, forKey: .sourceFormatRaw) ?? ""
             displayOnRaw = try c.decodeIfPresent(String.self, forKey: .displayOnRaw) ?? "all"
+            prefix = try c.decodeIfPresent(String.self, forKey: .prefix) ?? ""
+            suffix = try c.decodeIfPresent(String.self, forKey: .suffix) ?? ""
         }
 
-        func resolvedText(main: String, reference: String, translation: String, subtitle: String, now: Date = .now, slideNumber: String = "") -> String {
-            PresentationManager.resolveBoxSource(
+        /// Live sources support prefix/suffix; static/auto are used verbatim.
+        var supportsAffixes: Bool { sourceRaw != "static" && sourceRaw != "auto" }
+
+        func resolvedText(main: String, reference: String, translation: String, subtitle: String, now: Date = .now, slideNumber: String = "",
+                          footnote: String = "", crossReference: String = "", heading: String = "", gloss: String = "", strongs: String = "") -> String {
+            let value = PresentationManager.resolveBoxSource(
                 sourceRaw, format: sourceFormatRaw, autoValue: text, staticText: text,
                 main: main, reference: reference, translation: translation, subtitle: subtitle,
-                now: now, slideNumber: slideNumber
+                now: now, slideNumber: slideNumber,
+                footnote: footnote, crossReference: crossReference, heading: heading, gloss: gloss, strongs: strongs
             )
+            // Wrap a non-empty live value with the static prefix/suffix.
+            guard supportsAffixes, !value.isEmpty, !(prefix.isEmpty && suffix.isEmpty) else { return value }
+            return prefix + value + suffix
         }
 
         func resolvedText(live: LiveContent, now: Date = .now) -> String {
             resolvedText(
                 main: live.mainText, reference: live.reference,
                 translation: live.translationName, subtitle: live.subtitle,
-                now: now, slideNumber: live.slideNumberText
+                now: now, slideNumber: live.slideNumberText,
+                footnote: live.footnote, crossReference: live.crossReference,
+                heading: live.heading, gloss: live.gloss, strongs: live.strongs
             )
         }
 
@@ -1362,13 +1388,20 @@ final class PresentationManager {
     static func resolveBoxSource(
         _ raw: String, format: String = "", autoValue: String, staticText: String,
         main: String, reference: String, translation: String, subtitle: String,
-        now: Date = .now, slideNumber: String = ""
+        now: Date = .now, slideNumber: String = "",
+        footnote: String = "", crossReference: String = "", heading: String = "",
+        gloss: String = "", strongs: String = ""
     ) -> String {
         switch raw {
         case "mainText": return main
         case "reference": return reference
         case "translation": return translation
         case "subtitle": return subtitle
+        case "footnote": return footnote
+        case "crossReference": return crossReference
+        case "heading": return heading
+        case "gloss": return gloss
+        case "strongs": return strongs
         case "static": return staticText
         case "date", "time": return formattedClock(source: raw, format: format, now: now)
         case "slideNumber": return slideNumber
@@ -1398,6 +1431,11 @@ final class PresentationManager {
                 ("reference", String(localized: "Referință (live)", comment: "Box source")),
                 ("translation", String(localized: "Traducere (live)", comment: "Box source")),
                 ("subtitle", String(localized: "Subtitlu (live)", comment: "Box source")),
+                ("heading", String(localized: "Titlu secțiune (live)", comment: "Box source")),
+                ("footnote", String(localized: "Notă de subsol (live)", comment: "Box source")),
+                ("crossReference", String(localized: "Referințe încrucișate (live)", comment: "Box source")),
+                ("gloss", String(localized: "Glosă interliniară (live)", comment: "Box source")),
+                ("strongs", String(localized: "Numere Strong (live)", comment: "Box source")),
             ]
         }
         return live + [
@@ -1585,6 +1623,8 @@ final class PresentationManager {
         var shadowRadius: Double = 3.0
         var shadowColorHex: String = "000000B3"
         var letterTracking: Double = 0
+        var wocStyleEnabled: Bool = true
+        var wocColorHex: String = "C0392B"
         var autoFitVerseFont: Bool = false
         var globalWeightRaw: String = "regular"
         var globalVAlignRaw: String = "center"
@@ -1613,6 +1653,8 @@ final class PresentationManager {
             shadowRadius = try c.decodeIfPresent(Double.self, forKey: .shadowRadius) ?? 3.0
             shadowColorHex = try c.decodeIfPresent(String.self, forKey: .shadowColorHex) ?? "000000B3"
             letterTracking = try c.decodeIfPresent(Double.self, forKey: .letterTracking) ?? 0
+            wocStyleEnabled = try c.decodeIfPresent(Bool.self, forKey: .wocStyleEnabled) ?? true
+            wocColorHex = try c.decodeIfPresent(String.self, forKey: .wocColorHex) ?? "C0392B"
             autoFitVerseFont = try c.decodeIfPresent(Bool.self, forKey: .autoFitVerseFont) ?? false
             globalWeightRaw = try c.decodeIfPresent(String.self, forKey: .globalWeightRaw) ?? "regular"
             globalVAlignRaw = try c.decodeIfPresent(String.self, forKey: .globalVAlignRaw) ?? "center"
@@ -1684,6 +1726,8 @@ final class PresentationManager {
         p.shadowRadius = shadowRadius
         p.shadowColorHex = shadowColorHex
         p.letterTracking = letterTracking
+        p.wocStyleEnabled = wocStyleEnabled
+        p.wocColorHex = wocColorHex
         p.autoFitVerseFont = autoFitVerseFont
         p.globalWeightRaw = globalWeightRaw
         p.globalVAlignRaw = globalVAlignRaw
@@ -1988,6 +2032,8 @@ final class PresentationManager {
         shadowRadius = p.shadowRadius
         shadowColorHex = p.shadowColorHex
         letterTracking = p.letterTracking
+        wocStyleEnabled = p.wocStyleEnabled
+        wocColorHex = p.wocColorHex
         autoFitVerseFont = p.autoFitVerseFont
         globalWeightRaw = p.globalWeightRaw
         globalVAlignRaw = p.globalVAlignRaw
@@ -2272,6 +2318,8 @@ final class PresentationManager {
         self.shadowRadius = d.object(forKey: "pm_shadowRadius") as? Double ?? 3.0
         self.shadowColorHex = d.string(forKey: "pm_shadowColorHex") ?? "000000B3"
         self.letterTracking = d.object(forKey: "pm_letterTracking") as? Double ?? 0
+        self.wocStyleEnabled = d.object(forKey: "pm_wocStyleEnabled") as? Bool ?? true
+        self.wocColorHex = d.string(forKey: "pm_wocColorHex") ?? "C0392B"
         self.transitionDuration = d.object(forKey: "pm_transitionDuration") as? Double ?? PresentationDefaults.transitionDuration
         self.globalWeightRaw = d.string(forKey: "pm_globalWeightRaw") ?? "regular"
         self.globalVAlignRaw = d.string(forKey: "pm_globalVAlignRaw") ?? "center"
@@ -2484,10 +2532,16 @@ final class PresentationManager {
         }
     }
 
-    func showBibleVerse(text: String, reference: String, translationName: String = "", slideIndex: Int = 0, slideCount: Int = 1) {
+    func showBibleVerse(text: String, reference: String, translationName: String = "", runs: [VerseRun] = [],
+                        footnote: String = "", crossReference: String = "", heading: String = "",
+                        gloss: String = "", strongs: String = "",
+                        slideIndex: Int = 0, slideCount: Int = 1) {
         guard !isFrozen else { return }
         presentContent { [self] in
-            liveContent.setBibleVerse(text: text, reference: reference, translationName: translationName, slideIndex: slideIndex, slideCount: slideCount)
+            liveContent.setBibleVerse(text: text, reference: reference, translationName: translationName, runs: runs,
+                                      footnote: footnote, crossReference: crossReference, heading: heading,
+                                      gloss: gloss, strongs: strongs,
+                                      slideIndex: slideIndex, slideCount: slideCount)
             lastLiveProfileKey = "bible"
             liveContent.isLive = true
             isBlackScreen = false

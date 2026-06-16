@@ -124,6 +124,50 @@ final class DragDropImportHandler {
         urls.map { PendingImportFile(url: $0, category: classify($0)) }
     }
 
+    /// Expand a mixed selection of files and folders into individual importable
+    /// sources, recursing through subfolders. Semantics:
+    ///   • a file → itself
+    ///   • a folder of per-book `.usfm`/`.sfm` files → kept whole (that IS one
+    ///     USFM Bible), not split
+    ///   • any other folder (e.g. a language folder of `.json` Bibles, or a tree
+    ///     of them) → recursed; every contained file/USFM-folder is collected
+    /// Hidden files and macOS junk (.DS_Store) are skipped. Deduplicated, sorted.
+    static func expandToImportableFiles(_ urls: [URL]) -> [URL] {
+        let fm = FileManager.default
+        var out: [URL] = []
+        var seen = Set<String>()
+        func add(_ u: URL) { let p = u.standardizedFileURL.path; if seen.insert(p).inserted { out.append(u) } }
+        func walk(_ url: URL, depth: Int) {
+            guard depth < 8 else { return }   // guard against pathological trees
+            var isDir: ObjCBool = false
+            guard fm.fileExists(atPath: url.path, isDirectory: &isDir) else { return }
+            if !isDir.boolValue {
+                if url.lastPathComponent.hasPrefix(".") { return }
+                add(url); return
+            }
+            // A USFM Bible is a folder of per-book files → one source, kept whole.
+            if ImportService.detectBibleFormat(fileURL: url) == .usfm { add(url); return }
+            // Otherwise recurse into the folder's children.
+            let children = (try? fm.contentsOfDirectory(
+                at: url, includingPropertiesForKeys: [.isDirectoryKey],
+                options: [.skipsHiddenFiles])) ?? []
+            for child in children.sorted(by: { $0.lastPathComponent.localizedStandardCompare($1.lastPathComponent) == .orderedAscending }) {
+                walk(child, depth: depth + 1)
+            }
+        }
+        for u in urls { walk(u, depth: 0) }
+        return out
+    }
+
+    /// Expand + classify a mixed file/folder selection, keeping only the ones we
+    /// can actually import (drops `.unknown`).
+    static func classifyExpanded(_ urls: [URL]) -> [PendingImportFile] {
+        classify(expandToImportableFiles(urls)).filter {
+            if case .unknown = $0.category { return false }
+            return true
+        }
+    }
+
     /// Import all pending Bible files sequentially.
     static func importBibles(
         files: [PendingImportFile],

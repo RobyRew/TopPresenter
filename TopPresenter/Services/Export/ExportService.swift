@@ -58,25 +58,64 @@ final class ExportService {
 
                 var versesArray: [[String: Any]] = []
                 for verse in sortedVerses {
-                    versesArray.append([
+                    // GOAT v2: always-present text + optional rich fields.
+                    var v: [String: Any] = [
                         "number": verse.verseNumber,
                         "text": verse.text
-                    ])
+                    ]
+                    let runs = verse.runs
+                    if !runs.isEmpty {
+                        v["runs"] = runs.map { run -> [String: Any] in
+                            var r: [String: Any] = ["text": run.text, "kind": run.kind]
+                            if let s = run.strong { r["strong"] = s }
+                            if let m = run.morph { r["morph"] = m }
+                            if let g = run.gloss { r["gloss"] = g }
+                            return r
+                        }
+                    }
+                    if verse.hasWordsOfChrist { v["hasWordsOfChrist"] = true }
+                    if !verse.gloss.isEmpty { v["gloss"] = verse.gloss }
+                    let footnotes = verse.footnotes
+                    if !footnotes.isEmpty {
+                        v["footnotes"] = footnotes.map { ["marker": $0.marker, "text": $0.text] }
+                    }
+                    let xrefs = verse.crossReferences
+                    if !xrefs.isEmpty {
+                        v["crossReferences"] = xrefs.map { ref -> [String: Any] in
+                            var r: [String: Any] = ["targets": ref.targets]
+                            if let l = ref.label { r["label"] = l }
+                            return r
+                        }
+                    }
+                    if let ext = decodeExt(verse.extensionsJSON) { v["_extensions"] = ext }
+                    versesArray.append(v)
                 }
 
-                chaptersArray.append([
+                var chapterDict: [String: Any] = [
                     "number": chapter.chapterNumber,
                     "verses": versesArray
-                ])
+                ]
+                let headings = chapter.headings
+                if !headings.isEmpty {
+                    chapterDict["headings"] = headings.map {
+                        ["beforeVerse": $0.beforeVerse, "level": $0.level, "text": $0.text]
+                    }
+                }
+                if let ext = decodeExt(chapter.extensionsJSON) { chapterDict["_extensions"] = ext }
+                chaptersArray.append(chapterDict)
             }
 
-            let bookDict: [String: Any] = [
+            var bookDict: [String: Any] = [
                 "number": book.bookNumber,
                 "name": book.name,
                 "testament": book.testament,
                 "category": BibleBookCategory.from(bookNumber: book.bookNumber).englishName,
                 "chapters": chaptersArray
             ]
+            if !book.nameEnglish.isEmpty { bookDict["nameEnglish"] = book.nameEnglish }
+            if !book.abbreviation.isEmpty { bookDict["abbreviation"] = book.abbreviation }
+            if !book.introduction.isEmpty { bookDict["introduction"] = book.introduction }
+            if let ext = decodeExt(book.extensionsJSON) { bookDict["_extensions"] = ext }
             booksArray.append(bookDict)
 
             let progress = 0.1 + (Double(index + 1) / Double(totalBooks)) * 0.8
@@ -93,19 +132,34 @@ final class ExportService {
             }
         }
 
+        var translationDict: [String: Any] = [
+            "code": module.abbreviation,
+            "name": module.name,
+            "language": module.language,
+            "description": module.moduleDescription
+        ]
+        if let v = module.versification { translationDict["versification"] = v }
+        if let c = module.canon { translationDict["canon"] = c }
+        if !module.nameLocal.isEmpty { translationDict["nameLocal"] = module.nameLocal }
+        if !module.languageName.isEmpty { translationDict["languageName"] = module.languageName }
+        if !module.copyright.isEmpty { translationDict["copyright"] = module.copyright }
+        if !module.aboutText.isEmpty { translationDict["about"] = module.aboutText }
+        if !module.textSource.isEmpty { translationDict["source"] = module.textSource }
+        if let y = module.year { translationDict["year"] = y }
+        if module.direction != "ltr" { translationDict["direction"] = module.direction }
+        if module.hasWordsOfChrist { translationDict["hasWordsOfChrist"] = true }
+        if module.hasStrongs { translationDict["hasStrongs"] = true }
+        if module.incomplete { translationDict["incomplete"] = true }
+        if let ext = decodeExt(module.extensionsJSON) { translationDict["_extensions"] = ext }
+
         let result: [String: Any] = [
             "schemaVersion": "1.0.0",
             "format": "TopPresenter Bible",
-            "translation": [
-                "code": module.abbreviation,
-                "name": module.name,
-                "language": module.language,
-                "description": module.moduleDescription
-            ],
+            "translation": translationDict,
             "exportInfo": [
                 "source": "TopPresenter",
                 "exportDate": ISO8601DateFormatter().string(from: Date()),
-                "exporterVersion": "1.0.0",
+                "exporterVersion": "2.0.0",
                 "totalBooks": sortedBooks.count,
                 "totalChapters": totalChapters,
                 "totalVerses": totalVerses
@@ -118,6 +172,14 @@ final class ExportService {
             throw ExportError.encodingFailed
         }
         return jsonString
+    }
+
+    /// Decode a stored `_extensions` JSON string back into an object for export.
+    private static func decodeExt(_ json: String?) -> [String: Any]? {
+        guard let json, let data = json.data(using: .utf8),
+              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              !obj.isEmpty else { return nil }
+        return obj
     }
 
     // MARK: - Plain Text Export
