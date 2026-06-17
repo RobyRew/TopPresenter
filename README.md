@@ -215,6 +215,7 @@ xcodebuild -scheme TopPresenter -destination 'platform=macOS' test -only-testing
 - Stable releases come from final tags (`v1.0.0`): bump `MARKETING_VERSION`, push, then `git tag v1.0.0 && git push origin v1.0.0`.
 - The [Resurse release](https://github.com/RobyRew/TopPresenter/releases/tag/resources-1) hosts the starter themes and the EDC100 Bible.
 - The [Bible Library release](https://github.com/RobyRew/TopPresenter/releases/tag/bibles-1) bundles **all 70 Bible translations** (17 languages) as TopPresenter JSON — red-letter, Strong's, headings, cross-references and metadata included.
+- The [Themes release](https://github.com/RobyRew/TopPresenter/releases/tag/themes-1) bundles the starter `.tptheme` pack (Default, Cer Nepal, Galaxie, Minimal) with backgrounds embedded.
 
 ## License
 
