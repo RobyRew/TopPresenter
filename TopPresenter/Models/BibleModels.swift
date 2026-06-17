@@ -102,6 +102,8 @@ final class BibleBook {
     /// English name + abbreviations + per-book introduction (additive).
     var nameEnglish: String = ""
     var abbreviation: String = ""
+    var abbreviationEnglish: String = ""
+    var expectedChapters: Int = 0
     var introduction: String = ""
     var extensionsJSON: String?
 
@@ -112,6 +114,7 @@ final class BibleBook {
 
     init(name: String, bookNumber: Int, testament: String,
          nameEnglish: String = "", abbreviation: String = "",
+         abbreviationEnglish: String = "", expectedChapters: Int = 0,
          introduction: String = "", extensionsJSON: String? = nil) {
         self.id = UUID()
         self.name = name
@@ -119,6 +122,8 @@ final class BibleBook {
         self.testament = testament
         self.nameEnglish = nameEnglish
         self.abbreviation = abbreviation
+        self.abbreviationEnglish = abbreviationEnglish
+        self.expectedChapters = expectedChapters
         self.introduction = introduction
         self.extensionsJSON = extensionsJSON
     }

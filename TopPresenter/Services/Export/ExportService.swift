@@ -114,6 +114,8 @@ final class ExportService {
             ]
             if !book.nameEnglish.isEmpty { bookDict["nameEnglish"] = book.nameEnglish }
             if !book.abbreviation.isEmpty { bookDict["abbreviation"] = book.abbreviation }
+            if !book.abbreviationEnglish.isEmpty { bookDict["abbreviationEnglish"] = book.abbreviationEnglish }
+            if book.expectedChapters > 0 { bookDict["expectedChapters"] = book.expectedChapters }
             if !book.introduction.isEmpty { bookDict["introduction"] = book.introduction }
             if let ext = decodeExt(book.extensionsJSON) { bookDict["_extensions"] = ext }
             booksArray.append(bookDict)
@@ -159,7 +161,7 @@ final class ExportService {
             "exportInfo": [
                 "source": "TopPresenter",
                 "exportDate": ISO8601DateFormatter().string(from: Date()),
-                "exporterVersion": "2.0.0",
+                "exporterVersion": "1.0.0",
                 "totalBooks": sortedBooks.count,
                 "totalChapters": totalChapters,
                 "totalVerses": totalVerses
@@ -274,7 +276,7 @@ final class ExportService {
 
     // MARK: - TopPresenter Song JSON Export (GOAT v2.0.0 — one song per file)
 
-    static let songExporterVersion = "2.0.0"
+    static let songExporterVersion = "1.0.0"
 
     /// Serialize a single song to the canonical single-song GOAT document.
     static func exportSongToTopPresenterJSON(_ song: Song) throws -> String {

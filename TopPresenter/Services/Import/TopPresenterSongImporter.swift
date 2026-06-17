@@ -9,10 +9,10 @@
 //  ─────────────────────────────────────────────────────────────────────────────
 //  A SINGLE-SONG document: one JSON file = one song (carrying all its versions).
 //  The ResurseCrestine userscript emits one file per song; TopPresenter imports AND
-//  exports this exact format. Bulk = a folder of these files. schemaVersion "2.0.0".
+//  exports this exact format. Bulk = a folder of these files. schemaVersion "1.0.0".
 //
 //  {
-//    "schemaVersion": "2.0.0",
+//    "schemaVersion": "1.0.0",
 //    "format": "TopPresenter Song",
 //    "exportInfo": { "source", "exportDate", "exporterVersion" },
 //    "song": {

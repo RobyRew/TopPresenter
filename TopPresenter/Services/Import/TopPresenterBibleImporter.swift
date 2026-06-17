@@ -140,6 +140,8 @@ final class TopPresenterBibleImporter: BibleImporter {
                     introduction: bookJSON["introduction"] as? String,
                     nameEnglish: (bookJSON["nameEnglish"] as? String) ?? "",
                     abbreviation: (bookJSON["abbreviation"] as? String) ?? "",
+                    abbreviationEnglish: (bookJSON["abbreviationEnglish"] as? String) ?? "",
+                    expectedChapters: (bookJSON["expectedChapters"] as? Int) ?? 0,
                     extensionsJSON: Self.encodeExtensions(bookJSON["_extensions"])
                 ))
             }

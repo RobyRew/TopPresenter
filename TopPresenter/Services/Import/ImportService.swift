@@ -166,6 +166,8 @@ final class ImportService {
                 testament: importBook.testament,
                 nameEnglish: importBook.nameEnglish,
                 abbreviation: importBook.abbreviation,
+                abbreviationEnglish: importBook.abbreviationEnglish,
+                expectedChapters: importBook.expectedChapters,
                 introduction: importBook.introduction ?? "",
                 extensionsJSON: importBook.extensionsJSON
             )
@@ -253,6 +255,7 @@ final class ImportService {
             } else {
                 book = BibleBook(name: ib.name, bookNumber: ib.bookNumber, testament: ib.testament,
                                  nameEnglish: ib.nameEnglish, abbreviation: ib.abbreviation,
+                                 abbreviationEnglish: ib.abbreviationEnglish, expectedChapters: ib.expectedChapters,
                                  introduction: ib.introduction ?? "", extensionsJSON: ib.extensionsJSON)
                 book.module = module
                 booksByNumber[ib.bookNumber] = book

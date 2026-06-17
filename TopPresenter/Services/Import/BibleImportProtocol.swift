@@ -93,6 +93,8 @@ struct BibleImportBook {
     var introduction: String? = nil
     var nameEnglish: String = ""
     var abbreviation: String = ""
+    var abbreviationEnglish: String = ""
+    var expectedChapters: Int = 0
     var extensionsJSON: String? = nil
 }
 
