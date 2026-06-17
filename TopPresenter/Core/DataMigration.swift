@@ -29,16 +29,46 @@ enum SchemaV1: VersionedSchema {
     }
 }
 
+// MARK: - Schema Version 2 (rich Songs: Songbook + SongVersion + SongSection)
+//
+// Purely additive over V1 — new @Model types and new Song properties with inline
+// defaults — so V1→V2 is a lightweight migration (no data loss, no custom code).
+// SongVerse is retained as the flattened presentation cache of a song's active version.
+enum SchemaV2: VersionedSchema {
+    static var versionIdentifier = Schema.Version(2, 0, 0)
+
+    static var models: [any PersistentModel.Type] {
+        [
+            BibleModule.self,
+            BibleBook.self,
+            BibleChapter.self,
+            BibleVerse.self,
+            SongCollection.self,
+            Song.self,
+            SongVerse.self,
+            Songbook.self,
+            SongVersion.self,
+            SongSection.self,
+            PresentationSlide.self,
+            ServiceSchedule.self,
+            ScheduleItem.self,
+            MediaItem.self,
+            PresentationStyle.self,
+        ]
+    }
+}
+
 // MARK: - Migration Plan
 enum TopPresenterMigrationPlan: SchemaMigrationPlan {
     static var schemas: [any VersionedSchema.Type] {
-        [SchemaV1.self]
+        [SchemaV1.self, SchemaV2.self]
     }
 
     static var stages: [MigrationStage] {
-        // No migrations yet — will be added as the schema evolves.
-        // Example for future use:
-        // .lightweight(fromVersion: SchemaV1.self, toVersion: SchemaV2.self)
+        // Intentionally empty. The SchemaV1→V2 change is purely additive and is handled by
+        // SwiftData's automatic lightweight inference (the container is created without a
+        // staged plan). Staged `.lightweight`/`.custom` stages cannot express adding new
+        // @Model entities + relationships and throw at construction.
         []
     }
 }

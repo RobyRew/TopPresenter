@@ -272,47 +272,57 @@ final class ExportService {
         progressHandler?(1.0, String(localized: "Complete!", comment: "Export progress"))
     }
 
-    // MARK: - TopPresenter Songs JSON Export
+    // MARK: - TopPresenter Song JSON Export (GOAT v2.0.0 — one song per file)
 
+    static let songExporterVersion = "2.0.0"
+
+    /// Serialize a single song to the canonical single-song GOAT document.
+    static func exportSongToTopPresenterJSON(_ song: Song) throws -> String {
+        let result: [String: Any] = [
+            "schemaVersion": songExporterVersion,
+            "format": "TopPresenter Song",
+            "exportInfo": [
+                "source": "TopPresenter",
+                "exportDate": ISO8601DateFormatter().string(from: Date()),
+                "exporterVersion": songExporterVersion
+            ],
+            "song": songDictV2(song)
+        ]
+        return try jsonString(from: result)
+    }
+
+    /// Bulk export: write one GOAT file per song into a directory.
+    static func exportSongsToFolder(
+        _ songs: [Song],
+        directory: URL,
+        progressHandler: ((Double, String) -> Void)? = nil
+    ) throws {
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let total = max(songs.count, 1)
+        for (index, song) in songs.enumerated() {
+            let json = try exportSongToTopPresenterJSON(song)
+            let name = sanitizeFilename(song.title.isEmpty ? "song-\(index + 1)" : song.title)
+            let url = directory.appendingPathComponent("\(name).json")
+            try json.write(to: url, atomically: true, encoding: .utf8)
+            progressHandler?(Double(index + 1) / Double(total), String(localized: "Exporting \(song.title)...", comment: "Export progress"))
+        }
+    }
+
+    /// Bundle several songs into a single file (array of GOAT song objects).
     private static func exportSongsToTopPresenterJSON(
         collection: SongCollection,
         progressHandler: ((Double, String) -> Void)?
     ) async throws -> String {
         let sortedSongs = collection.sortedSongs
-        let totalSongs = sortedSongs.count
-
+        let total = max(sortedSongs.count, 1)
         var songsArray: [[String: Any]] = []
-
         for (index, song) in sortedSongs.enumerated() {
-            var versesArray: [[String: Any]] = []
-            for verse in song.sortedVerses {
-                versesArray.append([
-                    "label": verse.label,
-                    "verseType": verse.verseType,
-                    "text": verse.text,
-                    "order": verse.order
-                ])
-            }
-
-            let songDict: [String: Any] = [
-                "title": song.title,
-                "author": song.author,
-                "copyright": song.copyright,
-                "ccliNumber": song.ccliNumber,
-                "key": song.key,
-                "tempo": song.tempo,
-                "songNumber": song.songNumber,
-                "tags": song.tags,
-                "verses": versesArray
-            ]
-            songsArray.append(songDict)
-
-            let progress = 0.1 + (Double(index + 1) / Double(totalSongs)) * 0.8
-            progressHandler?(progress, String(localized: "Exporting \(song.title)...", comment: "Export progress"))
+            songsArray.append(songDictV2(song))
+            progressHandler?(0.1 + (Double(index + 1) / Double(total)) * 0.8,
+                             String(localized: "Exporting \(song.title)...", comment: "Export progress"))
         }
-
         let result: [String: Any] = [
-            "schemaVersion": "1.0.0",
+            "schemaVersion": songExporterVersion,
             "format": "TopPresenter Songs",
             "collection": [
                 "name": collection.name,
@@ -322,17 +332,106 @@ final class ExportService {
             "exportInfo": [
                 "source": "TopPresenter",
                 "exportDate": ISO8601DateFormatter().string(from: Date()),
-                "exporterVersion": "1.0.0",
+                "exporterVersion": songExporterVersion,
                 "totalSongs": sortedSongs.count
             ],
             "songs": songsArray
         ]
+        return try jsonString(from: result)
+    }
 
-        let jsonData = try JSONSerialization.data(withJSONObject: result, options: [.prettyPrinted, .sortedKeys])
-        guard let jsonString = String(data: jsonData, encoding: .utf8) else {
-            throw ExportError.encodingFailed
+    // MARK: GOAT dictionary builders
+
+    static func songDictV2(_ song: Song) -> [String: Any] {
+        var dict: [String: Any] = [
+            "title": song.title,
+            "language": song.language,
+            "style": song.style,
+            "copyright": song.copyright,
+            "ccliNumber": song.ccliNumber,
+            "notes": song.notes
+        ]
+        if !song.titles.isEmpty { dict["titles"] = song.titles }
+        if !song.themes.isEmpty { dict["themes"] = song.themes }
+        if !song.author.isEmpty { dict["author"] = song.author }
+        if !song.authorWords.isEmpty { dict["authorWords"] = song.authorWords }
+        if !song.authorMusic.isEmpty { dict["authorMusic"] = song.authorMusic }
+        if !song.authorTranslation.isEmpty { dict["authorTranslation"] = song.authorTranslation }
+        if let sb = song.songbook {
+            dict["songbook"] = [
+                "name": sb.name, "publisher": sb.publisher,
+                "language": sb.language, "year": sb.year, "number": song.songbookNumber
+            ]
+        } else if !song.songNumber.isEmpty {
+            dict["songNumber"] = song.songNumber
         }
-        return jsonString
+        let media = song.media.map { m -> [String: Any] in
+            var d: [String: Any] = ["role": m.role, "kind": m.kind, "filename": m.filename]
+            if let b = m.bookmark { d["bookmark"] = b }
+            return d
+        }
+        if !media.isEmpty { dict["media"] = media }
+        dict["versions"] = song.sortedVersions.map { versionDictV2($0) }
+        return dict
+    }
+
+    private static func versionDictV2(_ version: SongVersion) -> [String: Any] {
+        var dict: [String: Any] = [
+            "name": version.name,
+            "language": version.language,
+            "key": version.key,
+            "capo": version.capo,
+            "tempo": version.tempo,
+            "timeSignature": version.timeSignature,
+            "copyright": version.copyright,
+            "ccliNumber": version.ccliNumber,
+            "source": version.source
+        ]
+        if !version.displayTitle.isEmpty { dict["displayTitle"] = version.displayTitle }
+        if !version.author.isEmpty { dict["author"] = version.author }
+        if !version.authorWords.isEmpty { dict["authorWords"] = version.authorWords }
+        if !version.authorMusic.isEmpty { dict["authorMusic"] = version.authorMusic }
+        if !version.authorTranslation.isEmpty { dict["authorTranslation"] = version.authorTranslation }
+        if !version.style.isEmpty { dict["style"] = version.style }
+        if !version.songbookNumber.isEmpty { dict["songbookNumber"] = version.songbookNumber }
+        if !version.songbookName.isEmpty { dict["songbook"] = ["name": version.songbookName] }
+        if !version.themes.isEmpty { dict["themes"] = version.themes }
+        if !version.notes.isEmpty { dict["notes"] = version.notes }
+        if !version.repeatStyle.isEmpty { dict["repeatStyle"] = version.repeatStyle }
+        if version.overridesMetadata { dict["overridesMetadata"] = true }
+        if !version.arrangement.isEmpty { dict["arrangement"] = version.arrangement }
+        dict["sections"] = version.sortedSections.map { sectionDictV2($0) }
+        return dict
+    }
+
+    private static func sectionDictV2(_ section: SongSection) -> [String: Any] {
+        let lines = section.lines.map { line -> [String: Any] in
+            var l: [String: Any] = ["text": line.text]
+            if !line.chords.isEmpty { l["chords"] = line.chords.map { ["sym": $0.sym, "pos": $0.pos] } }
+            if !line.translations.isEmpty { l["translations"] = line.translations }
+            return l
+        }
+        var dict: [String: Any] = [
+            "id": section.sectionKey,
+            "type": section.type,
+            "label": section.label,
+            "order": section.order,
+            "lines": lines
+        ]
+        if section.repeatCount > 1 { dict["repeat"] = section.repeatCount }
+        return dict
+    }
+
+    private static func jsonString(from object: [String: Any]) throws -> String {
+        let data = try JSONSerialization.data(withJSONObject: object, options: [.prettyPrinted, .sortedKeys])
+        guard let string = String(data: data, encoding: .utf8) else { throw ExportError.encodingFailed }
+        return string
+    }
+
+    private static func sanitizeFilename(_ name: String) -> String {
+        let invalid = CharacterSet(charactersIn: "/\\:?%*|\"<>")
+        let cleaned = name.components(separatedBy: invalid).joined(separator: "-")
+        return String(cleaned.prefix(120)).trimmingCharacters(in: .whitespaces)
     }
 
     // MARK: - OpenLyrics XML Export

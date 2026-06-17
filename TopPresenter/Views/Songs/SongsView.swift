@@ -9,7 +9,8 @@ import SwiftUI
 import SwiftData
 import UniformTypeIdentifiers
 
-/// Main Songs view with collection management, song navigation, search, and verse display.
+/// Main Songs view: scalable library browser (left) + version-aware detail with a rendered
+/// slide filmstrip (right).
 struct SongsView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(LibraryManager.self) private var libraryManager
@@ -28,18 +29,22 @@ struct SongsView: View {
                 emptyStateView
             } else {
                 HSplitView {
-                    // Left: Song list
                     SongListPanel()
-                        .frame(minWidth: 250, maxWidth: 350)
+                        .frame(minWidth: 260, maxWidth: 380)
 
-                    // Right: Song verses
                     SongDetailPanel()
-                        .frame(minWidth: 400)
+                        .frame(minWidth: 420)
                 }
             }
         }
         .sheet(isPresented: $showImportSheet) {
             SongImportSheet()
+        }
+        .sheet(item: Binding(
+            get: { libraryManager.songToEdit },
+            set: { libraryManager.songToEdit = $0 }
+        )) { song in
+            SongEditorSheet(song: song)
         }
         .onChange(of: appState.triggerSongImport) { _, newValue in
             if newValue {
@@ -59,10 +64,12 @@ struct SongsView: View {
             }
         } message: {
             Text(String(localized: "Are you sure you want to delete \"\(collectionToDelete?.name ?? "")\"? This cannot be undone.", comment: "Alert message"))
-        }        .onKeyWindowNotification(.deleteSongCollection) { _ in
+        }
+        .onKeyWindowNotification(.deleteSongCollection) { _ in
             collectionToDelete = libraryManager.selectedSongCollection
             showDeleteConfirmation = true
-        }    }
+        }
+    }
 
     private var emptyStateView: some View {
         VStack(spacing: 16) {
@@ -73,7 +80,7 @@ struct SongsView: View {
             Text(String(localized: "No Song Collections", comment: "Empty state title"))
                 .font(.title2)
 
-            Text(String(localized: "Import songs to get started.\nSupported formats: OpenSong XML, OpenLyrics XML", comment: "Empty state message"))
+            Text(String(localized: "Import songs to get started.\nSupported: TopPresenter JSON, OpenSong, OpenLyrics, ChordPro, PowerPoint, plain text.", comment: "Empty state message"))
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
 
@@ -103,250 +110,569 @@ struct SongsView: View {
     }
 }
 
-// MARK: - Song List Panel
+// MARK: - Sort
+
+enum SongSortKey: String, CaseIterable, Identifiable {
+    case title, author, recent
+    var id: String { rawValue }
+    var label: String {
+        switch self {
+        case .title: return String(localized: "Titlu", comment: "Sort")
+        case .author: return String(localized: "Autor", comment: "Sort")
+        case .recent: return String(localized: "Recente", comment: "Sort")
+        }
+    }
+}
+
+// MARK: - Song Library Browser (search, list/grid, filters — scales to thousands)
+
 struct SongListPanel: View {
     @Environment(LibraryManager.self) private var libraryManager
+    @Environment(PresentationManager.self) private var presentationManager
+    @Environment(\.modelContext) private var modelContext
     @Query(sort: \SongCollection.name) private var collections: [SongCollection]
+    @AppStorage("song_maxLinesPerSlide") private var maxLines: Int = 6
+    @AppStorage("song_repeatStyle") private var repeatStyle = "none"
 
-    private var displayedSongs: [Song] {
-        if !libraryManager.songSearchResults.isEmpty {
-            // Filter songs from search results
-            let songIDs = Set(libraryManager.songSearchResults.map { $0.songID })
-            return collections.flatMap { $0.songs }.filter { songIDs.contains($0.id) }
+    @State private var query = ""
+    @State private var isGrid = false
+    @State private var sortKey: SongSortKey = .title
+    @State private var languageFilter = ""        // "" = all
+    @State private var collectionFilter: UUID?    // nil = all
+    @State private var onlyWithMedia = false
+
+    private var sourceSongs: [Song] {
+        if let id = collectionFilter, let col = collections.first(where: { $0.id == id }) {
+            return col.songs
         }
-
-        if let collection = libraryManager.selectedSongCollection {
-            return collection.sortedSongs
-        }
-
-        return collections.flatMap { $0.sortedSongs }
+        return collections.flatMap { $0.songs }
     }
 
-    var body: some View {
-        List(displayedSongs, selection: Binding(
-            get: { libraryManager.selectedSong?.id },
-            set: { newID in
-                if let id = newID,
-                   let song = displayedSongs.first(where: { $0.id == id }) {
-                    libraryManager.selectSong(song)
-                }
-            }
-        )) { song in
-            VStack(alignment: .leading, spacing: 2) {
-                Text(song.title)
-                    .font(.body)
-                    .lineLimit(1)
-
-                HStack {
-                    if !song.author.isEmpty {
-                        Text(song.author)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                    }
-                    if !song.songNumber.isEmpty {
-                        Text("#\(song.songNumber)")
-                            .font(.caption)
-                            .foregroundStyle(.tertiary)
-                    }
-                }
-            }
-            .tag(song.id)
-            .padding(.vertical, 2)
-        }
-        .listStyle(.plain)
+    private var availableLanguages: [String] {
+        Array(Set(sourceSongs.map(\.language).filter { !$0.isEmpty })).sorted()
     }
-}
 
-// MARK: - Song Detail Panel
-struct SongDetailPanel: View {
-    @Environment(LibraryManager.self) private var libraryManager
-    @Environment(PresentationManager.self) private var presentationManager
-
-    var body: some View {
-        if let song = libraryManager.selectedSong {
-            VStack(spacing: 0) {
-                // Song header
-                HStack {
-                    VStack(alignment: .leading) {
-                        Text(song.title)
-                            .font(.title3.bold())
-                        if !song.author.isEmpty {
-                            Text(song.author)
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                    Spacer()
-
-                    if !song.key.isEmpty {
-                        Text(String(localized: "Key: \(song.key)", comment: "Song info"))
-                            .font(.caption)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(.quaternary, in: Capsule())
-                    }
-                }
-                .padding(.horizontal)
-                .padding(.vertical, 8)
-
-                Divider()
-
-                // Verse navigation tabs
-                SongVerseTabBar(song: song)
-
-                Divider()
-
-                // Current verse display
-                if let verse = libraryManager.selectedSongVerse {
-                    SongVerseDisplay(verse: verse, songTitle: song.title)
-                } else {
-                    VStack {
-                        Text(String(localized: "Select a verse section", comment: "Placeholder"))
-                            .foregroundStyle(.secondary)
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                }
-            }
-        } else {
-            VStack {
-                Image(systemName: "music.note")
-                    .font(.system(size: 48))
-                    .foregroundStyle(.secondary)
-                Text(String(localized: "Select a song to view lyrics", comment: "Placeholder"))
-                    .foregroundStyle(.secondary)
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+    private var filtered: [Song] {
+        let tokens = query.lowercased().split(separator: " ").map(String.init)
+        var songs = sourceSongs.filter { song in
+            if !languageFilter.isEmpty && song.language != languageFilter { return false }
+            if onlyWithMedia && song.media.isEmpty { return false }
+            guard !tokens.isEmpty else { return true }
+            let hay = song.searchText.isEmpty ? song.title.lowercased() : song.searchText
+            return tokens.allSatisfy { hay.contains($0) }
         }
-    }
-}
-
-// MARK: - Song Verse Tab Bar
-struct SongVerseTabBar: View {
-    let song: Song
-
-    @Environment(LibraryManager.self) private var libraryManager
-
-    var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 4) {
-                ForEach(song.sortedVerses) { verse in
-                    Button {
-                        libraryManager.selectSongVerse(verse)
-                    } label: {
-                        Text(verse.label)
-                            .font(.caption)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
-                            .background(
-                                libraryManager.selectedSongVerse?.id == verse.id
-                                    ? Color.accentColor
-                                    : Color.secondary.opacity(0.15),
-                                in: RoundedRectangle(cornerRadius: 6)
-                            )
-                            .foregroundStyle(
-                                libraryManager.selectedSongVerse?.id == verse.id
-                                    ? .white
-                                    : .primary
-                            )
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            .padding(.horizontal)
-            .padding(.vertical, 6)
+        switch sortKey {
+        case .title:
+            songs.sort { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
+        case .author:
+            songs.sort { $0.author.localizedStandardCompare($1.author) == .orderedAscending }
+        case .recent:
+            songs.sort { ($0.collection?.importDate ?? .distantPast) > ($1.collection?.importDate ?? .distantPast) }
         }
+        return songs
     }
-}
-
-// MARK: - Song Verse Display
-struct SongVerseDisplay: View {
-    let verse: SongVerse
-    let songTitle: String
-
-    @Environment(PresentationManager.self) private var presentationManager
-    @Environment(LibraryManager.self) private var libraryManager
 
     var body: some View {
         VStack(spacing: 0) {
-            ScrollView {
-                Text(verse.text)
-                    .font(.title3)
-                    .multilineTextAlignment(.center)
-                    .textSelection(.enabled)
-                    .frame(maxWidth: .infinity)
-                    .padding(24)
-            }
-
+            toolbar
             Divider()
+            if filtered.isEmpty {
+                ContentUnavailableView(
+                    String(localized: "Niciun cântec", comment: "Empty"),
+                    systemImage: "magnifyingglass",
+                    description: Text(String(localized: "Ajustează căutarea sau filtrele.", comment: "Empty"))
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if isGrid {
+                gridView
+            } else {
+                listView
+            }
+        }
+    }
 
-            // Action bar
-            HStack {
-                Text(verse.label)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+    private var toolbar: some View {
+        VStack(spacing: 6) {
+            HStack(spacing: 6) {
+                Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+                TextField(String(localized: "Caută cântece…", comment: "Search"), text: $query)
+                    .textFieldStyle(.plain)
+                if !query.isEmpty {
+                    Button { query = "" } label: { Image(systemName: "xmark.circle.fill") }
+                        .buttonStyle(.plain).foregroundStyle(.secondary)
+                }
+            }
+            .padding(6)
+            .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
+
+            HStack(spacing: 6) {
+                Picker("", selection: $collectionFilter) {
+                    Text(String(localized: "Toate", comment: "All collections")).tag(UUID?.none)
+                    ForEach(collections) { col in
+                        Text(col.name).tag(UUID?.some(col.id))
+                    }
+                }
+                .labelsHidden()
+                .frame(maxWidth: 140)
 
                 Spacer()
 
-                // Previous verse
-                Button {
-                    navigateVerse(direction: -1)
+                Menu {
+                    Picker(String(localized: "Sortare", comment: "Sort"), selection: $sortKey) {
+                        ForEach(SongSortKey.allCases) { Text($0.label).tag($0) }
+                    }
+                    if !availableLanguages.isEmpty {
+                        Picker(String(localized: "Limbă", comment: "Language"), selection: $languageFilter) {
+                            Text(String(localized: "Toate", comment: "All")).tag("")
+                            ForEach(availableLanguages, id: \.self) { Text($0.uppercased()).tag($0) }
+                        }
+                    }
+                    Toggle(String(localized: "Doar cu media", comment: "Filter"), isOn: $onlyWithMedia)
                 } label: {
-                    Image(systemName: "chevron.left")
+                    Image(systemName: "line.3.horizontal.decrease.circle")
                 }
-                .keyboardShortcut(.leftArrow, modifiers: [])
-                .disabled(!canNavigate(direction: -1))
+                .menuStyle(.borderlessButton).fixedSize()
 
-                // Show on screen
-                Button {
-                    let sorted = libraryManager.selectedSong?.sortedVerses ?? []
-                    presentationManager.showSongVerse(
-                        text: verse.text,
-                        title: songTitle,
-                        verseLabel: verse.label,
-                        slideIndex: sorted.firstIndex(where: { $0.id == verse.id }) ?? 0,
-                        slideCount: max(sorted.count, 1)
-                    )
-                } label: {
-                    Label(
-                        String(localized: "Show", comment: "Button"),
-                        systemImage: "play.fill"
-                    )
+                Button { isGrid.toggle() } label: {
+                    Image(systemName: isGrid ? "list.bullet" : "square.grid.2x2")
                 }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.small)
-                .keyboardShortcut(.return, modifiers: [])
-
-                // Next verse
-                Button {
-                    navigateVerse(direction: 1)
-                } label: {
-                    Image(systemName: "chevron.right")
-                }
-                .keyboardShortcut(.rightArrow, modifiers: [])
-                .disabled(!canNavigate(direction: 1))
+                .buttonStyle(.borderless)
+                .help(isGrid ? String(localized: "Listă", comment: "View") : String(localized: "Grilă", comment: "View"))
             }
-            .padding(.horizontal)
-            .padding(.vertical, 8)
+
+            HStack {
+                Text(String(localized: "\(filtered.count) cântece", comment: "Count"))
+                    .font(.caption2).foregroundStyle(.secondary)
+                Spacer()
+            }
+        }
+        .padding(8)
+    }
+
+    private var listView: some View {
+        List(filtered, selection: Binding(
+            get: { libraryManager.selectedSong?.id },
+            set: { id in if let id, let s = filtered.first(where: { $0.id == id }) { libraryManager.selectSong(s) } }
+        )) { song in
+            songRow(song).tag(song.id)
+        }
+        .listStyle(.inset)
+    }
+
+    private func songRow(_ song: Song) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(song.title).font(.body).lineLimit(1)
+            HStack(spacing: 6) {
+                if !song.author.isEmpty {
+                    Text(song.author).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                }
+                Spacer()
+                songBadges(song)
+            }
+        }
+        .padding(.vertical, 2)
+        .contextMenu { songMenu(song) }
+    }
+
+    private var gridView: some View {
+        ScrollView {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 164), spacing: 10)], spacing: 10) {
+                ForEach(filtered) { song in
+                    Button { libraryManager.selectSong(song) } label: {
+                        VStack(spacing: 0) {
+                            SongThemeSlideView(text: firstSlideText(song), fontSize: 8)
+                                .frame(height: 62)
+                                .clipped()
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(song.title).font(.callout.weight(.medium)).lineLimit(2)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                if !song.author.isEmpty {
+                                    Text(song.author).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+                                }
+                                HStack { songBadges(song); Spacer() }
+                            }
+                            .padding(8)
+                        }
+                        .frame(height: 132, alignment: .top)
+                        .background(
+                            libraryManager.selectedSong?.id == song.id
+                                ? Color.accentColor.opacity(0.18)
+                                : Color.secondary.opacity(0.08),
+                            in: RoundedRectangle(cornerRadius: 10)
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10)
+                                .stroke(libraryManager.selectedSong?.id == song.id ? Color.accentColor : Color.clear, lineWidth: 1.5)
+                        )
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                    }
+                    .buttonStyle(.plain)
+                    .contextMenu { songMenu(song) }
+                }
+            }
+            .padding(8)
         }
     }
 
-    private func canNavigate(direction: Int) -> Bool {
-        guard let song = libraryManager.selectedSong else { return false }
-        let sorted = song.sortedVerses
-        guard let currentIndex = sorted.firstIndex(where: { $0.id == verse.id }) else { return false }
-        let newIndex = currentIndex + direction
-        return newIndex >= 0 && newIndex < sorted.count
+    private func firstSlideText(_ song: Song) -> String {
+        if let section = song.activeVersion?.sortedSections.first, !section.plainText.isEmpty {
+            return section.plainText
+        }
+        return song.sortedVerses.first?.text ?? song.title
     }
 
-    private func navigateVerse(direction: Int) {
-        guard let song = libraryManager.selectedSong else { return }
-        let sorted = song.sortedVerses
-        guard let currentIndex = sorted.firstIndex(where: { $0.id == verse.id }) else { return }
-        let newIndex = currentIndex + direction
-        if newIndex >= 0 && newIndex < sorted.count {
-            libraryManager.selectSongVerse(sorted[newIndex])
+    @ViewBuilder
+    private func songMenu(_ song: Song) -> some View {
+        Button { projectFirstSlide(song) } label: {
+            Label(String(localized: "Proiectează", comment: "Menu"), systemImage: "play.fill")
         }
+        Button { libraryManager.selectSong(song) } label: {
+            Label(String(localized: "Deschide", comment: "Menu"), systemImage: "eye")
+        }
+        Button {
+            libraryManager.selectSong(song)
+            libraryManager.songEditVersionID = nil
+            libraryManager.songEditSectionKey = nil
+            libraryManager.songToEdit = song
+        } label: {
+            Label(String(localized: "Editează…", comment: "Menu"), systemImage: "pencil")
+        }
+        Divider()
+        Button { exportSong(song) } label: {
+            Label(String(localized: "Exportă JSON…", comment: "Menu"), systemImage: "square.and.arrow.up")
+        }
+        Divider()
+        Button(role: .destructive) { deleteSong(song) } label: {
+            Label(String(localized: "Șterge cântecul", comment: "Menu"), systemImage: "trash")
+        }
+    }
+
+    private func projectFirstSlide(_ song: Song) {
+        libraryManager.selectSong(song)
+        let version = song.activeVersion
+        let slides = buildSongSlides(song: song, version: version, maxLines: maxLines, bilingual: false, language: nil, repeatStyle: repeatStyle)
+        guard let first = slides.first else { return }
+        libraryManager.selectSongSlide(text: first.text, label: first.label, index: 0, count: first.total)
+        presentationManager.showSongVerse(
+            text: first.text, title: song.title, verseLabel: first.label,
+            slideIndex: 0, slideCount: first.total, song: song, version: version
+        )
+    }
+
+    private func exportSong(_ song: Song) {
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.json]
+        panel.nameFieldStringValue = "\(song.title).json"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        try? ExportService.exportSongToTopPresenterJSON(song).write(to: url, atomically: true, encoding: .utf8)
+    }
+
+    private func deleteSong(_ song: Song) {
+        if libraryManager.selectedSong?.id == song.id {
+            libraryManager.selectedSong = nil
+            libraryManager.selectedSongVersion = nil
+            libraryManager.selectedSongVerse = nil
+        }
+        modelContext.delete(song)
+        try? modelContext.save()
+    }
+
+    @ViewBuilder
+    private func songBadges(_ song: Song) -> some View {
+        HStack(spacing: 4) {
+            if song.versions.count > 1 { badge("\(song.versions.count)×", color: .purple) }
+            if !song.language.isEmpty { badge(song.language.uppercased(), color: .blue) }
+            if !song.songNumber.isEmpty { badge("#\(song.songNumber)", color: .gray) }
+        }
+    }
+
+    private func badge(_ text: String, color: Color) -> some View {
+        Text(text)
+            .font(.system(size: 9, weight: .semibold))
+            .padding(.horizontal, 4).padding(.vertical, 1)
+            .background(color.opacity(0.2), in: Capsule())
+            .foregroundStyle(color)
+    }
+}
+
+// MARK: - Song Detail (version picker + rendered slide filmstrip)
+
+struct SongDetailPanel: View {
+    @Environment(LibraryManager.self) private var libraryManager
+    @AppStorage("song_maxLinesPerSlide") private var maxLines: Int = 6
+    @AppStorage("song_bilingual") private var bilingual: Bool = false
+
+    var body: some View {
+        if let song = libraryManager.selectedSong {
+            let version = libraryManager.selectedSongVersion ?? song.activeVersion
+            VStack(spacing: 0) {
+                header(song: song, version: version)
+                Divider()
+                SongSlideFilmstrip(song: song, version: version, maxLines: maxLines, bilingual: bilingual)
+            }
+        } else {
+            placeholder(icon: "music.note", text: String(localized: "Selectează un cântec", comment: "Placeholder"))
+        }
+    }
+
+    @ViewBuilder
+    private func header(song: Song, version: SongVersion?) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(song.title).font(.title3.bold()).lineLimit(2)
+                    if !song.author.isEmpty {
+                        Text(song.author).font(.subheadline).foregroundStyle(.secondary)
+                    }
+                }
+                Spacer()
+                if let key = version?.key, !key.isEmpty {
+                    infoChip(String(localized: "Ton: \(key)", comment: "Key"))
+                }
+            }
+            HStack(spacing: 8) {
+                if song.sortedVersions.count > 1 {
+                    Picker("", selection: Binding(
+                        get: { (libraryManager.selectedSongVersion ?? song.activeVersion)?.id },
+                        set: { id in
+                            if let id, let v = song.versions.first(where: { $0.id == id }) {
+                                libraryManager.selectSongVersion(v)
+                            }
+                        }
+                    )) {
+                        ForEach(song.sortedVersions) { v in
+                            Text(v.name.isEmpty ? String(localized: "Versiune", comment: "Version") : v.name)
+                                .tag(Optional(v.id))
+                        }
+                    }
+                    .labelsHidden().fixedSize()
+                }
+                if !song.style.isEmpty { infoChip(song.style) }
+                if let sb = song.songbook {
+                    infoChip(sb.name + (song.songbookNumber.isEmpty ? "" : " #\(song.songbookNumber)"))
+                }
+                Spacer()
+            }
+        }
+        .padding(.horizontal).padding(.vertical, 8)
+    }
+
+    private func infoChip(_ text: String) -> some View {
+        Text(text).font(.caption)
+            .padding(.horizontal, 8).padding(.vertical, 3)
+            .background(.quaternary, in: Capsule())
+            .lineLimit(1)
+    }
+
+    @ViewBuilder
+    private func placeholder(icon: String = "music.note", text: String) -> some View {
+        VStack(spacing: 8) {
+            Image(systemName: icon).font(.system(size: 44)).foregroundStyle(.secondary)
+            Text(text).foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+// MARK: - Song Slides (auto-split + filmstrip)
+
+struct SongSlide: Identifiable, Hashable {
+    let id = UUID()
+    let sectionKey: String
+    let label: String
+    let type: String
+    let text: String
+    let index: Int
+    let total: Int
+}
+
+/// Split pre-rendered sections into slides, auto-splitting any section that overflows `maxLines`.
+private func splitToSlides(_ sections: [(key: String, label: String, type: String, lines: [String])], maxLines: Int) -> [SongSlide] {
+    var raw: [(key: String, label: String, type: String, text: String)] = []
+    for s in sections {
+        if maxLines > 0 && s.lines.count > maxLines {
+            var start = 0
+            while start < s.lines.count {
+                let chunk = Array(s.lines[start..<min(start + maxLines, s.lines.count)])
+                raw.append((s.key, s.label, s.type, chunk.joined(separator: "\n")))
+                start += maxLines
+            }
+        } else {
+            raw.append((s.key, s.label, s.type, s.lines.joined(separator: "\n")))
+        }
+    }
+    let total = max(raw.count, 1)
+    return raw.enumerated().map { idx, r in
+        SongSlide(sectionKey: r.key, label: r.label, type: r.type, text: r.text, index: idx, total: total)
+    }
+}
+
+/// Expand a version into projectable slides: arrangement order → sections → auto-split by `maxLines`.
+/// When `bilingual`, each line is paired with its `language` translation (if present).
+func buildSongSlides(version: SongVersion, maxLines: Int, bilingual: Bool, language: String?, repeatStyle: String = "none") -> [SongSlide] {
+    // The version's own style wins over the global default.
+    let style = version.repeatStyle.isEmpty ? repeatStyle : version.repeatStyle
+    let sections = version.arrangedSections.map { section -> (key: String, label: String, type: String, lines: [String]) in
+        var rendered = section.lines.map { line -> String in
+            if bilingual, let language, let t = line.translations[language], !t.isEmpty {
+                return line.text + "\n" + t
+            }
+            return line.text
+        }
+        rendered = applyRepeatMarker(rendered, count: section.repeatCount, style: style)
+        return (section.sectionKey, section.label, section.type, rendered)
+    }
+    return splitToSlides(sections, maxLines: maxLines)
+}
+
+/// Build slides for a song. Uses the rich version when present; otherwise falls back to the
+/// flattened `SongVerse` cache (songs imported before the version model existed).
+func buildSongSlides(song: Song, version: SongVersion?, maxLines: Int, bilingual: Bool, language: String?, repeatStyle: String = "none") -> [SongSlide] {
+    if let version, !version.sections.isEmpty {
+        return buildSongSlides(version: version, maxLines: maxLines, bilingual: bilingual, language: language, repeatStyle: repeatStyle)
+    }
+    let sections = song.sortedVerses.map { v -> (key: String, label: String, type: String, lines: [String]) in
+        (v.label, v.label, v.verseType, v.text.components(separatedBy: "\n"))
+    }
+    return splitToSlides(sections, maxLines: maxLines)
+}
+
+struct SongSlideFilmstrip: View {
+    let song: Song
+    let version: SongVersion?
+    let maxLines: Int
+    let bilingual: Bool
+
+    @Environment(LibraryManager.self) private var libraryManager
+    @Environment(PresentationManager.self) private var presentationManager
+    @AppStorage("song_repeatStyle") private var repeatStyle = "none"
+
+    private var bilingualLanguage: String? {
+        guard bilingual else { return nil }
+        for sec in (version?.sections ?? []) {
+            for line in sec.lines {
+                if let lang = line.translations.keys.sorted().first { return lang }
+            }
+        }
+        return nil
+    }
+
+    private var slides: [SongSlide] {
+        buildSongSlides(song: song, version: version, maxLines: maxLines, bilingual: bilingual, language: bilingualLanguage, repeatStyle: repeatStyle)
+    }
+
+    var body: some View {
+        if slides.isEmpty {
+            ContentUnavailableView(
+                String(localized: "Niciun slide", comment: "Empty"),
+                systemImage: "rectangle.on.rectangle.slash",
+                description: Text(String(localized: "Acest cântec nu are versuri.", comment: "Empty"))
+            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            ScrollView {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 180), spacing: 12)], spacing: 12) {
+                    ForEach(slides) { slide in
+                        SongSlideThumbnail(
+                            slide: slide,
+                            isSelected: libraryManager.songSlideLabel == slide.label
+                                && libraryManager.songSlideText == slide.text,
+                            onShow: { project(slide) },
+                            onEdit: {
+                                libraryManager.songEditVersionID = version?.id
+                                libraryManager.songEditSectionKey = slide.sectionKey
+                                libraryManager.songToEdit = song
+                            }
+                        )
+                        // Double-tap projects; single-tap selects (updates the sidebar's rendered preview).
+                        .onTapGesture(count: 2) { project(slide) }
+                        .onTapGesture { select(slide) }
+                        .contextMenu {
+                            Button {
+                                project(slide)
+                            } label: {
+                                Label(String(localized: "Proiectează", comment: "Menu"), systemImage: "play.fill")
+                            }
+                            Button {
+                                select(slide)
+                            } label: {
+                                Label(String(localized: "Previzualizează", comment: "Menu"), systemImage: "eye")
+                            }
+                            Divider()
+                            Button {
+                                libraryManager.songEditVersionID = version?.id
+                                libraryManager.songEditSectionKey = slide.sectionKey
+                                libraryManager.songToEdit = song
+                            } label: {
+                                Label(String(localized: "Editează cântecul…", comment: "Menu"), systemImage: "pencil")
+                            }
+                        }
+                    }
+                }
+                .padding(12)
+            }
+        }
+    }
+
+    private func select(_ slide: SongSlide) {
+        libraryManager.selectSongSlide(text: slide.text, label: slide.label, index: slide.index, count: slide.total)
+    }
+
+    private func project(_ slide: SongSlide) {
+        select(slide)
+        presentationManager.showSongVerse(
+            text: slide.text, title: song.title, verseLabel: slide.label,
+            slideIndex: slide.index, slideCount: slide.total,
+            song: song, version: version
+        )
+    }
+}
+
+struct SongSlideThumbnail: View {
+    let slide: SongSlide
+    let isSelected: Bool
+    var onShow: () -> Void = {}
+    var onEdit: () -> Void = {}
+
+    var body: some View {
+        VStack(spacing: 0) {
+            ZStack(alignment: .topTrailing) {
+                SongThemeSlideView(text: slide.text.isEmpty ? slide.label : slide.text, fontSize: 9)
+                    .aspectRatio(16.0 / 9.0, contentMode: .fit)
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+
+                // Quick actions: show on screen + edit
+                HStack(spacing: 6) {
+                    Button(action: onShow) { Image(systemName: "play.fill") }
+                        .help(String(localized: "Arată pe ecran", comment: "Tooltip"))
+                    Button(action: onEdit) { Image(systemName: "pencil") }
+                        .help(String(localized: "Editează", comment: "Tooltip"))
+                }
+                .buttonStyle(.plain)
+                .font(.system(size: 10, weight: .bold))
+                .foregroundStyle(.white)
+                .padding(5)
+                .background(.black.opacity(0.4), in: Capsule())
+                .padding(5)
+            }
+
+            HStack {
+                Text(slide.label).font(.caption2.weight(.medium)).lineLimit(1)
+                Spacer()
+                Text("\(slide.index + 1)/\(slide.total)")
+                    .font(.system(size: 9)).foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 4).padding(.vertical, 3)
+        }
+        .background(
+            isSelected ? Color.accentColor.opacity(0.18) : Color.secondary.opacity(0.06),
+            in: RoundedRectangle(cornerRadius: 8)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(isSelected ? Color.accentColor : .clear, lineWidth: 2)
+        )
+        .contentShape(Rectangle())
     }
 }
 
@@ -361,25 +687,44 @@ struct SongImportSheet: View {
     @State private var isImporting = false
     @State private var importProgress: Double = 0
     @State private var importStatusText = ""
+    @State private var dupMode = "version"   // version | keepBoth | skip
+    @Query(sort: \SongCollection.name) private var existingCollections: [SongCollection]
 
     var body: some View {
         VStack(spacing: 20) {
             Text(String(localized: "Import Songs", comment: "Sheet title"))
                 .font(.title2.bold())
 
-            Text(String(localized: "Alege fișiere individuale și/sau directoare — formatul fiecărui fișier este detectat automat (OpenSong, OpenLyrics, PPTX, PPT).", comment: "Import sheet hint"))
+            Text(String(localized: "Alege fișiere și/sau directoare (subdirectoarele sunt incluse) — formatul fiecărui fișier este detectat automat.", comment: "Import sheet hint"))
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
 
-            // Collection name
-            TextField(
-                String(localized: "Collection Name", comment: "Text field placeholder"),
-                text: $collectionName
-            )
-            .textFieldStyle(.roundedBorder)
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 6) {
+                    TextField(
+                        String(localized: "Nume folder (gol = Nesortate)", comment: "Text field placeholder"),
+                        text: $collectionName
+                    )
+                    .textFieldStyle(.roundedBorder)
+                    if !existingCollections.isEmpty {
+                        Menu {
+                            ForEach(existingCollections) { c in
+                                Button(c.name) { collectionName = c.name }
+                            }
+                        } label: { Image(systemName: "folder") }
+                        .menuStyle(.borderlessButton).fixedSize()
+                        .help(String(localized: "Alege un folder existent", comment: "Tooltip"))
+                    }
+                }
+                Picker(String(localized: "La nume existent", comment: "Label"), selection: $dupMode) {
+                    Text(String(localized: "Versiune nouă", comment: "Option")).tag("version")
+                    Text(String(localized: "Cântec nou", comment: "Option")).tag("keepBoth")
+                    Text(String(localized: "Sări peste", comment: "Option")).tag("skip")
+                }
+                .pickerStyle(.segmented)
+            }
 
-            // Selection summary + chooser
             HStack {
                 if selectedURLs.isEmpty {
                     Text(String(localized: "Nimic selectat", comment: "Placeholder"))
@@ -429,7 +774,7 @@ struct SongImportSheet: View {
                 Spacer()
                 Button(String(localized: "Import", comment: "Button")) { performImport() }
                     .buttonStyle(.borderedProminent)
-                    .disabled(selectedURLs.isEmpty || collectionName.isEmpty || isImporting)
+                    .disabled(selectedURLs.isEmpty || isImporting)
                     .keyboardShortcut(.defaultAction)
             }
         }
@@ -439,8 +784,6 @@ struct SongImportSheet: View {
 
     private func chooseLocation() {
         let panel = NSOpenPanel()
-        // Files AND directories, multi-select, ANY type — auto-detection
-        // decides how each file is parsed.
         panel.canChooseDirectories = true
         panel.canChooseFiles = true
         panel.allowsMultipleSelection = true
@@ -457,12 +800,23 @@ struct SongImportSheet: View {
     private func performImport() {
         guard !selectedURLs.isEmpty else { return }
         isImporting = true
+        let targetName = collectionName.trimmingCharacters(in: .whitespaces).isEmpty
+            ? String(localized: "Nesortate", comment: "Default collection")
+            : collectionName
+        let resolution: SongDuplicateResolution = {
+            switch dupMode {
+            case "keepBoth": return .keepBoth
+            case "skip": return .skip
+            default: return .addAsVersion
+            }
+        }()
 
         Task {
             let result = await ImportService.importSongItems(
                 urls: selectedURLs,
-                collectionName: collectionName,
-                modelContext: modelContext
+                collectionName: targetName,
+                modelContext: modelContext,
+                duplicateResolution: resolution
             ) { progress, status in
                 Task { @MainActor in
                     importProgress = progress
@@ -475,7 +829,7 @@ struct SongImportSheet: View {
                 if result.failures.isEmpty, !result.importedTitles.isEmpty {
                     appState.showSuccess(
                         String(localized: "Import Successful", comment: "Alert title"),
-                        message: String(localized: "Au fost importate \(result.importedTitles.count) cântece în \"\(collectionName)\".", comment: "Alert message")
+                        message: String(localized: "Au fost importate \(result.importedTitles.count) cântece în \"\(targetName)\".", comment: "Alert message")
                     )
                     dismiss()
                 } else if result.importedTitles.isEmpty {
@@ -501,6 +855,844 @@ struct SongImportSheet: View {
                     dismiss()
                 }
             }
+        }
+    }
+}
+
+// MARK: - Song Editor (visual editing of all stored content)
+
+let songSectionTypes = ["verse", "chorus", "bridge", "prechorus", "intro", "ending", "tag", "interlude", "other"]
+
+func songTypeColor(_ type: String) -> Color {
+    switch type {
+    case "chorus": return .orange
+    case "bridge": return .purple
+    case "prechorus": return .pink
+    case "intro", "ending": return .teal
+    case "tag": return .green
+    case "interlude": return .indigo
+    default: return .blue   // verse / other
+    }
+}
+
+func songTypeLabel(_ type: String) -> String {
+    switch type {
+    case "verse": return String(localized: "Strofă", comment: "Section type")
+    case "chorus": return String(localized: "Refren", comment: "Section type")
+    case "bridge": return String(localized: "Punte", comment: "Section type")
+    case "prechorus": return String(localized: "Pre-refren", comment: "Section type")
+    case "intro": return String(localized: "Intro", comment: "Section type")
+    case "ending": return String(localized: "Final", comment: "Section type")
+    case "tag": return String(localized: "Tag", comment: "Section type")
+    case "interlude": return String(localized: "Interludiu", comment: "Section type")
+    default: return String(localized: "Altul", comment: "Section type")
+    }
+}
+
+/// A theme-rendered slide: the song profile's background (image > color > global) with the
+/// theme text color — so previews/thumbnails look like the real output, not a plain box.
+struct SongThemeSlideView: View {
+    let text: String
+    var fontSize: CGFloat = 13
+    @Environment(PresentationManager.self) private var pm
+
+    var body: some View {
+        let bg = pm.backgroundConfig(for: "song")
+        ZStack {
+            if bg.enabled, bg.useImage, let img = pm.contentBackgroundImages["song"] {
+                Image(nsImage: img).resizable().scaledToFill()
+            } else if bg.enabled, bg.showColor {
+                (Color(hex: bg.colorHex) ?? .black)
+            } else {
+                pm.backgroundColor
+            }
+            Text(text)
+                .font(.system(size: fontSize, weight: .semibold))
+                .foregroundStyle(Color(hex: pm.textColorHex) ?? .white)
+                .multilineTextAlignment(.center)
+                .lineLimit(8)
+                .padding(8)
+                .shadow(color: .black.opacity(0.45), radius: 1, y: 0.5)
+        }
+        .clipped()
+    }
+}
+
+// ChordPro round-trip so the editor can show/edit inline [G] chords without losing them.
+func songLinesToChordPro(_ lines: [SongLine]) -> String {
+    lines.map { line in
+        let chords = line.chords.sorted { $0.pos < $1.pos }
+        var out = ""
+        var ci = 0
+        for (i, ch) in line.text.enumerated() {
+            while ci < chords.count && chords[ci].pos <= i { out += "[\(chords[ci].sym)]"; ci += 1 }
+            out.append(ch)
+        }
+        while ci < chords.count { out += "[\(chords[ci].sym)]"; ci += 1 }
+        return out
+    }.joined(separator: "\n")
+}
+
+func songChordProToLines(_ text: String) -> [SongLine] {
+    text.components(separatedBy: "\n").map { raw in
+        var t = ""
+        var chords: [SongChord] = []
+        var i = raw.startIndex
+        while i < raw.endIndex {
+            if raw[i] == "[", let close = raw[i...].firstIndex(of: "]") {
+                let sym = String(raw[raw.index(after: i)..<close])
+                if !sym.isEmpty { chords.append(SongChord(sym: sym, pos: t.count)) }
+                i = raw.index(after: close)
+                continue
+            }
+            t.append(raw[i])
+            i = raw.index(after: i)
+        }
+        return SongLine(text: t, chords: chords)
+    }
+}
+
+/// Apply the theme's repeat-marker style to a repeated section's lines (count > 1).
+func applyRepeatMarker(_ lines: [String], count: Int, style: String) -> [String] {
+    guard count > 1, !lines.isEmpty, style != "none" else { return lines }
+    var out = lines
+    switch style {
+    case "slash": out[0] = "/: " + out[0]; out[out.count - 1] += " :/"
+    case "bar":   out[0] = "‖: " + out[0]; out[out.count - 1] += " :‖"
+    case "pipe":  out[0] = "|: " + out[0]; out[out.count - 1] += " :|"
+    case "times": out.append("(×\(count))")
+    case "bister": out.append(count == 2 ? "bis" : (count == 3 ? "ter" : "×\(count)"))
+    default: break
+    }
+    return out
+}
+
+struct SongEditorSheet: View {
+    @Bindable var song: Song
+    @Environment(\.modelContext) private var modelContext
+    @Environment(\.dismiss) private var dismiss
+    @Environment(LibraryManager.self) private var libraryManager
+    @Query(sort: \Songbook.name) private var allSongbooks: [Songbook]
+    @State private var selectedVersionID: UUID?
+    @State private var focusedSectionID: UUID?
+    @State private var newBookName = ""
+    @AppStorage("song_repeatStyle") private var globalRepeatStyle = "none"
+
+    private var currentVersion: SongVersion? {
+        if let id = selectedVersionID, let v = song.versions.first(where: { $0.id == id }) { return v }
+        return song.activeVersion
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            header
+            Divider()
+            versionTabBar
+            Divider()
+            HSplitView {
+                metadataPane
+                    .frame(minWidth: 300, idealWidth: 340, maxWidth: 400)
+                versionPane
+                    .frame(minWidth: 440)
+            }
+        }
+        .frame(minWidth: 900, idealWidth: 1020, minHeight: 660, idealHeight: 800)
+        .onAppear { ensureVersion() }
+    }
+
+    private var isOriginalVersion: Bool {
+        currentVersion?.id == song.sortedVersions.first?.id
+    }
+
+    // MARK: Version tabs (top)
+    private var versionTabBar: some View {
+        HStack(spacing: 8) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    ForEach(Array(song.sortedVersions.enumerated()), id: \.element.id) { idx, v in
+                        let selected = currentVersion?.id == v.id
+                        let title = idx == 0
+                            ? String(localized: "Original", comment: "Version")
+                            : (v.name.isEmpty ? "Versiunea \(idx + 1)" : v.name)
+                        Button {
+                            selectedVersionID = v.id
+                            focusedSectionID = nil
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: idx == 0 ? "star.fill" : "doc.on.doc").font(.system(size: 9))
+                                Text(title).font(.caption.weight(.medium)).lineLimit(1)
+                            }
+                            .padding(.horizontal, 12).padding(.vertical, 6)
+                            .background(selected ? Color.accentColor : Color.secondary.opacity(0.15), in: Capsule())
+                            .foregroundStyle(selected ? .white : .primary)
+                        }
+                        .buttonStyle(.plain)
+                        .contextMenu {
+                            if idx != 0 {
+                                Button(role: .destructive) { deleteVersion(v) } label: {
+                                    Label(String(localized: "Șterge versiunea", comment: "Menu"), systemImage: "trash")
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            Button { addVersion() } label: {
+                Label(String(localized: "Versiune", comment: "Button"), systemImage: "plus").font(.caption)
+            }
+            .buttonStyle(.bordered)
+            .help(String(localized: "Adaugă o versiune (copie a originalului)", comment: "Tooltip"))
+        }
+        .padding(.horizontal, 16).padding(.vertical, 8)
+    }
+
+    private var header: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "music.note.list")
+                .font(.title2)
+                .foregroundStyle(Color.accentColor)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(String(localized: "Editor cântec", comment: "Editor title")).font(.headline)
+                Text(song.title.isEmpty ? String(localized: "Fără titlu", comment: "Placeholder") : song.title)
+                    .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+            }
+            Spacer()
+            Button(String(localized: "Gata", comment: "Button")) { save(); dismiss() }
+                .buttonStyle(.borderedProminent)
+                .keyboardShortcut(.defaultAction)
+        }
+        .padding(.horizontal, 16).padding(.vertical, 12)
+    }
+
+    // MARK: Metadata pane (left) — per-version metadata + shared song identity
+    private var metadataPane: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 14) {
+                versionMetadataGroup
+                songIdentityGroup
+            }
+            .padding(16)
+        }
+        .background(Color(nsColor: .controlBackgroundColor))
+    }
+
+    @ViewBuilder private var versionMetadataGroup: some View {
+        if let v = currentVersion {
+            let editable = isOriginalVersion || v.overridesMetadata
+            let src = editable ? v : (song.sortedVersions.first ?? v)   // inherited values shown read-only
+            VStack(alignment: .leading, spacing: 8) {
+                if !isOriginalVersion {
+                    Toggle(isOn: Binding(
+                        get: { v.overridesMetadata },
+                        set: { on in
+                            if on && !v.overridesMetadata { seedOverrides(into: v) }   // pre-fill from original
+                            v.overridesMetadata = on
+                        }
+                    )) {
+                        Text(String(localized: "Date proprii pentru versiune", comment: "Toggle")).font(.caption.bold())
+                    }
+                    .toggleStyle(.switch).controlSize(.small)
+                    if !v.overridesMetadata {
+                        Text(String(localized: "Moștenește datele din „Original”. Activează pentru a edita.", comment: "Hint"))
+                            .font(.system(size: 10)).foregroundStyle(.tertiary)
+                    }
+                }
+                editorGroup(String(localized: "Date versiune", comment: "Group"), icon: "rectangle.stack") {
+                    versionField(String(localized: "Titlu afișat", comment: "Field"), src: src, keyPath: \.displayTitle, editable: editable)
+                    versionField(String(localized: "Autor", comment: "Field"), src: src, keyPath: \.author, editable: editable)
+                    HStack {
+                        versionField(String(localized: "Versuri de", comment: "Field"), src: src, keyPath: \.authorWords, editable: editable)
+                        versionField(String(localized: "Muzica de", comment: "Field"), src: src, keyPath: \.authorMusic, editable: editable)
+                    }
+                    versionField(String(localized: "Traducere de", comment: "Field"), src: src, keyPath: \.authorTranslation, editable: editable)
+                    HStack {
+                        versionField(String(localized: "Limbă", comment: "Field"), src: src, keyPath: \.language, editable: editable, width: 64)
+                        versionField(String(localized: "Ton", comment: "Field"), src: src, keyPath: \.key, editable: editable, width: 64)
+                        versionField(String(localized: "Tempo", comment: "Field"), src: src, keyPath: \.tempo, editable: editable, width: 64)
+                    }
+                    versionSongbookField(src: src, editable: editable)
+                    HStack {
+                        versionField(String(localized: "Stil", comment: "Field"), src: src, keyPath: \.style, editable: editable)
+                        versionField(String(localized: "Nr. carte", comment: "Field"), src: src, keyPath: \.songbookNumber, editable: editable, width: 80)
+                    }
+                    HStack {
+                        versionField(String(localized: "Copyright", comment: "Field"), src: src, keyPath: \.copyright, editable: editable)
+                        versionField(String(localized: "CCLI", comment: "Field"), src: src, keyPath: \.ccliNumber, editable: editable, width: 90)
+                    }
+                    versionListField(String(localized: "Teme", comment: "Field"), get: { src.themes }, set: { src.themes = $0 }, editable: editable)
+                    if editable {
+                        HStack {
+                            Stepper("Capo \(src.capo)", value: Binding(get: { src.capo }, set: { src.capo = $0 }), in: 0...11)
+                                .font(.caption).fixedSize()
+                            Spacer()
+                            versionRepeatPicker(src)
+                        }
+                    } else {
+                        HStack {
+                            Text("Capo \(src.capo)").font(.callout)
+                            Spacer()
+                            Text(String(localized: "Repetare: \(repeatStyleLabel(src.repeatStyle))", comment: "Info"))
+                                .font(.callout).foregroundStyle(.secondary)
+                        }
+                    }
+                    versionNotesField(src: src, editable: editable)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder private var songIdentityGroup: some View {
+        editorGroup(String(localized: "Identitate cântec", comment: "Group"), icon: "music.note") {
+            field(String(localized: "Titlu canonic (pentru bibliotecă)", comment: "Field"), text: $song.title)
+            field(String(localized: "Alte titluri (toate versiunile)", comment: "Field"),
+                  text: listBinding(get: { song.titles }, set: { song.titles = $0 }),
+                  hint: String(localized: "separate prin virgulă", comment: "Hint"))
+            Text(String(localized: "Restul câmpurilor se editează per versiune, mai sus.", comment: "Hint"))
+                .font(.system(size: 10)).foregroundStyle(.tertiary)
+        }
+    }
+
+    @ViewBuilder
+    private func versionSongbookField(src: SongVersion, editable: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(String(localized: "Carte de cântări", comment: "Field")).font(.caption2).foregroundStyle(.secondary)
+            if editable {
+                HStack(spacing: 6) {
+                    Picker("", selection: Binding(get: { src.songbookName }, set: { src.songbookName = $0 })) {
+                        Text(String(localized: "Fără carte", comment: "Option")).tag("")
+                        ForEach(allSongbooks) { book in Text(book.name).tag(book.name) }
+                        if !src.songbookName.isEmpty && !allSongbooks.contains(where: { $0.name == src.songbookName }) {
+                            Text(src.songbookName).tag(src.songbookName)
+                        }
+                    }
+                    .labelsHidden()
+                    TextField(String(localized: "Carte nouă…", comment: "Field"), text: $newBookName)
+                        .textFieldStyle(.roundedBorder)
+                    Button(String(localized: "Adaugă", comment: "Button")) { addBook(to: src) }
+                        .disabled(newBookName.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
+            } else {
+                Text(src.songbookName.isEmpty ? "—" : src.songbookName)
+                    .font(.callout).foregroundStyle(src.songbookName.isEmpty ? .tertiary : .primary)
+            }
+        }
+    }
+
+    private func addBook(to src: SongVersion) {
+        let name = newBookName.trimmingCharacters(in: .whitespaces)
+        guard !name.isEmpty else { return }
+        if !allSongbooks.contains(where: { $0.name.caseInsensitiveCompare(name) == .orderedSame }) {
+            modelContext.insert(Songbook(name: name))   // add to the shared list of books
+        }
+        src.songbookName = name
+        newBookName = ""
+    }
+
+    @ViewBuilder
+    private func versionListField(_ label: String, get: @escaping () -> [String], set: @escaping ([String]) -> Void, editable: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(label).font(.caption2).foregroundStyle(.secondary)
+            if editable {
+                TextField(String(localized: "separate prin virgulă", comment: "Hint"),
+                          text: Binding(get: { get().joined(separator: ", ") },
+                                        set: { set($0.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }) }))
+                    .textFieldStyle(.roundedBorder)
+            } else {
+                let joined = get().joined(separator: ", ")
+                Text(joined.isEmpty ? "—" : joined)
+                    .font(.callout).foregroundStyle(joined.isEmpty ? .tertiary : .primary)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func versionNotesField(src: SongVersion, editable: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(String(localized: "Note", comment: "Field")).font(.caption2).foregroundStyle(.secondary)
+            if editable {
+                TextEditor(text: Binding(get: { src.notes }, set: { src.notes = $0 }))
+                    .font(.body).frame(minHeight: 44)
+                    .scrollContentBackground(.hidden)
+                    .padding(4)
+                    .background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: 6))
+            } else {
+                Text(src.notes.isEmpty ? "—" : src.notes)
+                    .font(.callout).foregroundStyle(src.notes.isEmpty ? .tertiary : .primary)
+            }
+        }
+    }
+
+    /// Seed a version's override fields from the original (so toggling "own data" starts from
+    /// the inherited values rather than blanks).
+    private func seedOverrides(into v: SongVersion) {
+        guard let orig = song.sortedVersions.first, orig.id != v.id else { return }
+        if v.displayTitle.isEmpty { v.displayTitle = orig.displayTitle.isEmpty ? song.title : orig.displayTitle }
+        if v.author.isEmpty { v.author = orig.author.isEmpty ? song.author : orig.author }
+        if v.language.isEmpty { v.language = orig.language }
+        if v.key.isEmpty { v.key = orig.key }
+        if v.tempo.isEmpty { v.tempo = orig.tempo }
+        if v.copyright.isEmpty { v.copyright = orig.copyright }
+        if v.ccliNumber.isEmpty { v.ccliNumber = orig.ccliNumber }
+        if v.capo == 0 { v.capo = orig.capo }
+        if v.repeatStyle.isEmpty { v.repeatStyle = orig.repeatStyle }
+        if v.authorWords.isEmpty { v.authorWords = orig.authorWords }
+        if v.authorMusic.isEmpty { v.authorMusic = orig.authorMusic }
+        if v.authorTranslation.isEmpty { v.authorTranslation = orig.authorTranslation }
+        if v.style.isEmpty { v.style = orig.style }
+        if v.songbookNumber.isEmpty { v.songbookNumber = orig.songbookNumber }
+        if v.songbookName.isEmpty { v.songbookName = orig.songbookName }
+        if v.themes.isEmpty { v.themes = orig.themes }
+        if v.notes.isEmpty { v.notes = orig.notes }
+    }
+
+    /// Existing/imported songs store metadata on the Song. Copy it onto the original version
+    /// (where empty) so the per-version editor and inheritance have a real source.
+    private func hydrateOriginalFromSong() {
+        guard let orig = song.sortedVersions.first else { return }
+        if orig.displayTitle.isEmpty { orig.displayTitle = song.title }
+        if orig.author.isEmpty { orig.author = song.author }
+        if orig.authorWords.isEmpty { orig.authorWords = song.authorWords }
+        if orig.authorMusic.isEmpty { orig.authorMusic = song.authorMusic }
+        if orig.authorTranslation.isEmpty { orig.authorTranslation = song.authorTranslation }
+        if orig.language.isEmpty { orig.language = song.language }
+        if orig.key.isEmpty { orig.key = song.key }
+        if orig.tempo.isEmpty { orig.tempo = song.tempo }
+        if orig.copyright.isEmpty { orig.copyright = song.copyright }
+        if orig.ccliNumber.isEmpty { orig.ccliNumber = song.ccliNumber }
+        if orig.style.isEmpty { orig.style = song.style }
+        if orig.songbookNumber.isEmpty { orig.songbookNumber = song.songbookNumber }
+        if orig.songbookName.isEmpty { orig.songbookName = song.songbook?.name ?? "" }
+        if orig.themes.isEmpty { orig.themes = song.themes }
+        if orig.notes.isEmpty { orig.notes = song.notes }
+    }
+
+    /// Mirror the original version's metadata back onto the Song so the library browser
+    /// and search stay accurate.
+    private func mirrorOriginalToSong() {
+        guard let orig = song.sortedVersions.first else { return }
+        if !orig.displayTitle.isEmpty { song.title = orig.displayTitle }
+        song.author = orig.author
+        song.authorWords = orig.authorWords
+        song.authorMusic = orig.authorMusic
+        song.authorTranslation = orig.authorTranslation
+        song.language = orig.language
+        song.key = orig.key
+        song.tempo = orig.tempo
+        song.copyright = orig.copyright
+        song.ccliNumber = orig.ccliNumber
+        song.style = orig.style
+        song.songbookNumber = orig.songbookNumber
+        if !orig.songbookName.isEmpty {
+            song.songbook = allSongbooks.first { $0.name.caseInsensitiveCompare(orig.songbookName) == .orderedSame }
+                ?? { let b = Songbook(name: orig.songbookName); modelContext.insert(b); return b }()
+        }
+        song.themes = orig.themes
+        song.notes = orig.notes
+    }
+
+    @ViewBuilder
+    private func versionField(_ label: String, src: SongVersion, keyPath: ReferenceWritableKeyPath<SongVersion, String>, editable: Bool, width: CGFloat? = nil) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(label).font(.caption2).foregroundStyle(.secondary)
+            if editable {
+                TextField("", text: Binding(get: { src[keyPath: keyPath] }, set: { src[keyPath: keyPath] = $0 }))
+                    .textFieldStyle(.roundedBorder).frame(width: width)
+            } else {
+                Text(src[keyPath: keyPath].isEmpty ? "—" : src[keyPath: keyPath])
+                    .font(.callout)
+                    .foregroundStyle(src[keyPath: keyPath].isEmpty ? .tertiary : .primary)
+                    .frame(width: width, alignment: .leading)
+            }
+        }
+    }
+
+    private func repeatStyleLabel(_ style: String) -> String {
+        switch style {
+        case "slash": return "/: :/"
+        case "bar": return "‖: :‖"
+        case "pipe": return "|: :|"
+        case "times": return "(×N)"
+        case "bister": return "bis/ter"
+        case "none": return String(localized: "Fără", comment: "Repeat style")
+        default: return String(localized: "Implicit", comment: "Repeat style")
+        }
+    }
+
+    // MARK: Version pane (right)
+    private var versionPane: some View {
+        VStack(spacing: 0) {
+            if let version = currentVersion, let section = focusedSection(in: version) {
+                let style = version.repeatStyle.isEmpty ? globalRepeatStyle : version.repeatStyle
+                let previewLines = applyRepeatMarker(section.lines.map { $0.text }, count: section.repeatCount, style: style)
+                let previewText = previewLines.joined(separator: "\n")
+                SongThemeSlideView(text: previewText.isEmpty ? section.label : previewText, fontSize: 16)
+                    .frame(height: 150)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .padding(12)
+                Divider()
+            }
+
+            if let version = currentVersion {
+                ScrollView {
+                    LazyVStack(spacing: 10) {
+                        ForEach(version.sortedSections) { section in
+                            SectionEditorCard(
+                                section: section,
+                                isFocused: focusedSectionID == section.id,
+                                onFocus: { focusedSectionID = section.id },
+                                onMoveUp: { move(section, by: -1, in: version) },
+                                onMoveDown: { move(section, by: 1, in: version) },
+                                onDelete: { modelContext.delete(section) },
+                                onDuplicate: { duplicateSection(section, in: version) },
+                                onDrop: { draggedID in reorder(draggedID: draggedID, before: section, in: version) }
+                            )
+                        }
+                        addSectionMenu(version)
+                    }
+                    .padding(12)
+                }
+            } else {
+                ContentUnavailableView(String(localized: "Nicio versiune", comment: "Empty"), systemImage: "music.note")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
+    }
+
+    private func addSectionMenu(_ version: SongVersion) -> some View {
+        Menu {
+            ForEach(songSectionTypes, id: \.self) { type in
+                Button(songTypeLabel(type)) { addSection(type, to: version) }
+            }
+        } label: {
+            Label(String(localized: "Adaugă strofă", comment: "Button"), systemImage: "plus.rectangle.on.rectangle")
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 8)
+                .background(Color.accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
+        }
+        .menuStyle(.borderlessButton)
+    }
+
+    // MARK: small builders
+    @ViewBuilder
+    private func editorGroup<C: View>(_ title: String, icon: String, @ViewBuilder content: () -> C) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label(title, systemImage: icon)
+                .font(.caption.bold()).foregroundStyle(.secondary)
+            content()
+        }
+        .padding(12)
+        .background(Color(nsColor: .windowBackgroundColor), in: RoundedRectangle(cornerRadius: 10))
+        .overlay(RoundedRectangle(cornerRadius: 10).stroke(.quaternary))
+    }
+
+    private func field(_ label: String, text: Binding<String>, hint: String = "") -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(label).font(.caption2).foregroundStyle(.secondary)
+            TextField(hint, text: text).textFieldStyle(.roundedBorder)
+        }
+    }
+
+    private func compactField(_ label: String, text: Binding<String>, width: CGFloat? = nil) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(label).font(.system(size: 9)).foregroundStyle(.secondary)
+            TextField("", text: text).textFieldStyle(.roundedBorder).frame(width: width)
+        }
+    }
+
+    private func versionRepeatPicker(_ version: SongVersion) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(String(localized: "Repetare", comment: "Field")).font(.system(size: 9)).foregroundStyle(.secondary)
+            Picker("", selection: Binding(get: { version.repeatStyle }, set: { version.repeatStyle = $0 })) {
+                Text(String(localized: "Implicit", comment: "Option")).tag("")
+                Text(String(localized: "Fără", comment: "Option")).tag("none")
+                Text("/: :/").tag("slash")
+                Text("‖: :‖").tag("bar")
+                Text("|: :|").tag("pipe")
+                Text("(×N)").tag("times")
+                Text("bis/ter").tag("bister")
+            }
+            .labelsHidden().controlSize(.small).fixedSize()
+        }
+    }
+
+    private var songbookField: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(String(localized: "Carte de cântări", comment: "Field")).font(.caption2).foregroundStyle(.secondary)
+            Picker("", selection: Binding(
+                get: { song.songbook?.id },
+                set: { id in song.songbook = allSongbooks.first { $0.id == id } }
+            )) {
+                Text(String(localized: "Fără carte", comment: "Option")).tag(UUID?.none)
+                ForEach(allSongbooks) { book in
+                    Text(book.name).tag(UUID?.some(book.id))
+                }
+            }
+            .labelsHidden()
+            HStack(spacing: 6) {
+                TextField(String(localized: "Carte nouă…", comment: "Field"), text: $newBookName)
+                    .textFieldStyle(.roundedBorder)
+                Button(String(localized: "Adaugă", comment: "Button")) { addBook() }
+                    .disabled(newBookName.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+        }
+    }
+
+    private func addBook() {
+        let name = newBookName.trimmingCharacters(in: .whitespaces)
+        guard !name.isEmpty else { return }
+        if let existing = allSongbooks.first(where: { $0.name.caseInsensitiveCompare(name) == .orderedSame }) {
+            song.songbook = existing
+        } else {
+            let book = Songbook(name: name)
+            modelContext.insert(book)
+            song.songbook = book
+        }
+        newBookName = ""
+    }
+
+    private func focusedSection(in version: SongVersion) -> SongSection? {
+        if let id = focusedSectionID, let s = version.sections.first(where: { $0.id == id }) { return s }
+        return version.sortedSections.first
+    }
+
+    private func addSection(_ type: String, to version: SongVersion) {
+        let n = version.sections.count
+        let s = SongSection(sectionKey: "\(type.prefix(1))\(n + 1)", type: type,
+                            label: "\(songTypeLabel(type)) \(n + 1)", order: n, lines: [SongLine(text: "")])
+        s.version = version
+        focusedSectionID = s.id
+    }
+
+    private func duplicateSection(_ section: SongSection, in version: SongVersion) {
+        // Make room right after the original, then insert the copy there.
+        for s in version.sortedSections where s.order > section.order {
+            s.order += 1
+        }
+        let copy = SongSection(
+            sectionKey: "\(section.sectionKey)2", type: section.type, label: section.label,
+            order: section.order + 1, repeatCount: section.repeatCount, lines: section.lines
+        )
+        copy.version = version
+        focusedSectionID = copy.id
+    }
+
+    private func move(_ section: SongSection, by delta: Int, in version: SongVersion) {
+        let sorted = version.sortedSections
+        guard let i = sorted.firstIndex(where: { $0.id == section.id }) else { return }
+        let j = i + delta
+        guard j >= 0, j < sorted.count else { return }
+        let tmp = sorted[i].order
+        sorted[i].order = sorted[j].order
+        sorted[j].order = tmp
+    }
+
+    /// Drag-reorder: move the dragged section to sit just before `target`, then renumber.
+    private func reorder(draggedID: String, before target: SongSection, in version: SongVersion) {
+        guard let dragged = version.sections.first(where: { $0.id.uuidString == draggedID }),
+              dragged.id != target.id else { return }
+        var ordered = version.sortedSections
+        ordered.removeAll { $0.id == dragged.id }
+        guard let ti = ordered.firstIndex(where: { $0.id == target.id }) else { return }
+        ordered.insert(dragged, at: ti)
+        for (i, s) in ordered.enumerated() { s.order = i }
+    }
+
+    private func listBinding(get: @escaping () -> [String], set: @escaping ([String]) -> Void) -> Binding<String> {
+        Binding(
+            get: { get().joined(separator: ", ") },
+            set: { set($0.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }) }
+        )
+    }
+
+    /// Older songs (imported before versions existed) get a version synthesized from the
+    /// flattened cache the first time they're edited — an on-demand backfill.
+    private func ensureVersion() {
+        if song.versions.isEmpty {
+            let v = SongVersion(name: "Original", order: 0)
+            v.song = song
+            for (i, verse) in song.sortedVerses.enumerated() {
+                let s = SongSection(
+                    sectionKey: verse.label.isEmpty ? "s\(i)" : verse.label,
+                    type: verse.verseType, label: verse.label, order: i,
+                    lines: verse.text.components(separatedBy: "\n").map { SongLine(text: $0) }
+                )
+                s.version = v
+            }
+            modelContext.insert(v)
+            selectedVersionID = v.id
+        } else {
+            // Open the version the slide came from (if any), else the original/active one.
+            selectedVersionID = libraryManager.songEditVersionID ?? song.activeVersion?.id
+        }
+        hydrateOriginalFromSong()
+        libraryManager.songEditVersionID = nil
+        // Focus the section the user clicked "edit" on (from a slide), else the first.
+        if let key = libraryManager.songEditSectionKey,
+           let match = currentVersion?.sections.first(where: { $0.sectionKey == key }) {
+            focusedSectionID = match.id
+            libraryManager.songEditSectionKey = nil
+        } else {
+            focusedSectionID = currentVersion?.sortedSections.first?.id
+        }
+    }
+
+    /// New versions start as a copy of the current one (key/tempo/arrangement + all sections).
+    private func addVersion() {
+        let v = SongVersion(name: "Versiunea \(song.versions.count + 1)", order: song.versions.count)
+        v.song = song
+        if let source = song.activeVersion {
+            v.key = source.key
+            v.capo = source.capo
+            v.tempo = source.tempo
+            v.timeSignature = source.timeSignature
+            v.language = source.language
+            v.arrangement = source.arrangement
+            for sec in source.sortedSections {
+                let copy = SongSection(sectionKey: sec.sectionKey, type: sec.type, label: sec.label, order: sec.order, lines: sec.lines)
+                copy.version = v
+            }
+        } else {
+            let s = SongSection(sectionKey: "v1", type: "verse", label: "Strofa 1", order: 0, lines: [SongLine(text: "")])
+            s.version = v
+        }
+        modelContext.insert(v)
+        selectedVersionID = v.id
+        focusedSectionID = v.sortedSections.first?.id
+    }
+
+    private func deleteVersion(_ v: SongVersion) {
+        let fallback = song.sortedVersions.first { $0.id != v.id }?.id
+        modelContext.delete(v)
+        selectedVersionID = fallback
+    }
+
+    /// Keep the flattened SongVerse cache + searchText in sync with the active version.
+    private func save() {
+        mirrorOriginalToSong()
+        for old in song.verses { modelContext.delete(old) }
+        var lyrics = ""
+        if let active = song.activeVersion {
+            for (i, sec) in active.sortedSections.enumerated() {
+                let verse = SongVerse(label: sec.label, verseType: sec.type, text: sec.plainText, order: i)
+                verse.song = song
+                lyrics += " " + sec.plainText
+            }
+        }
+        song.searchText = Song.makeSearchText(
+            title: song.title, titles: song.titles, author: song.author,
+            authorWords: song.authorWords, songNumber: song.songNumber,
+            songbookNumber: song.songbookNumber, lyrics: lyrics
+        )
+        try? modelContext.save()
+    }
+}
+
+struct SectionEditorCard: View {
+    @Bindable var section: SongSection
+    var isFocused: Bool
+    var onFocus: () -> Void
+    var onMoveUp: () -> Void
+    var onMoveDown: () -> Void
+    var onDelete: () -> Void
+    var onDuplicate: () -> Void = {}
+    var onDrop: (String) -> Void = { _ in }
+
+    @State private var chordsOverride: Bool? = nil
+    private var sectionHasChords: Bool { section.lines.contains { !$0.chords.isEmpty } }
+    private var showChords: Bool { chordsOverride ?? sectionHasChords }
+
+    private var lyricsBinding: Binding<String> {
+        if showChords {
+            return Binding(
+                get: { songLinesToChordPro(section.lines) },
+                set: { section.lines = songChordProToLines($0) }
+            )
+        }
+        return Binding(
+            get: { section.plainText },
+            set: { section.lines = $0.components(separatedBy: "\n").map { SongLine(text: $0) } }
+        )
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                // Drag handle (reorder)
+                Image(systemName: "line.3.horizontal")
+                    .font(.caption).foregroundStyle(.tertiary)
+                    .draggable(section.id.uuidString)
+                    .help(String(localized: "Trage pentru reordonare", comment: "Tooltip"))
+
+                // Colored type badge + picker
+                Menu {
+                    ForEach(songSectionTypes, id: \.self) { type in
+                        Button(songTypeLabel(type)) { section.type = type }
+                    }
+                } label: {
+                    Text(songTypeLabel(section.type))
+                        .font(.caption2.weight(.bold))
+                        .padding(.horizontal, 8).padding(.vertical, 3)
+                        .background(songTypeColor(section.type).opacity(0.2), in: Capsule())
+                        .foregroundStyle(songTypeColor(section.type))
+                }
+                .menuStyle(.borderlessButton).fixedSize()
+
+                TextField(String(localized: "Etichetă", comment: "Field"), text: $section.label)
+                    .textFieldStyle(.plain).font(.callout.weight(.medium))
+
+                Spacer()
+
+                Stepper("×\(section.repeatCount)", value: $section.repeatCount, in: 1...8)
+                    .controlSize(.mini).fixedSize()
+                    .help(String(localized: "De câte ori se cântă", comment: "Tooltip"))
+
+                Button { chordsOverride = !showChords } label: {
+                    Image(systemName: "music.note")
+                        .foregroundStyle(showChords ? Color.accentColor : Color.secondary)
+                }
+                .buttonStyle(.borderless)
+                .help(String(localized: "Acorduri inline [G]", comment: "Tooltip"))
+
+                Button(action: onMoveUp) { Image(systemName: "chevron.up") }.buttonStyle(.borderless)
+                Button(action: onMoveDown) { Image(systemName: "chevron.down") }.buttonStyle(.borderless)
+                Button(action: onDuplicate) { Image(systemName: "plus.square.on.square") }
+                    .buttonStyle(.borderless)
+                    .help(String(localized: "Duplică strofa", comment: "Tooltip"))
+                Button(role: .destructive, action: onDelete) { Image(systemName: "trash") }.buttonStyle(.borderless)
+            }
+
+            TextEditor(text: lyricsBinding)
+                .font(showChords ? .system(.body, design: .monospaced) : .body)
+                .frame(minHeight: 76)
+                .scrollContentBackground(.hidden)
+                .padding(6)
+                .background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: 6))
+
+            if showChords {
+                Text(String(localized: "Scrie acordurile între paranteze: [G]Mare ești [D]Tu", comment: "Hint"))
+                    .font(.system(size: 10)).foregroundStyle(.tertiary)
+            }
+        }
+        .padding(10)
+        .background(
+            isFocused ? songTypeColor(section.type).opacity(0.08) : Color.secondary.opacity(0.05),
+            in: RoundedRectangle(cornerRadius: 10)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(isFocused ? songTypeColor(section.type) : .clear, lineWidth: 1.5)
+        )
+        .overlay(alignment: .leading) {
+            RoundedRectangle(cornerRadius: 2)
+                .fill(songTypeColor(section.type))
+                .frame(width: 3)
+                .padding(.vertical, 10)
+        }
+        .contentShape(Rectangle())
+        .onTapGesture { onFocus() }
+        .dropDestination(for: String.self) { items, _ in
+            if let id = items.first { onDrop(id) }
+            return true
         }
     }
 }

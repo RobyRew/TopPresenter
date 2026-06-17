@@ -27,7 +27,7 @@
 - **Universal themes** — one theme snapshots the entire look of all presenters; portable `.tptheme` packages travel between machines with all media embedded
 - **Transparent output window** — invisible on the projector when idle; content fades in from transparency and back out
 - **Multi-window tabs** (⌘T) — different modules and Bible translations per tab, one shared output
-- **Multi-format import** — 6 Bible formats, OpenSong/OpenLyrics/PowerPoint songs, universal drag &amp; drop
+- **Multi-format import** — 6 Bible formats, 6 song formats (incl. the GOAT TopPresenter Song JSON with versions + chords), universal drag &amp; drop
 - **Resolution adaptive** — layouts are defined in percentages and fonts scale from a 1080p reference; any projector resolution, aspect ratio, or PPI just works
 
 ---
@@ -79,10 +79,14 @@ The design studio behind everything you see on screen:
 
 ### 🎵 Songs &amp; Lyrics
 
-- **4 import formats** — OpenSong XML, OpenLyrics XML, PowerPoint (PPTX &amp; PPT — sandbox-safe, in-process parsing)
-- Multi-select file/folder import with auto-detection; each PowerPoint slide becomes a verse with section detection (Verse, Chorus, Bridge)
-- **Section quick-jump tabs**, ← → navigation, live slide position (first/last/chorus aware)
-- **Export** as TopPresenter JSON, OpenLyrics XML, or Plain Text
+- **The GOAT format** — **TopPresenter Song JSON v2.0.0** is one file per song and a superset of every source: per-song versions, sections with **inline chords** (ChordPro positions) and **bilingual translation lines**, arrangement/play-order, section **repeat counts**, linked media, and rich metadata all round-trip through import → store → export.
+- **Multiple versions per song** — a song groups several renditions (e.g. 3 Romanian variants, an ES translation). Each version owns its own metadata (title shown, authors, language, key/capo/tempo, copyright, CCLI, songbook, style, themes, notes, repeat marker) and **inherits the original's by default**, with a per-version toggle to customize.
+- **6 import formats** — TopPresenter Song JSON, OpenSong XML, OpenLyrics XML (translations + chords), ChordPro, plain text, and PowerPoint (PPTX &amp; PPT — sandbox-safe, in-process parsing, with filename titles + chorus-reuse detection).
+- **Recursive folder import** for thousands of files, with progress, format auto-detection, and duplicate handling (add as new version / keep both / skip).
+- **Scalable browser** — list ⇄ grid with theme-rendered thumbnails, instant indexed search, and filters (collection, language, media).
+- **Song studio editor** — two-pane visual editor with a live theme-rendered preview, version tabs, color-coded section cards (drag-to-reorder, duplicate, ×N repeat, inline-chord mode), and per-version metadata.
+- **Rendered slide filmstrip** — sections auto-split to fit the screen (configurable lines/slide); click to project, double-click or ▶ to go live; bilingual + repeat markers (`/: :/`, `‖: :‖`, `|: :|`, `(×N)`, `bis/ter`) applied per the theme.
+- **Export** as TopPresenter Song JSON (one file per song or a whole folder), OpenLyrics XML, or Plain Text.
 
 ### 🖥 Presentation Output
 
@@ -127,7 +131,7 @@ The design studio behind everything you see on screen:
 | | Formats |
 |---|---|
 | **Bible import** | TopPresenter JSON · OSIS XML · Zefania XML · MySword SQLite · USFM · Unbound Bible |
-| **Song import** | OpenSong XML · OpenLyrics XML · PowerPoint (`.pptx`, `.ppt`) |
+| **Song import** | TopPresenter Song JSON · OpenSong XML · OpenLyrics XML · ChordPro (`.cho`, `.crd`, `.chordpro`) · Plain text (`.txt`) · PowerPoint (`.pptx`, `.ppt`) |
 | **Media** | Images (jpg, png, gif, heic, tiff, bmp, webp, svg) · Audio (mp3, wav, aac, m4a, flac, ogg, aiff) · Video (mp4, mov, avi, mkv, webm, m4v) |
 | **Themes** | `.tptheme` packages (theme.json + embedded media) |
 | **Export** | Bible: TopPresenter JSON, TXT, CSV · Songs: TopPresenter JSON, OpenLyrics, TXT · Themes: `.tptheme` |
@@ -149,7 +153,7 @@ It exports straight to **TopPresenter Bible JSON** — clean verse text plus red
 **Shipped**
 - [x] Native SwiftUI + SwiftData app — Bible, Songs, Slides, Media, Schedules
 - [x] Per-presenter theme engine: layouts, transitions, custom & media boxes, portable `.tptheme`
-- [x] 6 Bible + 3 song import formats; lossless TopPresenter Bible JSON (GOAT) round-trip
+- [x] 6 Bible + 6 song import formats; lossless TopPresenter Bible **and** Song JSON (GOAT) round-trip — songs carry versions, chords, bilingual lines, arrangement &amp; repeats
 - [x] Red-letter, footnotes, cross-references, headings, Strong's & morphology stored in the DB
 - [x] Three-column Bible reader (Books · Chapters · Verses) with language groups & canon badges
 - [x] Drag-and-drop batch import (files *and* folders, recursive); eBiblia exporter

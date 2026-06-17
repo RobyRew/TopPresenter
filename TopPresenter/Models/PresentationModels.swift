@@ -246,6 +246,14 @@ final class LiveContent {
     var heading: String = ""
     var gloss: String = ""
     var strongs: String = ""
+    /// Song metadata sources (populated for live song slides; "" otherwise).
+    var songAuthor: String = ""
+    var songCopyright: String = ""
+    var songCCLI: String = ""
+    var songbook: String = ""
+    var songStyle: String = ""
+    var songKey: String = ""
+    var songTempo: String = ""
     /// Position of this slide within its set (verse within song, slide within
     /// deck, item within schedule) — drives "show only on first/last slide".
     var slideIndex: Int = 0
@@ -281,12 +289,18 @@ final class LiveContent {
         isLive = false
         mainRuns = []
         clearRichSources()
+        clearSongMeta()
         slideIndex = 0
         slideCount = 1
     }
 
     private func clearRichSources() {
         footnote = ""; crossReference = ""; heading = ""; gloss = ""; strongs = ""
+    }
+
+    private func clearSongMeta() {
+        songAuthor = ""; songCopyright = ""; songCCLI = ""
+        songbook = ""; songStyle = ""; songKey = ""; songTempo = ""
     }
 
     func setBibleVerse(text: String, reference: String, translationName: String = "", runs: [VerseRun] = [],
@@ -308,7 +322,9 @@ final class LiveContent {
         self.slideCount = max(slideCount, 1)
     }
 
-    func setSongVerse(text: String, title: String, verseLabel: String, slideIndex: Int = 0, slideCount: Int = 1) {
+    func setSongVerse(text: String, title: String, verseLabel: String, slideIndex: Int = 0, slideCount: Int = 1,
+                      author: String = "", copyright: String = "", ccli: String = "",
+                      songbook: String = "", style: String = "", key: String = "", tempo: String = "") {
         self.mainText = text
         self.reference = title
         self.subtitle = verseLabel
@@ -316,6 +332,13 @@ final class LiveContent {
         self.contentType = .song
         self.mainRuns = []
         clearRichSources()
+        self.songAuthor = author
+        self.songCopyright = copyright
+        self.songCCLI = ccli
+        self.songbook = songbook
+        self.songStyle = style
+        self.songKey = key
+        self.songTempo = tempo
         self.slideIndex = slideIndex
         self.slideCount = max(slideCount, 1)
     }

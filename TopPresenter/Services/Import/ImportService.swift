@@ -34,10 +34,16 @@ final class ImportService {
     /// Registered Song importers. Add new importers here to support additional formats.
     private static let songImporters: [SupportedSongFormat: SongImporter] = {
         var importers: [SupportedSongFormat: SongImporter] = [:]
+        let topPresenterImporter = TopPresenterSongImporter()
+        importers[topPresenterImporter.format] = topPresenterImporter
         let openSongImporter = OpenSongImporter()
         importers[openSongImporter.format] = openSongImporter
         let openLyricsImporter = OpenLyricsImporter()
         importers[openLyricsImporter.format] = openLyricsImporter
+        let chordProImporter = ChordProImporter()
+        importers[chordProImporter.format] = chordProImporter
+        let plainTextImporter = PlainTextSongImporter()
+        importers[plainTextImporter.format] = plainTextImporter
         let powerPointImporter = PowerPointSongImporter()
         importers[powerPointImporter.format] = powerPointImporter
         return importers
@@ -504,59 +510,64 @@ final class ImportService {
         urls: [URL],
         collectionName: String,
         modelContext: ModelContext,
+        duplicateResolution: SongDuplicateResolution = .addAsVersion,
+        isCancelled: @escaping () -> Bool = { false },
         progressHandler: ((Double, String) -> Void)? = nil
     ) async -> SongBatchResult {
         var result = SongBatchResult()
 
-        // Expand directories into their files (flat, like before)
+        // Expand directories RECURSIVELY (subfolders included); keep the immediate parent for tagging.
         var fileURLs: [(url: URL, parent: URL?)] = []
         for url in urls {
-            let accessing = url.startAccessingSecurityScopedResource()
+            _ = url.startAccessingSecurityScopedResource()  // kept open until the function ends
             var isDirectory: ObjCBool = false
             if FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory),
                isDirectory.boolValue {
-                let contents = (try? FileManager.default.contentsOfDirectory(
-                    at: url, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles]
-                )) ?? []
-                for child in contents.sorted(by: { $0.lastPathComponent < $1.lastPathComponent }) {
-                    fileURLs.append((child, url))
-                }
-                if contents.isEmpty {
+                let files = recursiveSongFiles(in: url)
+                if files.isEmpty {
                     result.failures.append((url.lastPathComponent, String(localized: "Directorul este gol.", comment: "Import error")))
                 }
+                for f in files { fileURLs.append((f, f.deletingLastPathComponent())) }
             } else {
                 fileURLs.append((url, nil))
             }
-            if accessing { /* keep open until the end of this function */ }
         }
 
         guard !fileURLs.isEmpty else { return result }
 
-        // Find or create the collection lazily (only once something imports)
+        // Duplicate-detection index (normalized title → existing song), built from the collection.
+        var index: [String: Song] = [:]
+        var indexBuilt = false
         func collection() -> SongCollection {
             if let existing = result.collection { return existing }
             let descriptor = FetchDescriptor<SongCollection>(
                 predicate: #Predicate { $0.name == collectionName }
             )
+            let col: SongCollection
             if let found = (try? modelContext.fetch(descriptor))?.first {
-                result.collection = found
-                return found
+                col = found
+            } else {
+                col = SongCollection(name: collectionName, sourceFormat: "mixed")
+                modelContext.insert(col)
             }
-            let fresh = SongCollection(name: collectionName, sourceFormat: "mixed")
-            modelContext.insert(fresh)
-            result.collection = fresh
-            return fresh
+            result.collection = col
+            if !indexBuilt {
+                for s in col.songs { index[normalizedSongKey(s.title)] = s }
+                indexBuilt = true
+            }
+            return col
         }
 
-        for (index, item) in fileURLs.enumerated() {
+        for (offset, item) in fileURLs.enumerated() {
+            if isCancelled() { break }
             let name = item.url.lastPathComponent
             progressHandler?(
-                Double(index) / Double(fileURLs.count),
+                Double(offset) / Double(fileURLs.count),
                 String(localized: "Se importă \(name)…", comment: "Import progress")
             )
 
             guard let format = detectSongFormat(fileURL: item.url) else {
-                result.failures.append((name, String(localized: "Format necunoscut (acceptat: OpenSong/OpenLyrics XML, PPTX, PPT).", comment: "Import error")))
+                result.failures.append((name, String(localized: "Format necunoscut (acceptat: TopPresenter/OpenSong/OpenLyrics, ChordPro, TXT, PPTX, PPT).", comment: "Import error")))
                 continue
             }
             guard let importer = songImporters[format] else {
@@ -564,13 +575,34 @@ final class ImportService {
                 continue
             }
 
-            let accessing = item.url.startAccessingSecurityScopedResource()
-            defer { if accessing { item.url.stopAccessingSecurityScopedResource() } }
-
             do {
                 let parsed = try await importer.parse(fileURL: item.url)
-                _ = createSongFromResult(parsed, collection: collection(), modelContext: modelContext)
-                result.importedTitles.append(parsed.title)
+                let col = collection()
+                let key = normalizedSongKey(parsed.title)
+
+                func makeNew(updateIndex: Bool) {
+                    let song = createSongFromResult(parsed, collection: col, modelContext: modelContext)
+                    applyFolderTag(item.parent, to: song)
+                    if updateIndex { index[key] = song }
+                    result.importedTitles.append(parsed.title)
+                }
+
+                if let existing = index[key] {
+                    switch duplicateResolution {
+                    case .addAsVersion:
+                        appendVersions(from: parsed, to: existing)
+                        result.importedTitles.append(parsed.title)
+                    case .replace:
+                        modelContext.delete(existing)
+                        makeNew(updateIndex: true)
+                    case .keepBoth:
+                        makeNew(updateIndex: false)
+                    case .skip:
+                        break
+                    }
+                } else {
+                    makeNew(updateIndex: true)
+                }
             } catch {
                 result.failures.append((name, error.localizedDescription))
             }
@@ -583,6 +615,34 @@ final class ImportService {
         return result
     }
 
+    /// Recursively list regular files under a directory (subfolders included).
+    private static func recursiveSongFiles(in dir: URL) -> [URL] {
+        var out: [URL] = []
+        let keys: Set<URLResourceKey> = [.isRegularFileKey]
+        if let en = FileManager.default.enumerator(at: dir, includingPropertiesForKeys: Array(keys), options: [.skipsHiddenFiles]) {
+            for case let f as URL in en {
+                if (try? f.resourceValues(forKeys: keys))?.isRegularFile == true {
+                    out.append(f)
+                }
+            }
+        }
+        return out.sorted { $0.path < $1.path }
+    }
+
+    /// Tag a song with its immediate folder name (folder structure → searchable tags/themes).
+    private static func applyFolderTag(_ parent: URL?, to song: Song) {
+        guard let parent else { return }
+        let folder = parent.lastPathComponent
+        guard !folder.isEmpty else { return }
+        var themes = song.themes
+        if !themes.contains(folder) { themes.append(folder); song.themes = themes }
+        if song.tags.isEmpty {
+            song.tags = folder
+        } else if !song.tags.contains(folder) {
+            song.tags += ", \(folder)"
+        }
+    }
+
     /// Auto-detect song format from file content
     static func detectSongFormat(fileURL: URL) -> SupportedSongFormat? {
         let ext = fileURL.pathExtension.lowercased()
@@ -591,14 +651,32 @@ final class ImportService {
         if ext == "pptx" || ext == "ppt" {
             return .powerPoint
         }
+        // ChordPro by extension
+        if ["cho", "crd", "chordpro", "chopro"].contains(ext) {
+            return .chordPro
+        }
 
         guard let data = try? Data(contentsOf: fileURL, options: .mappedIfSafe) else { return nil }
         guard let content = String(data: data.prefix(2000), encoding: .utf8) else { return nil }
 
+        // TopPresenter Song JSON (single-song doc or legacy bundle)
+        if ext == "json" || content.contains("\"format\"") {
+            if content.contains("TopPresenter Song") || content.contains("\"versions\"") || content.contains("\"verses\"") {
+                return .topPresenterJSON
+            }
+        }
         if content.contains("<song") && (content.contains("openlyrics") || content.contains("OpenLyrics")) {
             return .openLyricsXML
         } else if content.contains("<song") && (content.contains("<lyrics>") || content.contains("<title>")) {
             return .openSongXML
+        }
+        // ChordPro by content (directives)
+        if content.contains("{title:") || content.contains("{t:") || content.contains("{start_of_") {
+            return .chordPro
+        }
+        // Plain text fallback
+        if ext == "txt" {
+            return .plainText
         }
 
         return nil
@@ -622,17 +700,146 @@ final class ImportService {
             tags: result.tags
         )
         song.collection = collection
-
-        for importVerse in result.verses {
-            let verse = SongVerse(
-                label: importVerse.label,
-                verseType: importVerse.verseType,
-                text: importVerse.text,
-                order: importVerse.order
-            )
-            verse.song = song
+        song.titles = result.titles
+        song.language = result.language
+        song.themes = result.themes
+        song.style = result.style
+        song.songbookNumber = result.songbook?.number ?? ""
+        song.authorWords = result.authorWords
+        song.authorMusic = result.authorMusic
+        song.authorTranslation = result.authorTranslation
+        song.notes = result.notes
+        song.media = result.media.map {
+            SongMediaRef(role: $0.role, kind: $0.kind, filename: $0.filename, bookmark: $0.bookmark)
         }
+
+        if let sb = result.songbook, !sb.name.isEmpty {
+            song.songbook = upsertSongbook(sb, modelContext: modelContext)
+        }
+
+        // Build the rich version graph and attach it to the song.
+        let builtVersions = makeVersions(from: result)
+        for v in builtVersions { v.song = song }
+        let activeVersion = builtVersions.first
+
+        // Flatten the active version into the SongVerse cache (legacy presenter / search / schedule).
+        var lyrics = ""
+        if let active = activeVersion {
+            for (i, sec) in active.sortedSections.enumerated() {
+                let verse = SongVerse(label: sec.label, verseType: sec.type, text: sec.plainText, order: i)
+                verse.song = song
+                lyrics += " " + sec.plainText
+            }
+        }
+        song.searchText = Song.makeSearchText(
+            title: song.title, titles: song.titles, author: song.author,
+            authorWords: song.authorWords, songNumber: song.songNumber,
+            songbookNumber: song.songbookNumber, lyrics: lyrics
+        )
 
         return song
     }
+
+    /// Reuse an existing Songbook with the same name, or create and insert a new one.
+    private static func upsertSongbook(_ sb: SongImportSongbook, modelContext: ModelContext) -> Songbook {
+        let name = sb.name
+        let descriptor = FetchDescriptor<Songbook>(predicate: #Predicate { $0.name == name })
+        if let existing = try? modelContext.fetch(descriptor).first {
+            return existing
+        }
+        let book = Songbook(name: sb.name, publisher: sb.publisher, language: sb.language, year: sb.year)
+        modelContext.insert(book)
+        return book
+    }
+
+    /// Build the rich version graph from an import result (not yet attached to a song).
+    /// When the importer only produced flat verses, synthesize a single "Original" version.
+    private static func makeVersions(from result: SongImportResult) -> [SongVersion] {
+        let importVersions: [SongImportVersion]
+        if !result.versions.isEmpty {
+            importVersions = result.versions
+        } else {
+            let sections = result.verses.map { v in
+                SongImportSection(
+                    sectionKey: v.label.isEmpty ? "s\(v.order)" : v.label,
+                    type: v.verseType,
+                    label: v.label,
+                    order: v.order,
+                    lines: v.text.components(separatedBy: "\n").map { SongLine(text: $0) }
+                )
+            }
+            importVersions = [SongImportVersion(name: "Original", key: result.key, tempo: result.tempo, sections: sections)]
+        }
+
+        return importVersions.enumerated().map { vi, iv in
+            let version = SongVersion(
+                name: iv.name.isEmpty ? "Versiunea \(vi + 1)" : iv.name,
+                order: vi,
+                language: iv.language,
+                key: iv.key,
+                capo: iv.capo,
+                tempo: iv.tempo,
+                timeSignature: iv.timeSignature,
+                copyright: iv.copyright,
+                ccliNumber: iv.ccliNumber,
+                source: iv.source
+            )
+            version.displayTitle = iv.displayTitle
+            version.author = iv.author
+            version.titles = iv.titles
+            version.authorWords = iv.authorWords
+            version.authorMusic = iv.authorMusic
+            version.authorTranslation = iv.authorTranslation
+            version.style = iv.style
+            version.songbookNumber = iv.songbookNumber
+            version.themes = iv.themes
+            version.notes = iv.notes
+            version.songbookName = iv.songbookName
+            version.repeatStyle = iv.repeatStyle
+            version.overridesMetadata = iv.overridesMetadata
+            version.arrangement = iv.arrangement
+            for sec in iv.sections.sorted(by: { $0.order < $1.order }) {
+                let section = SongSection(
+                    sectionKey: sec.sectionKey, type: sec.type, label: sec.label,
+                    order: sec.order, repeatCount: sec.repeatCount, lines: sec.lines
+                )
+                section.version = version
+            }
+            return version
+        }
+    }
+
+    /// Append an import result as additional version(s) of an existing song (the user's
+    /// "a song can have 3 versions" case). The active/first version — and therefore the
+    /// flattened SongVerse cache — is unchanged; only searchText grows.
+    private static func appendVersions(from result: SongImportResult, to song: Song) {
+        let newVersions = makeVersions(from: result)
+        let base = song.versions.count
+        var extraLyrics = ""
+        for (i, version) in newVersions.enumerated() {
+            version.order = base + i
+            if version.name.isEmpty || version.name == "Original" {
+                version.name = "Versiunea \(base + i + 1)"
+            }
+            version.song = song
+            for sec in version.sortedSections { extraLyrics += " " + sec.plainText }
+        }
+        if !extraLyrics.isEmpty { song.searchText += " " + extraLyrics.lowercased() }
+    }
+
+    /// Normalized key for duplicate detection (diacritic- and case-insensitive, whitespace-collapsed).
+    static func normalizedSongKey(_ title: String) -> String {
+        title.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+            .components(separatedBy: .whitespacesAndNewlines)
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+    }
+}
+
+/// What to do when an imported song matches one already in the library.
+enum SongDuplicateResolution {
+    case addAsVersion   // append the import as a new version of the existing song
+    case replace        // delete the existing song, import fresh
+    case keepBoth       // import as a separate song
+    case skip           // ignore the import
 }

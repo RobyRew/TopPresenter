@@ -1149,12 +1149,16 @@ final class PresentationManager {
         var supportsAffixes: Bool { sourceRaw != "static" && sourceRaw != "auto" }
 
         func resolvedText(main: String, reference: String, translation: String, subtitle: String, now: Date = .now, slideNumber: String = "",
-                          footnote: String = "", crossReference: String = "", heading: String = "", gloss: String = "", strongs: String = "") -> String {
+                          footnote: String = "", crossReference: String = "", heading: String = "", gloss: String = "", strongs: String = "",
+                          songAuthor: String = "", songCopyright: String = "", songCCLI: String = "",
+                          songbook: String = "", songStyle: String = "", songKey: String = "", songTempo: String = "") -> String {
             let value = PresentationManager.resolveBoxSource(
                 sourceRaw, format: sourceFormatRaw, autoValue: text, staticText: text,
                 main: main, reference: reference, translation: translation, subtitle: subtitle,
                 now: now, slideNumber: slideNumber,
-                footnote: footnote, crossReference: crossReference, heading: heading, gloss: gloss, strongs: strongs
+                footnote: footnote, crossReference: crossReference, heading: heading, gloss: gloss, strongs: strongs,
+                songAuthor: songAuthor, songCopyright: songCopyright, songCCLI: songCCLI,
+                songbook: songbook, songStyle: songStyle, songKey: songKey, songTempo: songTempo
             )
             // Wrap a non-empty live value with the static prefix/suffix.
             guard supportsAffixes, !value.isEmpty, !(prefix.isEmpty && suffix.isEmpty) else { return value }
@@ -1167,7 +1171,9 @@ final class PresentationManager {
                 translation: live.translationName, subtitle: live.subtitle,
                 now: now, slideNumber: live.slideNumberText,
                 footnote: live.footnote, crossReference: live.crossReference,
-                heading: live.heading, gloss: live.gloss, strongs: live.strongs
+                heading: live.heading, gloss: live.gloss, strongs: live.strongs,
+                songAuthor: live.songAuthor, songCopyright: live.songCopyright, songCCLI: live.songCCLI,
+                songbook: live.songbook, songStyle: live.songStyle, songKey: live.songKey, songTempo: live.songTempo
             )
         }
 
@@ -1390,7 +1396,9 @@ final class PresentationManager {
         main: String, reference: String, translation: String, subtitle: String,
         now: Date = .now, slideNumber: String = "",
         footnote: String = "", crossReference: String = "", heading: String = "",
-        gloss: String = "", strongs: String = ""
+        gloss: String = "", strongs: String = "",
+        songAuthor: String = "", songCopyright: String = "", songCCLI: String = "",
+        songbook: String = "", songStyle: String = "", songKey: String = "", songTempo: String = ""
     ) -> String {
         switch raw {
         case "mainText": return main
@@ -1402,6 +1410,13 @@ final class PresentationManager {
         case "heading": return heading
         case "gloss": return gloss
         case "strongs": return strongs
+        case "author": return songAuthor
+        case "copyright": return songCopyright
+        case "ccli": return songCCLI
+        case "songbook": return songbook
+        case "style": return songStyle
+        case "songKey": return songKey
+        case "songTempo": return songTempo
         case "static": return staticText
         case "date", "time": return formattedClock(source: raw, format: format, now: now)
         case "slideNumber": return slideNumber
@@ -1419,6 +1434,13 @@ final class PresentationManager {
                 ("mainText", String(localized: "Versuri (live)", comment: "Box source")),
                 ("reference", String(localized: "Titlu cântec (live)", comment: "Box source")),
                 ("subtitle", String(localized: "Etichetă strofă (live)", comment: "Box source")),
+                ("author", String(localized: "Autor (live)", comment: "Box source")),
+                ("copyright", String(localized: "Copyright (live)", comment: "Box source")),
+                ("ccli", String(localized: "Număr CCLI (live)", comment: "Box source")),
+                ("songbook", String(localized: "Carte de cântări (live)", comment: "Box source")),
+                ("style", String(localized: "Stil (live)", comment: "Box source")),
+                ("songKey", String(localized: "Tonalitate (live)", comment: "Box source")),
+                ("songTempo", String(localized: "Tempo (live)", comment: "Box source")),
             ]
         case "text":
             live = [
@@ -2548,10 +2570,30 @@ final class PresentationManager {
         }
     }
 
-    func showSongVerse(text: String, title: String, verseLabel: String, slideIndex: Int = 0, slideCount: Int = 1) {
+    func showSongVerse(text: String, title: String, verseLabel: String, slideIndex: Int = 0, slideCount: Int = 1,
+                       song: Song? = nil, version: SongVersion? = nil) {
         guard !isFrozen else { return }
+        // A version uses its own metadata only when it overrides; otherwise it inherits the
+        // original (first) version's. Song-level fields are the final fallback.
+        let meta = (version?.overridesMetadata == true) ? version : (song?.activeVersion ?? version)
+        func pick(_ versionValue: String?, _ songValue: String?) -> String {
+            if let v = versionValue, !v.isEmpty { return v }
+            return songValue ?? ""
+        }
         presentContent { [self] in
-            liveContent.setSongVerse(text: text, title: title, verseLabel: verseLabel, slideIndex: slideIndex, slideCount: slideCount)
+            liveContent.setSongVerse(
+                text: text,
+                title: pick(meta?.displayTitle, title),
+                verseLabel: verseLabel,
+                slideIndex: slideIndex, slideCount: slideCount,
+                author: pick(meta?.author, song?.author),
+                copyright: pick(meta?.copyright, song?.copyright),
+                ccli: pick(meta?.ccliNumber, song?.ccliNumber),
+                songbook: pick(meta?.songbookName, song?.songbook?.name),
+                style: pick(meta?.style, song?.style),
+                key: pick(meta?.key, song?.key),
+                tempo: pick(meta?.tempo, song?.tempo)
+            )
             lastLiveProfileKey = "song"
             liveContent.isLive = true
             isBlackScreen = false
@@ -2817,7 +2859,10 @@ final class PresentationManager {
             autoValue: autoValue,
             staticText: staticText(for: section, in: key),
             main: main, reference: reference, translation: translation, subtitle: subtitle,
-            now: now, slideNumber: slideNumber
+            now: now, slideNumber: slideNumber,
+            songAuthor: liveContent.songAuthor, songCopyright: liveContent.songCopyright,
+            songCCLI: liveContent.songCCLI, songbook: liveContent.songbook,
+            songStyle: liveContent.songStyle, songKey: liveContent.songKey, songTempo: liveContent.songTempo
         )
     }
 

@@ -372,23 +372,31 @@ final class PowerPointSongImporter: SongImporter {
     }
 
     /// Build a SongImportResult from extracted slide data.
+    ///
+    /// PowerPoint has no real structure, so each slide becomes a section. We additionally:
+    ///  - prefer the file name as the song title (slide 1 is usually a lyric, not a title);
+    ///  - collapse identical repeated slides into a single section referenced multiple times
+    ///    in the version `arrangement` (a slide repeated ≥2× is treated as the chorus);
+    ///  - guess the language from the lyrics' diacritics.
     private func buildSongResult(
         fileName: String,
         presentationTitle: String,
         slides: [(title: String, body: String)]
     ) -> SongImportResult {
-        // Use presentation title, or first slide title, or filename
         let songTitle: String
         if !presentationTitle.isEmpty {
             songTitle = presentationTitle
-        } else if let firstSlide = slides.first, !firstSlide.title.isEmpty {
-            songTitle = firstSlide.title
-        } else {
+        } else if !fileName.isEmpty {
             songTitle = fileName
+        } else {
+            songTitle = slides.first?.title ?? "Untitled"
         }
 
-        var verses: [SongImportVerse] = []
-        for (index, slide) in slides.enumerated() {
+        // Collect non-empty slide units.
+        struct Unit { let text: String; let normKey: String; let labeledType: String? }
+        var units: [Unit] = []
+        var allText = ""
+        for slide in slides {
             let fullText: String
             if !slide.title.isEmpty && !slide.body.isEmpty {
                 fullText = slide.title + "\n" + slide.body
@@ -397,37 +405,48 @@ final class PowerPointSongImporter: SongImporter {
             } else {
                 fullText = slide.body
             }
-
             guard !fullText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { continue }
+            allText += " " + fullText
+            units.append(Unit(text: fullText, normKey: normalize(fullText), labeledType: labeledType(slide.title)))
+        }
 
-            // Try to detect verse type from the text or label
-            let label: String
-            let verseType: String
-            let lowerTitle = slide.title.lowercased()
+        var repeatCount: [String: Int] = [:]
+        for unit in units { repeatCount[unit.normKey, default: 0] += 1 }
 
-            if lowerTitle.hasPrefix("chorus") || lowerTitle.hasPrefix("refren") || lowerTitle.hasPrefix("cor") {
-                label = "Chorus"
-                verseType = "chorus"
-            } else if lowerTitle.hasPrefix("bridge") || lowerTitle.hasPrefix("punte") {
-                label = "Bridge"
-                verseType = "bridge"
-            } else if lowerTitle.hasPrefix("pre-chorus") || lowerTitle.hasPrefix("pre chorus") {
-                label = "Pre-Chorus"
-                verseType = "pre-chorus"
-            } else if lowerTitle.hasPrefix("ending") || lowerTitle.hasPrefix("final") {
-                label = "Ending"
-                verseType = "ending"
-            } else {
-                label = "Slide \(index + 1)"
-                verseType = "verse"
+        var sections: [SongImportSection] = []
+        var keyByNorm: [String: String] = [:]
+        var arrangement: [String] = []
+        var counters: [String: Int] = [:]
+
+        for unit in units {
+            if let existing = keyByNorm[unit.normKey] {
+                arrangement.append(existing)   // repeated slide → reuse the section
+                continue
             }
+            let type: String
+            if let labeled = unit.labeledType {
+                type = labeled
+            } else if (repeatCount[unit.normKey] ?? 0) >= 2 {
+                type = "chorus"                // an unlabeled slide that repeats is the chorus
+            } else {
+                type = "verse"
+            }
+            let (key, label) = nextKeyLabel(type, &counters)
+            let lines = unit.text.components(separatedBy: "\n")
+                .map { $0.trimmingCharacters(in: CharacterSet(charactersIn: "\r")) }
+                .map { SongLine(text: $0) }
+            sections.append(SongImportSection(sectionKey: key, type: type, label: label, order: sections.count, lines: lines))
+            keyByNorm[unit.normKey] = key
+            arrangement.append(key)
+        }
 
-            verses.append(SongImportVerse(
-                label: label,
-                verseType: verseType,
-                text: fullText,
-                order: index
-            ))
+        // Only record an arrangement when slides actually repeat (otherwise it's just section order).
+        let finalArrangement = arrangement.count > sections.count ? arrangement : []
+        let version = SongImportVersion(name: "Original", arrangement: finalArrangement, sections: sections)
+
+        let flatVerses = sections.enumerated().map { idx, sec in
+            SongImportVerse(label: sec.label, verseType: sec.type,
+                            text: sec.lines.map { $0.text }.joined(separator: "\n"), order: idx)
         }
 
         return SongImportResult(
@@ -439,8 +458,47 @@ final class PowerPointSongImporter: SongImporter {
             tempo: "",
             songNumber: "",
             tags: "powerpoint",
-            verses: verses
+            verses: flatVerses,
+            language: guessLanguage(allText),
+            versions: [version]
         )
+    }
+
+    private func normalize(_ text: String) -> String {
+        text.lowercased()
+            .components(separatedBy: .whitespacesAndNewlines)
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+    }
+
+    private func labeledType(_ title: String) -> String? {
+        let t = title.lowercased()
+        if t.hasPrefix("chorus") || t.hasPrefix("refren") || t.hasPrefix("cor") { return "chorus" }
+        if t.hasPrefix("bridge") || t.hasPrefix("punte") { return "bridge" }
+        if t.hasPrefix("pre-chorus") || t.hasPrefix("pre chorus") { return "prechorus" }
+        if t.hasPrefix("ending") || t.hasPrefix("final") { return "ending" }
+        return nil
+    }
+
+    private func nextKeyLabel(_ type: String, _ counters: inout [String: Int]) -> (key: String, label: String) {
+        let n = (counters[type] ?? 0) + 1
+        counters[type] = n
+        switch type {
+        case "chorus": return (n == 1 ? "c" : "c\(n)", n == 1 ? "Chorus" : "Chorus \(n)")
+        case "bridge": return ("b\(n)", n == 1 ? "Bridge" : "Bridge \(n)")
+        case "prechorus": return ("p\(n)", "Pre-Chorus")
+        case "ending": return ("e", "Ending")
+        default: return ("v\(n)", "Verse \(n)")
+        }
+    }
+
+    private func guessLanguage(_ text: String) -> String {
+        let lower = text.lowercased()
+        let roDiacritics = lower.reduce(0) { "ăâîșț".contains($1) ? $0 + 1 : $0 }
+        let esMarks = lower.reduce(0) { "ñ¿¡".contains($1) ? $0 + 1 : $0 }
+        if roDiacritics >= 3 { return "ro" }
+        if esMarks >= 1 { return "es" }
+        return ""
     }
 }
 

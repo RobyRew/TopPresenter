@@ -19,11 +19,15 @@ struct SongsPreviewPanel: View {
 
             Divider()
 
-            // Preview display — previews the selected song verse before it goes live
+            // Rendered preview of the slide selected in the filmstrip (falls back to the verse).
             PresentationPreviewCard(formatHint: "song", pendingContent: .init(
-                text: libraryManager.selectedSongVerse?.text ?? "",
+                text: libraryManager.songSlideText.isEmpty
+                    ? (libraryManager.selectedSongVerse?.text ?? "")
+                    : libraryManager.songSlideText,
                 reference: libraryManager.selectedSong?.title ?? "",
-                subtitle: libraryManager.selectedSongVerse?.label ?? ""
+                subtitle: libraryManager.songSlideLabel.isEmpty
+                    ? (libraryManager.selectedSongVerse?.label ?? "")
+                    : libraryManager.songSlideLabel
             ))
             .padding()
 
@@ -51,7 +55,10 @@ struct SongsPreviewPanel: View {
                 Divider()
             }
 
-            Spacer()
+            // Song + output quick settings (parity with the Bible presenter sidebar)
+            StyleQuickSettings(sections: [.songOptions, .output])
+
+            Spacer(minLength: 0)
 
             Divider()
 
@@ -125,34 +132,32 @@ struct SongVerseControlsBar: View {
                 .disabled(!canNavigate(direction: -1))
                 .keyboardShortcut(.leftArrow, modifiers: [])
 
-                // Show / Hide toggle
+                // Show (explicit) — projects the selected slide/verse
                 Button {
-                    if isLive {
-                        pm.clearOutput()
-                    } else if let verse = currentVerse, let song = currentSong {
-                        pm.showSongVerse(
-                            text: verse.text,
-                            title: song.title,
-                            verseLabel: verse.label,
-                            slideIndex: currentIndex ?? 0,
-                            slideCount: sortedVerses.count
-                        )
-                    }
+                    showCurrent()
                 } label: {
-                    Label(
-                        isLive
-                            ? String(localized: "Hide", comment: "Control button")
-                            : String(localized: "Show", comment: "Control button"),
-                        systemImage: isLive ? "eye.slash.fill" : "play.fill"
-                    )
-                    .font(.body.weight(.semibold))
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 36)
+                    Label(String(localized: "Show", comment: "Control button"), systemImage: "play.fill")
+                        .font(.body.weight(.semibold))
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 36)
                 }
                 .buttonStyle(.borderedProminent)
-                .tint(isLive ? .orange : .accentColor)
+                .tint(.accentColor)
                 .keyboardShortcut(.return, modifiers: [])
-                .disabled(!isLive && currentVerse == nil)
+                .disabled(currentVerse == nil && libraryManager.songSlideText.isEmpty)
+
+                // Hide (explicit) — blanks the output
+                Button {
+                    pm.clearOutput()
+                } label: {
+                    Label(String(localized: "Hide", comment: "Control button"), systemImage: "eye.slash.fill")
+                        .font(.body.weight(.semibold))
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 36)
+                }
+                .buttonStyle(.bordered)
+                .tint(.orange)
+                .disabled(!isLive)
 
                 // → Next verse section
                 Button {
@@ -180,7 +185,8 @@ struct SongVerseControlsBar: View {
                                         title: song.title,
                                         verseLabel: verse.label,
                                         slideIndex: sortedVerses.firstIndex(where: { $0.id == verse.id }) ?? 0,
-                                        slideCount: sortedVerses.count
+                                        slideCount: sortedVerses.count,
+                                        song: song, version: libraryManager.selectedSongVersion
                                     )
                                 }
                             } label: {
@@ -206,6 +212,24 @@ struct SongVerseControlsBar: View {
         }
     }
 
+    private func showCurrent() {
+        guard let song = currentSong else { return }
+        if !libraryManager.songSlideText.isEmpty {
+            pm.showSongVerse(
+                text: libraryManager.songSlideText, title: song.title,
+                verseLabel: libraryManager.songSlideLabel,
+                slideIndex: libraryManager.songSlideIndex, slideCount: libraryManager.songSlideCount,
+                song: song, version: libraryManager.selectedSongVersion
+            )
+        } else if let verse = currentVerse {
+            pm.showSongVerse(
+                text: verse.text, title: song.title, verseLabel: verse.label,
+                slideIndex: currentIndex ?? 0, slideCount: sortedVerses.count,
+                song: song, version: libraryManager.selectedSongVersion
+            )
+        }
+    }
+
     private func canNavigate(direction: Int) -> Bool {
         guard let idx = currentIndex else { return false }
         let newIdx = idx + direction
@@ -222,7 +246,8 @@ struct SongVerseControlsBar: View {
         if wasLive, let song = currentSong {
             pm.showSongVerse(
                 text: verse.text, title: song.title, verseLabel: verse.label,
-                slideIndex: newIdx, slideCount: sortedVerses.count
+                slideIndex: newIdx, slideCount: sortedVerses.count,
+                song: song, version: libraryManager.selectedSongVersion
             )
         }
     }

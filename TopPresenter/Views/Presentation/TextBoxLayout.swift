@@ -1633,7 +1633,6 @@ struct LayoutEditorSheet: View {
         }
     }
 
-    @ViewBuilder
     private func sampleBoxText(
         _ text: String,
         style: PresentationManager.ResolvedBoxStyle,
