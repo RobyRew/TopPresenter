@@ -25,6 +25,31 @@ struct MainControlView: View {
     @State private var showLayoutEditor = false
     @State private var droppedFiles: [PendingImportFile] = []
     @State private var isDragTargeted = false
+    // Per-tab name: empty = automatic (derived from the active section/module).
+    @SceneStorage("tabCustomName") private var tabCustomName: String = ""
+    @State private var showRenameTab = false
+    @State private var renameDraft = ""
+
+    /// Automatic tab title from the current section + selection.
+    private var autoTabTitle: String {
+        switch appState.selectedSidebarItem {
+        case .bible:
+            if let m = libraryManager.selectedBibleModule {
+                return m.abbreviation.isEmpty ? m.name : m.abbreviation
+            }
+            return String(localized: "Bible", comment: "Tab title")
+        case .songs:
+            return libraryManager.selectedSongCollection?.name
+                ?? String(localized: "Songs", comment: "Tab title")
+        default:
+            return appState.selectedSidebarItem.localizedName
+        }
+    }
+
+    /// The tab/window title: custom name if set, otherwise automatic.
+    private var tabTitle: String {
+        tabCustomName.isEmpty ? autoTabTitle : tabCustomName
+    }
 
     var body: some View {
         @Bindable var state = appState
@@ -153,7 +178,8 @@ struct MainControlView: View {
                     .frame(minWidth: 300, maxWidth: 400)
             }
         }
-        .navigationTitle("")
+        .navigationTitle(tabTitle)
+        .navigationSubtitle(tabCustomName.isEmpty ? "" : autoTabTitle)
         .toolbar {
             bibleToolbarContent
             songToolbarContent
@@ -161,8 +187,29 @@ struct MainControlView: View {
             scheduleToolbarContent
             customSlidesToolbarContent
             presentationToolbarContent
+            ToolbarItem(placement: .navigation) {
+                Button {
+                    renameDraft = tabCustomName
+                    showRenameTab = true
+                } label: {
+                    Label(String(localized: "Rename Tab", comment: "Toolbar"), systemImage: "character.cursor.ibeam")
+                }
+                .help(String(localized: "Name this tab", comment: "Toolbar tooltip"))
+            }
         }
         .toolbarRole(.editor)
+        .alert(String(localized: "Name this tab", comment: "Alert title"), isPresented: $showRenameTab) {
+            TextField(String(localized: "Tab name", comment: "Field"), text: $renameDraft)
+            Button(String(localized: "Save", comment: "Button")) {
+                tabCustomName = renameDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+            Button(String(localized: "Use automatic name", comment: "Button"), role: .destructive) {
+                tabCustomName = ""
+            }
+            Button(String(localized: "Cancel", comment: "Button"), role: .cancel) { }
+        } message: {
+            Text(String(localized: "Leave empty (Use automatic name) to track the section and translation.", comment: "Alert message"))
+        }
     }
 
     // MARK: - Drag & Drop

@@ -980,7 +980,7 @@ struct BibleImportSheet: View {
             VStack(spacing: 4) {
                 Text(String(localized: "Import Bible", comment: "Sheet title"))
                     .font(.title2.bold())
-                Text(String(localized: "Drop files or folders, or click to browse. Folders are scanned — every Bible inside is imported.", comment: "Import subtitle"))
+                Text(String(localized: "Drop files or folders, or click to browse. Folders (and subfolders) are scanned — every Bible and song inside is imported.", comment: "Import subtitle"))
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
@@ -1275,7 +1275,9 @@ struct BibleImportSheet: View {
     private func handleSelectedURLs(_ urls: [URL]) {
         guard !urls.isEmpty else { return }
         let expanded = DragDropImportHandler.expandToImportableFiles(urls)
-        if expanded.count == 1, let url = expanded.first {
+        // A single Bible file → inline single-import flow (with format override).
+        if expanded.count == 1, let url = expanded.first,
+           case .bible = DragDropImportHandler.classify(url) {
             selectedFileURL = url
             if let detected = ImportService.detectBibleFormat(fileURL: url) {
                 selectedFormat = detected; autoDetected = true
@@ -1284,6 +1286,9 @@ struct BibleImportSheet: View {
             }
             return
         }
+        // Anything else — multiple files, folders, or a folder/tree that mixes
+        // Bibles with songs (and media) — goes to batch import, which scans every
+        // subfolder and imports each file by its detected kind.
         let pending = DragDropImportHandler.classifyExpanded(urls)
         guard !pending.isEmpty else {
             appState.showError(

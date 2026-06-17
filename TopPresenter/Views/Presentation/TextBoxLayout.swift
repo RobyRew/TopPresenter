@@ -1552,6 +1552,22 @@ struct LayoutEditorSheet: View {
         return String(localized: "Strofa 1", comment: "Layout editor sample subtitle")
     }
 
+    /// Red-letter runs for the verse box on the editor canvas, so the Cuvintele
+    /// lui Isus color is visible while editing. Uses real runs from the live/
+    /// selected verse; for the default placeholder (John 3:16 — Jesus speaking)
+    /// it colors the whole sample.
+    private var sampleRuns: [VerseRun] {
+        guard pm.activeProfileKey == "bible", pm.wocStyleEnabled else { return [] }
+        if liveMatchesProfile, pm.liveContent.mainRuns.contains(where: { $0.kind == "woc" }) {
+            return pm.liveContent.mainRuns
+        }
+        if !libraryManager.selectedVerses.isEmpty {
+            let runs = libraryManager.selectedVersesRuns
+            return runs.contains(where: { $0.kind == "woc" }) ? runs : []
+        }
+        return [VerseRun(text: sampleVerse, kind: "woc")]
+    }
+
     @ViewBuilder
     private func sampleContent(size: CGSize) -> some View {
         let targetScale = pm.targetFontScale
@@ -1588,7 +1604,8 @@ struct LayoutEditorSheet: View {
                                     lineSpacing: style.lineSpacing
                                   ) * canvasScale
                                 : nil
-                            sampleBoxText(text, style: style, rect: rect, fontScale: fontScale, fittedSize: fitted)
+                            sampleBoxText(text, style: style, rect: rect, fontScale: fontScale, fittedSize: fitted,
+                                          runs: section == .verseContent ? sampleRuns : [])
                         }
                     }
                 case .custom(let id):
@@ -1621,12 +1638,18 @@ struct LayoutEditorSheet: View {
         _ text: String,
         style: PresentationManager.ResolvedBoxStyle,
         rect: CGRect, fontScale: CGFloat,
-        fittedSize: CGFloat?
+        fittedSize: CGFloat?,
+        runs: [VerseRun] = []
     ) -> some View {
         let size = fittedSize ?? CGFloat(style.fontSize) * fontScale
-        Text(style.display(text))
+        let composed: Text = runs.contains(where: { $0.kind == "woc" })
+            ? runs.reduce(Text("")) { acc, run in
+                let c = (run.kind == "woc") ? pm.wocColor : style.color
+                return acc + Text(style.display(run.text)).foregroundColor(c.opacity(style.opacity))
+              }
+            : Text(style.display(text)).foregroundColor(style.color.opacity(style.opacity))
+        return composed
             .font(style.font(at: size))
-            .foregroundStyle(style.color.opacity(style.opacity))
             .multilineTextAlignment(style.hAlign)
             .lineSpacing(style.lineSpacing * size * 0.1)
             .tracking(style.tracking * fontScale)

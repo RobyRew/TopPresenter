@@ -235,6 +235,38 @@ struct TopPresenterImporterTests {
     }
 }
 
+// MARK: - Recursive folder import
+
+struct BibleFolderImportTests {
+    private func writeBible(_ url: URL) throws {
+        let json: [String: Any] = ["format": "TopPresenter Bible", "translation": ["code": "T"], "books": []]
+        try JSONSerialization.data(withJSONObject: json).write(to: url)
+    }
+
+    @Test func recursivelyFindsBiblesInFolderAndSubfolders() throws {
+        let fm = FileManager.default
+        let root = fm.temporaryDirectory.appendingPathComponent("tp_bibfolder_\(UUID().uuidString)")
+        let lang1 = root.appendingPathComponent("Romana")
+        let lang2deep = root.appendingPathComponent("English/extra")   // two levels deep
+        try fm.createDirectory(at: lang1, withIntermediateDirectories: true)
+        try fm.createDirectory(at: lang2deep, withIntermediateDirectories: true)
+        defer { try? fm.removeItem(at: root) }
+
+        try writeBible(lang1.appendingPathComponent("A.json"))
+        try writeBible(lang1.appendingPathComponent("B.json"))
+        try writeBible(lang2deep.appendingPathComponent("C.json"))     // nested subfolder
+        try "not a bible".data(using: .utf8)!.write(to: root.appendingPathComponent("readme.txt"))
+
+        // Picking the ROOT folder finds every Bible at any depth, ignoring junk.
+        let expanded = DragDropImportHandler.expandToImportableFiles([root])
+        #expect(expanded.filter { $0.pathExtension == "json" }.count == 3)
+
+        let pending = DragDropImportHandler.classifyExpanded([root])
+        let bibles = pending.filter { if case .bible = $0.category { return true }; return false }
+        #expect(bibles.count == 3)
+    }
+}
+
 // MARK: - Zefania XML Importer Tests
 
 struct ZefaniaImporterTests {
