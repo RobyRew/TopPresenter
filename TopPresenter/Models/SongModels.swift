@@ -8,7 +8,83 @@
 import Foundation
 import SwiftData
 
-// MARK: - Song Collection
+// MARK: - JSON helpers (blobs keep the rich layer flexible without exploding the table count)
+
+func tpEncodeJSON<T: Encodable>(_ value: T, fallback: String) -> String {
+    guard let data = try? JSONEncoder().encode(value),
+          let string = String(data: data, encoding: .utf8) else { return fallback }
+    return string
+}
+
+func tpDecodeJSON<T: Decodable>(_ string: String, as type: T.Type, fallback: T) -> T {
+    guard let data = string.data(using: .utf8),
+          let value = try? JSONDecoder().decode(T.self, from: data) else { return fallback }
+    return value
+}
+
+// MARK: - Value Types (encoded into linesJSON / mediaJSON)
+
+/// A chord placed at a character offset within a line (ChordPro-style).
+struct SongChord: Codable, Hashable {
+    var sym: String          // e.g. "G", "D/F#"
+    var pos: Int             // character offset into the line text
+
+    init(sym: String, pos: Int) {
+        self.sym = sym
+        self.pos = pos
+    }
+}
+
+/// One lyric line: text + optional chords + optional per-language translations (bilingual).
+struct SongLine: Codable, Hashable {
+    var text: String
+    var chords: [SongChord]
+    var translations: [String: String]   // languageCode -> translated line
+
+    init(text: String, chords: [SongChord] = [], translations: [String: String] = [:]) {
+        self.text = text
+        self.chords = chords
+        self.translations = translations
+    }
+}
+
+/// A linked media asset (audio negative / karaoke / background).
+struct SongMediaRef: Codable, Hashable {
+    var role: String         // "negative" | "karaoke" | "audio" | "background"
+    var kind: String         // "audio" | "video" | "image"
+    var filename: String
+    var bookmark: String?    // base64 security-scoped bookmark, optional
+
+    init(role: String, kind: String, filename: String, bookmark: String? = nil) {
+        self.role = role
+        self.kind = kind
+        self.filename = filename
+        self.bookmark = bookmark
+    }
+}
+
+// MARK: - Songbook (canonical hymnal a song may optionally belong to)
+@Model
+final class Songbook {
+    @Attribute(.unique) var id: UUID
+    var name: String
+    var publisher: String = ""
+    var language: String = ""
+    var year: String = ""
+
+    @Relationship(deleteRule: .nullify, inverse: \Song.songbook)
+    var songs: [Song] = []
+
+    init(name: String, publisher: String = "", language: String = "", year: String = "") {
+        self.id = UUID()
+        self.name = name
+        self.publisher = publisher
+        self.language = language
+        self.year = year
+    }
+}
+
+// MARK: - Song Collection (import grouping / library)
 @Model
 final class SongCollection {
     @Attribute(.unique) var id: UUID
@@ -33,21 +109,42 @@ final class SongCollection {
     }
 }
 
-// MARK: - Song
+// MARK: - Song (conceptual work; owns one or more versions)
 @Model
 final class Song {
     @Attribute(.unique) var id: UUID
     var title: String
-    var author: String
+    var author: String                 // legacy combined author (display fallback)
     var copyright: String
     var ccliNumber: String
     var key: String
     var tempo: String
     var songNumber: String
-    var tags: String // comma-separated
+    var tags: String                   // comma-separated
+
+    // Rich metadata (v2; additive — inline defaults keep the migration lightweight)
+    var titlesJSON: String = "[]"      // alternate titles / aliases
+    var language: String = ""
+    var themesJSON: String = "[]"
+    var style: String = ""             // style-of-singing (imn/coral/contemporan…)
+    var songbookNumber: String = ""
+    var authorWords: String = ""
+    var authorMusic: String = ""
+    var authorTranslation: String = ""
+    var notes: String = ""
+    var mediaJSON: String = "[]"       // [SongMediaRef]
+    var extensionsJSON: String = "{}"  // future params (_extensions)
+    var searchText: String = ""        // denormalized lowercase (title+aliases+author+lyrics)
 
     var collection: SongCollection?
+    var songbook: Songbook?
 
+    /// Rich layer — the source of truth for lyrics.
+    @Relationship(deleteRule: .cascade, inverse: \SongVersion.song)
+    var versions: [SongVersion] = []
+
+    /// Flattened presentation cache of the active version (legacy consumers: presenter / search / schedule).
+    /// Regenerated from the active `SongVersion`; never hand-edited.
     @Relationship(deleteRule: .cascade, inverse: \SongVerse.song)
     var verses: [SongVerse] = []
 
@@ -72,16 +169,164 @@ final class Song {
         self.tags = tags
     }
 
-    var sortedVerses: [SongVerse] {
-        verses.sorted { $0.order < $1.order }
+    var sortedVersions: [SongVersion] { versions.sorted { $0.order < $1.order } }
+    var activeVersion: SongVersion? { sortedVersions.first }
+
+    var sortedVerses: [SongVerse] { verses.sorted { $0.order < $1.order } }
+    var verseLabels: [String] { sortedVerses.map { $0.label } }
+
+    // Decoded convenience accessors
+    var titles: [String] {
+        get { tpDecodeJSON(titlesJSON, as: [String].self, fallback: []) }
+        set { titlesJSON = tpEncodeJSON(newValue, fallback: "[]") }
+    }
+    var themes: [String] {
+        get { tpDecodeJSON(themesJSON, as: [String].self, fallback: []) }
+        set { themesJSON = tpEncodeJSON(newValue, fallback: "[]") }
+    }
+    var media: [SongMediaRef] {
+        get { tpDecodeJSON(mediaJSON, as: [SongMediaRef].self, fallback: []) }
+        set { mediaJSON = tpEncodeJSON(newValue, fallback: "[]") }
     }
 
-    var verseLabels: [String] {
-        sortedVerses.map { $0.label }
+    /// Denormalized, lowercased search blob used by the scalable library browser.
+    static func makeSearchText(
+        title: String, titles: [String] = [], author: String = "", authorWords: String = "",
+        songNumber: String = "", songbookNumber: String = "", lyrics: String = ""
+    ) -> String {
+        (([title] + titles + [author, authorWords, songNumber, songbookNumber, lyrics]))
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+            .lowercased()
     }
 }
 
-// MARK: - Song Verse
+// MARK: - Song Version (a specific rendition: 3 RO versions, an ES translation, an alt arrangement…)
+@Model
+final class SongVersion {
+    @Attribute(.unique) var id: UUID
+    var name: String = ""              // distinguishing label, e.g. "Versiunea clasică"
+    // Per-version metadata. When empty, the song-level value is used instead (overrides).
+    var displayTitle: String = ""      // title shown on screen for THIS version (e.g. a translation)
+    var author: String = ""
+    var language: String = ""
+    var key: String = ""
+    var capo: Int = 0
+    var tempo: String = ""
+    var timeSignature: String = ""
+    var copyright: String = ""
+    var ccliNumber: String = ""
+    var source: String = ""
+    var repeatStyle: String = ""       // repeat-marker style override ("" = use the global default)
+    // Per-version overrides for the song's shared ("comun") fields. Used only when
+    // overridesMetadata is true; empty otherwise (the original's values are inherited).
+    var titlesJSON: String = "[]"      // alternate titles / aliases
+    var authorWords: String = ""
+    var authorMusic: String = ""
+    var authorTranslation: String = ""
+    var style: String = ""
+    var songbookNumber: String = ""
+    var themesJSON: String = "[]"
+    var notes: String = ""
+    var songbookName: String = ""      // per-version songbook name (book the version is from)
+    /// When false, this version inherits the original (first) version's metadata; its own
+    /// override fields are ignored. The "Original" version is always treated as authoritative.
+    var overridesMetadata: Bool = false
+    var arrangementJSON: String = "[]" // [sectionKey] play order (section reuse)
+    var order: Int
+
+    var song: Song?
+
+    @Relationship(deleteRule: .cascade, inverse: \SongSection.version)
+    var sections: [SongSection] = []
+
+    init(
+        name: String = "",
+        order: Int = 0,
+        language: String = "",
+        key: String = "",
+        capo: Int = 0,
+        tempo: String = "",
+        timeSignature: String = "",
+        copyright: String = "",
+        ccliNumber: String = "",
+        source: String = ""
+    ) {
+        self.id = UUID()
+        self.name = name
+        self.order = order
+        self.language = language
+        self.key = key
+        self.capo = capo
+        self.tempo = tempo
+        self.timeSignature = timeSignature
+        self.copyright = copyright
+        self.ccliNumber = ccliNumber
+        self.source = source
+    }
+
+    var sortedSections: [SongSection] { sections.sorted { $0.order < $1.order } }
+
+    var arrangement: [String] {
+        get { tpDecodeJSON(arrangementJSON, as: [String].self, fallback: []) }
+        set { arrangementJSON = tpEncodeJSON(newValue, fallback: "[]") }
+    }
+
+    var titles: [String] {
+        get { tpDecodeJSON(titlesJSON, as: [String].self, fallback: []) }
+        set { titlesJSON = tpEncodeJSON(newValue, fallback: "[]") }
+    }
+    var themes: [String] {
+        get { tpDecodeJSON(themesJSON, as: [String].self, fallback: []) }
+        set { themesJSON = tpEncodeJSON(newValue, fallback: "[]") }
+    }
+
+    /// Sections expanded in `arrangement` order (repeats a reused chorus, etc.).
+    /// Falls back to plain section order when no arrangement is defined.
+    var arrangedSections: [SongSection] {
+        let order = arrangement
+        guard !order.isEmpty else { return sortedSections }
+        let byKey = Dictionary(sections.map { ($0.sectionKey, $0) }, uniquingKeysWith: { a, _ in a })
+        let mapped = order.compactMap { byKey[$0] }
+        return mapped.isEmpty ? sortedSections : mapped
+    }
+}
+
+// MARK: - Song Section (verse / chorus / bridge … with rich lines)
+@Model
+final class SongSection {
+    @Attribute(.unique) var id: UUID
+    var sectionKey: String        // "v1", "c", "b1" — referenced by a version's arrangement
+    var type: String              // verse/chorus/bridge/prechorus/intro/ending/tag/interlude
+    var label: String
+    var order: Int
+    var repeatCount: Int = 1      // sung N times — rendered with the theme's repeat-marker style
+    var linesJSON: String = "[]"  // [SongLine] — text + chords + translations
+    var plainText: String         // flattened lines (quick render + search)
+
+    var version: SongVersion?
+
+    init(sectionKey: String, type: String, label: String, order: Int, repeatCount: Int = 1, lines: [SongLine] = []) {
+        self.id = UUID()
+        self.sectionKey = sectionKey
+        self.type = type
+        self.label = label
+        self.order = order
+        self.repeatCount = repeatCount
+        self.plainText = lines.map { $0.text }.joined(separator: "\n")
+        self.linesJSON = tpEncodeJSON(lines, fallback: "[]")
+    }
+
+    var lines: [SongLine] {
+        get { tpDecodeJSON(linesJSON, as: [SongLine].self, fallback: []) }
+        set {
+            linesJSON = tpEncodeJSON(newValue, fallback: "[]")
+            plainText = newValue.map { $0.text }.joined(separator: "\n")
+        }
+    }
+}
+
+// MARK: - Song Verse (flattened presentation cache; see Song.verses)
 @Model
 final class SongVerse {
     @Attribute(.unique) var id: UUID

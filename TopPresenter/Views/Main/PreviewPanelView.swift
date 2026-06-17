@@ -326,7 +326,6 @@ struct PresentationPreviewCard: View {
         }
     }
 
-    @ViewBuilder
     private func previewBoxText(
         _ text: String,
         style: PresentationManager.ResolvedBoxStyle,
@@ -1236,7 +1235,7 @@ struct StyleQuickSettings: View {
     var sections: Set<SettingsSection> = SettingsSection.allSet
 
     enum SettingsSection: Hashable {
-        case multiVerse, general, output
+        case multiVerse, general, songOptions, output
 
         static let allSet: Set<SettingsSection> = [.multiVerse, .general, .output]
     }
@@ -1246,7 +1245,13 @@ struct StyleQuickSettings: View {
 
     @AppStorage("settingsExpanded_multiVerse") private var multiVerseExpanded: Bool = false
     @AppStorage("settingsExpanded_general") private var generalExpanded: Bool = false
+    @AppStorage("settingsExpanded_songOptions") private var songOptionsExpanded: Bool = true
     @AppStorage("settingsExpanded_output") private var outputExpanded: Bool = false
+
+    // Song options
+    @AppStorage("song_maxLinesPerSlide") private var songMaxLines: Int = 6
+    @AppStorage("song_bilingual") private var songBilingual: Bool = false
+    @AppStorage("song_repeatStyle") private var songRepeatStyle: String = "none"
 
     // General settings
     @AppStorage("showVerseNumbers") private var showVerseNumbers: Bool = true
@@ -1277,6 +1282,17 @@ struct StyleQuickSettings: View {
                         isExpanded: $generalExpanded
                     ) {
                         generalSection
+                    }
+                }
+
+                if sections.contains(.songOptions) {
+                    // ─── Cântece (song presentation options) ───
+                    settingsSection(
+                        title: String(localized: "Cântece", comment: "Settings section"),
+                        icon: "music.note",
+                        isExpanded: $songOptionsExpanded
+                    ) {
+                        songOptionsSection
                     }
                 }
 
@@ -1367,6 +1383,44 @@ struct StyleQuickSettings: View {
             Toggle(String(localized: "Show verse number prefix", comment: "Setting label"), isOn: $showVerseNumberPrefix)
                 .font(.caption)
                 .controlSize(.small)
+        }
+    }
+
+    // MARK: - Cântece Section (song presentation options)
+
+    @ViewBuilder
+    private var songOptionsSection: some View {
+        HStack {
+            Text(String(localized: "Linii/slide:", comment: "Setting label"))
+                .font(.caption)
+                .frame(width: 70, alignment: .trailing)
+            Stepper(value: $songMaxLines, in: 0...20) {
+                Text(songMaxLines == 0
+                     ? String(localized: "Nelimitat", comment: "Setting value")
+                     : "\(songMaxLines)")
+                    .font(.caption)
+            }
+            .controlSize(.small)
+        }
+
+        Toggle(String(localized: "Linie de traducere (bilingv)", comment: "Setting label"), isOn: $songBilingual)
+            .font(.caption)
+            .controlSize(.small)
+
+        HStack {
+            Text(String(localized: "Repetare:", comment: "Setting label"))
+                .font(.caption)
+                .frame(width: 70, alignment: .trailing)
+            Picker("", selection: $songRepeatStyle) {
+                Text(String(localized: "Fără", comment: "Repeat style")).tag("none")
+                Text("/: :/").tag("slash")
+                Text("‖: :‖").tag("bar")
+                Text("|: :|").tag("pipe")
+                Text("(×N)").tag("times")
+                Text("bis/ter").tag("bister")
+            }
+            .labelsHidden()
+            .controlSize(.small)
         }
     }
 

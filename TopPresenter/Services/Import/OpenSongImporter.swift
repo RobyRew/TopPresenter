@@ -9,7 +9,9 @@ import Foundation
 
 /// Importer for OpenSong XML format songs.
 /// OpenSong uses one file per song, typically without a file extension.
-/// Each song file contains lyrics with verse markers.
+///
+/// Rich mapping: `.`-prefixed chord lines become positioned `SongChord`s on the following
+/// lyric line, and the `<presentation>` order becomes the version `arrangement`.
 final class OpenSongImporter: SongImporter {
     let format: SupportedSongFormat = .openSongXML
 
@@ -31,7 +33,34 @@ final class OpenSongImporter: SongImporter {
         }
 
         let title = delegate.title.isEmpty ? fileURL.lastPathComponent : delegate.title
-        let verses = parseLyrics(delegate.lyrics, presentation: delegate.presentation)
+        let sections = parseSections(delegate.lyrics)
+        let arrangement = mapPresentation(delegate.presentation, sections: sections)
+
+        let version = SongImportVersion(
+            name: "Original",
+            key: delegate.key,
+            tempo: delegate.tempo,
+            arrangement: arrangement,
+            sections: sections
+        )
+
+        // Flat verses follow the arrangement when present (legacy presentation order).
+        let orderedSections: [SongImportSection]
+        if arrangement.isEmpty {
+            orderedSections = sections
+        } else {
+            let byKey = Dictionary(sections.map { ($0.sectionKey, $0) }, uniquingKeysWith: { a, _ in a })
+            orderedSections = arrangement.compactMap { byKey[$0] }
+        }
+        let flatVerses = orderedSections.enumerated().map { idx, sec in
+            SongImportVerse(label: sec.label, verseType: sec.type,
+                            text: sec.lines.map { $0.text }.joined(separator: "\n"), order: idx)
+        }
+
+        let themes = delegate.theme
+            .components(separatedBy: CharacterSet(charactersIn: ";,/"))
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
 
         return SongImportResult(
             title: title,
@@ -42,145 +71,139 @@ final class OpenSongImporter: SongImporter {
             tempo: delegate.tempo,
             songNumber: delegate.hymn_number,
             tags: delegate.theme,
-            verses: verses
+            verses: flatVerses,
+            themes: themes,
+            versions: [version]
         )
     }
 
-    /// Parse OpenSong lyrics format.
-    /// Lines starting with [ mark verse sections (e.g., [V1], [C], [B])
-    /// Lines starting with . are chord lines (ignored for presentation)
-    /// Lines starting with a space are lyric lines
-    private func parseLyrics(_ lyrics: String, presentation: String) -> [SongImportVerse] {
-        let lines = lyrics.components(separatedBy: .newlines)
-        var verses: [SongImportVerse] = []
-        var currentLabel = "Verse 1"
-        var currentType = "verse"
-        var currentLines: [String] = []
-        var order = 0
+    /// Parse OpenSong lyrics into rich sections (chords kept as positions).
+    private func parseSections(_ lyrics: String) -> [SongImportSection] {
+        let rawLines = lyrics.components(separatedBy: .newlines)
+        var sections: [SongImportSection] = []
+        var counters: [String: Int] = [:]
 
-        for line in lines {
+        var curType = "verse"
+        var curLabel = "Verse 1"
+        var curKey = "v1"
+        var curLines: [SongLine] = []
+        var pendingChords: [SongChord] = []
+        var started = false
+
+        func flush() {
+            guard !curLines.isEmpty else { return }
+            sections.append(SongImportSection(sectionKey: curKey, type: curType, label: curLabel, order: sections.count, lines: curLines))
+            curLines = []
+        }
+
+        for line in rawLines {
             if line.hasPrefix("[") {
-                // Save previous verse
-                if !currentLines.isEmpty {
-                    let text = currentLines.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
-                    if !text.isEmpty {
-                        verses.append(SongImportVerse(
-                            label: currentLabel,
-                            verseType: currentType,
-                            text: text,
-                            order: order
-                        ))
-                        order += 1
-                    }
-                    currentLines = []
-                }
-
-                // Parse section header
-                let sectionTag = line
-                    .replacingOccurrences(of: "[", with: "")
+                flush()
+                let tag = line.replacingOccurrences(of: "[", with: "")
                     .replacingOccurrences(of: "]", with: "")
                     .trimmingCharacters(in: .whitespaces)
-
-                let (label, type) = classifySection(sectionTag)
-                currentLabel = label
-                currentType = type
-
+                let classified = classifySection(tag, counters: &counters)
+                curType = classified.type
+                curLabel = classified.label
+                curKey = classified.key
+                pendingChords = []
+                started = true
             } else if line.hasPrefix(".") {
-                // Chord line - skip for lyrics
-                continue
-            } else if line.hasPrefix(" ") || line.hasPrefix(";") {
-                // Lyric line (remove leading space) or comment
-                let lyricLine: String
-                if line.hasPrefix(";") {
-                    continue  // Skip comments
-                } else {
-                    lyricLine = String(line.dropFirst())
-                }
-                currentLines.append(lyricLine)
+                pendingChords = parseChordLine(line)
+            } else if line.hasPrefix(";") {
+                continue  // comment
+            } else if line.hasPrefix(" ") {
+                let text = String(line.dropFirst())
+                curLines.append(makeLine(text: text, chords: pendingChords))
+                pendingChords = []
             } else if !line.trimmingCharacters(in: .whitespaces).isEmpty {
-                // Some OpenSong files have lyrics without leading space
-                currentLines.append(line)
+                curLines.append(makeLine(text: line, chords: pendingChords))
+                pendingChords = []
             }
         }
+        flush()
 
-        // Save last verse
-        if !currentLines.isEmpty {
-            let text = currentLines.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
-            if !text.isEmpty {
-                verses.append(SongImportVerse(
-                    label: currentLabel,
-                    verseType: currentType,
-                    text: text,
-                    order: order
-                ))
-            }
+        // Some files have no section markers at all — keep one verse.
+        if sections.isEmpty && started == false && !curLines.isEmpty {
+            sections.append(SongImportSection(sectionKey: "v1", type: "verse", label: "Verse 1", order: 0, lines: curLines))
         }
-
-        // If presentation order is specified, reorder
-        if !presentation.isEmpty {
-            return applyPresentationOrder(verses: verses, presentation: presentation)
-        }
-
-        return verses
+        return sections
     }
 
-    private func classifySection(_ tag: String) -> (label: String, type: String) {
+    private func makeLine(text: String, chords: [SongChord]) -> SongLine {
+        guard !chords.isEmpty else { return SongLine(text: text) }
+        let clamped = chords.map { SongChord(sym: $0.sym, pos: min(max($0.pos, 0), text.count)) }
+        return SongLine(text: text, chords: clamped)
+    }
+
+    /// Parse a `.`-prefixed chord line into chords at column positions (column 0 == after the dot).
+    private func parseChordLine(_ line: String) -> [SongChord] {
+        let chars = Array(line)
+        var chords: [SongChord] = []
+        var i = 1  // skip leading "."
+        while i < chars.count {
+            if chars[i] == " " { i += 1; continue }
+            var sym = ""
+            let start = i
+            while i < chars.count, chars[i] != " " {
+                sym.append(chars[i]); i += 1
+            }
+            if !sym.isEmpty { chords.append(SongChord(sym: sym, pos: max(start - 1, 0))) }
+        }
+        return chords
+    }
+
+    private func classifySection(_ tag: String, counters: inout [String: Int]) -> (key: String, label: String, type: String) {
         let upper = tag.uppercased()
+        let num = tag.filter { $0.isNumber }
 
-        if upper.hasPrefix("V") || upper.hasPrefix("VERSE") {
-            let num = tag.filter { $0.isNumber }
-            return ("Verse \(num.isEmpty ? "1" : num)", "verse")
-        } else if upper.hasPrefix("C") || upper.hasPrefix("CHORUS") {
-            let num = tag.filter { $0.isNumber }
-            return ("Chorus\(num.isEmpty ? "" : " \(num)")", "chorus")
-        } else if upper.hasPrefix("B") || upper.hasPrefix("BRIDGE") {
-            let num = tag.filter { $0.isNumber }
-            return ("Bridge\(num.isEmpty ? "" : " \(num)")", "bridge")
-        } else if upper.hasPrefix("P") || upper.hasPrefix("PRE") {
-            return ("Pre-Chorus", "pre-chorus")
-        } else if upper.hasPrefix("T") || upper.hasPrefix("TAG") {
-            return ("Tag", "tag")
-        } else if upper.hasPrefix("E") || upper.hasPrefix("END") {
-            return ("Ending", "ending")
+        func nextKey(_ prefix: String) -> Int {
+            let n = (counters[prefix] ?? 0) + 1
+            counters[prefix] = n
+            return n
+        }
+
+        if upper.hasPrefix("V") {
+            let n = num.isEmpty ? "\(nextKey("v"))" : num
+            return ("v\(n)", "Verse \(n)", "verse")
+        } else if upper.hasPrefix("C") {
+            let n = num.isEmpty ? nextKey("c") : (Int(num) ?? 1)
+            return (n == 1 ? "c" : "c\(n)", n == 1 ? "Chorus" : "Chorus \(n)", "chorus")
+        } else if upper.hasPrefix("B") {
+            let n = num.isEmpty ? nextKey("b") : (Int(num) ?? 1)
+            return ("b\(n)", n == 1 ? "Bridge" : "Bridge \(n)", "bridge")
+        } else if upper.hasPrefix("P") {
+            return ("p\(nextKey("p"))", "Pre-Chorus", "prechorus")
+        } else if upper.hasPrefix("T") {
+            return ("t\(nextKey("t"))", "Tag", "tag")
+        } else if upper.hasPrefix("E") {
+            return ("e", "Ending", "ending")
         } else {
-            return (tag, "other")
+            return (tag.isEmpty ? "s\(counters.count)" : tag, tag, "other")
         }
     }
 
-    private func applyPresentationOrder(verses: [SongImportVerse], presentation: String) -> [SongImportVerse] {
-        let sections = presentation.components(separatedBy: .whitespaces).filter { !$0.isEmpty }
-        var ordered: [SongImportVerse] = []
-        var orderIndex = 0
-
-        for section in sections {
-            // Find matching verse by tag
-            if let match = verses.first(where: { matchesTag($0, sectionTag: section) }) {
-                ordered.append(SongImportVerse(
-                    label: match.label,
-                    verseType: match.verseType,
-                    text: match.text,
-                    order: orderIndex
-                ))
-                orderIndex += 1
+    /// Map an OpenSong `<presentation>` string (e.g. "V1 C V2 C B") to section keys.
+    private func mapPresentation(_ presentation: String, sections: [SongImportSection]) -> [String] {
+        let tokens = presentation.components(separatedBy: .whitespaces).filter { !$0.isEmpty }
+        guard !tokens.isEmpty else { return [] }
+        var keys: [String] = []
+        for token in tokens {
+            let upper = token.uppercased()
+            let num = token.filter { $0.isNumber }
+            let match = sections.first { sec in
+                let label = sec.label.uppercased()
+                if upper.hasPrefix("V") { return sec.type == "verse" && (num.isEmpty || label.contains(num)) }
+                if upper.hasPrefix("C") { return sec.type == "chorus" }
+                if upper.hasPrefix("B") { return sec.type == "bridge" }
+                if upper.hasPrefix("P") { return sec.type == "prechorus" }
+                if upper.hasPrefix("T") { return sec.type == "tag" }
+                if upper.hasPrefix("E") { return sec.type == "ending" }
+                return false
             }
+            if let match { keys.append(match.sectionKey) }
         }
-
-        return ordered.isEmpty ? verses : ordered
-    }
-
-    private func matchesTag(_ verse: SongImportVerse, sectionTag: String) -> Bool {
-        let tag = sectionTag.uppercased()
-        let label = verse.label.uppercased()
-
-        if tag.hasPrefix("V") {
-            let num = tag.filter { $0.isNumber }
-            return label.contains("VERSE") && (num.isEmpty || label.contains(num))
-        } else if tag.hasPrefix("C") {
-            return label.contains("CHORUS")
-        } else if tag.hasPrefix("B") {
-            return label.contains("BRIDGE")
-        }
-        return false
+        return keys
     }
 }
 

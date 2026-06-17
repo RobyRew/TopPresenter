@@ -27,16 +27,19 @@ struct TopPresenterApp: App {
     }
 
     var sharedModelContainer: ModelContainer = {
-        let schema = Schema(versionedSchema: SchemaV1.self)
+        let schema = Schema(versionedSchema: SchemaV2.self)
         let modelConfiguration = ModelConfiguration(
             schema: schema,
             isStoredInMemoryOnly: false
         )
 
         do {
+            // No staged migration plan: the SchemaV1→V2 change is purely additive
+            // (new song entities + new Song attributes). SwiftData's automatic lightweight
+            // inference handles adding entities/relationships, which the staged
+            // `.lightweight`/`.custom` APIs reject at stage construction.
             return try ModelContainer(
                 for: schema,
-                migrationPlan: TopPresenterMigrationPlan.self,
                 configurations: [modelConfiguration]
             )
         } catch {

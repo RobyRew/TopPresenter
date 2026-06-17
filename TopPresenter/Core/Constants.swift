@@ -144,24 +144,33 @@ enum BibleBookNumbers {
 }
 
 enum SupportedSongFormat: String, CaseIterable, Identifiable {
+    case topPresenterJSON = "toppresenter-song"
     case openSongXML = "opensong"
     case openLyricsXML = "openlyrics"
+    case chordPro = "chordpro"
+    case plainText = "plaintext"
     case powerPoint = "powerpoint"
 
     var id: String { rawValue }
 
     var displayName: String {
         switch self {
+        case .topPresenterJSON: return String(localized: "TopPresenter Song JSON", comment: "Song format name")
         case .openSongXML: return String(localized: "OpenSong XML", comment: "Song format name")
         case .openLyricsXML: return String(localized: "OpenLyrics XML", comment: "Song format name")
+        case .chordPro: return String(localized: "ChordPro", comment: "Song format name")
+        case .plainText: return String(localized: "Plain Text", comment: "Song format name")
         case .powerPoint: return String(localized: "PowerPoint", comment: "Song format name")
         }
     }
 
     var fileExtensions: [String] {
         switch self {
+        case .topPresenterJSON: return ["json"]
         case .openSongXML: return ["xml"]
         case .openLyricsXML: return ["xml"]
+        case .chordPro: return ["cho", "crd", "chordpro", "chopro"]
+        case .plainText: return ["txt"]
         case .powerPoint: return ["pptx", "ppt"]
         }
     }

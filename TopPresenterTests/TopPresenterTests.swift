@@ -578,6 +578,28 @@ struct PPTXImporterTests {
         #expect(result.verses[0].text.contains("La la la"))
         #expect(result.verses[1].text.contains("Strofa a doua"))
     }
+
+    @Test func powerPointDedupsRepeatedChorusIntoArrangement() async throws {
+        // V1, Chorus, V2, Chorus(identical) → 3 unique sections, 4-step arrangement.
+        let chorus = "Slăvit să fie Domnul"
+        let zip = makeZip(entries: [
+            ("docProps/core.xml", Data("<cp><dc:title>Test Dedup</dc:title></cp>".utf8), true),
+            ("ppt/slides/slide1.xml", Data(slideXML(title: nil, body: "Strofa unu aici").utf8), true),
+            ("ppt/slides/slide2.xml", Data(slideXML(title: nil, body: chorus).utf8), true),
+            ("ppt/slides/slide3.xml", Data(slideXML(title: nil, body: "Strofa doi aici").utf8), true),
+            ("ppt/slides/slide4.xml", Data(slideXML(title: nil, body: chorus).utf8), true),
+        ])
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("dedup-\(UUID().uuidString).pptx")
+        try zip.write(to: url)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let result = try await PowerPointSongImporter().parse(fileURL: url)
+        let version = try #require(result.versions.first)
+        #expect(version.sections.count == 3)                 // chorus stored once
+        #expect(version.arrangement.count == 4)              // but played 4 times
+        #expect(version.sections.contains { $0.type == "chorus" })  // repeated slide → chorus
+    }
 }
 
 // MARK: - Batch Song Import Tests
@@ -585,7 +607,7 @@ struct PPTXImporterTests {
 struct SongBatchImportTests {
     private func makeInMemoryContext() throws -> ModelContext {
         let container = try ModelContainer(
-            for: Schema(versionedSchema: SchemaV1.self),
+            for: Schema(versionedSchema: SchemaV2.self),
             configurations: [ModelConfiguration(isStoredInMemoryOnly: true)]
         )
         return ModelContext(container)
@@ -1633,5 +1655,262 @@ struct PresentationManagerTests {
 
         pm.toggleFreeze()
         #expect(pm.outputBoxFrame(for: .verseContent) == .defaultVerse)
+    }
+}
+
+// MARK: - GOAT Song JSON round-trip + new importers
+
+struct SongGoatFormatTests {
+    private func makeContext() throws -> ModelContext {
+        let container = try ModelContainer(
+            for: Schema(versionedSchema: SchemaV2.self),
+            configurations: [ModelConfiguration(isStoredInMemoryOnly: true)]
+        )
+        return ModelContext(container)
+    }
+
+    @Test func roundTripsRichSongThroughGoatJSON() throws {
+        let ctx = try makeContext()
+        let collection = SongCollection(name: "T", sourceFormat: "test")
+        ctx.insert(collection)
+        let song = Song(title: "Mare ești Tu", author: "Anon", copyright: "©", ccliNumber: "123", songNumber: "7")
+        ctx.insert(song)
+        song.collection = collection
+        song.titles = ["How Great Thou Art"]
+        song.language = "ro"
+        song.themes = ["worship", "easter"]
+        song.style = "imn"
+        song.songbookNumber = "42"
+        let book = Songbook(name: "Cântările Evangheliei", publisher: "X", language: "ro", year: "1990")
+        ctx.insert(book)
+        song.songbook = book
+
+        let v = SongVersion(name: "Clasică", order: 0, language: "ro", key: "G", capo: 2, tempo: "72", timeSignature: "4/4")
+        v.arrangement = ["v1", "c", "v1", "c"]
+        v.song = song
+        let s1 = SongSection(sectionKey: "v1", type: "verse", label: "Strofa 1", order: 0, lines: [
+            SongLine(text: "Mare ești Tu", chords: [SongChord(sym: "G", pos: 0)], translations: ["en": "How great Thou art"])
+        ])
+        s1.version = v
+        let s2 = SongSection(sectionKey: "c", type: "chorus", label: "Refren", order: 1, lines: [
+            SongLine(text: "Atunci cânt eu", chords: [SongChord(sym: "D", pos: 6)])
+        ])
+        s2.version = v
+        try ctx.save()
+
+        let json = try ExportService.exportSongToTopPresenterJSON(song)
+        let results = try TopPresenterSongImporter.allResults(from: Data(json.utf8))
+        // Use plain `guard let` (not #require/#expect) to unwrap the rich structs — the
+        // Swift Testing macros segfault copying a large optional struct here.
+        guard let r = results.first else { #expect(Bool(false), "no song parsed"); return }
+
+        #expect(r.title == "Mare ești Tu")
+        #expect(r.titles.contains("How Great Thou Art"))
+        #expect(r.language == "ro")
+        #expect(r.themes.contains("easter"))
+        #expect(r.style == "imn")
+        let bookName = r.songbook?.name
+        let bookNumber = r.songbook?.number
+        #expect(bookName == "Cântările Evangheliei")
+        #expect(bookNumber == "42")
+
+        guard let rv = r.versions.first else { #expect(Bool(false), "no version parsed"); return }
+        let key = rv.key
+        let capo = rv.capo
+        let arrangement = rv.arrangement
+        let secCount = rv.sections.count
+        let v1Sym = rv.sections.first { $0.sectionKey == "v1" }?.lines.first?.chords.first?.sym
+        let v1Trans = rv.sections.first { $0.sectionKey == "v1" }?.lines.first?.translations["en"]
+        #expect(key == "G")
+        #expect(capo == 2)
+        #expect(arrangement == ["v1", "c", "v1", "c"])
+        #expect(secCount == 2)
+        #expect(v1Sym == "G")
+        #expect(v1Trans == "How great Thou art")
+    }
+
+    @Test func roundTripsPerVersionOverrides() throws {
+        let container = try ModelContainer(
+            for: Schema(versionedSchema: SchemaV2.self),
+            configurations: [ModelConfiguration(isStoredInMemoryOnly: true)]
+        )
+        let ctx = ModelContext(container)
+        let col = SongCollection(name: "T", sourceFormat: "test"); ctx.insert(col)
+        let song = Song(title: "Mare ești Tu"); ctx.insert(song); song.collection = col
+
+        let v0 = SongVersion(name: "Original", order: 0, key: "G"); v0.song = song
+        let s0 = SongSection(sectionKey: "v1", type: "verse", label: "Strofa 1", order: 0, lines: [SongLine(text: "Mare ești Tu")])
+        s0.version = v0
+
+        let v1 = SongVersion(name: "Spaniolă", order: 1); v1.song = song
+        v1.overridesMetadata = true
+        v1.displayTitle = "Grande eres Tú"
+        v1.author = "Trad. X"
+        v1.language = "es"
+        v1.key = "A"
+        let s1 = SongSection(sectionKey: "v1", type: "verse", label: "Estrofa", order: 0, repeatCount: 2, lines: [SongLine(text: "Grande eres Tú")])
+        s1.version = v1
+        try ctx.save()
+
+        let json = try ExportService.exportSongToTopPresenterJSON(song)
+        let results = try TopPresenterSongImporter.allResults(from: Data(json.utf8))
+        guard let r = results.first, r.versions.count >= 2 else { #expect(Bool(false), "missing versions"); return }
+
+        let rv1 = r.versions[1]
+        let overrides = rv1.overridesMetadata
+        let dt = rv1.displayTitle
+        let auth = rv1.author
+        let lang = rv1.language
+        let key = rv1.key
+        let rep = rv1.sections.first?.repeatCount
+        #expect(r.versions.count == 2)
+        #expect(overrides == true)
+        #expect(dt == "Grande eres Tú")
+        #expect(auth == "Trad. X")
+        #expect(lang == "es")
+        #expect(key == "A")
+        #expect(rep == 2)
+    }
+
+    @Test func chordProParsesChordsAndSections() {
+        let content = """
+        {title: Amazing Grace}
+        {artist: John Newton}
+        {key: G}
+        {start_of_verse}
+        [G]Amazing [G7]grace how [C]sweet the [G]sound
+        {end_of_verse}
+        {start_of_chorus}
+        [D]Praise the [G]Lord
+        {end_of_chorus}
+        """
+        let r = ChordProImporter.parse(content: content, fallbackTitle: "x")
+        #expect(r.title == "Amazing Grace")
+        #expect(r.key == "G")
+        // Extract scalars before #expect (avoids the macro copying the whole struct).
+        let sectionCount = r.versions.first?.sections.count
+        let firstType = r.versions.first?.sections.first?.type
+        let firstLine = r.versions.first?.sections.first?.lines.first?.text
+        let firstChord = r.versions.first?.sections.first?.lines.first?.chords.first?.sym
+        let lastType = r.versions.first?.sections.last?.type
+        #expect(sectionCount == 2)
+        #expect(firstType == "verse")
+        #expect(firstLine == "Amazing grace how sweet the sound")
+        #expect(firstChord == "G")
+        #expect(lastType == "chorus")
+    }
+
+    @Test func plainTextSplitsStanzasAndDetectsChorus() {
+        let content = """
+        Strofa unu
+        linia doi
+
+        [Chorus]
+        Refrenul aici
+        înca o linie
+        """
+        let r = PlainTextSongImporter.parse(content: content, fallbackTitle: "Cant")
+        #expect(r.title == "Cant")
+        let sectionCount = r.versions.first?.sections.count
+        let firstType = r.versions.first?.sections.first?.type
+        let lastType = r.versions.first?.sections.last?.type
+        let lastLineCount = r.versions.first?.sections.last?.lines.count
+        #expect(sectionCount == 2)
+        #expect(firstType == "verse")
+        #expect(lastType == "chorus")
+        #expect(lastLineCount == 2)
+    }
+}
+
+// MARK: - Recursive bulk import + duplicate→version
+
+struct SongBulkImportTests {
+    private func makeContext() throws -> ModelContext {
+        let container = try ModelContainer(
+            for: Schema(versionedSchema: SchemaV2.self),
+            configurations: [ModelConfiguration(isStoredInMemoryOnly: true)]
+        )
+        return ModelContext(container)
+    }
+
+    private func writeSong(_ title: String, to url: URL) throws {
+        let xml = "<song><title>\(title)</title><lyrics>[V1]\nPrima strofa\n[C]\nRefren aici</lyrics></song>"
+        try Data(xml.utf8).write(to: url)
+    }
+
+    @Test func recursiveImportFindsSongsInSubfolders() async throws {
+        let context = try makeContext()
+        let fm = FileManager.default
+        let root = fm.temporaryDirectory.appendingPathComponent("bulk-\(UUID().uuidString)")
+        let sub = root.appendingPathComponent("Laszlo/Nesortate")
+        try fm.createDirectory(at: sub, withIntermediateDirectories: true)
+        defer { try? fm.removeItem(at: root) }
+
+        try writeSong("Cantec Unu", to: root.appendingPathComponent("a.xml"))
+        try writeSong("Cantec Doi", to: sub.appendingPathComponent("b.xml"))
+
+        let result = await ImportService.importSongItems(urls: [root], collectionName: "Bulk", modelContext: context)
+        #expect(result.importedTitles.count == 2)
+        #expect(result.collection?.songs.count == 2)
+    }
+
+    @Test func duplicateImportAddsAsVersionDiacriticInsensitive() async throws {
+        let context = try makeContext()
+        let fm = FileManager.default
+        let dir = fm.temporaryDirectory.appendingPathComponent("dup-\(UUID().uuidString)")
+        try fm.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? fm.removeItem(at: dir) }
+
+        try writeSong("Același Cântec", to: dir.appendingPathComponent("v1.xml"))
+        try writeSong("Acelasi Cantec", to: dir.appendingPathComponent("v2.xml")) // diacritic-folded match
+
+        let result = await ImportService.importSongItems(
+            urls: [dir], collectionName: "Dup", modelContext: context, duplicateResolution: .addAsVersion
+        )
+        #expect(result.collection?.songs.count == 1)
+        let song = try #require(result.collection?.songs.first)
+        #expect(song.versions.count == 2)
+    }
+
+    @Test func keepBothImportsSeparately() async throws {
+        let context = try makeContext()
+        let fm = FileManager.default
+        let dir = fm.temporaryDirectory.appendingPathComponent("keep-\(UUID().uuidString)")
+        try fm.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? fm.removeItem(at: dir) }
+
+        try writeSong("Egal", to: dir.appendingPathComponent("a.xml"))
+        try writeSong("Egal", to: dir.appendingPathComponent("b.xml"))
+
+        let result = await ImportService.importSongItems(
+            urls: [dir], collectionName: "Keep", modelContext: context, duplicateResolution: .keepBoth
+        )
+        #expect(result.collection?.songs.count == 2)
+    }
+
+    @Test func slideBuilderAutoSplitsAndExpandsArrangement() throws {
+        let container = try ModelContainer(
+            for: Schema(versionedSchema: SchemaV2.self),
+            configurations: [ModelConfiguration(isStoredInMemoryOnly: true)]
+        )
+        let ctx = ModelContext(container)
+        let song = Song(title: "X")
+        ctx.insert(song)
+        let v = SongVersion(name: "V", order: 0)
+        v.song = song
+        let s1 = SongSection(sectionKey: "v1", type: "verse", label: "Strofa 1", order: 0,
+                             lines: (1...5).map { SongLine(text: "linia \($0)") })
+        s1.version = v
+        let s2 = SongSection(sectionKey: "c", type: "chorus", label: "Refren", order: 1,
+                             lines: [SongLine(text: "ref")])
+        s2.version = v
+        v.arrangement = ["v1", "c", "v1"]   // verse (splits) + chorus + verse again
+        try ctx.save()
+
+        let slides = buildSongSlides(version: v, maxLines: 2, bilingual: false, language: nil)
+        // v1 (5 lines / 2 = 3 slides) + c (1) + v1 (3) = 7
+        #expect(slides.count == 7)
+        #expect(slides.allSatisfy { $0.total == 7 })
+        #expect(slides.first?.text.contains("linia 1") == true)
     }
 }

@@ -34,10 +34,23 @@ final class LibraryManager {
     // MARK: - Song State
     var selectedSongCollection: SongCollection?
     var selectedSong: Song?
+    var selectedSongVersion: SongVersion?
     var selectedSongVerse: SongVerse?
     var songSearchQuery: String = ""
     var songSearchResults: [SongSearchResult] = []
     var isSongSearching: Bool = false
+
+    /// When set, the Songs view presents the visual song editor for this song.
+    var songToEdit: Song?
+    /// When opening the editor from a specific slide, open this version and focus this section.
+    var songEditVersionID: UUID?
+    var songEditSectionKey: String?
+
+    // Selected slide (version-aware; drives the sidebar preview + projection from the filmstrip).
+    var songSlideText: String = ""
+    var songSlideLabel: String = ""
+    var songSlideIndex: Int = 0
+    var songSlideCount: Int = 1
 
     // MARK: - Bible Navigation
     /// Switch translation while staying on the same passage where possible.
@@ -493,7 +506,26 @@ final class LibraryManager {
 
     func selectSong(_ song: Song) {
         selectedSong = song
+        selectedSongVersion = song.activeVersion
         selectedSongVerse = song.sortedVerses.first
+        songSlideText = ""
+        songSlideLabel = ""
+        songSlideIndex = 0
+        songSlideCount = 1
+    }
+
+    func selectSongVersion(_ version: SongVersion) {
+        selectedSongVersion = version
+        songSlideText = ""
+        songSlideLabel = ""
+    }
+
+    /// Select a built slide (from the filmstrip) for preview/projection.
+    func selectSongSlide(text: String, label: String, index: Int, count: Int) {
+        songSlideText = text
+        songSlideLabel = label
+        songSlideIndex = index
+        songSlideCount = count
     }
 
     func selectSongVerse(_ verse: SongVerse) {
