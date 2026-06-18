@@ -36,10 +36,22 @@ final class OpenSongImporter: SongImporter {
         let sections = parseSections(delegate.lyrics)
         let arrangement = mapPresentation(delegate.presentation, sections: sections)
 
+        let aliases = delegate.aka
+            .components(separatedBy: CharacterSet(charactersIn: ";\n"))
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+        let notes = [delegate.user1, delegate.user2, delegate.user3]
+            .filter { !$0.isEmpty }
+            .joined(separator: "\n")
+
         let version = SongImportVersion(
             name: "Original",
+            titles: aliases,
+            notes: notes,
             key: delegate.key,
+            capo: Int(delegate.capo) ?? 0,
             tempo: delegate.tempo,
+            timeSignature: delegate.timeSignature,
             arrangement: arrangement,
             sections: sections
         )
@@ -72,7 +84,9 @@ final class OpenSongImporter: SongImporter {
             songNumber: delegate.hymn_number,
             tags: delegate.theme,
             verses: flatVerses,
+            titles: aliases,
             themes: themes,
+            notes: notes,
             versions: [version]
         )
     }
@@ -219,6 +233,12 @@ private final class OpenSongParserDelegate: NSObject, XMLParserDelegate {
     var theme = ""
     var lyrics = ""
     var presentation = ""
+    var capo = ""
+    var aka = ""
+    var timeSignature = ""
+    var user1 = ""
+    var user2 = ""
+    var user3 = ""
 
     private var currentElement = ""
     private var currentText = ""
@@ -257,6 +277,12 @@ private final class OpenSongParserDelegate: NSObject, XMLParserDelegate {
         case "theme": theme = trimmed
         case "lyrics": lyrics = currentText  // Don't trim - whitespace matters
         case "presentation": presentation = trimmed
+        case "capo": capo = trimmed
+        case "aka": aka = trimmed
+        case "time_sig", "timesig": timeSignature = trimmed
+        case "user1": user1 = trimmed
+        case "user2": user2 = trimmed
+        case "user3": user3 = trimmed
         default: break
         }
 

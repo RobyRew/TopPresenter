@@ -71,16 +71,23 @@ final class USFMBibleImporter: BibleImporter {
         // Derive abbreviation from module name
         let abbreviation = deriveAbbreviation(from: moduleName)
 
-        return BibleImportResult(
+        var result = BibleImportResult(
             moduleName: moduleName,
             abbreviation: abbreviation,
             language: language,
             description: "",
             books: allBooks
         )
+        result.hasWordsOfChrist = anyWoc
+        result.hasStrongs = anyStrong
+        return result
     }
 
     // MARK: - USFM Parsing
+
+    /// Aggregated across every parsed file/book — feeds the module-level flags.
+    private var anyWoc = false
+    private var anyStrong = false
 
     private struct ParsedUSFM {
         var name: String = ""
@@ -108,11 +115,18 @@ final class USFMBibleImporter: BibleImporter {
         func finishVerse() {
             let text = currentVerseText.trimmingCharacters(in: .whitespacesAndNewlines)
             if currentVerseNum > 0 && !text.isEmpty {
-                // GOAT v2: extract red-letter / Strong's / added-words runs.
+                // GOAT v2: extract red-letter / Strong's / added-words runs + notes.
                 let rich = USFMRich.parse(currentVerseRaw, plain: text)
+                let footnotes = USFMNotes.footnotes(currentVerseRaw)
+                let crossRefs = USFMNotes.crossRefs(currentVerseRaw)
+                if rich.woc { anyWoc = true }
+                if rich.runs?.contains(where: { $0.strong != nil }) == true { anyStrong = true }
                 verses.append(BibleImportVerse(
                     verseNumber: currentVerseNum, text: text,
-                    runs: rich.runs, hasWordsOfChrist: rich.woc
+                    runs: rich.runs,
+                    footnotes: footnotes.isEmpty ? nil : footnotes,
+                    crossReferences: crossRefs.isEmpty ? nil : crossRefs,
+                    hasWordsOfChrist: rich.woc
                 ))
             }
             currentVerseText = ""
@@ -356,7 +370,7 @@ final class USFMBibleImporter: BibleImporter {
 /// Footnotes/cross-refs are dropped from the run text (they're not verse words).
 enum USFMRich {
     static func parse(_ raw: String, plain: String) -> (runs: [VerseRun]?, woc: Bool) {
-        guard raw.contains("\\wj") || raw.contains("\\nd") || raw.contains("\\add") || raw.contains("\\w ") else {
+        guard raw.contains("\\wj") || raw.contains("\\nd") || raw.contains("\\add") || raw.contains("\\w ") || raw.contains("\\+w ") else {
             return (nil, false)
         }
         // Strip footnotes/cross-refs first — their inner text isn't scripture.
@@ -372,6 +386,13 @@ enum USFMRich {
         var woc = false
         var buf = ""
         var kindStack: [String] = []
+
+        // `\w word|strong="…" x-morph="…"\w*` word-level annotation state.
+        var inW = false
+        var wWord = ""
+        var wAttr = ""
+        var inWAttr = false
+
         func flush() {
             // Keep boundary spaces so runs concatenate back to the full verse;
             // only skip purely-empty segments.
@@ -381,18 +402,34 @@ enum USFMRich {
             }
             buf = ""
         }
+        func flushWord() {
+            let cleaned = clean(wWord)
+            if !cleaned.trimmingCharacters(in: .whitespaces).isEmpty {
+                let (strong, morph) = parseWordAttrs(wAttr)
+                runs.append(VerseRun(text: cleaned, kind: kindStack.last ?? "plain", strong: strong, morph: morph))
+            }
+            wWord = ""; wAttr = ""; inWAttr = false; inW = false
+        }
         let markerKind: [String: String] = ["wj": "woc", "nd": "divineName", "add": "add"]
         var i = s.startIndex
         while i < s.endIndex {
             if s[i] == "\\" {
-                // read marker name
+                // read marker name (drop a leading "+" for nested markers)
                 var j = s.index(after: i)
+                if j < s.endIndex, s[j] == "+" { j = s.index(after: j) }
                 var name = ""
                 while j < s.endIndex, s[j].isLetter || s[j].isNumber { name.append(s[j]); j = s.index(after: j) }
                 let closing = (j < s.endIndex && s[j] == "*")
                 if closing { j = s.index(after: j) }
                 let base = name.trimmingCharacters(in: CharacterSet(charactersIn: "0123456789"))
-                if let kind = markerKind[base] {
+                if base == "w" {
+                    if closing {
+                        flushWord()
+                    } else {
+                        flush(); inW = true; wWord = ""; wAttr = ""; inWAttr = false
+                    }
+                } else if let kind = markerKind[base] {
+                    if inW { flushWord() }
                     flush()
                     if closing {
                         if kindStack.last == kind { kindStack.removeLast() }
@@ -401,17 +438,49 @@ enum USFMRich {
                     }
                 }
                 // skip a single following space that USFM puts after a marker
-                if j < s.endIndex, s[j] == " " { j = s.index(after: j) }
+                if j < s.endIndex, s[j] == " " {
+                    if inW { wWord.append(" ") } else { buf.append(" ") }
+                    j = s.index(after: j)
+                }
                 i = j
+            } else if inW {
+                if s[i] == "|" { inWAttr = true }
+                else if inWAttr { wAttr.append(s[i]) }
+                else { wWord.append(s[i]) }
+                i = s.index(after: i)
             } else {
                 buf.append(s[i]); i = s.index(after: i)
             }
         }
+        if inW { flushWord() }
         flush()
 
-        // Collapse to nil unless there's a genuinely non-plain run.
-        let meaningful = runs.contains { $0.kind != "plain" } && runs.count > 0
+        // Collapse to nil unless there's a genuinely non-plain or annotated run.
+        let meaningful = runs.contains { $0.kind != "plain" || $0.strong != nil } && runs.count > 0
         return (meaningful ? runs : nil, woc)
+    }
+
+    /// Pull a Strong's number + morphology from a `\w` word's pipe attributes:
+    /// `strong="G3056"`, `lemma="…"`, `x-strong="…"`, `x-morph="…"`, or a bare `H1234`.
+    private static func parseWordAttrs(_ attr: String) -> (String?, String?) {
+        func capture(_ key: String) -> String? {
+            let pattern = "\(key)=\"([^\"]+)\""
+            guard let re = try? NSRegularExpression(pattern: pattern),
+                  let m = re.firstMatch(in: attr, range: NSRange(attr.startIndex..., in: attr)),
+                  m.numberOfRanges > 1, let r = Range(m.range(at: 1), in: attr) else { return nil }
+            return String(attr[r])
+        }
+        var strong = capture("strong") ?? capture("x-strong") ?? capture("lemma")
+        let morph = capture("x-morph") ?? capture("morph")
+        if strong == nil {
+            let bare = attr.trimmingCharacters(in: .whitespaces)
+            if let f = bare.uppercased().first, (f == "G" || f == "H"),
+               bare.count > 1, bare.dropFirst().allSatisfy({ $0.isNumber }) {
+                strong = bare.uppercased()
+            }
+        }
+        if let s = strong, let first = s.split(separator: " ").first { strong = String(first).uppercased() }
+        return (strong, morph)
     }
 
     /// Remove leftover pipe attributes and stray markers from a run's text.
@@ -424,5 +493,79 @@ enum USFMRich {
             }
         }
         return r.replacingOccurrences(of: "  +", with: " ", options: .regularExpression)
+    }
+}
+
+// MARK: - USFM footnote / cross-reference extraction
+
+/// Pulls `\f …\f*` / `\fe …\fe*` footnotes and `\x …\x*` cross-references out of a
+/// raw USFM verse, mapping them to the GOAT `BibleFootnote` / `BibleCrossRef` types.
+enum USFMNotes {
+    static func footnotes(_ raw: String) -> [BibleFootnote] {
+        var notes: [BibleFootnote] = []
+        for marker in ["f", "fe"] {
+            for body in spans(raw, marker: marker) {
+                // First token is the caller (`+`, `-`, or a letter); the rest is the note.
+                var caller = ""
+                var rest = body.trimmingCharacters(in: .whitespaces)
+                if let first = rest.first, first == "+" || first == "-" || (first.isLetter && rest.dropFirst().first == " ") {
+                    caller = String(first)
+                    rest = String(rest.dropFirst()).trimmingCharacters(in: .whitespaces)
+                }
+                let text = stripInner(rest)
+                if !text.isEmpty { notes.append(BibleFootnote(marker: caller, text: text)) }
+            }
+        }
+        return notes
+    }
+
+    static func crossRefs(_ raw: String) -> [BibleCrossRef] {
+        var refs: [BibleCrossRef] = []
+        for body in spans(raw, marker: "x") {
+            // Targets live in `\xt …` segments; split each on ; and ,
+            var targets: [String] = []
+            if let re = try? NSRegularExpression(pattern: "\\\\xt\\s(.*?)(?=\\\\x|$)", options: .dotMatchesLineSeparators) {
+                let ns = body as NSString
+                re.enumerateMatches(in: body, range: NSRange(location: 0, length: ns.length)) { m, _, _ in
+                    guard let m = m, m.numberOfRanges > 1 else { return }
+                    let seg = stripInner(ns.substring(with: m.range(at: 1)))
+                    targets.append(contentsOf: seg.split(whereSeparator: { $0 == ";" || $0 == "," })
+                        .map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty })
+                }
+            }
+            if targets.isEmpty {
+                let fallback = stripInner(body)
+                targets = fallback.split(whereSeparator: { $0 == ";" || $0 == "," })
+                    .map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+            }
+            if !targets.isEmpty { refs.append(BibleCrossRef(targets: targets)) }
+        }
+        return refs
+    }
+
+    /// Inner bodies of every `\marker …\marker*` span in `raw`.
+    private static func spans(_ raw: String, marker: String) -> [String] {
+        let pattern = "\\\\\(marker)\\s(.*?)\\\\\(marker)\\*"
+        guard let re = try? NSRegularExpression(pattern: pattern, options: .dotMatchesLineSeparators) else { return [] }
+        let ns = raw as NSString
+        var out: [String] = []
+        re.enumerateMatches(in: raw, range: NSRange(location: 0, length: ns.length)) { m, _, _ in
+            guard let m = m, m.numberOfRanges > 1 else { return }
+            out.append(ns.substring(with: m.range(at: 1)))
+        }
+        return out
+    }
+
+    /// Strip inner USFM markers (`\fr`, `\ft`, `\xo`, `\xt`, …) and pipe attributes,
+    /// keeping the human-readable text.
+    private static func stripInner(_ t: String) -> String {
+        var r = t
+        for pat in ["\\\\\\+?[a-z]+\\d?\\*?", "\\|[^\\s]*"] {
+            if let re = try? NSRegularExpression(pattern: pat) {
+                r = re.stringByReplacingMatches(in: r, range: NSRange(r.startIndex..., in: r), withTemplate: "")
+            }
+        }
+        return r.replacingOccurrences(of: "  +", with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }

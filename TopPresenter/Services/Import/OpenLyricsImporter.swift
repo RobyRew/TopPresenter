@@ -39,8 +39,10 @@ final class OpenLyricsImporter: SongImporter {
 
         // Build rich sections, merging translation languages into each line.
         var sections: [SongImportSection] = []
+        var nameToKey: [String: String] = [:]   // original verse name → section key (for verseOrder)
         for (idx, group) in delegate.orderedVerses.enumerated() {
             let (key, label, type) = classify(group.name, index: idx)
+            nameToKey[group.name.lowercased()] = key
             let primary = group.primaryLang
             var lines = group.lines[primary] ?? []
             for (lang, transLines) in group.lines where lang != primary {
@@ -52,17 +54,37 @@ final class OpenLyricsImporter: SongImporter {
             sections.append(SongImportSection(sectionKey: key, type: type, label: label, order: idx, lines: lines))
         }
 
+        // <verseOrder> → arrangement of section keys.
+        let arrangement = delegate.verseOrder
+            .split(whereSeparator: { $0 == " " || $0 == "\n" || $0 == "\t" })
+            .map { nameToKey[$0.lowercased()] ?? String($0) }
+
+        let songbookNumber = delegate.songbookEntry
+        let notes = delegate.comments.joined(separator: "\n")
+
         let version = SongImportVersion(
             name: "Original",
+            authorWords: delegate.authorWords,
+            authorMusic: delegate.authorMusic,
+            authorTranslation: delegate.authorTranslation,
+            songbookNumber: songbookNumber,
+            songbookName: delegate.songbookName,
+            notes: notes,
             language: delegate.songLang,
             key: delegate.key,
             tempo: delegate.tempo,
+            arrangement: arrangement,
             sections: sections
         )
 
         let flatVerses = sections.enumerated().map { idx, sec in
             SongImportVerse(label: sec.label, verseType: sec.type,
                             text: sec.lines.map { $0.text }.joined(separator: "\n"), order: idx)
+        }
+
+        var songbook: SongImportSongbook?
+        if !delegate.songbookName.isEmpty {
+            songbook = SongImportSongbook(name: delegate.songbookName, number: songbookNumber)
         }
 
         return SongImportResult(
@@ -72,12 +94,17 @@ final class OpenLyricsImporter: SongImporter {
             ccliNumber: delegate.ccliNumber,
             key: delegate.key,
             tempo: delegate.tempo,
-            songNumber: delegate.songNumber,
+            songNumber: delegate.songNumber.isEmpty ? songbookNumber : delegate.songNumber,
             tags: delegate.themes.joined(separator: ", "),
             verses: flatVerses,
             titles: aliases,
             language: delegate.songLang,
             themes: delegate.themes,
+            songbook: songbook,
+            authorWords: delegate.authorWords,
+            authorMusic: delegate.authorMusic,
+            authorTranslation: delegate.authorTranslation,
+            notes: notes,
             versions: [version]
         )
     }
@@ -113,6 +140,9 @@ private struct VerseGroup {
 private final class OpenLyricsParserDelegate: NSObject, XMLParserDelegate {
     var titles: [String] = []
     var authors: [String] = []
+    var authorWords = ""
+    var authorMusic = ""
+    var authorTranslation = ""
     var copyright = ""
     var ccliNumber = ""
     var key = ""
@@ -120,12 +150,17 @@ private final class OpenLyricsParserDelegate: NSObject, XMLParserDelegate {
     var songNumber = ""
     var themes: [String] = []
     var songLang = ""
+    var verseOrder = ""
+    var songbookName = ""
+    var songbookEntry = ""
+    var comments: [String] = []
 
     private(set) var orderedVerses: [VerseGroup] = []
     private var verseIndexByName: [String: Int] = [:]
 
     private var currentText = ""
     private var elementStack: [String] = []
+    private var currentAuthorType = ""
 
     // Verse parsing state
     private var currentVerseName = ""
@@ -138,6 +173,7 @@ private final class OpenLyricsParserDelegate: NSObject, XMLParserDelegate {
     private var isInTitles = false
     private var isInAuthors = false
     private var isInThemes = false
+    private var isInComments = false
 
     func parser(
         _ parser: XMLParser,
@@ -154,7 +190,14 @@ private final class OpenLyricsParserDelegate: NSObject, XMLParserDelegate {
         case "titles": isInTitles = true
         case "authors": isInAuthors = true
         case "themes": isInThemes = true
-        case "title", "author", "theme", "copyright", "ccliNo", "key", "tempo", "songNumber", "number":
+        case "comments": isInComments = true
+        case "author":
+            currentAuthorType = (attributeDict["type"] ?? "").lowercased()
+            currentText = ""
+        case "songbook":
+            if let n = attributeDict["name"], !n.isEmpty { songbookName = n }
+            if let e = attributeDict["entry"], !e.isEmpty { songbookEntry = e }
+        case "title", "theme", "comment", "copyright", "ccliNo", "key", "tempo", "verseOrder", "songNumber", "number":
             currentText = ""
         case "verse":
             currentVerseName = attributeDict["name"] ?? "v\(orderedVerses.count + 1)"
@@ -196,13 +239,26 @@ private final class OpenLyricsParserDelegate: NSObject, XMLParserDelegate {
         case "titles": isInTitles = false
         case "authors": isInAuthors = false
         case "themes": isInThemes = false
+        case "comments": isInComments = false
         case "title": if isInTitles && !trimmed.isEmpty { titles.append(trimmed) }
-        case "author": if isInAuthors && !trimmed.isEmpty { authors.append(trimmed) }
+        case "author":
+            if isInAuthors && !trimmed.isEmpty {
+                authors.append(trimmed)
+                switch currentAuthorType {
+                case "words", "lyrics": if authorWords.isEmpty { authorWords = trimmed }
+                case "music": if authorMusic.isEmpty { authorMusic = trimmed }
+                case "translation": if authorTranslation.isEmpty { authorTranslation = trimmed }
+                default: break
+                }
+            }
+            currentAuthorType = ""
         case "theme": if isInThemes && !trimmed.isEmpty { themes.append(trimmed) }
+        case "comment": if isInComments && !trimmed.isEmpty { comments.append(trimmed) }
         case "copyright": copyright = trimmed
         case "ccliNo": ccliNumber = trimmed
         case "key": key = trimmed
         case "tempo": tempo = trimmed
+        case "verseOrder": verseOrder = trimmed
         case "songNumber", "number": songNumber = trimmed
         case "lines":
             if isInLines {

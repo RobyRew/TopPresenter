@@ -33,9 +33,12 @@ final class ChordProImporter: SongImporter {
         var lyricist = ""
         var key = ""
         var tempo = ""
+        var timeSignature = ""
         var ccli = ""
         var copyright = ""
         var capo = 0
+        var album = ""
+        var year = ""
         var themes: [String] = []
 
         var sections: [SongImportSection] = []
@@ -83,9 +86,12 @@ final class ChordProImporter: SongImporter {
                 case "lyricist", "author": lyricist = dir.value
                 case "key": key = dir.value
                 case "tempo", "bpm": tempo = dir.value
+                case "time": timeSignature = dir.value
                 case "ccli": ccli = dir.value
                 case "copyright": copyright = dir.value
                 case "capo": capo = Int(dir.value) ?? 0
+                case "album": album = dir.value
+                case "year": year = dir.value
                 case "tag": if !dir.value.isEmpty { themes.append(dir.value) }
                 case "comment", "c", "highlight": break  // not lyrics
                 case "start_of_verse", "sov":
@@ -120,8 +126,24 @@ final class ChordProImporter: SongImporter {
         var titles: [String] = []
         if !subtitle.isEmpty { titles.append(subtitle) }
 
+        // Album / year have no first-class field — preserve them as notes.
+        var noteParts: [String] = []
+        if !album.isEmpty { noteParts.append("Album: \(album)") }
+        if !year.isEmpty { noteParts.append("Year: \(year)") }
+        if !artist.isEmpty && artist != author { noteParts.append("Artist: \(artist)") }
+        let notes = noteParts.joined(separator: "\n")
+
         let version = SongImportVersion(
-            name: "Original", key: key, capo: capo, tempo: tempo, source: "ChordPro", sections: sections
+            name: "Original",
+            authorWords: lyricist,
+            authorMusic: composer,
+            notes: notes,
+            key: key,
+            capo: capo,
+            tempo: tempo,
+            timeSignature: timeSignature,
+            source: "ChordPro",
+            sections: sections
         )
 
         // If parsing produced nothing usable, keep a single empty verse so the song still imports.
@@ -143,6 +165,7 @@ final class ChordProImporter: SongImporter {
             themes: themes,
             authorWords: lyricist,
             authorMusic: composer,
+            notes: notes,
             versions: [usableVersion]
         )
     }

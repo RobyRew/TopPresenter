@@ -348,6 +348,217 @@ struct ZefaniaImporterTests {
     }
 }
 
+// MARK: - Rich-field extraction (lean Bible formats → GOAT superset)
+
+/// Every lean Bible importer must map its format's full markup (headings, footnotes,
+/// cross-refs, red-letter, Strong's, morphology) into the GOAT model so exports are rich.
+struct RichBibleExtractionTests {
+
+    // MARK: OSIS
+
+    @Test func osisExtractsHeadingsFootnotesCrossRefsStrongsAndWoc() async throws {
+        let xml = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <osis xmlns="http://www.bibletechnologies.net/2003/OSIS/namespace">
+          <osisText osisIDWork="KJV" xml:lang="en">
+            <header><work osisWork="KJV">
+              <title>King James Version</title>
+              <identifier type="OSIS">Bible.en.KJV</identifier>
+              <rights>Public Domain</rights>
+              <language>en</language>
+            </work></header>
+            <div type="book" osisID="John">
+              <chapter osisID="John.3">
+                <title>God's Love</title>
+                <verse osisID="John.3.16">For God so loved <q who="Jesus">the <w lemma="strong:G2889" morph="robinson:N-ASM">world</w></q><note type="crossReference"><reference osisRef="Rom.5.8">Rom 5:8</reference></note><note>A clarifying footnote.</note></verse>
+              </chapter>
+            </div>
+          </osisText>
+        </osis>
+        """
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("rt_osis.xml")
+        try xml.write(to: url, atomically: true, encoding: .utf8)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let result = try await OSISBibleImporter().parse(fileURL: url)
+        #expect(result.copyright == "Public Domain")
+        #expect(result.hasWordsOfChrist)
+        #expect(result.hasStrongs)
+
+        let chapter = result.books[0].chapters[0]
+        #expect(chapter.headings?.first?.text == "God's Love")
+
+        let verse = chapter.verses[0]
+        #expect(verse.hasWordsOfChrist)
+        let runs = try #require(verse.runs)
+        #expect(runs.contains { $0.kind == "woc" })
+        #expect(runs.contains { $0.strong == "G2889" && $0.morph == "N-ASM" })
+        #expect(verse.footnotes?.first?.text == "A clarifying footnote.")
+        #expect(verse.crossReferences?.first?.targets == ["Rom.5.8"])
+    }
+
+    // MARK: USFM
+
+    @Test func usfmExtractsFootnotesAndCrossRefs() {
+        let raw = "For God so loved the world,\\f + \\fr 3.16 \\ft Greek: kosmos.\\f*\\x + \\xt Rom 5:8; John 1:29\\x* that he gave."
+        let footnotes = USFMNotes.footnotes(raw)
+        #expect(footnotes.first?.text.contains("Greek: kosmos.") == true)
+        let xrefs = USFMNotes.crossRefs(raw)
+        #expect(xrefs.first?.targets == ["Rom 5:8", "John 1:29"])
+    }
+
+    @Test func usfmExtractsStrongsFromWordMarkers() {
+        let raw = "\\v 1 In the \\w beginning|strong=\"H7225\"\\w* God \\w created|strong=\"H1254\" x-morph=\"Vqp3ms\"\\w* the heavens."
+        let r = USFMRich.parse(raw, plain: "In the beginning God created the heavens.")
+        let runs = try! #require(r.runs)
+        #expect(runs.contains { $0.strong == "H7225" })
+        let created = runs.first { $0.strong == "H1254" }
+        #expect(created?.morph == "Vqp3ms")
+    }
+
+    @Test func usfmFullVerseRoundTripsThroughImporter() async throws {
+        let usfm = """
+        \\id JHN John
+        \\h John
+        \\c 3
+        \\s The Love of God
+        \\v 16 For God so loved \\wj the world\\wj*,\\f + \\fr 3.16 \\ft kosmos\\f*\\x + \\xt Rom 5:8\\x* \\w that|strong="G3754"\\w* he gave.
+        """
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("rt_john.usfm")
+        try usfm.write(to: url, atomically: true, encoding: .utf8)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let result = try await USFMBibleImporter().parse(fileURL: url)
+        #expect(result.hasWordsOfChrist)
+        #expect(result.hasStrongs)
+        let chapter = result.books[0].chapters[0]
+        #expect(chapter.headings?.contains { $0.text == "The Love of God" } == true)
+        let verse = chapter.verses[0]
+        #expect(verse.hasWordsOfChrist)
+        #expect(verse.runs?.contains { $0.kind == "woc" } == true)
+        #expect(verse.runs?.contains { $0.strong == "G3754" } == true)
+        #expect(verse.footnotes?.first?.text.contains("kosmos") == true)
+        #expect(verse.crossReferences?.first?.targets == ["Rom 5:8"])
+    }
+
+    // MARK: MySword (GBF)
+
+    @Test func mySwordGBFExtractsEverything() {
+        let raw = "<TS>The Creation<Ts>In the beginning <FR>God<Fr> created<WG1254><WTHeb> the heaven.<RF>A footnote.<Rf><RX>Gen 1:1<Rx>"
+        let p = MySwordGBF.parse(raw)
+        #expect(p.text == "In the beginning God created the heaven.")
+        #expect(p.headings.first == "The Creation")
+        #expect(p.woc)
+        let runs = try! #require(p.runs)
+        #expect(runs.contains { $0.kind == "woc" && $0.text.contains("God") })
+        let created = runs.first { $0.strong == "G1254" }
+        #expect(created != nil)
+        #expect(created?.morph == "Heb")
+        #expect(p.footnotes.first?.text == "A footnote.")
+        #expect(p.crossRefs.first?.targets == ["Gen 1:1"])
+    }
+
+    @Test func mySwordPlainTextHasNoRuns() {
+        let p = MySwordGBF.parse("In the beginning God created the heaven and the earth.")
+        #expect(p.text == "In the beginning God created the heaven and the earth.")
+        #expect(p.runs == nil)
+        #expect(!p.woc)
+    }
+}
+
+// MARK: - Rich-field extraction (song formats → GOAT superset)
+
+struct RichSongExtractionTests {
+
+    @Test func openLyricsExtractsSongbookVerseOrderCommentsAndTypedAuthors() async throws {
+        let xml = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <song xmlns="http://openlyrics.info/namespace/2009/song" version="0.9">
+          <properties>
+            <titles><title>Amazing Grace</title><title>Grace</title></titles>
+            <authors>
+              <author type="words">John Newton</author>
+              <author type="music">Traditional</author>
+            </authors>
+            <songbooks><songbook name="Hymns Ancient" entry="42"/></songbooks>
+            <verseOrder>v1 c v1</verseOrder>
+            <comments><comment>A beloved hymn.</comment></comments>
+            <themes><theme>Grace</theme></themes>
+          </properties>
+          <lyrics>
+            <verse name="v1"><lines>Amazing grace how sweet the sound</lines></verse>
+            <verse name="c"><lines>How precious did that grace appear</lines></verse>
+          </lyrics>
+        </song>
+        """
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("rt_amazing.xml")
+        try xml.write(to: url, atomically: true, encoding: .utf8)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let result = try await OpenLyricsImporter().parse(fileURL: url)
+        #expect(result.title == "Amazing Grace")
+        #expect(result.titles == ["Grace"])
+        #expect(result.authorWords == "John Newton")
+        #expect(result.authorMusic == "Traditional")
+        #expect(result.notes == "A beloved hymn.")
+        #expect(result.themes == ["Grace"])
+        let version = try #require(result.versions.first)
+        #expect(version.songbookName == "Hymns Ancient")
+        #expect(version.songbookNumber == "42")
+        #expect(version.arrangement == ["v1", "c", "v1"])
+    }
+
+    @Test func chordProExtractsTimeAlbumYearAndCapo() {
+        let content = """
+        {title: Test Song}
+        {composer: J. Composer}
+        {lyricist: L. Lyric}
+        {time: 6/8}
+        {capo: 2}
+        {album: Hymns Vol 1}
+        {year: 1779}
+
+        [C]Amazing [G]grace how [Am]sweet
+        """
+        let result = ChordProImporter.parse(content: content, fallbackTitle: "x")
+        #expect(result.authorMusic == "J. Composer")
+        #expect(result.authorWords == "L. Lyric")
+        let version = try! #require(result.versions.first)
+        #expect(version.timeSignature == "6/8")
+        #expect(version.capo == 2)
+        #expect(version.notes.contains("Album: Hymns Vol 1"))
+        #expect(version.notes.contains("Year: 1779"))
+    }
+
+    @Test func openSongExtractsCapoAkaAndTimeSignature() async throws {
+        let xml = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <song>
+          <title>Test Song</title>
+          <author>Someone</author>
+          <aka>Alternate Name</aka>
+          <capo print="false">3</capo>
+          <time_sig>3/4</time_sig>
+          <user1>A production note</user1>
+          <lyrics>
+        [V1]
+         Line one of the verse
+        </lyrics>
+        </song>
+        """
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("rt_opensong")
+        try xml.write(to: url, atomically: true, encoding: .utf8)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let result = try await OpenSongImporter().parse(fileURL: url)
+        #expect(result.titles == ["Alternate Name"])
+        let version = try #require(result.versions.first)
+        #expect(version.capo == 3)
+        #expect(version.timeSignature == "3/4")
+        #expect(version.notes.contains("A production note"))
+    }
+}
+
 // MARK: - Bible Import Result Validation Tests
 
 struct BibleImportResultTests {
