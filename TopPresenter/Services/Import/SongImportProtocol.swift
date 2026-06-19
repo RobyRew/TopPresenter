@@ -16,12 +16,21 @@ protocol SongImporter {
     /// Parse a single song file and return a structured result
     func parse(fileURL: URL) async throws -> SongImportResult
 
+    /// Parse EVERY song contained in a single file. For most formats this is one
+    /// song, but a TopPresenter Song JSON *bundle* (`{ "songs": [ … ] }`) holds many —
+    /// the scraper userscript emits one bundle per letter. Default = `[parse()]`.
+    func parseAll(fileURL: URL) async throws -> [SongImportResult]
+
     /// Parse a directory of song files (for formats that use one file per song)
     func parseDirectory(directoryURL: URL) async throws -> [SongImportResult]
 }
 
-/// Default implementation for directory parsing
+/// Default implementations
 extension SongImporter {
+    func parseAll(fileURL: URL) async throws -> [SongImportResult] {
+        [try await parse(fileURL: fileURL)]
+    }
+
     func parseDirectory(directoryURL: URL) async throws -> [SongImportResult] {
         let fileManager = FileManager.default
         let contents = try fileManager.contentsOfDirectory(

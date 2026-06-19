@@ -882,6 +882,51 @@ struct SongBatchImportTests {
         #expect(result.failures.isEmpty)
     }
 
+    @Test func importsMultiSongBundleAsSeparateSongs() async throws {
+        let context = try makeInMemoryContext()
+        let fm = FileManager.default
+        let dir = fm.temporaryDirectory.appendingPathComponent("bundle-\(UUID().uuidString)")
+        try fm.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? fm.removeItem(at: dir) }
+
+        func song(_ title: String, _ line: String) -> [String: Any] {
+            ["title": title, "language": "ro", "versions": [[
+                "name": "Original",
+                "sections": [["id": "v1", "type": "verse", "label": "Strofă 1", "order": 0,
+                              "lines": [["text": line]]]]
+            ]]]
+        }
+
+        // A per-letter bundle: one file, many songs (ResurseCrestine userscript shape).
+        let bundle: [String: Any] = [
+            "schemaVersion": "1.0.0", "format": "TopPresenter Song",
+            "songs": [song("Cântec Unu", "Linia unu"),
+                      song("Cântec Doi", "Linia doi"),
+                      song("Cântec Trei", "Linia trei")]
+        ]
+        let bundleURL = dir.appendingPathComponent("litera-c.json")
+        try JSONSerialization.data(withJSONObject: bundle, options: .prettyPrinted).write(to: bundleURL)
+
+        // A single-song doc still yields exactly one song.
+        let single: [String: Any] = [
+            "schemaVersion": "1.0.0", "format": "TopPresenter Song",
+            "song": song("Singur", "O linie")
+        ]
+        let singleURL = dir.appendingPathComponent("singur.json")
+        try JSONSerialization.data(withJSONObject: single, options: .prettyPrinted).write(to: singleURL)
+
+        let result = await ImportService.importSongItems(
+            urls: [bundleURL, singleURL],
+            collectionName: "Bundle Test",
+            modelContext: context,
+            duplicateResolution: .keepBoth
+        )
+
+        #expect(result.failures.isEmpty)
+        #expect(result.importedTitles.sorted() == ["Cântec Doi", "Cântec Trei", "Cântec Unu", "Singur"])
+        #expect(result.collection?.songs.count == 4)
+    }
+
     @Test func pptRecordWalkerDescendsIntoContainers() {
         // Slide container (recVer 0xF) WRAPPING a TextCharsAtom child —
         // the old walker skipped container children and found no text.

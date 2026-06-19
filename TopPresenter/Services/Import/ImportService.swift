@@ -409,8 +409,14 @@ final class ImportService {
             }
         }
 
-        let result = try await importer.parse(fileURL: fileURL)
-        return createSongFromResult(result, collection: collection, modelContext: modelContext)
+        let results = try await importer.parseAll(fileURL: fileURL)
+        guard let first = results.first else { throw SongImportError.noSongsFound }
+        // A bundle file yields many songs; return the first, create the rest too.
+        let song = createSongFromResult(first, collection: collection, modelContext: modelContext)
+        for extra in results.dropFirst() {
+            _ = createSongFromResult(extra, collection: collection, modelContext: modelContext)
+        }
+        return song
     }
 
     /// Import all songs from a directory
@@ -492,8 +498,11 @@ final class ImportService {
             modelContext.insert(collection)
         }
 
-        let result = try await importer.parse(fileURL: fileURL)
-        _ = createSongFromResult(result, collection: collection, modelContext: modelContext)
+        let results = try await importer.parseAll(fileURL: fileURL)
+        guard !results.isEmpty else { throw SongImportError.noSongsFound }
+        for result in results {
+            _ = createSongFromResult(result, collection: collection, modelContext: modelContext)
+        }
 
         try modelContext.save()
         return collection
@@ -579,32 +588,36 @@ final class ImportService {
             }
 
             do {
-                let parsed = try await importer.parse(fileURL: item.url)
+                // One file may hold many songs (a TopPresenter Song JSON bundle, e.g. the
+                // ResurseCrestine per-letter exports). Apply duplicate handling per song.
+                let parsedSongs = try await importer.parseAll(fileURL: item.url)
                 let col = collection()
-                let key = normalizedSongKey(parsed.title)
+                for parsed in parsedSongs {
+                    let key = normalizedSongKey(parsed.title)
 
-                func makeNew(updateIndex: Bool) {
-                    let song = createSongFromResult(parsed, collection: col, modelContext: modelContext)
-                    applyFolderTag(item.parent, to: song)
-                    if updateIndex { index[key] = song }
-                    result.importedTitles.append(parsed.title)
-                }
-
-                if let existing = index[key] {
-                    switch duplicateResolution {
-                    case .addAsVersion:
-                        appendVersions(from: parsed, to: existing)
+                    func makeNew(updateIndex: Bool) {
+                        let song = createSongFromResult(parsed, collection: col, modelContext: modelContext)
+                        applyFolderTag(item.parent, to: song)
+                        if updateIndex { index[key] = song }
                         result.importedTitles.append(parsed.title)
-                    case .replace:
-                        modelContext.delete(existing)
-                        makeNew(updateIndex: true)
-                    case .keepBoth:
-                        makeNew(updateIndex: false)
-                    case .skip:
-                        break
                     }
-                } else {
-                    makeNew(updateIndex: true)
+
+                    if let existing = index[key] {
+                        switch duplicateResolution {
+                        case .addAsVersion:
+                            appendVersions(from: parsed, to: existing)
+                            result.importedTitles.append(parsed.title)
+                        case .replace:
+                            modelContext.delete(existing)
+                            makeNew(updateIndex: true)
+                        case .keepBoth:
+                            makeNew(updateIndex: false)
+                        case .skip:
+                            break
+                        }
+                    } else {
+                        makeNew(updateIndex: true)
+                    }
                 }
             } catch {
                 result.failures.append((name, error.localizedDescription))

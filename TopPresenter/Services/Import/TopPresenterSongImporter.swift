@@ -62,6 +62,20 @@ final class TopPresenterSongImporter: SongImporter {
         return first
     }
 
+    /// Every song in the file — one for a single-song doc, N for a bundle
+    /// (`{ "songs": [ … ] }`, e.g. the ResurseCrestine per-letter exports).
+    func parseAll(fileURL: URL) async throws -> [SongImportResult] {
+        guard FileManager.default.fileExists(atPath: fileURL.path) else {
+            throw SongImportError.fileNotFound
+        }
+        let data = try Data(contentsOf: fileURL)
+        guard !data.isEmpty else { throw SongImportError.emptyFile }
+
+        let results = try Self.allResults(from: data, fallbackTitle: fileURL.deletingPathExtension().lastPathComponent)
+        guard !results.isEmpty else { throw SongImportError.noSongsFound }
+        return results
+    }
+
     /// Every song in a file: 1 for a single-song doc, N for a legacy bundle.
     static func allResults(from data: Data, fallbackTitle: String = "") throws -> [SongImportResult] {
         guard let root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else {
