@@ -15,6 +15,8 @@ import AVKit
 struct PresentationOutputView: View {
     @Environment(PresentationManager.self) private var pm
     @Environment(VideoPlayerService.self) private var videoService
+    /// Live master switch for the interlinear grid (theme holds the styling).
+    @AppStorage("interlinearLiveEnabled") private var interlinearLiveEnabled = true
 
     var body: some View {
         ZStack {
@@ -206,15 +208,23 @@ struct PresentationOutputView: View {
     ) -> some View {
         let rect = pm.outputBoxFrame(for: section).rect(in: canvasSize)
         let style = pm.outputStyle(for: section)
-        // Red-letter: only the main verse box, only when enabled and the live
-        // verse actually carries words-of-Christ runs.
-        let runs: [VerseRun] = (section == .verseContent && pm.wocStyleEnabled
-                                && pm.outputProfileKey == "bible"
-                                && pm.liveContent.mainRuns.contains { $0.kind == "woc" })
-            ? pm.liveContent.mainRuns : []
-        boxText(text, style: style, rect: rect, fontScale: fontScale,
-                fittedSize: fittedSize(text, style: style, rect: rect, fontScale: fontScale),
-                runs: runs)
+        let isBibleVerse = section == .verseContent && pm.outputProfileKey == "bible"
+        let allRuns = isBibleVerse ? pm.liveContent.mainRuns : []
+        let options = pm.contentOptions(for: pm.outputProfileKey)
+
+        if isBibleVerse, interlinearLiveEnabled, interlinearHasContent(allRuns, options: options) {
+            // Interlinear grid takes over the verse box (word-stack columns).
+            InterlinearText(columns: interlinearColumns(from: allRuns), style: style,
+                            options: options, wocColor: pm.wocColor, rect: rect, fontScale: fontScale)
+        } else {
+            // Red-letter: only the main verse box, only when enabled and the live
+            // verse actually carries words-of-Christ runs.
+            let runs: [VerseRun] = (isBibleVerse && pm.wocStyleEnabled
+                                    && allRuns.contains { $0.kind == "woc" }) ? allRuns : []
+            boxText(text, style: style, rect: rect, fontScale: fontScale,
+                    fittedSize: fittedSize(text, style: style, rect: rect, fontScale: fontScale),
+                    runs: runs)
+        }
     }
 
     /// Composes a verse from rich runs, coloring `woc` segments with the

@@ -134,17 +134,27 @@ final class ImportService {
 
         progressHandler?(0.5, String(localized: "Importing books...", comment: "Import progress"))
 
+        // Correct an obviously-wrong declared language from the verse-text script
+        // (e.g. a Greek/Hebrew module mistakenly tagged "ro"). Latin scripts are
+        // left untouched. Heals mislabeled files on (re-)import.
+        let langSample = result.books.first?.chapters.first?.verses.prefix(8)
+            .map(\.text).joined(separator: " ") ?? ""
+        let correctedLanguage = BibleLanguageDetection.refine(declared: result.language, sample: langSample)
+        let correctedLanguageName = correctedLanguage == result.language
+            ? result.languageName
+            : BibleLanguageNames.name(for: correctedLanguage)
+
         // Create SwiftData models
         let module = BibleModule(
             name: resolvedName,
             abbreviation: result.abbreviation,
-            language: result.language,
+            language: correctedLanguage,
             sourceFormat: format.rawValue,
             moduleDescription: result.description,
             versification: result.versification,
             canon: result.canon,
             nameLocal: result.nameLocal,
-            languageName: result.languageName,
+            languageName: correctedLanguageName,
             copyright: result.copyright,
             aboutText: result.about,
             textSource: result.textSource,
@@ -632,11 +642,18 @@ final class ImportService {
     }
 
     /// Recursively list regular files under a directory (subfolders included).
+    /// Lowercased extensions of every supported song format — used to skip
+    /// unrelated files when scanning a folder, so we never try to parse (or read)
+    /// e.g. video footage sitting in the same directory tree.
+    private static let songFileExtensions: Set<String> =
+        Set(SupportedSongFormat.allCases.flatMap { $0.fileExtensions.map { $0.lowercased() } })
+
     private static func recursiveSongFiles(in dir: URL) -> [URL] {
         var out: [URL] = []
         let keys: Set<URLResourceKey> = [.isRegularFileKey]
         if let en = FileManager.default.enumerator(at: dir, includingPropertiesForKeys: Array(keys), options: [.skipsHiddenFiles]) {
             for case let f as URL in en {
+                guard songFileExtensions.contains(f.pathExtension.lowercased()) else { continue }
                 if (try? f.resourceValues(forKeys: keys))?.isRegularFile == true {
                     out.append(f)
                 }
@@ -725,6 +742,7 @@ final class ImportService {
         song.authorMusic = result.authorMusic
         song.authorTranslation = result.authorTranslation
         song.notes = result.notes
+        if result.extensionsJSON != "{}" { song.extensionsJSON = result.extensionsJSON }
         song.media = result.media.map {
             SongMediaRef(role: $0.role, kind: $0.kind, filename: $0.filename, bookmark: $0.bookmark)
         }

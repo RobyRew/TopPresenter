@@ -34,5 +34,8 @@ Pods/
 
 # Bible library — distributed as a GitHub release, not committed (~856 MB)
 ExtraAssets/Bibles/
+# Scraped song corpora — kept local, not committed (melodia.ro, ResurseCrestine)
+ExtraAssets/Songs/
+resursecrestine-songs/
 # Icon Composer raster exports (regenerable from the .icon / .svg)
 Logo/Icon-Exports/

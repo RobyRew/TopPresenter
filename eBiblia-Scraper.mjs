@@ -25,6 +25,7 @@
 //   --codes a,b,c     translation codes to export (eBiblia internal codes)
 //   --all             export the built-in fallback list
 //   --books A-B       book range (default 1-66; >66 = Orthodox deuterocanon discovery)
+//   --lang CODE       force the language code (ro/en/de/gr/ebr/ru…); else auto-detected
 //   --out DIR         output folder (default ./TopPresenter-Bibles), language-foldered
 //   --delay MS        pause between chapter fetches (default 60)
 //   --no-meta         skip the about/foreword metadata fetch
@@ -93,9 +94,51 @@ const LANG_FOLDERS = {
   hu: 'Magyar', ru: 'Russian', gr: 'Greek', ebr: 'Hebrew', lat: 'Latin', ukr: 'Ukrainian',
   nl: 'Nederlands', pg: 'Portugues', arab: 'Arabic', sb: 'Srpski', roma: 'Romani',
 };
-const LANG_NAMES = { ro: 'Română', en: 'English', de: 'Deutsch', fr: 'Français', es: 'Español', it: 'Italiano', hu: 'Magyar', ru: 'Русский' };
+// Display names — must match the app's codes (Views/Main/MainControlView.swift).
+const LANG_NAMES = {
+  ro: 'Română', en: 'English', de: 'Deutsch', fr: 'Français', es: 'Español', it: 'Italiano',
+  hu: 'Magyar', ru: 'Русский', gr: 'Ελληνικά', ebr: 'עברית', lat: 'Latina', ukr: 'Українська',
+  nl: 'Nederlands', pg: 'Português', arab: 'العربية', sb: 'Srpski', roma: 'Romani',
+};
 
 const mapTranslationCode = c => CODE_MAP[(c || '').toLowerCase()] || (c || '').toUpperCase();
+
+// ── Language resolution ───────────────────────────────────────────────────────────
+const stripDia = s => (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+
+/// Map the eBiblia "Limba:" metadata name → an app language code.
+function langFromName(name) {
+  const n = stripDia(name);
+  if (!n) return '';
+  const rules = [
+    [/greac|greek|elin|ellin/, 'gr'], [/ebraic|ebr|hebr/, 'ebr'], [/englez|english/, 'en'],
+    [/roman(?!i)|romana/, 'ro'], [/german|deutsch/, 'de'], [/francez|french/, 'fr'],
+    [/spaniol|spanish|espan/, 'es'], [/italian/, 'it'], [/maghiar|unguri|hungar|magyar/, 'hu'],
+    [/rus(?!t)|russ/, 'ru'], [/ucrain|ukrain/, 'ukr'], [/latin/, 'lat'], [/olandez|neerland|dutch|nederlan/, 'nl'],
+    [/portugh|portug/, 'pg'], [/arab/, 'arab'], [/sarb|sirb|serb|srpsk/, 'sb'], [/romani|tigan|rromani/, 'roma'],
+  ];
+  for (const [re, code] of rules) if (re.test(n)) return code;
+  return '';
+}
+
+/// Dominant script of the verse text → app language code (non-Latin) or ro/en.
+function detectScript(text) {
+  const s = String(text || '');
+  let greek = 0, hebrew = 0, cyrillic = 0, latin = 0, roDia = 0;
+  for (const ch of s) {
+    const c = ch.codePointAt(0);
+    if ((c >= 0x0370 && c <= 0x03FF) || (c >= 0x1F00 && c <= 0x1FFF)) greek++;
+    else if (c >= 0x0590 && c <= 0x05FF) hebrew++;
+    else if (c >= 0x0400 && c <= 0x04FF) cyrillic++;
+    else if ('ăâîșțĂÂÎȘȚ'.includes(ch)) { roDia++; latin++; }
+    else if ((c >= 0x41 && c <= 0x5A) || (c >= 0x61 && c <= 0x7A)) latin++;
+  }
+  if (greek > 10) return 'gr';
+  if (hebrew > 10) return 'ebr';
+  if (cyrillic > 10) return 'ru';
+  if (latin > 10) return roDia > 0 ? 'ro' : 'en';
+  return '';
+}
 
 // ── DOM-free HTML helpers (regex replacements for the userscript's DOM bits) ──────
 function decodeEntities(s) {
@@ -196,7 +239,9 @@ function parseInterlinear(cleanHtml) {
   while ((m = re.exec(cleanHtml))) {
     const b = m[1];
     const wd = tagInner(b, 'wd').replace(/\s+/g, ' ').trim();
-    const sr = tagInner(b, 'sr').trim(), mf = tagInner(b, 'mf').trim(), en = tagInner(b, 'en').trim();
+    // Per-word gloss is in <ro> (eBiblia interlinear modules) or <en>.
+    const sr = tagInner(b, 'sr').trim(), mf = tagInner(b, 'mf').trim();
+    const en = tagInner(b, 'ro').trim() || tagInner(b, 'en').trim();
     if (!wd && !en) continue;
     const run = { text: wd };
     if (sr) { run.strong = sr; anySr = true; }
@@ -429,7 +474,9 @@ async function exportTranslation(code, opts) {
   let meta = null;
   if (opts.meta) { process.stderr.write(`  · ${displayName}: metadate…\n`); meta = await fetchTranslationMeta(code); }
   const fullName = (meta && meta.fullName) || displayName;
-  const lang = 'ro';
+  // Seed language from --lang or the "Limba:" metadata name; finalized after the
+  // walk via verse-script detection when neither is available.
+  let lang = opts.lang || langFromName(meta && meta.languageName) || '';
   const state = { hasWoc: false, hasStrong: false };
   const bible = createBibleJSON(code, {
     name: fullName, nameLocal: fullName, language: lang, languageName: (meta && meta.languageName) || LANG_NAMES[lang] || lang,
@@ -482,6 +529,15 @@ async function exportTranslation(code, opts) {
     }
   }
 
+  // Finalize language: fall back to verse-script detection when --lang / metadata
+  // didn't decide it (e.g. a Greek/Hebrew interlinear with no clear "Limba:").
+  if (!lang) {
+    const sample = (bible.books[0]?.chapters?.[0]?.verses || []).slice(0, 8).map(v => v.text).join(' ');
+    lang = detectScript(sample) || 'ro';
+  }
+  bible.translation.language = lang;
+  bible.translation.languageName = (meta && meta.languageName) || LANG_NAMES[lang] || lang;
+
   bible.translation.hasWordsOfChrist = state.hasWoc;
   bible.translation.hasStrongs = state.hasStrong;
   bible.exportInfo.totalBooks = bible.books.length;
@@ -500,11 +556,12 @@ function bibleFilename(bible) {
 
 // ── CLI ─────────────────────────────────────────────────────────────────────────
 function parseArgs(argv) {
-  const o = { codes: null, all: false, out: './TopPresenter-Bibles', delay: CONFIG.delay, meta: true, resume: true, bookStart: 1, bookEnd: 66 };
+  const o = { codes: null, all: false, out: './TopPresenter-Bibles', delay: CONFIG.delay, meta: true, resume: true, bookStart: 1, bookEnd: 66, lang: '' };
   for (let i = 2; i < argv.length; i++) {
     const a = argv[i], next = () => argv[++i];
     if (a === '--codes') o.codes = next().split(',').map(s => s.trim()).filter(Boolean);
     else if (a === '--all') o.all = true;
+    else if (a === '--lang') o.lang = next().trim();
     else if (a === '--out') o.out = next();
     else if (a === '--delay') o.delay = +next();
     else if (a === '--no-meta') o.meta = false;

@@ -71,6 +71,7 @@ The design studio behind everything you see on screen:
 - **The GOAT format** — TopPresenter Bible JSON **v1.0.0** is a superset of every format: section headings, footnotes, cross-references, Strong's numbers, poetry, and **red-letter** (words of Christ) all round-trip through import → store → export. Fields are optional; nothing is lost importing OSIS/USFM and re-exporting.
 - **Red-letter theme** — highlight the words spoken by Jesus in any color, per theme (Editor de Teme ▸ Text ▸ *Cuvintele lui Isus*). Populated from OSIS/USFM Bibles that mark them.
 - **Smart duplicate handling** — importing a Bible whose code already exists prompts **Combină / Înlocuiește / Păstrează ambele / Anulează**; *Combină* fills in only the chapters/verses you're missing.
+- **Language auto-correction** — a Bible whose declared language contradicts its actual script (e.g. a Greek interlinear mistagged Romanian) is filed under the correct language group on import.
 - **Full-text &amp; reference search** — type `John 3:16` or `Gen 1:1-3` to jump directly
 - **List view &amp; Grid view** with color-coded book categories
 - **Multi-verse selection** (⌘+Click) and **auto-fill** that measures the actual verse box
@@ -79,10 +80,10 @@ The design studio behind everything you see on screen:
 
 ### 🎵 Songs &amp; Lyrics
 
-- **The GOAT format** — **TopPresenter Song JSON v2.0.0** is one file per song and a superset of every source: per-song versions, sections with **inline chords** (ChordPro positions) and **bilingual translation lines**, arrangement/play-order, section **repeat counts**, linked media, and rich metadata all round-trip through import → store → export.
+- **The GOAT format** — **TopPresenter Song JSON v2.0.0** is one file per song and a superset of every source: per-song versions, sections with **inline chords** (ChordPro positions) and **bilingual translation lines**, arrangement/play-order, section **repeat counts**, linked media, and rich metadata all round-trip through import → store → export. Source-specific extras (chord/capo charts, song analysis, external ids) ride along losslessly in `_extensions`.
 - **Multiple versions per song** — a song groups several renditions (e.g. 3 Romanian variants, an ES translation). Each version owns its own metadata (title shown, authors, language, key/capo/tempo, copyright, CCLI, songbook, style, themes, notes, repeat marker) and **inherits the original's by default**, with a per-version toggle to customize.
 - **6 import formats** — TopPresenter Song JSON, OpenSong XML, OpenLyrics XML (translations + chords), ChordPro, plain text, and PowerPoint (PPTX &amp; PPT — sandbox-safe, in-process parsing, with filename titles + chorus-reuse detection).
-- **Recursive folder import** for thousands of files, with progress, format auto-detection, and duplicate handling (add as new version / keep both / skip).
+- **Recursive folder import** for thousands of files, with progress, format auto-detection, and duplicate handling (add as new version / keep both / skip). Only TopPresenter-supported file types are scanned and the walk runs off the main thread, so picking a huge folder never freezes the app.
 - **Scalable browser** — list ⇄ grid with theme-rendered thumbnails, instant indexed search, and filters (collection, language, media).
 - **Song studio editor** — two-pane visual editor with a live theme-rendered preview, version tabs, color-coded section cards (drag-to-reorder, duplicate, ×N repeat, inline-chord mode), and per-version metadata.
 - **Rendered slide filmstrip** — sections auto-split to fit the screen (configurable lines/slide); click to project, double-click or ▶ to go live; bilingual + repeat markers (`/: :/`, `‖: :‖`, `|: :|`, `(×N)`, `bis/ter`) applied per the theme.
@@ -98,7 +99,7 @@ The design studio behind everything you see on screen:
 
 ### 🪟 Multi-Window Tabs
 
-⌘T opens native tabs — each with its own module, Bible translation, and selection. One output, driven by whichever tab presses Show.
+⌘T opens native tabs — each with its own module, Bible translation, and selection. Tabs are titled by **type + name** (e.g. *Bible — (EDC100) Ediția Dumitru Cornilescu Centenară*, *Songs — Înaintea Ta venim*), or rename any tab manually. One output, driven by whichever tab presses Show.
 
 ### 📂 Universal Drag &amp; Drop, Media, Schedule, Quick Search
 
@@ -145,6 +146,23 @@ The design studio behind everything you see on screen:
 It exports straight to **TopPresenter Bible JSON** — clean verse text plus red-letter (words of Christ), section headings, cross-references, footnotes, Strong's numbers, morphology, interlinear glosses, and full translation metadata (name, year, copyright, foreword). Toggle the rich-content groups to keep files lean. **⏬ Toate** exports every translation your account can open at once, organized into per-language folders. Works on Chrome, Firefox and Safari.
 
 > Please respect each translation's copyright — export only for personal and congregational use.
+
+---
+
+## Song Scrapers — melodia.ro &amp; ResurseCrestine
+
+Dependency-free scrapers that export Romanian worship songs into **TopPresenter Song JSON** — one file per song, ready for recursive folder-import. Source-specific extras are preserved losslessly under each song's `_extensions`, surviving import → store → export.
+
+### melodia.ro
+
+- **[`melodia-scraper.mjs`](melodia-scraper.mjs)** (Node 18+, resumable) — enumerates the sitemap and exports every song: lyrics with **inline chords at exact character positions**, key, tempo (BPM) and time signature, authors (*Muzică / Versuri*), copyright, composed year, keyword tags, and the song structure as a play-order **arrangement** (identical re-rendered sections are de-duplicated and reused). melodia's *Anatomia Evangheliei* analysis, available keys and a computed per-instrument capo recommendation are kept under `_extensions.melodia`. Chords are stored **once** in the song's own key — every other key (C, C#, Db, D…) is derivable by transposition. Run: `node melodia-scraper.mjs --out ./songs`.
+- **[`melodia-scraper.user.js`](melodia-scraper.user.js)** (Tampermonkey) — same export, but reads melodia's React-rendered capo charts to capture the **exact** guitar **and** ukulele fingerings (shape, capo, frets, fingers, barre). One-click ⬇ button (Alt+T).
+
+### ResurseCrestine
+
+- **[`resursecrestine-scraper.mjs`](resursecrestine-scraper.mjs)** / **[`.user.js`](resursecrestine-scraper.user.js)** — crawl the full [resursecrestine.ro/cantece](https://www.resursecrestine.ro) catalog (~28k songs) into TopPresenter Song JSON: rich sections (verse/chorus + `/: :/` repeat markers), with author / album / theme metadata and bible reference carried across.
+
+> Scraped corpora are kept local (git-ignored), not committed. Please respect each song's copyright — export only for personal and congregational use.
 
 ---
 

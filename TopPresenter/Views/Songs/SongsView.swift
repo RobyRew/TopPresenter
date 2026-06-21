@@ -787,6 +787,10 @@ struct SongImportSheet: View {
         panel.canChooseDirectories = true
         panel.canChooseFiles = true
         panel.allowsMultipleSelection = true
+        // Only supported song file types are selectable; folders stay pickable.
+        panel.allowedContentTypes = SupportedSongFormat.allCases
+            .flatMap { $0.fileExtensions }
+            .compactMap { UTType(filenameExtension: $0) }
         panel.message = String(localized: "Alege cântece (fișiere sau directoare)", comment: "Open panel message")
 
         if panel.runModal() == .OK {

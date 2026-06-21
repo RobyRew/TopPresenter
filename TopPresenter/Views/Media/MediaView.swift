@@ -15,6 +15,7 @@ struct MediaView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(PresentationManager.self) private var presentationManager
     @Environment(AudioPlayerManager.self) private var audioPlayerManager
+    @Environment(LibraryManager.self) private var libraryManager
 
     @Query(sort: \MediaItem.importDate, order: .reverse) private var mediaItems: [MediaItem]
 
@@ -118,6 +119,10 @@ struct MediaView: View {
         }
         .onKeyWindowNotification(.importMedia) { _ in
             importMedia()
+        }
+        // Mirror the highlighted media item so the tab title can read it.
+        .onChange(of: selectedItem) { _, newValue in
+            libraryManager.selectedMediaItem = newValue
         }
     }
 

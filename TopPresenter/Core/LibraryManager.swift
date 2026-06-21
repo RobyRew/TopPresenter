@@ -52,6 +52,10 @@ final class LibraryManager {
     var songSlideIndex: Int = 0
     var songSlideCount: Int = 1
 
+    // MARK: - Media State
+    /// The media item highlighted in the Media view — drives the tab title.
+    var selectedMediaItem: MediaItem?
+
     // MARK: - Bible Navigation
     /// Switch translation while staying on the same passage where possible.
     /// Fallback chain: same book+chapter+verse → same book, first verse →

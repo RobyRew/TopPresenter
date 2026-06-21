@@ -68,6 +68,7 @@ struct PresentationPreviewCard: View {
     @Environment(LibraryManager.self) private var libraryManager
     @AppStorage("multiVerseLayout") private var multiVerseLayout: String = "inline"
     @AppStorage("showVerseNumberPrefix") private var showVerseNumberPrefix: Bool = false
+    @AppStorage("interlinearLiveEnabled") private var interlinearLiveEnabled = true
 
     /// Pass `true` when rendering Bible content so the translation name is populated.
     var isBibleContent: Bool = false
@@ -167,6 +168,13 @@ struct PresentationPreviewCard: View {
     /// theme has it enabled and the verse carries words-of-Christ.
     private var previewRuns: [VerseRun] {
         guard pm.wocStyleEnabled, isBibleContent else { return [] }
+        return pm.liveContent.isLive ? pm.liveContent.mainRuns : libraryManager.selectedVersesRuns
+    }
+
+    /// Real runs (live or selected) for the interlinear preview — no fabrication;
+    /// the card shows exactly what would project.
+    private var previewInterlinearRuns: [VerseRun] {
+        guard isBibleContent else { return [] }
         return pm.liveContent.isLive ? pm.liveContent.mainRuns : libraryManager.selectedVersesRuns
     }
 
@@ -282,8 +290,18 @@ struct PresentationPreviewCard: View {
                                   ) * canvasScale
                                 : nil
 
-                            previewBoxText(text, style: style, rect: rect, fontScale: targetScale * canvasScale, fittedSize: fitted, dim: dim,
-                                           runs: section == .verseContent ? previewRuns : [])
+                            let ilOpts = pm.contentOptions(for: key)
+                            let ilRuns = previewInterlinearRuns
+                            if section == .verseContent, key == "bible", interlinearLiveEnabled,
+                               interlinearHasContent(ilRuns, options: ilOpts) {
+                                InterlinearText(columns: interlinearColumns(from: ilRuns), style: style,
+                                                options: ilOpts, wocColor: pm.wocColor, rect: rect,
+                                                fontScale: targetScale * canvasScale)
+                                    .opacity(dim)
+                            } else {
+                                previewBoxText(text, style: style, rect: rect, fontScale: targetScale * canvasScale, fittedSize: fitted, dim: dim,
+                                               runs: section == .verseContent ? previewRuns : [])
+                            }
                         }
                     }
                 case .custom(let id):
@@ -1257,6 +1275,7 @@ struct StyleQuickSettings: View {
     @AppStorage("showVerseNumbers") private var showVerseNumbers: Bool = true
     @AppStorage("showCrossReferences") private var showCrossReferences: Bool = false
     @AppStorage("showFootnotes") private var showFootnotes: Bool = false
+    @AppStorage("interlinearLiveEnabled") private var interlinearLiveEnabled = true
     @AppStorage("multiVerseLayout") private var multiVerseLayout: String = "inline"
     @AppStorage("showVerseNumberPrefix") private var showVerseNumberPrefix: Bool = false
 
@@ -1509,6 +1528,9 @@ struct StyleQuickSettings: View {
                     Toggle(String(localized: "Afișează numerele versetelor", comment: "Setting label"), isOn: $showVerseNumbers)
                     Toggle(String(localized: "Afișează referințe încrucișate", comment: "Setting label"), isOn: $showCrossReferences)
                     Toggle(String(localized: "Afișează note de subsol", comment: "Setting label"), isOn: $showFootnotes)
+                    if pm.contentOptions(for: "bible").interlinearModeRaw != "off" {
+                        Toggle(String(localized: "Afișează interliniar (grilă)", comment: "Setting label"), isOn: $interlinearLiveEnabled)
+                    }
                 }
                 .font(.caption)
                 .controlSize(.small)

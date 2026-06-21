@@ -30,19 +30,44 @@ struct MainControlView: View {
     @State private var showRenameTab = false
     @State private var renameDraft = ""
 
-    /// Automatic tab title from the current section + selection.
+    /// Automatic tab title: the section type plus the active selection, e.g.
+    /// "Bible - (EDC100) Ediția Dumitru Cornilescu Centenară",
+    /// "Songs - Înaintea Ta venim", "Media - Image · banner.jpg".
     private var autoTabTitle: String {
+        let section = appState.selectedSidebarItem.localizedName
+        func titled(_ detail: String?) -> String {
+            guard let detail, !detail.isEmpty else { return section }
+            return "\(section) - \(detail)"
+        }
+
         switch appState.selectedSidebarItem {
         case .bible:
-            if let m = libraryManager.selectedBibleModule {
-                return m.abbreviation.isEmpty ? m.name : m.abbreviation
-            }
-            return String(localized: "Bible", comment: "Tab title")
+            guard let m = libraryManager.selectedBibleModule else { return section }
+            let abbr = m.abbreviation.trimmingCharacters(in: .whitespaces)
+            let name = m.name.trimmingCharacters(in: .whitespaces)
+            let detail: String
+            if !abbr.isEmpty, !name.isEmpty, abbr != name { detail = "(\(abbr)) \(name)" }
+            else if !abbr.isEmpty { detail = abbr }
+            else { detail = name }
+            return titled(detail)
         case .songs:
-            return libraryManager.selectedSongCollection?.name
-                ?? String(localized: "Songs", comment: "Tab title")
+            if let song = libraryManager.selectedSong { return titled(song.title) }
+            return titled(libraryManager.selectedSongCollection?.name)
+        case .media:
+            guard let item = libraryManager.selectedMediaItem else { return section }
+            return titled("\(mediaTypeLabel(item.mediaType)) · \(item.name)")
         default:
-            return appState.selectedSidebarItem.localizedName
+            return section
+        }
+    }
+
+    /// Friendly, localized label for a media item's type.
+    private func mediaTypeLabel(_ type: String) -> String {
+        switch type {
+        case "image": return String(localized: "Image", comment: "Media type")
+        case "audio": return String(localized: "Audio", comment: "Media type")
+        case "video": return String(localized: "Video", comment: "Media type")
+        default: return type.capitalized
         }
     }
 
@@ -554,15 +579,8 @@ struct MainControlView: View {
 
     @State private var showModulePopover = false
 
-    /// Friendly language name for a module language code.
-    private func languageName(_ code: String) -> String {
-        let names = ["ro": "Română", "en": "English", "de": "Deutsch", "fr": "Français",
-                     "es": "Español", "it": "Italiano", "hu": "Magyar", "ru": "Русский",
-                     "gr": "Ελληνικά", "ebr": "עברית", "lat": "Latina", "ukr": "Українська",
-                     "nl": "Nederlands", "pg": "Português", "arab": "العربية",
-                     "sb": "Srpski", "roma": "Romani"]
-        return names[code] ?? code.uppercased()
-    }
+    /// Friendly language name for a module language code (shared source of truth).
+    private func languageName(_ code: String) -> String { BibleLanguageNames.name(for: code) }
 
     /// Modules grouped by language (Romanian + English first, then alphabetical).
     private var moduleLanguageGroups: [(code: String, name: String, modules: [BibleModule])] {

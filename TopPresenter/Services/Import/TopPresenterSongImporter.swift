@@ -155,6 +155,14 @@ final class TopPresenterSongImporter: SongImporter {
 
         let songNumber = stringValue(obj["songNumber"]) .isEmpty ? (songbook?.number ?? "") : stringValue(obj["songNumber"])
 
+        // Preserve source-specific extras (melodia.ro Anatomia Evangheliei, capos, …) verbatim.
+        let extensionsJSON: String = {
+            guard let ext = obj["_extensions"], JSONSerialization.isValidJSONObject(ext),
+                  let data = try? JSONSerialization.data(withJSONObject: ext),
+                  let s = String(data: data, encoding: .utf8), s != "{}" else { return "{}" }
+            return s
+        }()
+
         return SongImportResult(
             title: title,
             author: combinedAuthor,
@@ -175,7 +183,8 @@ final class TopPresenterSongImporter: SongImporter {
             authorTranslation: authorTranslation,
             notes: (obj["notes"] as? String) ?? "",
             media: media,
-            versions: versions
+            versions: versions,
+            extensionsJSON: extensionsJSON
         )
     }
 

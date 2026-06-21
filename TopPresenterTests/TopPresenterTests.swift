@@ -208,6 +208,31 @@ struct TopPresenterImporterTests {
         #expect(USFMRich.parse("Just plain text.", plain: "Just plain text.").runs == nil)
     }
 
+    @Test func parsesInterlinearRunsWithOriginalGlossStrongMorph() async throws {
+        // A true interlinear verse (ENINT shape): each run = original word + gloss + Strong's + morph.
+        let json: [String: Any] = [
+            "format": "TopPresenter Bible",
+            "translation": ["code": "ENINT", "hasStrongs": true],
+            "books": [["number": 64, "name": "3 John", "chapters": [[
+                "number": 1,
+                "verses": [["number": 1, "text": "Ὁ πρεσβύτερος",
+                            "runs": [
+                                ["text": "Ὁ", "strong": "3588", "morph": "T-NSM", "gloss": "The"],
+                                ["text": "πρεσβύτερος", "strong": "4245", "morph": "A-NSM", "gloss": "elder"],
+                            ]]]
+            ]]]],
+        ]
+        let url = try writeJSON(json, filename: "test_interlinear.json")
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let result = try await importer.parse(fileURL: url)
+        #expect(result.hasStrongs)
+        let runs = try #require(result.books[0].chapters[0].verses[0].runs)
+        #expect(runs.count == 2)
+        #expect(runs[0].text == "Ὁ" && runs[0].strong == "3588" && runs[0].morph == "T-NSM" && runs[0].gloss == "The")
+        #expect(runs[1].text == "πρεσβύτερος" && runs[1].gloss == "elder")
+    }
+
     @Test func acceptsLegacyCrossRefShape() async throws {
         // eBiblia v1 used {references:[…]} — must still decode into targets.
         let json: [String: Any] = [
@@ -1652,6 +1677,65 @@ struct PresentationManagerTests {
         #expect(pm.wocColorHex == "FF3300")
     }
 
+    @Test func interlinearColumnsMapRunsToWordStacks() {
+        let runs = [
+            VerseRun(text: "In the", kind: "plain"),
+            VerseRun(text: "beginning", kind: "plain", strong: "G746", morph: "N-DSF", gloss: "început"),
+        ]
+        let cols = interlinearColumns(from: runs)
+        #expect(cols.count == 3)                                   // 2 bare + 1 annotated
+        #expect(cols[0].word == "In" && cols[0].strong == nil)
+        #expect(cols[1].word == "the")
+        let last = cols[2]
+        #expect(last.word == "beginning")
+        #expect(last.strong == "G746")
+        #expect(last.morph == "N-DSF")
+        #expect(last.gloss == "început")
+    }
+
+    @Test func interlinearEngagesOnlyWithContentAndMode() {
+        let annotated = [VerseRun(text: "λόγος", strong: "G3056", morph: "N-NSM", gloss: "Cuvântul")]
+        var off = PresentationManager.ContentOptions(); off.interlinearModeRaw = "off"
+        #expect(!interlinearHasContent(annotated, options: off))
+
+        var gloss = PresentationManager.ContentOptions(); gloss.interlinearModeRaw = "gloss"
+        #expect(interlinearHasContent(annotated, options: gloss))
+
+        var fullNoGloss = PresentationManager.ContentOptions()
+        fullNoGloss.interlinearModeRaw = "full"; fullNoGloss.interlinearShowGloss = false
+        #expect(interlinearHasContent(annotated, options: fullNoGloss))   // strong/morph in full
+
+        var full = PresentationManager.ContentOptions(); full.interlinearModeRaw = "full"
+        #expect(!interlinearHasContent([VerseRun(text: "word", kind: "plain")], options: full))  // nothing to show
+    }
+
+    @Test func interlinearOptionsTravelWithThemes() {
+        let pm = PresentationManager()
+        let original = pm.contentOptions(for: "bible")
+        defer { pm.setContentOptions(original, for: "bible") }
+
+        var o = original
+        o.interlinearModeRaw = "full"
+        o.interlinearShowMorph = false
+        o.interlinearStrongColorHex = "D9A441"
+        o.interlinearGlossScale = 0.6
+        pm.setContentOptions(o, for: "bible")
+        let theme = pm.saveCurrentAsTheme(named: "IL Test", formatRaw: "all")
+        defer { pm.deleteTheme(id: theme.id) }
+
+        var reset = pm.contentOptions(for: "bible")
+        reset.interlinearModeRaw = "off"; reset.interlinearShowMorph = true
+        reset.interlinearStrongColorHex = ""; reset.interlinearGlossScale = 0.55
+        pm.setContentOptions(reset, for: "bible")
+
+        pm.applyTheme(id: theme.id)
+        let back = pm.contentOptions(for: "bible")
+        #expect(back.interlinearModeRaw == "full")
+        #expect(back.interlinearShowMorph == false)
+        #expect(back.interlinearStrongColorHex == "D9A441")
+        #expect(abs(back.interlinearGlossScale - 0.6) < 0.001)
+    }
+
     @Test func duplicateImportMergeFillsMissingChapters() async throws {
         let container = try ModelContainer(
             for: BibleModule.self, BibleBook.self, BibleChapter.self, BibleVerse.self,
@@ -2168,5 +2252,132 @@ struct SongBulkImportTests {
         #expect(slides.count == 7)
         #expect(slides.allSatisfy { $0.total == 7 })
         #expect(slides.first?.text.contains("linia 1") == true)
+    }
+}
+
+// MARK: - Bible language detection / correction
+
+@MainActor
+struct BibleLanguageDetectionTests {
+    @Test func refineOverridesNonLatinMismatches() {
+        // A Greek interlinear mistakenly tagged "ro" → corrected to "gr".
+        #expect(BibleLanguageDetection.refine(declared: "ro", sample: "Ἐν ἀρχῇ ἐποίησεν ὁ θεὸς τὸν οὐρανὸν") == "gr")
+        // Hebrew → "ebr".
+        #expect(BibleLanguageDetection.refine(declared: "ro", sample: "בְּרֵאשִׁית בָּרָא אֱלֹהִים אֵת הַשָּׁמַיִם") == "ebr")
+        // Cyrillic mislabeled "ro" → "ru"; an already-Cyrillic code is kept.
+        #expect(BibleLanguageDetection.refine(declared: "ro", sample: "В начале сотворил Бог небо и землю") == "ru")
+        #expect(BibleLanguageDetection.refine(declared: "ukr", sample: "На початку Бог створив небо і землю") == "ukr")
+    }
+
+    @Test func refineLeavesLatinAndMatchingScriptsAlone() {
+        // Latin script → trust the declared code (can't tell ro/en/de by letters).
+        #expect(BibleLanguageDetection.refine(declared: "ro", sample: "La început a făcut Dumnezeu cerurile și pământul") == "ro")
+        #expect(BibleLanguageDetection.refine(declared: "en", sample: "In the beginning God created the heavens") == "en")
+        // Already-correct non-Latin code stays.
+        #expect(BibleLanguageDetection.refine(declared: "gr", sample: "Ἐν ἀρχῇ ἦν ὁ λόγος καὶ ὁ λόγος") == "gr")
+    }
+
+    @Test func importCorrectsGreekModuleTaggedRomanian() async throws {
+        let container = try ModelContainer(
+            for: BibleModule.self, BibleBook.self, BibleChapter.self, BibleVerse.self,
+            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
+        )
+        let ctx = container.mainContext
+        func write(_ j: [String: Any], _ name: String) throws -> URL {
+            let u = FileManager.default.temporaryDirectory.appendingPathComponent(name)
+            try JSONSerialization.data(withJSONObject: j).write(to: u)
+            return u
+        }
+
+        // Greek verse text but declared language "ro" (the mislabel bug) → corrected to "gr".
+        let greek: [String: Any] = ["format": "TopPresenter Bible",
+            "translation": ["code": "INTER", "name": "Interlinear", "language": "ro"],
+            "books": [["number": 64, "name": "3 John", "testament": "NT", "chapters": [
+                ["number": 1, "verses": [["number": 1, "text": "Ὁ πρεσβύτερος τῷ ἀγαπητῷ Γαΐῳ ὃν ἐγὼ ἀγαπῶ"]]]]]]]
+        let gm = try await ImportService.importBible(fileURL: try write(greek, "lang_gr.json"), format: .topPresenter, modelContext: ctx, resolution: .keepBoth)
+        #expect(gm.language == "gr")
+        #expect(gm.languageName == "Ελληνικά")
+
+        // A genuinely Romanian module keeps "ro".
+        let ro: [String: Any] = ["format": "TopPresenter Bible",
+            "translation": ["code": "VDC", "name": "Cornilescu", "language": "ro"],
+            "books": [["number": 64, "name": "3 Ioan", "testament": "NT", "chapters": [
+                ["number": 1, "verses": [["number": 1, "text": "Bătrânul, către preaiubitul Gaiu, pe care îl iubesc în adevăr"]]]]]]]
+        let rm = try await ImportService.importBible(fileURL: try write(ro, "lang_ro.json"), format: .topPresenter, modelContext: ctx, resolution: .keepBoth)
+        #expect(rm.language == "ro")
+    }
+}
+
+// MARK: - melodia.ro song: chords + arrangement + _extensions round-trip
+
+struct MelodiaSongRoundTripTests {
+    private func makeContext() throws -> ModelContext {
+        let container = try ModelContainer(
+            for: Schema(versionedSchema: SchemaV2.self),
+            configurations: [ModelConfiguration(isStoredInMemoryOnly: true)]
+        )
+        return ModelContext(container)
+    }
+
+    /// A melodia-shaped GOAT song (chords at positions, deduped chorus reused in
+    /// the arrangement, melodia extras under `_extensions`) imports with all of it
+    /// preserved, and re-exports the `_extensions` block intact.
+    @Test func importsChordsArrangementAndExtensionsThenReExports() async throws {
+        let json = """
+        { "schemaVersion": "1.0.0", "format": "TopPresenter Song",
+          "song": {
+            "title": "Voi cânta bunătatea Ta", "language": "ro",
+            "themes": ["Bunatate", "indurare"],
+            "authorWords": "Revive", "authorMusic": "Revive",
+            "copyright": "©Revive 2023",
+            "versions": [{
+              "name": "", "language": "ro", "key": "F", "capo": 0, "tempo": "180", "timeSignature": "4/4",
+              "source": "https://melodia.ro/cantari/Voi-canta-bunatatea-Ta",
+              "arrangement": ["v1", "c1", "v2", "c1"],
+              "sections": [
+                { "id": "v1", "type": "verse", "label": "Strofa 1", "order": 0,
+                  "lines": [{ "text": "Voi cânta a Ta îndurare,", "chords": [{ "sym": "F", "pos": 1 }] }] },
+                { "id": "c1", "type": "chorus", "label": "Refren", "order": 1,
+                  "lines": [{ "text": "Voi cânta bunătatea Ta,", "chords": [{ "sym": "Bb", "pos": 0 }, { "sym": "C", "pos": 13 }] }] },
+                { "id": "v2", "type": "verse", "label": "Strofa 2", "order": 2,
+                  "lines": [{ "text": "Ceru-ntreg e uimit de Tine", "chords": [{ "sym": "F", "pos": 1 }] }] }
+              ]
+            }],
+            "_extensions": { "melodia": {
+              "id": "7080", "slug": "Voi-canta-bunatatea-Ta", "composedYear": 2022, "meetingsCount": 100,
+              "availableKeys": ["C", "Db", "D", "F"],
+              "instruments": { "guitar": { "recommendedCapo": 3, "shapeKey": "D" } },
+              "anatomiaEvangheliei": { "score": 4, "scoreMax": 5, "categories": [{ "name": "Adorare", "percent": 72 }] }
+            } }
+          } }
+        """
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("mel-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let file = dir.appendingPathComponent("Voi-canta-bunatatea-Ta.json")
+        try Data(json.utf8).write(to: file)
+
+        let ctx = try makeContext()
+        let result = await ImportService.importSongItems(urls: [file], collectionName: "melodia", modelContext: ctx)
+        let song = try #require(result.collection?.songs.first)
+
+        // melodia extras survived import → DB.
+        #expect(song.extensionsJSON.contains("anatomiaEvangheliei"))
+        #expect(song.extensionsJSON.contains("\"composedYear\""))
+        #expect(song.extensionsJSON.contains("7080"))
+
+        // Chords + arrangement (deduped chorus reused) survived.
+        let version = try #require(song.activeVersion)
+        #expect(version.key == "F")
+        #expect(version.arrangement == ["v1", "c1", "v2", "c1"])
+        #expect(version.sortedSections.count == 3)            // chorus stored ONCE
+        let chorus = try #require(version.sortedSections.first { $0.type == "chorus" })
+        #expect(chorus.lines.first?.chords.map(\.sym) == ["Bb", "C"])
+
+        // Re-export keeps the _extensions block.
+        let exported = try ExportService.exportSongToTopPresenterJSON(song)
+        #expect(exported.contains("_extensions"))
+        #expect(exported.contains("anatomiaEvangheliei"))
+        #expect(exported.contains("\"composedYear\""))
     }
 }

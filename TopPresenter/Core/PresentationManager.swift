@@ -285,12 +285,42 @@ final class PresentationManager {
         /// Render the reference/title in uppercase (e.g. "IOAN 3:16").
         var referenceUppercase: Bool = false
 
+        // MARK: Interlinear (Bible) — render each word as a stacked column.
+        /// "off" | "gloss" (word + meaning) | "full" (word + gloss + Strong's + morph).
+        var interlinearModeRaw: String = "off"
+        var interlinearShowGloss: Bool = true
+        var interlinearShowStrong: Bool = true
+        var interlinearShowMorph: Bool = true
+        /// Empty = renderer default colour. Per-annotation-row colours.
+        var interlinearGlossColorHex: String = ""
+        var interlinearStrongColorHex: String = ""
+        var interlinearMorphColorHex: String = ""
+        /// Annotation font size as a fraction of the verse font.
+        var interlinearGlossScale: Double = 0.55
+        var interlinearStrongScale: Double = 0.42
+        var interlinearMorphScale: Double = 0.38
+        /// Gap between word columns and between stacked rows.
+        var interlinearColumnSpacing: Double = 12
+        var interlinearRowSpacing: Double = 2
+
         init() {}
 
         init(from decoder: Decoder) throws {
             let c = try decoder.container(keyedBy: CodingKeys.self)
             textTransformRaw = try c.decodeIfPresent(String.self, forKey: .textTransformRaw) ?? "none"
             referenceUppercase = try c.decodeIfPresent(Bool.self, forKey: .referenceUppercase) ?? false
+            interlinearModeRaw = try c.decodeIfPresent(String.self, forKey: .interlinearModeRaw) ?? "off"
+            interlinearShowGloss = try c.decodeIfPresent(Bool.self, forKey: .interlinearShowGloss) ?? true
+            interlinearShowStrong = try c.decodeIfPresent(Bool.self, forKey: .interlinearShowStrong) ?? true
+            interlinearShowMorph = try c.decodeIfPresent(Bool.self, forKey: .interlinearShowMorph) ?? true
+            interlinearGlossColorHex = try c.decodeIfPresent(String.self, forKey: .interlinearGlossColorHex) ?? ""
+            interlinearStrongColorHex = try c.decodeIfPresent(String.self, forKey: .interlinearStrongColorHex) ?? ""
+            interlinearMorphColorHex = try c.decodeIfPresent(String.self, forKey: .interlinearMorphColorHex) ?? ""
+            interlinearGlossScale = try c.decodeIfPresent(Double.self, forKey: .interlinearGlossScale) ?? 0.55
+            interlinearStrongScale = try c.decodeIfPresent(Double.self, forKey: .interlinearStrongScale) ?? 0.42
+            interlinearMorphScale = try c.decodeIfPresent(Double.self, forKey: .interlinearMorphScale) ?? 0.38
+            interlinearColumnSpacing = try c.decodeIfPresent(Double.self, forKey: .interlinearColumnSpacing) ?? 12
+            interlinearRowSpacing = try c.decodeIfPresent(Double.self, forKey: .interlinearRowSpacing) ?? 2
         }
     }
 

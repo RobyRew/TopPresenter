@@ -85,6 +85,9 @@ struct SongImportResult {
     var notes: String = ""
     var media: [SongImportMedia] = []
     var versions: [SongImportVersion] = []
+    /// Source-specific extras preserved verbatim (`song._extensions` in the JSON):
+    /// e.g. melodia.ro's Anatomia Evangheliei, composed year, capo charts. "{}" = none.
+    var extensionsJSON: String = "{}"
 }
 
 struct SongImportVerse {

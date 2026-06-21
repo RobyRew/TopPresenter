@@ -10,7 +10,7 @@ import SwiftData
 import UniformTypeIdentifiers
 
 /// Identifies what kind of content a dropped file is.
-enum DroppedFileCategory {
+enum DroppedFileCategory: Sendable {
     case bible(SupportedBibleFormat)
     case song(SupportedSongFormat)
     case media(String)  // "image", "audio", "video"
@@ -27,7 +27,7 @@ enum DroppedFileCategory {
 }
 
 /// A pending file identified by drag & drop, ready for batch import.
-struct PendingImportFile: Identifiable {
+struct PendingImportFile: Identifiable, Sendable {
     let id = UUID()
     let url: URL
     let category: DroppedFileCategory
@@ -36,7 +36,7 @@ struct PendingImportFile: Identifiable {
     var fileName: String { url.lastPathComponent }
 }
 
-enum ImportFileStatus: Equatable {
+enum ImportFileStatus: Equatable, Sendable {
     case pending
     case importing
     case success(String)
@@ -71,6 +71,34 @@ private enum MediaExtensions {
 
 /// Service that classifies dropped files and performs batch imports.
 final class DragDropImportHandler {
+
+    /// Bible + Song file extensions, lowercased. Used to pre-filter the folder
+    /// walk so we never open/read files we can't use here — e.g. multi-GB `.LRF`
+    /// drone footage (or any video/image) sitting in a Documents tree, which
+    /// would otherwise beach-ball the app and spam AppleFSCompression. Media is
+    /// intentionally excluded: this walk feeds the Bible/Song import flow.
+    static let bibleSongExtensions: Set<String> = {
+        var exts = Set<String>()
+        for fmt in SupportedBibleFormat.allCases { exts.formUnion(fmt.fileExtensions.map { $0.lowercased() }) }
+        for fmt in SupportedSongFormat.allCases { exts.formUnion(fmt.fileExtensions.map { $0.lowercased() }) }
+        return exts
+    }()
+
+    /// True when a file's extension is a Bible/Song type we can import. Folders
+    /// are handled separately (recursed / treated as a USFM Bible).
+    static func isImportableFile(_ url: URL) -> Bool {
+        bibleSongExtensions.contains(url.pathExtension.lowercased())
+    }
+
+    /// UTTypes for the Bible + Song import panels, so the open panel greys out
+    /// everything else. Folders stay selectable (`canChooseDirectories`), so a
+    /// USFM folder or a tree of `.json` Bibles can still be picked.
+    static var bibleSongContentTypes: [UTType] {
+        var exts = Set<String>()
+        for fmt in SupportedBibleFormat.allCases { exts.formUnion(fmt.fileExtensions.map { $0.lowercased() }) }
+        for fmt in SupportedSongFormat.allCases { exts.formUnion(fmt.fileExtensions.map { $0.lowercased() }) }
+        return exts.compactMap { UTType(filenameExtension: $0) }
+    }
 
     /// Classify a single file URL into a category.
     static func classify(_ url: URL) -> DroppedFileCategory {
@@ -143,6 +171,9 @@ final class DragDropImportHandler {
             guard fm.fileExists(atPath: url.path, isDirectory: &isDir) else { return }
             if !isDir.boolValue {
                 if url.lastPathComponent.hasPrefix(".") { return }
+                // Only collect files we can actually import. This is what keeps a
+                // huge Documents tree (drone footage, archives, …) from being read.
+                guard isImportableFile(url) else { return }
                 add(url); return
             }
             // A USFM Bible is a folder of per-book files → one source, kept whole.

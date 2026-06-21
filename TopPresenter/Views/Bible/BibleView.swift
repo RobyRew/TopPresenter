@@ -40,6 +40,8 @@ struct BibleView: View {
         VStack(spacing: 0) {
             if modules.isEmpty {
                 emptyStateView
+            } else if libraryManager.selectedBibleModule == nil {
+                noModuleSelectedView
             } else if viewMode == "grid" {
                 // Grid navigation: Books → Chapters → Verses as button grids
                 BibleGridNavigationView()
@@ -126,6 +128,82 @@ struct BibleView: View {
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding()
+    }
+
+    /// Shown when modules exist but none is selected — a single informational
+    /// page (no empty Books/Chapters/Verses columns) that explains what this
+    /// section does and lets the user pick a translation or import another.
+    private var noModuleSelectedView: some View {
+        VStack(spacing: 22) {
+            Spacer(minLength: 0)
+
+            Image(systemName: "books.vertical")
+                .font(.system(size: 56))
+                .foregroundStyle(.secondary)
+
+            VStack(spacing: 7) {
+                Text(String(localized: "Select a Bible Module", comment: "No-selection splash title"))
+                    .font(.title2.weight(.semibold))
+                Text(String(localized: "Pick a translation to browse its books, chapters and verses — then send any passage to the screen. You can switch translations anytime from the toolbar above.", comment: "No-selection splash message"))
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: 440)
+            }
+
+            VStack(spacing: 8) {
+                Text(String(localized: "\(modules.count) translations available", comment: "No-selection splash subheader"))
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+
+                ScrollView {
+                    LazyVGrid(
+                        columns: [GridItem(.adaptive(minimum: 110, maximum: 190), spacing: 8)],
+                        spacing: 8
+                    ) {
+                        ForEach(modules) { module in
+                            Button {
+                                libraryManager.selectModule(module)
+                            } label: {
+                                VStack(spacing: 2) {
+                                    Text(module.abbreviation.isEmpty ? module.name : module.abbreviation)
+                                        .font(.callout.weight(.semibold))
+                                        .lineLimit(1)
+                                    if !module.name.isEmpty, module.name != module.abbreviation {
+                                        Text(module.name)
+                                            .font(.caption2)
+                                            .foregroundStyle(.secondary)
+                                            .lineLimit(1)
+                                            .truncationMode(.middle)
+                                    }
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 8)
+                                .padding(.horizontal, 8)
+                                .background(Color.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
+                                .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color.secondary.opacity(0.15)))
+                            }
+                            .buttonStyle(.plain)
+                            .help(module.name)
+                        }
+                    }
+                    .padding(.horizontal, 24)
+                    .padding(.vertical, 2)
+                }
+                .frame(maxHeight: 220)
+            }
+
+            Button {
+                showImportSheet = true
+            } label: {
+                Label(String(localized: "Import another module", comment: "Button"), systemImage: "square.and.arrow.down")
+            }
+            .controlSize(.large)
+
+            Spacer(minLength: 0)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding()
@@ -972,6 +1050,8 @@ struct BibleImportSheet: View {
     @State private var selectedFileURL: URL?
     @State private var autoDetected = false
     @State private var isDropTargeted = false
+    /// True while a picked folder/tree is being scanned on a background task.
+    @State private var isScanning = false
     /// Duplicate-on-import: set when a same-code module already exists.
     @State private var pendingConflict: ImportService.BibleConflict?
 
@@ -1114,6 +1194,21 @@ struct BibleImportSheet: View {
         }
         .padding(24)
         .frame(width: 520)
+        .overlay {
+            if isScanning {
+                VStack(spacing: 12) {
+                    ProgressView()
+                        .controlSize(.large)
+                    Text(String(localized: "Scanning for Bible & song files…", comment: "Import scanning"))
+                        .font(.callout.weight(.medium))
+                    Text(String(localized: "Only supported file types are read.", comment: "Import scanning detail"))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(.ultraThinMaterial)
+            }
+        }
         .confirmationDialog(
             pendingConflict.map {
                 String(localized: "„\($0.code)” există deja (\($0.existingName), \($0.existingVerses) versete). Noul fișier are \($0.incomingVerses) versete.", comment: "Duplicate import dialog")
@@ -1249,6 +1344,8 @@ struct BibleImportSheet: View {
         panel.allowsMultipleSelection = true
         panel.canChooseFiles = true
         panel.canChooseDirectories = true
+        // Only supported file types are selectable; folders stay pickable.
+        panel.allowedContentTypes = DragDropImportHandler.bibleSongContentTypes
         panel.message = String(localized: "Select Bible files and/or folders — subfolders are scanned automatically", comment: "Open panel message")
         panel.prompt = String(localized: "Open", comment: "Open panel button")
         guard panel.runModal() == .OK else { return }
@@ -1272,32 +1369,55 @@ struct BibleImportSheet: View {
 
     /// One file → inline single-import flow (detect/override format). Multiple
     /// files or any folder → expand recursively and hand off to batch import.
+    ///
+    /// The recursive scan runs on a background task: a Documents-sized tree would
+    /// otherwise block the main thread (the spinning-rainbow beach ball) while it
+    /// walks thousands of entries. The extension filter in `expandToImportableFiles`
+    /// means we never open unrelated files (drone footage, archives, …).
     private func handleSelectedURLs(_ urls: [URL]) {
         guard !urls.isEmpty else { return }
-        let expanded = DragDropImportHandler.expandToImportableFiles(urls)
-        // A single Bible file → inline single-import flow (with format override).
-        if expanded.count == 1, let url = expanded.first,
-           case .bible = DragDropImportHandler.classify(url) {
-            selectedFileURL = url
-            if let detected = ImportService.detectBibleFormat(fileURL: url) {
-                selectedFormat = detected; autoDetected = true
-            } else {
-                selectedFormat = guessFormatFromExtension(url); autoDetected = selectedFormat != nil
+        isScanning = true
+        Task {
+            // The recursive walk + per-file classification run off the main actor
+            // (Task.detached) so the UI stays live; only the small Sendable results
+            // come back to the main actor below.
+            let expanded = await Task.detached(priority: .userInitiated) {
+                DragDropImportHandler.expandToImportableFiles(urls)
+            }.value
+
+            // A single Bible file → inline single-import flow (with format override).
+            if expanded.count == 1, let url = expanded.first,
+               case .bible = DragDropImportHandler.classify(url) {
+                isScanning = false
+                selectedFileURL = url
+                if let detected = ImportService.detectBibleFormat(fileURL: url) {
+                    selectedFormat = detected; autoDetected = true
+                } else {
+                    selectedFormat = guessFormatFromExtension(url); autoDetected = selectedFormat != nil
+                }
+                return
             }
-            return
+
+            // Anything else — multiple files, folders, or a folder/tree that mixes
+            // Bibles with songs (and media) — goes to batch import, which imports
+            // each file by its detected kind.
+            let pending = await Task.detached(priority: .userInitiated) {
+                DragDropImportHandler.classify(expanded).filter {
+                    if case .unknown = $0.category { return false }
+                    return true
+                }
+            }.value
+
+            isScanning = false
+            guard !pending.isEmpty else {
+                appState.showError(
+                    String(localized: "Nothing to import", comment: "Alert title"),
+                    message: String(localized: "No recognizable Bible or song files were found in the selection.", comment: "Alert message"))
+                return
+            }
+            dismiss()
+            NotificationCenter.default.post(name: .batchImportFiles, object: nil, userInfo: ["files": pending])
         }
-        // Anything else — multiple files, folders, or a folder/tree that mixes
-        // Bibles with songs (and media) — goes to batch import, which scans every
-        // subfolder and imports each file by its detected kind.
-        let pending = DragDropImportHandler.classifyExpanded(urls)
-        guard !pending.isEmpty else {
-            appState.showError(
-                String(localized: "Nothing to import", comment: "Alert title"),
-                message: String(localized: "No recognizable Bible files were found in the selection.", comment: "Alert message"))
-            return
-        }
-        dismiss()
-        NotificationCenter.default.post(name: .batchImportFiles, object: nil, userInfo: ["files": pending])
     }
 
     /// First attempt uses `.ask` — if a same-code module exists it surfaces the

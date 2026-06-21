@@ -1250,6 +1250,8 @@ struct LayoutEditorSheet: View {
 
     @State private var selection: BoxIdentity? = .section(.verseContent)
     @State private var activeTab: EditorTab = .layout
+    /// Mirrors the output's interlinear master switch so the canvas preview matches.
+    @AppStorage("interlinearLiveEnabled") private var interlinearLiveEnabled = true
     /// Quick-align toggle memory: pressing the same action again restores the
     /// frame from before the action was applied.
     @State private var quickActionMemory: [BoxIdentity: [String: PresentationManager.TextBoxFrame]] = [:]
@@ -1568,6 +1570,53 @@ struct LayoutEditorSheet: View {
         return [VerseRun(text: sampleVerse, kind: "woc")]
     }
 
+    /// REAL runs for the interlinear canvas preview — the live or selected verse,
+    /// never fabricated, so the editor matches the preview card and the output
+    /// exactly (the grid appears only when the Bible actually carries the data).
+    private var sampleInterlinearRuns: [VerseRun] {
+        guard pm.activeProfileKey == "bible" else { return [] }
+        return liveMatchesProfile ? pm.liveContent.mainRuns : libraryManager.selectedVersesRuns
+    }
+
+    /// Whether the current Bible selection actually carries interlinear annotations
+    /// (Strong's / morph / gloss). Drives the editor's "no data" hint.
+    private var currentBibleHasInterlinearData: Bool {
+        sampleInterlinearRuns.contains {
+            ($0.strong?.isEmpty == false) || ($0.gloss?.isEmpty == false) || ($0.morph?.isEmpty == false)
+        }
+    }
+
+    /// Binding into the active profile's ContentOptions (interlinear fields etc.).
+    private func ilBinding<T>(_ kp: WritableKeyPath<PresentationManager.ContentOptions, T>) -> Binding<T> {
+        Binding(
+            get: { pm.contentOptions(for: pm.activeProfileKey)[keyPath: kp] },
+            set: { v in
+                var o = pm.contentOptions(for: pm.activeProfileKey)
+                o[keyPath: kp] = v
+                pm.setContentOptions(o, for: pm.activeProfileKey)
+            }
+        )
+    }
+
+    /// One annotation-row control: visibility toggle + colour + relative size.
+    @ViewBuilder
+    private func interlinearRowControl(_ label: String, show: Binding<Bool>,
+                                       colorHex: Binding<String>, scale: Binding<Double>) -> some View {
+        HStack(spacing: 6) {
+            Toggle(isOn: show) { Text(label).font(.caption) }
+                .toggleStyle(.switch).controlSize(.mini)
+            Spacer()
+            if show.wrappedValue {
+                ColorPicker("", selection: Binding(
+                    get: { colorHex.wrappedValue.isEmpty ? Color.gray : (Color(hex: colorHex.wrappedValue) ?? .gray) },
+                    set: { colorHex.wrappedValue = $0.toHex() }
+                ))
+                .labelsHidden().controlSize(.mini)
+                Slider(value: scale, in: 0.25...1.0).frame(width: 70).controlSize(.mini)
+            }
+        }
+    }
+
     @ViewBuilder
     private func sampleContent(size: CGSize) -> some View {
         let targetScale = pm.targetFontScale
@@ -1604,8 +1653,16 @@ struct LayoutEditorSheet: View {
                                     lineSpacing: style.lineSpacing
                                   ) * canvasScale
                                 : nil
-                            sampleBoxText(text, style: style, rect: rect, fontScale: fontScale, fittedSize: fitted,
-                                          runs: section == .verseContent ? sampleRuns : [])
+                            let ilOpts = pm.contentOptions(for: pm.activeProfileKey)
+                            let ilRuns = sampleInterlinearRuns
+                            if section == .verseContent, pm.activeProfileKey == "bible",
+                               interlinearLiveEnabled, interlinearHasContent(ilRuns, options: ilOpts) {
+                                InterlinearText(columns: interlinearColumns(from: ilRuns), style: style,
+                                                options: ilOpts, wocColor: pm.wocColor, rect: rect, fontScale: fontScale)
+                            } else {
+                                sampleBoxText(text, style: style, rect: rect, fontScale: fontScale, fittedSize: fitted,
+                                              runs: section == .verseContent ? sampleRuns : [])
+                            }
                         }
                     }
                 case .custom(let id):
@@ -2976,6 +3033,61 @@ struct LayoutEditorSheet: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                 } label: {
                     Label(String(localized: "Cuvintele lui Isus", comment: "Inspector group"), systemImage: "quote.bubble")
+                        .font(.caption.bold())
+                }
+
+                // Interlinear — stacked word columns (original + gloss + Strong's + morph).
+                GroupBox {
+                    VStack(alignment: .leading, spacing: 8) {
+                        labeledRow(String(localized: "Mod:", comment: "Setting label")) {
+                            Picker("", selection: ilBinding(\.interlinearModeRaw)) {
+                                Text(String(localized: "Dezactivat", comment: "Interlinear mode")).tag("off")
+                                Text(String(localized: "Doar sens", comment: "Interlinear mode")).tag("gloss")
+                                Text(String(localized: "Complet", comment: "Interlinear mode")).tag("full")
+                            }
+                            .pickerStyle(.segmented)
+                            .controlSize(.small)
+                        }
+                        Toggle(isOn: $interlinearLiveEnabled) {
+                            Text(String(localized: "Afișează pe ecran", comment: "Setting label")).font(.caption)
+                        }
+                        .toggleStyle(.switch).controlSize(.small)
+                        .help(String(localized: "Comutator live pentru grila interliniară (stilul rămâne în temă).", comment: "Tooltip"))
+
+                        if pm.contentOptions(for: pm.activeProfileKey).interlinearModeRaw != "off" {
+                            interlinearRowControl(String(localized: "Sens", comment: "Annotation row"),
+                                                  show: ilBinding(\.interlinearShowGloss),
+                                                  colorHex: ilBinding(\.interlinearGlossColorHex),
+                                                  scale: ilBinding(\.interlinearGlossScale))
+                            if pm.contentOptions(for: pm.activeProfileKey).interlinearModeRaw == "full" {
+                                interlinearRowControl(String(localized: "Strong", comment: "Annotation row"),
+                                                      show: ilBinding(\.interlinearShowStrong),
+                                                      colorHex: ilBinding(\.interlinearStrongColorHex),
+                                                      scale: ilBinding(\.interlinearStrongScale))
+                                interlinearRowControl(String(localized: "Morfologie", comment: "Annotation row"),
+                                                      show: ilBinding(\.interlinearShowMorph),
+                                                      colorHex: ilBinding(\.interlinearMorphColorHex),
+                                                      scale: ilBinding(\.interlinearMorphScale))
+                            }
+                            labeledRow(String(localized: "Spațiere coloane:", comment: "Setting label")) {
+                                Slider(value: ilBinding(\.interlinearColumnSpacing), in: 2...40).controlSize(.mini)
+                            }
+                            labeledRow(String(localized: "Spațiere rânduri:", comment: "Setting label")) {
+                                Slider(value: ilBinding(\.interlinearRowSpacing), in: 0...14).controlSize(.mini)
+                            }
+                            // Tell the user exactly why the grid is (or isn't) showing.
+                            if currentBibleHasInterlinearData {
+                                Label(String(localized: "Date interliniare disponibile pentru selecția curentă.", comment: "Inspector hint"), systemImage: "checkmark.circle")
+                                    .font(.caption2).foregroundStyle(.green)
+                            } else {
+                                Label(String(localized: "Biblia curentă nu are date interliniare — încarcă un modul cu Strong/interliniar (ex. ENINT, ASTL). Bibliile simple (EDC100) rămân normale.", comment: "Inspector hint"), systemImage: "exclamationmark.triangle")
+                                    .font(.caption2).foregroundStyle(.orange)
+                            }
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                } label: {
+                    Label(String(localized: "Interliniar", comment: "Inspector group"), systemImage: "text.word.spacing")
                         .font(.caption.bold())
                 }
             }
