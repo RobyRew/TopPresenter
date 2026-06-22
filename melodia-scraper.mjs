@@ -371,7 +371,9 @@ async function enumerateSlugs(retries) {
   const re = /<loc>https?:\/\/melodia\.ro\/cantari\/([^<>?/]+)<\/loc>/gi;
   let m; const seen = new Set();
   while ((m = re.exec(xml))) {
-    const slug = m[1].trim();
+    // Decode XML entities — sitemap slugs encode `&` as `&amp;`, and the literal
+    // `&amp;` 404s (the real URL uses a bare `&`).
+    const slug = decodeEntities(m[1].trim());
     if (slug && !seen.has(slug)) { seen.add(slug); slugs.push(slug); }
   }
   return slugs;
