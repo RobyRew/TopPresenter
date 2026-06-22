@@ -399,8 +399,14 @@ struct SongListPanel: View {
 
 struct SongDetailPanel: View {
     @Environment(LibraryManager.self) private var libraryManager
+    @Environment(HistoryStore.self) private var historyStore
+    @Environment(\.openWindow) private var openWindow
     @AppStorage("song_maxLinesPerSlide") private var maxLines: Int = 6
     @AppStorage("song_bilingual") private var bilingual: Bool = false
+
+    private static let histFmt: DateFormatter = {
+        let f = DateFormatter(); f.dateStyle = .medium; f.timeStyle = .none; return f
+    }()
 
     var body: some View {
         if let song = libraryManager.selectedSong {
@@ -451,10 +457,24 @@ struct SongDetailPanel: View {
                 if let sb = song.songbook {
                     infoChip(sb.name + (song.songbookNumber.isEmpty ? "" : " #\(song.songbookNumber)"))
                 }
+                if let h = songHistory(song) {
+                    Button { openWindow(id: WindowIdentifiers.history) } label: {
+                        infoChip(String(localized: "Prezentat \(h.timesPresented)× · \(Self.histFmt.string(from: h.lastPresented))", comment: "Song history chip"))
+                    }
+                    .buttonStyle(.plain)
+                    .help(String(localized: "Deschide istoricul prezentărilor", comment: "History tooltip"))
+                }
                 Spacer()
             }
         }
         .padding(.horizontal).padding(.vertical, 8)
+    }
+
+    /// This song's presentation-history summary (nil if never presented).
+    private func songHistory(_ song: Song) -> SongHistorySummary? {
+        let key = HistoryStore.songKey(ccli: song.ccliNumber, title: song.title,
+                                       source: song.collection?.sourceFormat ?? "")
+        return historyStore.summary(forSongKey: key)
     }
 
     private func infoChip(_ text: String) -> some View {

@@ -43,6 +43,62 @@ final class PresentationManager {
     /// Video playback service — set once at app start so clearOutput() can stop playback.
     @ObservationIgnored weak var videoService: VideoPlayerService?
 
+    // MARK: - Presentation history (recorded into a separate store)
+    /// Set once at app start. Live shows are recorded here (dwell-gated + sessioned).
+    @ObservationIgnored var historyStore: HistoryStore?
+    @ObservationIgnored private var pendingHistory: HistoryItem?
+    @ObservationIgnored private var pendingShownAt: Date = .now
+    @ObservationIgnored private var currentSessionID = UUID()
+    @ObservationIgnored private var currentSessionKey = ""
+    @ObservationIgnored private var lastHistoryShowAt: Date = .distantPast
+    /// A verse/slide is only logged once it's been live this long (ignore scrubbing).
+    @ObservationIgnored private let historyDwellSeconds: Double = 4
+    /// A gap longer than this starts a new presentation session.
+    @ObservationIgnored private let historySessionGapSeconds: Double = 1800
+
+    /// Identity of the currently-live item, held until it's recorded (on the next
+    /// show or clear, if it dwelled long enough).
+    struct HistoryItem {
+        var contentType: String
+        var sessionKey: String
+        var sessionID = UUID()
+        var songKey = "", songTitle = "", versionName = "", verseLabel = ""
+        var slideIndex = 0
+        var translation = "", translationName = "", bookName = "", reference = ""
+        var bookNumber = 0, chapter = 0, verseStart = 0, verseEnd = 0
+    }
+
+    /// Begin tracking a newly-live item: flush the previous one, then open this one
+    /// (assigning it to the current or a fresh session).
+    private func beginHistory(_ item: HistoryItem) {
+        flushHistory()
+        var item = item
+        let now = Date()
+        if item.sessionKey != currentSessionKey || now.timeIntervalSince(lastHistoryShowAt) > historySessionGapSeconds {
+            currentSessionID = UUID()
+            currentSessionKey = item.sessionKey
+        }
+        item.sessionID = currentSessionID
+        pendingHistory = item
+        pendingShownAt = now
+        lastHistoryShowAt = now
+    }
+
+    /// Record the pending item iff it was on screen long enough (dwell filter).
+    private func flushHistory() {
+        guard let p = pendingHistory else { return }
+        pendingHistory = nil
+        let dwell = Date().timeIntervalSince(pendingShownAt)
+        guard dwell >= historyDwellSeconds, let store = historyStore else { return }
+        store.record(PresentationEvent(
+            timestamp: pendingShownAt, sessionID: p.sessionID, dwellSeconds: dwell, contentType: p.contentType,
+            songKey: p.songKey, songTitle: p.songTitle, versionName: p.versionName,
+            verseLabel: p.verseLabel, slideIndex: p.slideIndex,
+            translation: p.translation, translationName: p.translationName, bookNumber: p.bookNumber,
+            bookName: p.bookName, chapter: p.chapter, verseStart: p.verseStart, verseEnd: p.verseEnd,
+            reference: p.reference))
+    }
+
     // MARK: - Style
     var currentStyle: PresentationStyle?
 
@@ -2535,6 +2591,8 @@ final class PresentationManager {
     }
 
     func clearOutput() {
+        flushHistory()              // record the last-shown item (if it dwelled)
+        currentSessionKey = ""      // a clear ends the presentation session
         contentChangeKind = "clear"
         // Resolve the exit duration BEFORE clearing (it needs the live profile).
         let exitDuration = resolvedTransitionDuration(phase: "clear", in: outputProfileKey)
@@ -2587,8 +2645,14 @@ final class PresentationManager {
     func showBibleVerse(text: String, reference: String, translationName: String = "", runs: [VerseRun] = [],
                         footnote: String = "", crossReference: String = "", heading: String = "",
                         gloss: String = "", strongs: String = "",
+                        bookNumber: Int = 0, bookName: String = "", chapter: Int = 0,
+                        verseStart: Int = 0, verseEnd: Int = 0, translation: String = "",
                         slideIndex: Int = 0, slideCount: Int = 1) {
         guard !isFrozen else { return }
+        beginHistory(HistoryItem(contentType: "bible", sessionKey: "\(translation):\(bookNumber):\(chapter)",
+                                 translation: translation, translationName: translationName, bookName: bookName,
+                                 reference: reference, bookNumber: bookNumber, chapter: chapter,
+                                 verseStart: verseStart, verseEnd: verseEnd))
         presentContent { [self] in
             liveContent.setBibleVerse(text: text, reference: reference, translationName: translationName, runs: runs,
                                       footnote: footnote, crossReference: crossReference, heading: heading,
@@ -2603,6 +2667,11 @@ final class PresentationManager {
     func showSongVerse(text: String, title: String, verseLabel: String, slideIndex: Int = 0, slideCount: Int = 1,
                        song: Song? = nil, version: SongVersion? = nil) {
         guard !isFrozen else { return }
+        let sKey = HistoryStore.songKey(ccli: song?.ccliNumber ?? "", title: song?.title ?? title,
+                                        source: song?.collection?.sourceFormat ?? "")
+        beginHistory(HistoryItem(contentType: "song", sessionKey: sKey, songKey: sKey,
+                                 songTitle: song?.title ?? title, versionName: version?.name ?? "",
+                                 verseLabel: verseLabel, slideIndex: slideIndex))
         // A version uses its own metadata only when it overrides; otherwise it inherits the
         // original (first) version's. Song-level fields are the final fallback.
         let meta = (version?.overridesMetadata == true) ? version : (song?.activeVersion ?? version)
@@ -2632,6 +2701,8 @@ final class PresentationManager {
 
     func showCustomText(text: String, title: String, slideIndex: Int = 0, slideCount: Int = 1) {
         guard !isFrozen else { return }
+        beginHistory(HistoryItem(contentType: "custom", sessionKey: "custom:" + title,
+                                 songTitle: title, slideIndex: slideIndex))
         presentContent { [self] in
             liveContent.setCustomText(text: text, title: title, slideIndex: slideIndex, slideCount: slideCount)
             lastLiveProfileKey = "text"

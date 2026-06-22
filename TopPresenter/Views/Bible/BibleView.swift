@@ -611,7 +611,12 @@ struct BibleVerseRow: View {
             translationName: libraryManager.selectedBibleModule?.abbreviation ?? "",
             runs: verse.runs,
             footnote: footnote, crossReference: crossRef, heading: heading,
-            gloss: verse.gloss, strongs: strongs
+            gloss: verse.gloss, strongs: strongs,
+            bookNumber: verse.chapter?.book?.bookNumber ?? 0,
+            bookName: verse.chapter?.book?.name ?? "",
+            chapter: verse.chapter?.chapterNumber ?? 0,
+            verseStart: verse.verseNumber, verseEnd: verse.verseNumber,
+            translation: libraryManager.selectedBibleModule?.abbreviation ?? ""
         )
     }
 
@@ -988,7 +993,12 @@ struct BibleGridNavigationView: View {
                                         text: verse.text,
                                         reference: verse.fullReference,
                                         translationName: libraryManager.selectedBibleModule?.abbreviation ?? "",
-                                        runs: verse.runs
+                                        runs: verse.runs,
+                                        bookNumber: verse.chapter?.book?.bookNumber ?? 0,
+                                        bookName: verse.chapter?.book?.name ?? "",
+                                        chapter: verse.chapter?.chapterNumber ?? 0,
+                                        verseStart: verse.verseNumber, verseEnd: verse.verseNumber,
+                                        translation: libraryManager.selectedBibleModule?.abbreviation ?? ""
                                     )
                                 }
                                 Button(String(localized: "Copy Text", comment: "Context menu")) {

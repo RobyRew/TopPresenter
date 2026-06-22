@@ -13,15 +13,20 @@ struct TopPresenterApp: App {
     @State private var presentationManager: PresentationManager
     @State private var audioPlayerManager = AudioPlayerManager()
     @State private var videoPlayerService: VideoPlayerService
+    /// Separate, isolated store for presentation history (its own DB file).
+    @State private var historyStore: HistoryStore
     /// Handles output-wide menu commands (black/freeze/clear/font) exactly once —
     /// they act on the shared PresentationManager, not per window/tab.
     private let commandRouter: PresentationCommandRouter
 
     init() {
         let video = VideoPlayerService()
+        let history = HistoryStore()
         let pm = PresentationManager()
         pm.videoService = video
+        pm.historyStore = history
         _videoPlayerService = State(initialValue: video)
+        _historyStore = State(initialValue: history)
         _presentationManager = State(initialValue: pm)
         commandRouter = PresentationCommandRouter(pm: pm)
     }
@@ -57,6 +62,7 @@ struct TopPresenterApp: App {
                 .environment(presentationManager)
                 .environment(audioPlayerManager)
                 .environment(videoPlayerService)
+                .environment(historyStore)
                 .frame(minWidth: 1100, minHeight: 700)
         }
         .modelContainer(sharedModelContainer)
@@ -78,6 +84,14 @@ struct TopPresenterApp: App {
         .windowStyle(.plain)
         .windowResizability(.contentSize)
         .defaultSize(width: 1920, height: 1080)
+
+        // Presentation history window (reads the separate HistoryStore)
+        WindowGroup(id: WindowIdentifiers.history) {
+            HistoryView()
+                .environment(historyStore)
+                .frame(minWidth: 820, minHeight: 520)
+        }
+        .defaultSize(width: 1040, height: 700)
 
         // Settings window
         Settings {

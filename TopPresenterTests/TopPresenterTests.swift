@@ -2491,3 +2491,56 @@ struct ScrapedSongsImportTests {
         #expect(song.extensionsJSON.contains("Hebrews 9:22"))
     }
 }
+
+// MARK: - Presentation history (separate store)
+
+@MainActor
+struct HistoryStoreTests {
+    private func makeStore() -> HistoryStore { HistoryStore(inMemory: true) }
+
+    @Test func songKeyPrefersCCLIElseNormalizedTitle() {
+        #expect(HistoryStore.songKey(ccli: "7278328", title: "X", source: "wt") == "ccli:7278328")
+        // Same song, different casing/source → same stable key (survives re-import).
+        let a = HistoryStore.songKey(ccli: "", title: "Nothing But The Blood", source: "worshiptogether")
+        let b = HistoryStore.songKey(ccli: "", title: "nothing but the blood", source: "WORSHIPTOGETHER")
+        #expect(a == b)
+    }
+
+    @Test func aggregatesSongSessionsAndVerses() throws {
+        let s = makeStore()
+        let s1 = UUID(), s2 = UUID(), key = "ccli:111"
+        // Session 1: verses 1,2,3; session 2: verses 1,2.
+        for (i, sess) in [(0, s1), (1, s1), (2, s1), (0, s2), (1, s2)] {
+            s.record(PresentationEvent(timestamp: Date().addingTimeInterval(Double(i)), sessionID: sess,
+                dwellSeconds: 5, contentType: "song", songKey: key, songTitle: "Test", verseLabel: "v\(i + 1)"))
+        }
+        let sum = try #require(s.summary(forSongKey: key))
+        #expect(sum.timesPresented == 2)   // distinct sessions
+        #expect(sum.verseShows == 5)
+        #expect(s.verseTallies(forSongKey: key).contains { $0.label == "v1" && $0.count == 2 })
+        #expect(s.sessions(forSongKey: key).count == 2)
+    }
+
+    @Test func aggregatesBibleVerse() throws {
+        let s = makeStore()
+        s.record(PresentationEvent(timestamp: .now, sessionID: UUID(), dwellSeconds: 5, contentType: "bible",
+            translation: "EDC100", translationName: "Cornilescu", bookNumber: 43, bookName: "Ioan",
+            chapter: 3, verseStart: 16, verseEnd: 16, reference: "Ioan 3:16"))
+        let b = try #require(s.bibleSummaries().first)
+        #expect(b.reference == "Ioan 3:16")
+        #expect(b.translation == "EDC100")
+        #expect(b.timesPresented == 1)
+    }
+
+    @Test func exportsCSVAndJSON() throws {
+        let s = makeStore()
+        s.record(PresentationEvent(timestamp: .now, sessionID: UUID(), dwellSeconds: 5, contentType: "song",
+            songKey: "ccli:1", songTitle: "Amazing Grace", verseLabel: "v1"))
+        let csv = HistoryExportService.eventsCSV(s.exportEvents())
+        #expect(csv.contains("timestamp,type,title"))
+        #expect(csv.contains("Amazing Grace"))
+        let json = try HistoryExportService.json(s)
+        #expect(json.contains("TopPresenter History"))
+        #expect(json.contains("aggregates"))
+    }
+}

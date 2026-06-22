@@ -113,6 +113,7 @@ struct PresentationCommands: Commands {
 
 // MARK: - View Menu Commands
 struct ViewCommands: Commands {
+    @Environment(\.openWindow) private var openWindow
     var body: some Commands {
         CommandGroup(after: .sidebar) {
             Divider()
@@ -141,6 +142,13 @@ struct ViewCommands: Commands {
                 NotificationCenter.default.post(name: .navigateToCustomSlides, object: nil)
             }
             .keyboardShortcut("5", modifiers: [.command])
+
+            Divider()
+
+            Button(String(localized: "Presentation History", comment: "Menu item")) {
+                openWindow(id: WindowIdentifiers.history)
+            }
+            .keyboardShortcut("y", modifiers: [.command])
 
             Divider()
 
