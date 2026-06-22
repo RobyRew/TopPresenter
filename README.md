@@ -149,9 +149,9 @@ It exports straight to **TopPresenter Bible JSON** — clean verse text plus red
 
 ---
 
-## Song Scrapers — melodia.ro · ResurseCrestine · cantaricrestine.ro
+## Song Scrapers — melodia · ResurseCrestine · cantaricrestine · WorshipTogether
 
-Dependency-free scrapers that export Romanian worship songs into **TopPresenter Song JSON** — one file per song, ready for recursive folder-import. Source-specific extras are preserved losslessly under each song's `_extensions`, surviving import → store → export. Every scraper's output is verified to import back into TopPresenter with its chords, keys, authors and metadata intact.
+Dependency-free scrapers that export worship songs (Romanian + English/Spanish/Portuguese) into **TopPresenter Song JSON** — one file per song, ready for recursive folder-import. Source-specific extras are preserved losslessly under each song's `_extensions`, surviving import → store → export. Every scraper's output is verified to import back into TopPresenter with its chords, keys, authors and metadata intact.
 
 ### melodia.ro
 
@@ -168,6 +168,13 @@ Dependency-free scrapers that export Romanian worship songs into **TopPresenter 
 - **[`cantaricrestine-scraper.mjs`](cantaricrestine-scraper.mjs)** (Node 18+, resumable) — uses the site's public JSON API (`api.php`; `token` is just a random anti-bot value) to export all **~9.5k songs**, organized into **per-book folders**. Each song carries its lyrics (parsed into sections with `//: ://` repeats), book/number, and `_extensions.cantaricrestine` (id, date added, downloads/views, PowerPoint URL). It also **downloads every PowerPoint** (`.ppt`/`.pptx`) next to the JSON, and writes a `_completeness.json` (which songs have lyrics vs are PowerPoint-only). Run `--no-ppt` for JSON only. Disk-full-resilient (always writes the JSON; flags any PowerPoint it couldn't save).
 - **[`cantaricrestine-scraper.user.js`](cantaricrestine-scraper.user.js)** (Tampermonkey) — pick a book (or *Toate*) and download a single importable TopPresenter Songs bundle, straight from the API.
 
+### worshiptogether.com — modern worship (EN / ES / PT)
+
+- **[`worshiptogether-scraper.mjs`](worshiptogether-scraper.mjs)** (Node 18+, resumable) — enumerates the per-language sitemaps (`sitemap-{en,es,pt}.xml`, ~4.7k songs) and parses each song's ChordPro markup into **positional chords** (`{sym, pos}`) with section detection and play-order **arrangement** (`REPEAT CHORUS` → reuse). The richest source: it captures **CCLI #**, original + recommended keys, BPM, tempo, **themes**, **scripture references** and writers/copyright (under `_extensions.worshipTogether`). Organized into `en/`, `es/`, `pt/` folders.
+- **[`worshiptogether-scraper.user.js`](worshiptogether-scraper.user.js)** (Tampermonkey) — exports the current song from your **logged-in** session by reading the rendered ChordPro DOM. ⬇ button / Alt+T.
+
+> These are copyrighted modern worship songs — for personal/congregational use; projecting the lyrics still requires your church's **CCLI** license.
+
 ### Keeping your library up to date
 
 Re-running a scraper into the **same output folder** fetches only the songs you don't already have — it skips every `.json` already present (`--resume`, on by default). So `node melodia-scraper.mjs --out ./songs` next month grabs just the newly-added songs; the existing thousands skip in seconds. Keep the output folder as your archive so the scraper knows what's missing.
@@ -178,6 +185,7 @@ How each source signals change (so you know what a re-run can and can't catch):
 |---|---|---|---|
 | **melodia.ro** | `sitemap.xml` (per-song `<lastmod>`) | ✅ new slug | ✅ via `<lastmod>` |
 | **cantaricrestine.ro** | `api.php` (per-song `data_adaugare`) | ✅ new id | ✅ via `data_adaugare` |
+| **worshiptogether.com** | `sitemap-{en,es,pt}.xml` (per-song `<lastmod>`) | ✅ new slug | ✅ via `<lastmod>` |
 | **resursecrestine** | alphabetical index pages | ✅ new slug/id | ❌ no timestamps — re-fetch manually |
 | **eBiblia** | live catalog `window.app.BIBLES` | ✅ new code | ❌ no version field — re-export manually |
 

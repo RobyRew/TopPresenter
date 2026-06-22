@@ -2452,4 +2452,42 @@ struct ScrapedSongsImportTests {
         #expect(line.chords.map(\.pos) == [0, 7, 25])
         #expect(song.extensionsJSON.contains("resursecrestineAcorduri"))
     }
+
+    /// A worshiptogether song (CCLI + key + themes + positional chords + arrangement
+    /// reuse) imports with everything intact — the richest of the song sources.
+    @Test func importsWorshipTogetherSong() async throws {
+        let json = """
+        { "schemaVersion": "1.0.0", "format": "TopPresenter Song",
+          "song": {
+            "title": "Nothing But The Blood", "language": "en",
+            "author": "Tommee Profitt, Jeremy Rosado", "authorMusic": "Tommee Profitt",
+            "copyright": "© 2021 Capitol CMG", "ccliNumber": "7278328",
+            "themes": ["Adoration & Praise", "Communion", "Easter"],
+            "versions": [{ "name": "", "language": "en", "key": "E", "tempo": "111",
+              "arrangement": ["v1", "c1", "v2", "c1", "b1"],
+              "sections": [
+                { "id": "v1", "type": "verse", "label": "Verse 1", "order": 0,
+                  "lines": [{ "text": "What can wash away my sin?", "chords": [{ "sym": "E5", "pos": 0 }, { "sym": "B/D#", "pos": 9 }, { "sym": "C#m7", "pos": 22 }] }] },
+                { "id": "c1", "type": "chorus", "label": "Chorus", "order": 1,
+                  "lines": [{ "text": "O precious is the flow", "chords": [{ "sym": "E", "pos": 0 }] }] },
+                { "id": "v2", "type": "verse", "label": "Verse 2", "order": 2, "lines": [{ "text": "For my pardon this I see" }] },
+                { "id": "b1", "type": "bridge", "label": "Bridge", "order": 3, "lines": [{ "text": "Through Him I'll overcome" }] }
+              ] }],
+            "_extensions": { "worshipTogether": { "url": "https://www.worshiptogether.com/songs/x/", "ccli": "7278328",
+              "originalKey": "E", "recommendedKeys": ["Db", "D", "Eb"], "bpm": 111, "tempoLabel": "Medium",
+              "scripture": "Hebrews 9:22; Ephesians 1:7", "themes": ["Adoration & Praise"] } }
+          } }
+        """
+        let song = try await importOne(json)
+        #expect(song.title == "Nothing But The Blood")
+        #expect(song.ccliNumber == "7278328")
+        #expect(song.themes.contains("Communion"))
+        let version = try #require(song.activeVersion)
+        #expect(version.key == "E")
+        #expect(version.arrangement == ["v1", "c1", "v2", "c1", "b1"])   // chorus reused
+        let line = try #require(version.sortedSections.first?.lines.first)
+        #expect(line.chords.map(\.sym) == ["E5", "B/D#", "C#m7"])
+        #expect(song.extensionsJSON.contains("worshipTogether"))
+        #expect(song.extensionsJSON.contains("Hebrews 9:22"))
+    }
 }
