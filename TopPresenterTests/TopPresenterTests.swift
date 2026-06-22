@@ -2381,3 +2381,75 @@ struct MelodiaSongRoundTripTests {
         #expect(exported.contains("\"composedYear\""))
     }
 }
+
+// MARK: - Scraped sources (cantaricrestine / acorduri) import into TopPresenter
+
+struct ScrapedSongsImportTests {
+    private func makeContext() throws -> ModelContext {
+        let container = try ModelContainer(
+            for: Schema(versionedSchema: SchemaV2.self),
+            configurations: [ModelConfiguration(isStoredInMemoryOnly: true)]
+        )
+        return ModelContext(container)
+    }
+    private func importOne(_ json: String) async throws -> Song {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("scrape-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let file = dir.appendingPathComponent("song.json")
+        try Data(json.utf8).write(to: file)
+        let ctx = try makeContext()
+        let res = await ImportService.importSongItems(urls: [file], collectionName: "scrape", modelContext: ctx)
+        return try #require(res.collection?.songs.first)
+    }
+
+    /// A cantaricrestine song (lyrics + songbook + PowerPoint ref) imports with all of it.
+    @Test func importsCantaricrestineSong() async throws {
+        let json = """
+        { "schemaVersion": "1.0.0", "format": "TopPresenter Song",
+          "song": {
+            "title": "Aceasta e ziua Domnului", "language": "ro", "songNumber": "001",
+            "songbook": { "name": "Cantecele Bucuriei", "number": "001" },
+            "versions": [{ "name": "", "language": "ro", "arrangement": ["v1"],
+              "sections": [{ "id": "v1", "type": "verse", "label": "Strofa 1", "order": 0,
+                "lines": [{ "text": "Aceasta e ziua Domnului," }, { "text": "Veseli să fim, să ne bucurăm;" }] }] }],
+            "_extensions": { "cantaricrestine": { "id": "8445", "pptUrl": "https://www.cantaricrestine.ro/cantari/cb/x.ppt",
+              "dataAdaugare": "2019-03-15 10:30:00", "downloads": 342, "categorySymbol": "cb", "hasLyrics": true, "hasPptx": true } }
+          } }
+        """
+        let song = try await importOne(json)
+        #expect(song.title == "Aceasta e ziua Domnului")
+        #expect(song.songbook?.name == "Cantecele Bucuriei" || song.songbookNumber == "001")
+        #expect(song.extensionsJSON.contains("cantaricrestine"))
+        #expect(song.extensionsJSON.contains("8445"))
+        let sec = try #require(song.activeVersion?.sortedSections.first)
+        #expect(sec.lines.first?.text == "Aceasta e ziua Domnului,")
+        // re-export keeps the source extras
+        let exported = try ExportService.exportSongToTopPresenterJSON(song)
+        #expect(exported.contains("cantaricrestine") && exported.contains("pptUrl"))
+    }
+
+    /// An acorduri song (author + key + positional chords) imports with chords intact.
+    @Test func importsAcorduriSongWithChords() async throws {
+        let json = """
+        { "schemaVersion": "1.0.0", "format": "TopPresenter Song",
+          "song": {
+            "title": "Lauda", "language": "ro", "author": "Trei, doi, unu",
+            "versions": [{ "name": "", "language": "ro", "key": "A", "arrangement": ["v1"],
+              "sections": [{ "id": "v1", "type": "verse", "label": "Strofa 1", "order": 0,
+                "lines": [{ "text": "Lauda fie adusa celui ce S-a nascut",
+                  "chords": [{ "sym": "A", "pos": 0 }, { "sym": "D", "pos": 7 }, { "sym": "F#m", "pos": 25 }] }] }] }],
+            "_extensions": { "resursecrestineAcorduri": { "id": "200084", "slug": "lauda", "hasChords": true, "keyInferred": true } }
+          } }
+        """
+        let song = try await importOne(json)
+        #expect(song.title == "Lauda")
+        #expect(song.author.contains("Trei"))
+        let version = try #require(song.activeVersion)
+        #expect(version.key == "A")
+        let line = try #require(version.sortedSections.first?.lines.first)
+        #expect(line.chords.map(\.sym) == ["A", "D", "F#m"])
+        #expect(line.chords.map(\.pos) == [0, 7, 25])
+        #expect(song.extensionsJSON.contains("resursecrestineAcorduri"))
+    }
+}

@@ -149,9 +149,9 @@ It exports straight to **TopPresenter Bible JSON** — clean verse text plus red
 
 ---
 
-## Song Scrapers — melodia.ro &amp; ResurseCrestine
+## Song Scrapers — melodia.ro · ResurseCrestine · cantaricrestine.ro
 
-Dependency-free scrapers that export Romanian worship songs into **TopPresenter Song JSON** — one file per song, ready for recursive folder-import. Source-specific extras are preserved losslessly under each song's `_extensions`, surviving import → store → export.
+Dependency-free scrapers that export Romanian worship songs into **TopPresenter Song JSON** — one file per song, ready for recursive folder-import. Source-specific extras are preserved losslessly under each song's `_extensions`, surviving import → store → export. Every scraper's output is verified to import back into TopPresenter with its chords, keys, authors and metadata intact.
 
 ### melodia.ro
 
@@ -161,6 +161,27 @@ Dependency-free scrapers that export Romanian worship songs into **TopPresenter 
 ### ResurseCrestine
 
 - **[`resursecrestine-scraper.mjs`](resursecrestine-scraper.mjs)** / **[`.user.js`](resursecrestine-scraper.user.js)** — crawl the full [resursecrestine.ro/cantece](https://www.resursecrestine.ro) catalog (~28k songs) into TopPresenter Song JSON: rich sections (verse/chorus + `/: :/` repeat markers), with author / album / theme metadata and bible reference carried across.
+- **[`resursecrestine-acorduri-scraper.mjs`](resursecrestine-acorduri-scraper.mjs)** — the **chords** section (`/acorduri`, ~4.2k songs). Each acord page holds the full lyrics *with* chords, so every file is a complete song-with-chords: the chord-over-lyric charts are parsed into **positional chords** (`{sym, pos}`), with chorus detection, author, and an inferred key. A `matchKey` is carried so you can dedupe against the lyrics-only `/cantece` songs.
+
+### cantaricrestine.ro — "Cântări Creștine în PowerPoint"
+
+- **[`cantaricrestine-scraper.mjs`](cantaricrestine-scraper.mjs)** (Node 18+, resumable) — uses the site's public JSON API (`api.php`; `token` is just a random anti-bot value) to export all **~9.5k songs**, organized into **per-book folders**. Each song carries its lyrics (parsed into sections with `//: ://` repeats), book/number, and `_extensions.cantaricrestine` (id, date added, downloads/views, PowerPoint URL). It also **downloads every PowerPoint** (`.ppt`/`.pptx`) next to the JSON, and writes a `_completeness.json` (which songs have lyrics vs are PowerPoint-only). Run `--no-ppt` for JSON only. Disk-full-resilient (always writes the JSON; flags any PowerPoint it couldn't save).
+- **[`cantaricrestine-scraper.user.js`](cantaricrestine-scraper.user.js)** (Tampermonkey) — pick a book (or *Toate*) and download a single importable TopPresenter Songs bundle, straight from the API.
+
+### Keeping your library up to date
+
+Re-running a scraper into the **same output folder** fetches only the songs you don't already have — it skips every `.json` already present (`--resume`, on by default). So `node melodia-scraper.mjs --out ./songs` next month grabs just the newly-added songs; the existing thousands skip in seconds. Keep the output folder as your archive so the scraper knows what's missing.
+
+How each source signals change (so you know what a re-run can and can't catch):
+
+| Source | What exists (enumerate) | New items | Edited items |
+|---|---|---|---|
+| **melodia.ro** | `sitemap.xml` (per-song `<lastmod>`) | ✅ new slug | ✅ via `<lastmod>` |
+| **cantaricrestine.ro** | `api.php` (per-song `data_adaugare`) | ✅ new id | ✅ via `data_adaugare` |
+| **resursecrestine** | alphabetical index pages | ✅ new slug/id | ❌ no timestamps — re-fetch manually |
+| **eBiblia** | live catalog `window.app.BIBLES` | ✅ new code | ❌ no version field — re-export manually |
+
+A plain re-run (`--resume`) always tops up **new** songs. Detecting **edits** to songs you already have is possible where the source carries a timestamp (melodia's `<lastmod>`, cantaricrestine's `data_adaugare`); for resursecrestine/eBiblia you'd re-fetch the specific item by hand.
 
 > Scraped corpora are kept local (git-ignored), not committed. Please respect each song's copyright — export only for personal and congregational use.
 
