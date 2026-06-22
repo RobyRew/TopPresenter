@@ -115,6 +115,9 @@ struct BibleHistorySummary: Identifiable, Hashable {
 @Observable
 final class HistoryStore {
     let container: ModelContainer
+    /// Our own context (NOT `container.mainContext`, which is `@MainActor`-isolated
+    /// and can't be reached from this non-isolated class). Used on the main thread.
+    let context: ModelContext
 
     init(inMemory: Bool = false) {
         let schema = Schema([PresentationEvent.self])
@@ -124,9 +127,8 @@ final class HistoryStore {
         } catch {
             fatalError("Could not create History ModelContainer: \(error)")
         }
+        context = ModelContext(container)
     }
-
-    var context: ModelContext { container.mainContext }
 
     // MARK: Recording
 
