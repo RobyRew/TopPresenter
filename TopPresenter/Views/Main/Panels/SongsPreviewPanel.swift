@@ -12,6 +12,24 @@ struct SongsPreviewPanel: View {
     @Environment(PresentationManager.self) private var pm
     @Environment(LibraryManager.self) private var libraryManager
     @Environment(AudioPlayerManager.self) private var audioPlayerManager
+    @AppStorage("song_repeatBracket") private var repeatBracket = "none"
+    @AppStorage("song_repeatCount") private var repeatCount = "times"
+
+    /// Pending preview content: a filmstrip slide already carries markers; a bare
+    /// verse from the cache is decorated here so the preview matches the output.
+    private var pendingPreview: PresentationPreviewCard.PendingContent {
+        let title = libraryManager.selectedSong?.title ?? ""
+        if !libraryManager.songSlideText.isEmpty {
+            let t = libraryManager.songSlideText
+            return .init(text: t, reference: title, subtitle: libraryManager.songSlideLabel,
+                         lines: richLines(forSlideText: t, in: libraryManager.selectedSongVersion))
+        }
+        if let v = libraryManager.selectedSongVerse {
+            let d = decoratedVerse(v, version: libraryManager.selectedSongVersion, bracket: repeatBracket, countStyle: repeatCount)
+            return .init(text: d.text, reference: title, subtitle: v.label, lines: d.lines)
+        }
+        return .init(text: "", reference: title, subtitle: "")
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -20,15 +38,7 @@ struct SongsPreviewPanel: View {
             Divider()
 
             // Rendered preview of the slide selected in the filmstrip (falls back to the verse).
-            PresentationPreviewCard(formatHint: "song", pendingContent: .init(
-                text: libraryManager.songSlideText.isEmpty
-                    ? (libraryManager.selectedSongVerse?.text ?? "")
-                    : libraryManager.songSlideText,
-                reference: libraryManager.selectedSong?.title ?? "",
-                subtitle: libraryManager.songSlideLabel.isEmpty
-                    ? (libraryManager.selectedSongVerse?.label ?? "")
-                    : libraryManager.songSlideLabel
-            ))
+            PresentationPreviewCard(formatHint: "song", pendingContent: pendingPreview)
             .padding()
 
             Divider()
@@ -74,9 +84,16 @@ struct SongsPreviewPanel: View {
 struct SongVerseControlsBar: View {
     @Environment(PresentationManager.self) private var pm
     @Environment(LibraryManager.self) private var libraryManager
+    @AppStorage("song_repeatBracket") private var repeatBracket = "none"
+    @AppStorage("song_repeatCount") private var repeatCount = "times"
 
     private var isLive: Bool {
         pm.liveContent.isLive && !pm.isBlackScreen
+    }
+
+    /// A verse projected with repeat markers (text + chords) for the live path.
+    private func decorated(_ verse: SongVerse) -> (text: String, lines: [SongLine]) {
+        decoratedVerse(verse, version: libraryManager.selectedSongVersion, bracket: repeatBracket, countStyle: repeatCount)
     }
 
     private var currentSong: Song? { libraryManager.selectedSong }
@@ -180,13 +197,15 @@ struct SongVerseControlsBar: View {
                             Button {
                                 libraryManager.selectSongVerse(verse)
                                 if isLive, let song = currentSong {
+                                    let d = decorated(verse)
                                     pm.showSongVerse(
-                                        text: verse.text,
+                                        text: d.text,
                                         title: song.title,
                                         verseLabel: verse.label,
                                         slideIndex: sortedVerses.firstIndex(where: { $0.id == verse.id }) ?? 0,
                                         slideCount: sortedVerses.count,
-                                        song: song, version: libraryManager.selectedSongVersion
+                                        song: song, version: libraryManager.selectedSongVersion,
+                                        lines: d.lines
                                     )
                                 }
                             } label: {
@@ -219,13 +238,16 @@ struct SongVerseControlsBar: View {
                 text: libraryManager.songSlideText, title: song.title,
                 verseLabel: libraryManager.songSlideLabel,
                 slideIndex: libraryManager.songSlideIndex, slideCount: libraryManager.songSlideCount,
-                song: song, version: libraryManager.selectedSongVersion
+                song: song, version: libraryManager.selectedSongVersion,
+                lines: richLines(forSlideText: libraryManager.songSlideText, in: libraryManager.selectedSongVersion)
             )
         } else if let verse = currentVerse {
+            let d = decorated(verse)
             pm.showSongVerse(
-                text: verse.text, title: song.title, verseLabel: verse.label,
+                text: d.text, title: song.title, verseLabel: verse.label,
                 slideIndex: currentIndex ?? 0, slideCount: sortedVerses.count,
-                song: song, version: libraryManager.selectedSongVersion
+                song: song, version: libraryManager.selectedSongVersion,
+                lines: d.lines
             )
         }
     }
@@ -244,10 +266,12 @@ struct SongVerseControlsBar: View {
         let verse = sortedVerses[newIdx]
         libraryManager.selectSongVerse(verse)
         if wasLive, let song = currentSong {
+            let d = decorated(verse)
             pm.showSongVerse(
-                text: verse.text, title: song.title, verseLabel: verse.label,
+                text: d.text, title: song.title, verseLabel: verse.label,
                 slideIndex: newIdx, slideCount: sortedVerses.count,
-                song: song, version: libraryManager.selectedSongVersion
+                song: song, version: libraryManager.selectedSongVersion,
+                lines: d.lines
             )
         }
     }

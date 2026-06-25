@@ -28,6 +28,8 @@
 - **Transparent output window** — invisible on the projector when idle; content fades in from transparency and back out
 - **Multi-window tabs** (⌘T) — different modules and Bible translations per tab, one shared output
 - **Multi-format import** — 6 Bible formats, 6 song formats (incl. the GOAT TopPresenter Song JSON with versions + chords), universal drag &amp; drop
+- **Chords &amp; live transpose** — a song-only *Acorduri* casetá renders chords over the lyrics with independent styling, plus on-the-fly transpose, capo suggestions, and combinable repeat markers
+- **Presentation history** — every song verse and Bible passage shown is tracked (per service, dwell-gated), with per-verse/book roll-ups and CSV/JSON export — kept in its own store
 - **Resolution adaptive** — layouts are defined in percentages and fonts scale from a 1080p reference; any projector resolution, aspect ratio, or PPI just works
 
 ---
@@ -48,7 +50,9 @@ Download from the [**Resurse** release](https://github.com/RobyRew/TopPresenter/
 
 The design studio behind everything you see on screen:
 
-- **Per-presenter layout profiles** — Biblie / Cântece / Slide-uri are edited independently (segmented picker in the editor header, with one-click copy between presenters). Songs have song boxes (*Versuri, Titlu Cântec, Etichetă Strofă*), not Bible ones.
+- **Per-presenter layout profiles** — Biblie / Cântece / Slide-uri are edited independently (segmented picker in the editor header, with one-click copy between presenters). Songs have song boxes (*Versuri, Titlu Cântec, Etichetă Strofă, Acorduri*), not Bible ones.
+- **Chords casetá + live transpose** — *Acorduri* is a song-only box that renders the lyrics with chords above them (each chord aligned over its syllable, for any font). It ships hidden — turn it on for a stage/musician layout and it replaces the plain lyrics at the verse position. The chord **letters have their own independent style** (font, size, weight, color) separate from the lyrics, both edited in the box's Text tab. A transpose/capo control in the song header changes key on the fly (±semitone or pick any of 12 keys), with **capo suggestions** and the recommended keys from the song's metadata — all **display-only**, the saved chords are never touched.
+- **Repeat markers** — mark a repeated strofă/refren with a **bracket** (`/: :/`, `‖: :‖`, `|: :|`) and/or a **count** (`(×2)`, `bis/ter`) — the two combine (`‖: … :‖ (×2)`). They appear consistently on the filmstrip, previews, theme preview and the live output (including the chord chart, with chords kept aligned).
 - **Fixed text boxes** — boxes never move or resize with their content; text flows inside them. Drag/resize on the canvas, arrow-key nudge (⇧ = 5%), numeric X/Y/W/H fields, quick-align toggles.
 - **Custom text boxes &amp; media boxes** — add static text (church name, CCLI, "Amin."), live-fed boxes, clocks, slide counters, or image/GIF/video overlays with opacity, corner radius, edge feather, and fit/fill.
 - **Unified z-order** — one stacking order for every box; drag rows in the always-visible *Casete* list or use the Ordonare context menu. Boxes are recolorable (click the swatch), removable, hideable.
@@ -84,9 +88,10 @@ The design studio behind everything you see on screen:
 - **Multiple versions per song** — a song groups several renditions (e.g. 3 Romanian variants, an ES translation). Each version owns its own metadata (title shown, authors, language, key/capo/tempo, copyright, CCLI, songbook, style, themes, notes, repeat marker) and **inherits the original's by default**, with a per-version toggle to customize.
 - **6 import formats** — TopPresenter Song JSON, OpenSong XML, OpenLyrics XML (translations + chords), ChordPro, plain text, and PowerPoint (PPTX &amp; PPT — sandbox-safe, in-process parsing, with filename titles + chorus-reuse detection).
 - **Recursive folder import** for thousands of files, with progress, format auto-detection, and duplicate handling (add as new version / keep both / skip). Only TopPresenter-supported file types are scanned and the walk runs off the main thread, so picking a huge folder never freezes the app.
-- **Scalable browser** — list ⇄ grid with theme-rendered thumbnails, instant indexed search, and filters (collection, language, media).
-- **Song studio editor** — two-pane visual editor with a live theme-rendered preview, version tabs, color-coded section cards (drag-to-reorder, duplicate, ×N repeat, inline-chord mode), and per-version metadata.
-- **Rendered slide filmstrip** — sections auto-split to fit the screen (configurable lines/slide); click to project, double-click or ▶ to go live; bilingual + repeat markers (`/: :/`, `‖: :‖`, `|: :|`, `(×N)`, `bis/ter`) applied per the theme.
+- **Scalable browser** — list ⇄ grid with theme-rendered thumbnails, instant indexed search, sort header chips (A-Z · Artist · Carte · Limbă · Recente), and filters (collection, language, media, **verified-only**).
+- **Verified flag** — mark a song as checked &amp; good; a green seal shows in the list/grid/detail, you can filter to verified-only (or search `verificat`/`✓`), and it round-trips through GOAT export/import.
+- **Song studio editor** — two-pane visual editor with a live theme-rendered preview that follows the section you click, version tabs, color-coded section cards (drag-to-reorder, duplicate, ×N repeat, inline-chord mode), per-version metadata, a **Verifică** toggle, **Renunță** (revert all edits), and a per-song **change log** (what changed, when).
+- **Rendered slide filmstrip** — sections auto-split to fit the screen (configurable lines/slide); **Edit** button + song facts (CCLI, BPM, language, import source…) above it; click to project, double-click or ▶ to go live; each slide has a **PREVIEW** button and a delete (with confirm); bilingual + repeat markers (`/: :/`, `‖: :‖`, `|: :|`, `(×N)`, `bis/ter`) applied per the theme.
 - **Export** as TopPresenter Song JSON (one file per song or a whole folder), OpenLyrics XML, or Plain Text.
 
 ### 🖥 Presentation Output
@@ -99,7 +104,12 @@ The design studio behind everything you see on screen:
 
 ### 🪟 Multi-Window Tabs
 
-⌘T opens native tabs — each with its own module, Bible translation, and selection. Tabs are titled by **type + name** (e.g. *Bible — (EDC100) Ediția Dumitru Cornilescu Centenară*, *Songs — Înaintea Ta venim*), or rename any tab manually. One output, driven by whichever tab presses Show.
+⌘T opens native tabs — each with its own module, Bible translation, and selection. Tabs are titled by **type + name + reference** (e.g. *Bible - EDC100 - Ioan 3:16*, *Songs — Înaintea Ta venim*), or rename any tab manually. One output, driven by whichever tab presses Show.
+
+### 🧭 Sidebar &amp; History
+
+- **Sidebar** — content sections (Bible, Songs, Media, Schedule, Custom Slides) up top, with **History · Settings · Account** pinned in a utility group at the bottom. **Account** opens a local profile/preferences screen (presenter name, church, defaults — no online login).
+- **Presentation History** (sidebar ▸ History, ⌘Y) — a record of everything shown to the audience: songs and Bible passages, how many times (per service/session), and when. Verses are logged only after a short on-screen dwell, so fast scrubbing doesn't pollute it. Drill into a song for its session timeline + per-verse counts; Bible passages roll up by translation → book → chapter. Stored in its **own** database (never part of the song/bible JSON) with its **own** CSV / JSON export. Each song's detail panel shows its history at a glance.
 
 ### 📂 Universal Drag &amp; Drop, Media, Schedule, Quick Search
 
@@ -116,6 +126,8 @@ The design studio behind everything you see on screen:
 |----------|--------|
 | `⌘K` | Quick search |
 | `⌘T` | New tab |
+| `⌘1`–`⌘5` | Jump to Bible / Songs / Media / Schedule / Custom Slides |
+| `⌘Y` | Presentation History |
 | `⌘B` | Black screen |
 | `⌘F` | Freeze / Unfreeze |
 | `Return` | Show / Hide content |

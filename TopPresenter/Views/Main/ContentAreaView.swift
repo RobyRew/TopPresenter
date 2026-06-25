@@ -24,6 +24,10 @@ struct ContentAreaView: View {
                 ScheduleView()
             case .customSlides:
                 CustomSlidesView()
+            case .history:
+                HistoryView()
+            case .account:
+                ProfileView()
             }
         }
     }

@@ -146,6 +146,7 @@ struct PresentationOutputView: View {
         switch boxIdentity(fromToken: token) {
         case .section(let section):
             if textVisible, pm.outputSectionVisible(section),
+               !(section == .verseContent && pm.chordsReplaceVerse(in: pm.outputProfileKey, hasChartLines: pm.liveHasChordLines)),
                pm.scopeMatchesLiveSlide(pm.displayScope(for: section, in: pm.outputProfileKey)) {
                 let text = pm.sectionText(
                     section,
@@ -212,7 +213,11 @@ struct PresentationOutputView: View {
         let allRuns = isBibleVerse ? pm.liveContent.mainRuns : []
         let options = pm.contentOptions(for: pm.outputProfileKey)
 
-        if isBibleVerse, interlinearLiveEnabled, interlinearHasContent(allRuns, options: options) {
+        if section == .chords {
+            // Chord chart: lyrics (box style) with transposed/capo'd chords (own style) above.
+            ChordChartText(lines: pm.transposedSongLines(), lyricStyle: style,
+                           chordStyle: pm.outputChordRowStyle(), rect: rect, fontScale: fontScale)
+        } else if isBibleVerse, interlinearLiveEnabled, interlinearHasContent(allRuns, options: options) {
             // Interlinear grid takes over the verse box (word-stack columns).
             InterlinearText(columns: interlinearColumns(from: allRuns), style: style,
                             options: options, wocColor: pm.wocColor, rect: rect, fontScale: fontScale)

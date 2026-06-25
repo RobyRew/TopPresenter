@@ -11,7 +11,6 @@ import Foundation
 enum WindowIdentifiers {
     static let main = "main-control"
     static let presentation = "presentation-output"
-    static let history = "presentation-history"
 }
 
 // MARK: - Supported File Types

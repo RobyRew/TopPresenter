@@ -84,14 +84,12 @@ struct TopPresenterApp: App {
         .windowStyle(.plain)
         .windowResizability(.contentSize)
         .defaultSize(width: 1920, height: 1080)
+        // Don't let macOS restore a stale output window on relaunch — the app
+        // re-opens it itself, and a restored duplicate caused overlapping outputs.
+        .restorationBehavior(.disabled)
 
-        // Presentation history window (reads the separate HistoryStore)
-        WindowGroup(id: WindowIdentifiers.history) {
-            HistoryView()
-                .environment(historyStore)
-                .frame(minWidth: 820, minHeight: 520)
-        }
-        .defaultSize(width: 1040, height: 700)
+        // Presentation history now lives IN the main window (sidebar ▸ History),
+        // not as a separate window — see ContentAreaView + AppState.SidebarItem.history.
 
         // Settings window
         Settings {

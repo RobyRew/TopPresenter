@@ -48,6 +48,17 @@ struct SongLine: Codable, Hashable {
     }
 }
 
+/// One coarse entry in a song's change log (edit-log only; never restored).
+struct SongEditEntry: Codable, Hashable {
+    var date: Date
+    var summary: String
+
+    init(date: Date = .now, summary: String) {
+        self.date = date
+        self.summary = summary
+    }
+}
+
 /// A linked media asset (audio negative / karaoke / background).
 struct SongMediaRef: Codable, Hashable {
     var role: String         // "negative" | "karaoke" | "audio" | "background"
@@ -135,6 +146,9 @@ final class Song {
     var mediaJSON: String = "[]"       // [SongMediaRef]
     var extensionsJSON: String = "{}"  // future params (_extensions)
     var searchText: String = ""        // denormalized lowercase (title+aliases+author+lyrics)
+    var verified: Bool = false         // user-confirmed "checked & good" (round-trips through GOAT)
+    var modifiedDate: Date = Date.now  // last edit — drives sort + the change log
+    var editLogJSON: String = "[]"     // [SongEditEntry] — coarse change log (internal, not exported)
 
     var collection: SongCollection?
     var songbook: Songbook?
@@ -187,6 +201,10 @@ final class Song {
     var media: [SongMediaRef] {
         get { tpDecodeJSON(mediaJSON, as: [SongMediaRef].self, fallback: []) }
         set { mediaJSON = tpEncodeJSON(newValue, fallback: "[]") }
+    }
+    var editLog: [SongEditEntry] {
+        get { tpDecodeJSON(editLogJSON, as: [SongEditEntry].self, fallback: []) }
+        set { editLogJSON = tpEncodeJSON(newValue, fallback: "[]") }
     }
 
     /// Denormalized, lowercased search blob used by the scalable library browser.

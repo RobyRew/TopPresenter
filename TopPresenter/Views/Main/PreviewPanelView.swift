@@ -25,6 +25,8 @@ struct PreviewPanelView: View {
                 SchedulePreviewPanel()
             case .customSlides:
                 CustomSlidesPreviewPanel()
+            case .history, .account:
+                EmptyView()   // These fill the content area; no live preview here
             }
         }
     }
@@ -90,6 +92,9 @@ struct PresentationPreviewCard: View {
         var text: String
         var reference: String
         var subtitle: String = ""
+        /// Rich lyric lines (text + chords) of the pending song slide — feeds the
+        /// chords casetá preview before the slide goes live.
+        var lines: [SongLine] = []
     }
     var pendingContent: PendingContent? = nil
 
@@ -118,6 +123,14 @@ struct PresentationPreviewCard: View {
             return pm.liveContent.mainText
         }
         return pendingText
+    }
+
+    /// Chord lines for the preview: live (transposed) when live, else the pending
+    /// slide's chords (transposed). Empty when there's nothing to chart.
+    private var previewChordLines: [SongLine] {
+        let base = pm.liveContent.isLive ? pm.liveContent.songLines : (pendingContent?.lines ?? [])
+        guard base.contains(where: { !$0.chords.isEmpty }) else { return [] }
+        return pm.applyChordTranspose(to: base)
     }
 
     private var previewReference: String {
@@ -264,8 +277,18 @@ struct PresentationPreviewCard: View {
             // Unified stacking order — exactly what the output renders
             ForEach(pm.orderedBoxTokens(in: key), id: \.self) { token in
                 switch boxIdentity(fromToken: token) {
+                case .section(let section) where section == .chords:
+                    if pm.isSectionVisible(section, in: key), !previewChordLines.isEmpty {
+                        let rect = pm.boxFrame(for: section, in: key).rect(in: size)
+                        let style = pm.resolvedStyle(for: section, in: key)
+                        ChordChartText(lines: previewChordLines, lyricStyle: style,
+                                       chordStyle: pm.resolvedChordRowStyle(in: key),
+                                       rect: rect, fontScale: targetScale * canvasScale)
+                            .opacity(dim)
+                    }
                 case .section(let section):
                     if pm.isSectionVisible(section, in: key),
+                       !(section == .verseContent && pm.chordsReplaceVerse(in: key, hasChartLines: !previewChordLines.isEmpty)),
                        !pm.liveContent.isLive || pm.scopeMatchesLiveSlide(pm.displayScope(for: section, in: key)) {
                         let text = pm.sectionText(
                             section,
@@ -1269,7 +1292,8 @@ struct StyleQuickSettings: View {
     // Song options
     @AppStorage("song_maxLinesPerSlide") private var songMaxLines: Int = 6
     @AppStorage("song_bilingual") private var songBilingual: Bool = false
-    @AppStorage("song_repeatStyle") private var songRepeatStyle: String = "none"
+    @AppStorage("song_repeatBracket") private var songRepeatBracket: String = "none"
+    @AppStorage("song_repeatCount") private var songRepeatCount: String = "times"
 
     // General settings
     @AppStorage("showVerseNumbers") private var showVerseNumbers: Bool = true
@@ -1427,20 +1451,32 @@ struct StyleQuickSettings: View {
             .controlSize(.small)
 
         HStack {
-            Text(String(localized: "Repetare:", comment: "Setting label"))
+            Text(String(localized: "Paranteze:", comment: "Setting label — repeat bracket"))
                 .font(.caption)
                 .frame(width: 70, alignment: .trailing)
-            Picker("", selection: $songRepeatStyle) {
+            Picker("", selection: $songRepeatBracket) {
                 Text(String(localized: "Fără", comment: "Repeat style")).tag("none")
                 Text("/: :/").tag("slash")
                 Text("‖: :‖").tag("bar")
                 Text("|: :|").tag("pipe")
+            }
+            .labelsHidden()
+            .controlSize(.small)
+        }
+        HStack {
+            Text(String(localized: "Repetări:", comment: "Setting label — repeat count"))
+                .font(.caption)
+                .frame(width: 70, alignment: .trailing)
+            Picker("", selection: $songRepeatCount) {
+                Text(String(localized: "Fără", comment: "Repeat count")).tag("none")
                 Text("(×N)").tag("times")
                 Text("bis/ter").tag("bister")
             }
             .labelsHidden()
             .controlSize(.small)
         }
+        Text(String(localized: "Se combină: ex. „‖: … :‖ (×2)”. Marcajele apar la strofele cu ×N ≥ 2.", comment: "Repeat hint"))
+            .font(.system(size: 10)).foregroundStyle(.tertiary)
     }
 
     // MARK: - Ieșire Section (output screen, compact)

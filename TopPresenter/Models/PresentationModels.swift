@@ -254,6 +254,8 @@ final class LiveContent {
     var songStyle: String = ""
     var songKey: String = ""
     var songTempo: String = ""
+    /// Rich lyric lines (text + chords) of the live song slide — feeds the chord casetá.
+    var songLines: [SongLine] = []
     /// Position of this slide within its set (verse within song, slide within
     /// deck, item within schedule) — drives "show only on first/last slide".
     var slideIndex: Int = 0
@@ -301,6 +303,7 @@ final class LiveContent {
     private func clearSongMeta() {
         songAuthor = ""; songCopyright = ""; songCCLI = ""
         songbook = ""; songStyle = ""; songKey = ""; songTempo = ""
+        songLines = []
     }
 
     func setBibleVerse(text: String, reference: String, translationName: String = "", runs: [VerseRun] = [],
@@ -324,7 +327,8 @@ final class LiveContent {
 
     func setSongVerse(text: String, title: String, verseLabel: String, slideIndex: Int = 0, slideCount: Int = 1,
                       author: String = "", copyright: String = "", ccli: String = "",
-                      songbook: String = "", style: String = "", key: String = "", tempo: String = "") {
+                      songbook: String = "", style: String = "", key: String = "", tempo: String = "",
+                      lines: [SongLine] = []) {
         self.mainText = text
         self.reference = title
         self.subtitle = verseLabel
@@ -339,6 +343,7 @@ final class LiveContent {
         self.songStyle = style
         self.songKey = key
         self.songTempo = tempo
+        self.songLines = lines
         self.slideIndex = slideIndex
         self.slideCount = max(slideCount, 1)
     }

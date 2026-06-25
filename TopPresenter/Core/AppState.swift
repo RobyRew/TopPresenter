@@ -32,8 +32,15 @@ final class AppState {
         case media = "Media"
         case schedule = "Schedule"
         case customSlides = "Custom Slides"
+        case history = "History"
+        case account = "Account"
 
         var id: String { rawValue }
+
+        /// Content sections (top of the sidebar).
+        static let contentItems: [SidebarItem] = [.bible, .songs, .media, .schedule, .customSlides]
+        /// Utility destinations pinned to the bottom of the sidebar.
+        static let utilityItems: [SidebarItem] = [.history, .account]
 
         var localizedName: String {
             switch self {
@@ -42,6 +49,8 @@ final class AppState {
             case .media: return String(localized: "Media", comment: "Sidebar item")
             case .schedule: return String(localized: "Schedule", comment: "Sidebar item")
             case .customSlides: return String(localized: "Custom Slides", comment: "Sidebar item")
+            case .history: return String(localized: "History", comment: "Sidebar item")
+            case .account: return String(localized: "Account", comment: "Sidebar item")
             }
         }
 
@@ -52,6 +61,8 @@ final class AppState {
             case .media: return "photo.on.rectangle"
             case .schedule: return "list.bullet.rectangle"
             case .customSlides: return "rectangle.stack.fill"
+            case .history: return "clock.arrow.circlepath"
+            case .account: return "person.crop.circle"
             }
         }
     }

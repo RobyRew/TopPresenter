@@ -523,11 +523,14 @@ final class PresentationManager {
             switch key {
             case "song":
                 // Songs: lyrics + title + verse label. No Bible translation.
+                // The chord chart ships hidden — enable it for a stage/musician layout.
+                p.frames[TextBoxSection.chords.rawValue] = .defaultChords
                 p.visibility = [
                     TextBoxSection.verseContent.rawValue: true,
                     TextBoxSection.reference.rawValue: true,
                     TextBoxSection.translationName.rawValue: false,
                     TextBoxSection.subtitle.rawValue: true,
+                    TextBoxSection.chords.rawValue: false,
                 ]
             case "text":
                 p.visibility = [
@@ -552,9 +555,9 @@ final class PresentationManager {
     /// translation box, Slides has neither translation nor verse label.
     static func relevantSections(for key: String) -> [TextBoxSection] {
         switch key {
-        case "song": return [.verseContent, .reference, .subtitle]
+        case "song": return [.verseContent, .reference, .subtitle, .chords]
         case "text": return [.verseContent, .reference]
-        default: return TextBoxSection.allCases
+        default: return TextBoxSection.allCases.filter { $0 != .chords }
         }
     }
 
@@ -571,6 +574,72 @@ final class PresentationManager {
     /// The profile currently being EDITED (editor, preview overlay, right bar).
     /// Follows the focused module; the OUTPUT always uses the live content's key.
     var activeProfileKey: String = "bible"
+
+    // MARK: - Chord transpose / capo (display-only — NEVER mutates the stored song)
+    /// Semitones the live chord chart is transposed by (−11…11). Reset per song.
+    var chordTransposeSemitones: Int = 0
+    /// Capo fret for the chord chart (0…11): the fingered shapes drop by this much.
+    var chordCapo: Int = 0
+    /// The song key the transpose/capo currently apply to — switching songs resets them.
+    @ObservationIgnored private var chordTransposeSongKey: String = ""
+
+    /// Flat/sharp flavour for the live chart: the song key shifted by the current
+    /// transpose, then spelled per the resulting key.
+    var chordPreferFlats: Bool {
+        let base = liveContent.songKey.isEmpty ? "C" : liveContent.songKey
+        let shifted = ChordTransposer.transpose(base, by: chordTransposeSemitones,
+                                                 preferFlats: ChordTransposer.preferFlats(forKey: base))
+        return ChordTransposer.preferFlats(forKey: shifted)
+    }
+
+    /// Apply the current transpose + capo (capo lowers the fingered shapes) to any
+    /// chord lines — used for both the live output and not-yet-live previews.
+    func applyChordTranspose(to lines: [SongLine]) -> [SongLine] {
+        let net = chordTransposeSemitones - chordCapo
+        guard net % 12 != 0 else { return lines }
+        let flats = chordPreferFlats
+        return lines.map { ChordTransposer.transpose(line: $0, by: net, preferFlats: flats) }
+    }
+
+    /// The live slide's chord lines after transpose + capo.
+    func transposedSongLines() -> [SongLine] { applyChordTranspose(to: liveContent.songLines) }
+
+    /// The chord chart already shows the lyrics, so when it's active the plain verse
+    /// box is suppressed — otherwise two lyric blocks overlap at the verse position.
+    /// `hasChartLines` = the chart will actually render content in this context.
+    func chordsReplaceVerse(in key: String, hasChartLines: Bool) -> Bool {
+        key == "song" && hasChartLines && isSectionVisible(.chords, in: key)
+    }
+
+    /// True when the live song slide carries at least one chord (the chart will draw).
+    var liveHasChordLines: Bool { liveContent.songLines.contains { !$0.chords.isEmpty } }
+
+    /// The sounding key after transpose (for the chart header); "" if unknown.
+    var liveSoundingKey: String {
+        let base = liveContent.songKey
+        guard !base.isEmpty else { return "" }
+        return ChordTransposer.transpose(base, by: chordTransposeSemitones,
+                                         preferFlats: ChordTransposer.preferFlats(forKey: base))
+    }
+
+    /// Reset transpose/capo whenever a different song goes live (per-song state).
+    func syncChordTranspose(forSongKey key: String) {
+        guard key != chordTransposeSongKey else { return }
+        chordTransposeSongKey = key
+        chordTransposeSemitones = 0
+        chordCapo = 0
+    }
+
+    /// Whether the current transpose/capo belong to this song (else it shows 0).
+    func chordTransposeApplies(to songKey: String) -> Bool { chordTransposeSongKey == songKey }
+
+    /// Set transpose/capo for a specific song and PIN it, so projecting that song
+    /// keeps the operator's choice instead of resetting it.
+    func setChordTranspose(semitones: Int? = nil, capo: Int? = nil, forSongKey key: String) {
+        chordTransposeSongKey = key
+        if let semitones { chordTransposeSemitones = max(-11, min(11, semitones)) }
+        if let capo { chordCapo = max(0, min(11, capo)) }
+    }
 
     private func resolvedKey(_ key: String?) -> String {
         let k = key ?? activeProfileKey
@@ -945,6 +1014,8 @@ final class PresentationManager {
         static let defaultReference = TextBoxFrame(x: 0.05, y: 0.72, width: 0.90, height: 0.10)
         static let defaultTranslation = TextBoxFrame(x: 0.02, y: 0.03, width: 0.22, height: 0.07)
         static let defaultSubtitle = TextBoxFrame(x: 0.05, y: 0.90, width: 0.90, height: 0.06)
+        /// Chords default to the lyrics area — "tied to the verse" out of the box.
+        static let defaultChords = TextBoxFrame(x: 0.05, y: 0.15, width: 0.90, height: 0.55)
 
         static func decode(from defaults: UserDefaults, key: String, fallback: TextBoxFrame) -> TextBoxFrame {
             guard let data = defaults.data(forKey: key),
@@ -1068,6 +1139,7 @@ final class PresentationManager {
         case .reference: return (0.55, .semibold, 0.9)
         case .translationName: return (0.35, .regular, 0.6)
         case .subtitle: return (0.4, .regular, 0.6)
+        case .chords: return (0.5, .regular, 1.0)
         }
     }
 
@@ -1188,6 +1260,36 @@ final class PresentationManager {
         style.vAlignRaw = resolved.vAlignRaw
         setBoxStyle(style, for: section, in: key)
     }
+
+    // MARK: - Chord-row style (the chord letters inside the Acorduri box)
+    /// A SECOND, fully independent style for the chord letters — separate from the
+    /// box's main style, which dresses the lyrics. Stored under a reserved key in the
+    /// profile's style dict (never collides with a section rawValue).
+    static let chordRowStyleKey = "chordRow"
+
+    func chordRowStyle(in key: String? = nil) -> BoxTextStyle {
+        profile(key).styles[Self.chordRowStyleKey] ?? BoxTextStyle()
+    }
+    func setChordRowStyle(_ style: BoxTextStyle, in key: String? = nil) {
+        mutateProfile(key) { $0.styles[Self.chordRowStyleKey] = style }
+    }
+    /// Chords default to ~0.55× the lyric size and semibold, until customized.
+    func resolvedChordRowStyle(in key: String? = nil) -> ResolvedBoxStyle {
+        resolve(chordRowStyle(in: key), sizeFactor: 0.55, defaultWeight: .semibold, defaultOpacity: 1.0)
+    }
+    func enableChordRowStyleCustomization(in key: String? = nil) {
+        var style = chordRowStyle(in: key)
+        guard !style.isCustomized else { return }
+        let resolved = resolvedChordRowStyle(in: key)
+        style.isCustomized = true
+        style.fontSize = resolved.fontSize
+        style.weightRaw = BoxTextStyle.weightRaw(resolved.weight)
+        style.opacity = resolved.opacity
+        style.vAlignRaw = resolved.vAlignRaw
+        setChordRowStyle(style, in: key)
+    }
+    /// Output-profile resolved chord style (mirrors `outputStyle(for:)`).
+    func outputChordRowStyle() -> ResolvedBoxStyle { resolvedChordRowStyle(in: outputProfileKey) }
 
     // MARK: - Custom Text Boxes
     /// A user-created text box — church name, CCLI line, a second reference, a
@@ -2665,10 +2767,11 @@ final class PresentationManager {
     }
 
     func showSongVerse(text: String, title: String, verseLabel: String, slideIndex: Int = 0, slideCount: Int = 1,
-                       song: Song? = nil, version: SongVersion? = nil) {
+                       song: Song? = nil, version: SongVersion? = nil, lines: [SongLine] = []) {
         guard !isFrozen else { return }
         let sKey = HistoryStore.songKey(ccli: song?.ccliNumber ?? "", title: song?.title ?? title,
                                         source: song?.collection?.sourceFormat ?? "")
+        syncChordTranspose(forSongKey: sKey)
         beginHistory(HistoryItem(contentType: "song", sessionKey: sKey, songKey: sKey,
                                  songTitle: song?.title ?? title, versionName: version?.name ?? "",
                                  verseLabel: verseLabel, slideIndex: slideIndex))
@@ -2691,7 +2794,8 @@ final class PresentationManager {
                 songbook: pick(meta?.songbookName, song?.songbook?.name),
                 style: pick(meta?.style, song?.style),
                 key: pick(meta?.key, song?.key),
-                tempo: pick(meta?.tempo, song?.tempo)
+                tempo: pick(meta?.tempo, song?.tempo),
+                lines: lines
             )
             lastLiveProfileKey = "song"
             liveContent.isLive = true
@@ -2774,15 +2878,33 @@ final class PresentationManager {
 
     /// Positions the presentation window on the specified screen
     func positionOnScreen(_ screen: NSScreen) {
+        dedupePresentationWindows()
         presentationScreenIndex = NSScreen.screens.firstIndex(of: screen)
         movePresentationWindow(to: screen)
     }
 
+    /// ALL windows carrying the presentation identifier. Normally one; more than one
+    /// means a stale/duplicate (state restoration + auto-open) — see `dedupe…`.
+    private var presentationWindows: [NSWindow] {
+        NSApplication.shared.windows.filter { $0.identifier?.rawValue == WindowIdentifiers.presentation }
+    }
+
     /// The presentation NSWindow, found by its identifier.
-    private var presentationWindow: NSWindow? {
-        NSApplication.shared.windows.first(where: {
-            $0.identifier?.rawValue == WindowIdentifiers.presentation
-        })
+    private var presentationWindow: NSWindow? { presentationWindows.first }
+
+    /// True when an output window already exists (so the launch auto-open can skip).
+    var hasPresentationWindow: Bool { presentationWindow != nil }
+
+    /// Close any EXTRA presentation windows — macOS window-state restoration can
+    /// re-create one on relaunch, which the launch auto-open then doubles, leaving an
+    /// unmanaged copy on the built-in screen overlapping the real output.
+    func dedupePresentationWindows() {
+        let windows = presentationWindows
+        guard windows.count > 1 else { return }
+        for extra in windows.dropFirst() {
+            extra.orderOut(nil)
+            extra.close()
+        }
     }
 
     /// Hides the presentation window (used when clearing output on the built-in screen).
@@ -2792,12 +2914,14 @@ final class PresentationManager {
 
     /// Shows the presentation window if it is not visible.
     func showPresentationWindow() {
+        dedupePresentationWindows()
         guard let window = presentationWindow, !window.isVisible else { return }
         window.orderFront(nil)
     }
 
     /// Moves the presentation window to fill the given screen.
     func movePresentationWindow(to screen: NSScreen) {
+        dedupePresentationWindows()
         guard let window = presentationWindow else { return }
 
         let frame = screen.frame
@@ -2905,6 +3029,7 @@ final class PresentationManager {
         case .reference: return .defaultReference
         case .translationName: return .defaultTranslation
         case .subtitle: return .defaultSubtitle
+        case .chords: return .defaultChords
         }
     }
 
@@ -2953,6 +3078,9 @@ final class PresentationManager {
         case .reference: autoValue = reference
         case .translationName: autoValue = translation
         case .subtitle: autoValue = subtitle
+        // The chords box renders from `liveContent.songLines` directly; this text
+        // only gates whether the box mounts (non-empty == there is a slide to chart).
+        case .chords: autoValue = liveContent.songLines.contains { !$0.chords.isEmpty } ? main : ""
         }
         return Self.resolveBoxSource(
             sourceRaw(for: section, in: key),

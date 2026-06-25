@@ -1108,15 +1108,20 @@ struct PresentationManagerTests {
     }
 
     @Test func relevantSectionsFilterPerPresenter() {
-        // Songs have no Bible translation box; slides have neither extra box
+        // Songs have no Bible translation box but DO have the chord chart;
+        // slides have neither; chords are song-only.
         #expect(!PresentationManager.relevantSections(for: "song").contains(.translationName))
+        #expect(PresentationManager.relevantSections(for: "song").contains(.chords))
         #expect(!PresentationManager.relevantSections(for: "text").contains(.subtitle))
-        #expect(PresentationManager.relevantSections(for: "bible") == TextBoxSection.allCases)
+        #expect(!PresentationManager.relevantSections(for: "bible").contains(.chords))
+        #expect(PresentationManager.relevantSections(for: "bible") == TextBoxSection.allCases.filter { $0 != .chords })
 
         // The unified z-order only offers a profile's relevant boxes
         let pm = PresentationManager()
         #expect(!pm.orderedBoxTokens(in: "song").contains("section:translationName"))
+        #expect(pm.orderedBoxTokens(in: "song").contains("section:chords"))
         #expect(pm.orderedBoxTokens(in: "bible").contains("section:translationName"))
+        #expect(!pm.orderedBoxTokens(in: "bible").contains("section:chords"))
     }
 
     @Test func transitionCatalogResolvesEveryOption() {
@@ -2542,5 +2547,187 @@ struct HistoryStoreTests {
         let json = try HistoryExportService.json(s)
         #expect(json.contains("TopPresenter History"))
         #expect(json.contains("aggregates"))
+    }
+}
+
+// MARK: - ChordTransposer
+
+struct ChordTransposerTests {
+
+    @Test func parsesRootQualityAndBass() {
+        let c = ChordTransposer.parse("Dm7")
+        #expect(c?.rootPC == 2)
+        #expect(c?.quality == "m7")
+        #expect(c?.bassPC == nil)
+
+        let slash = ChordTransposer.parse("D/F#")
+        #expect(slash?.rootPC == 2)
+        #expect(slash?.quality == "")
+        #expect(slash?.bassPC == 6)
+
+        // Non-chords are left for the caller to keep verbatim.
+        #expect(ChordTransposer.parse("N.C.") == nil)
+        #expect(ChordTransposer.parse("") == nil)
+    }
+
+    @Test func transposesUpKeepingQuality() {
+        // C -> D is +2 semitones.
+        #expect(ChordTransposer.transpose("C", by: 2, preferFlats: false) == "D")
+        #expect(ChordTransposer.transpose("Am7", by: 2, preferFlats: false) == "Bm7")
+        #expect(ChordTransposer.transpose("G/B", by: 2, preferFlats: false) == "A/C#")
+        #expect(ChordTransposer.transpose("Csus4", by: 5, preferFlats: false) == "Fsus4")
+    }
+
+    @Test func enharmonicSpellingFollowsTargetFlavour() {
+        // +1 from C: sharp world = C#, flat world = Db.
+        #expect(ChordTransposer.transpose("C", by: 1, preferFlats: false) == "C#")
+        #expect(ChordTransposer.transpose("C", by: 1, preferFlats: true) == "Db")
+        // A flat key prefers flats throughout.
+        #expect(ChordTransposer.preferFlats(forKey: "Eb"))
+        #expect(ChordTransposer.preferFlats(forKey: "Bbm"))
+        #expect(!ChordTransposer.preferFlats(forKey: "E"))
+        #expect(!ChordTransposer.preferFlats(forKey: "A"))
+    }
+
+    @Test func semitonesBetweenKeys() {
+        #expect(ChordTransposer.semitones(fromKey: "C", toKey: "D") == 2)
+        #expect(ChordTransposer.semitones(fromKey: "E", toKey: "C") == 8)  // forward wrap
+        #expect(ChordTransposer.semitones(fromKey: "G", toKey: "G") == 0)
+    }
+
+    @Test func transposesAWholeLineKeepingPositions() {
+        let line = SongLine(text: "Mare ești Tu", chords: [SongChord(sym: "G", pos: 0), SongChord(sym: "D", pos: 10)])
+        let up = ChordTransposer.transpose(line: line, by: 2, preferFlats: false)
+        #expect(up.text == "Mare ești Tu")
+        #expect(up.chords.map(\.sym) == ["A", "E"])
+        #expect(up.chords.map(\.pos) == [0, 10])
+        // A full octave (or no shift) is a no-op.
+        #expect(ChordTransposer.transpose(line: line, by: 12, preferFlats: false).chords.map(\.sym) == ["G", "D"])
+    }
+
+    @Test func capoShapesAndSuggestions() {
+        // Sounding E with capo 2 is fingered as D shapes.
+        #expect(ChordTransposer.shapeChord("E", capo: 2, preferFlats: false) == "D")
+        #expect(ChordTransposer.shapeChord("A", capo: 2, preferFlats: false) == "G")
+        // To sound in F, capo 1 + E shapes (or capo 3 + D shapes, etc.).
+        let sugg = ChordTransposer.capoSuggestions(forSoundingKey: "F")
+        #expect(sugg.contains { $0.capo == 1 && $0.shapeKey == "E" })
+        #expect(sugg.allSatisfy { $0.capo >= 1 && $0.capo <= 7 })
+    }
+
+    @Test func parsesRecommendedKeysFromExtensions() {
+        let json = #"{"worshipTogether":{"recommendedKeys":["Db","D","Eb"],"bpm":111}}"#
+        #expect(ChordTransposer.recommendedKeys(fromExtensionsJSON: json) == ["Db", "D", "Eb"])
+        // Comma string + junk are tolerated.
+        let json2 = #"{"melodia":{"keys":"G, A, junk"}}"#
+        #expect(ChordTransposer.recommendedKeys(fromExtensionsJSON: json2) == ["G", "A"])
+        #expect(ChordTransposer.recommendedKeys(fromExtensionsJSON: "{}") == [])
+    }
+}
+
+// MARK: - Chord chart repeat markers
+
+struct ChordChartMarkerTests {
+
+    @Test func bracketShiftsFirstLineChordPositions() {
+        let lines = [
+            SongLine(text: "Mare ești", chords: [SongChord(sym: "G", pos: 0), SongChord(sym: "D", pos: 5)]),
+            SongLine(text: "Doamne", chords: [SongChord(sym: "C", pos: 0)]),
+        ]
+        let out = applyRepeatMarkerRich(lines, count: 2, bracket: "slash", countStyle: "none")
+        #expect(out.count == 2)
+        // First line gets the "/: " prefix and every chord shifts right by 3.
+        #expect(out[0].text == "/: Mare ești")
+        #expect(out[0].chords.map(\.pos) == [3, 8])
+        #expect(out[0].chords.map(\.sym) == ["G", "D"])
+        // Last line gets the closing marker; its chords are untouched.
+        #expect(out[1].text == "Doamne :/")
+        #expect(out[1].chords.map(\.pos) == [0])
+    }
+
+    @Test func bracketAndCountCombineInline() {
+        let lines = [
+            SongLine(text: "Mare ești", chords: [SongChord(sym: "G", pos: 0)]),
+            SongLine(text: "Doamne", chords: [SongChord(sym: "C", pos: 0)]),
+        ]
+        let out = applyRepeatMarkerRich(lines, count: 2, bracket: "bar", countStyle: "times")
+        #expect(out.count == 2)                         // no extra line — count is inline
+        #expect(out[0].text == "‖: Mare ești")
+        #expect(out[0].chords.map(\.pos) == [3])        // shifted by the 3-char prefix
+        #expect(out[1].text == "Doamne :‖ (×2)")        // bracket + count on the last line
+        #expect(out[1].chords.map(\.pos) == [0])
+        // Text path produces the SAME line count so slides chunk identically.
+        #expect(applyRepeatMarker(["Mare ești", "Doamne"], count: 2, bracket: "bar", countStyle: "times").count == 2)
+    }
+
+    @Test func bisterCountSuffix() {
+        let lines = [SongLine(text: "Aleluia")]
+        #expect(applyRepeatMarkerRich(lines, count: 2, bracket: "none", countStyle: "bister")[0].text == "Aleluia bis")
+        #expect(applyRepeatMarkerRich(lines, count: 3, bracket: "none", countStyle: "bister")[0].text == "Aleluia ter")
+    }
+
+    @Test func noMarkerWhenSingleOrAllNone() {
+        let lines = [SongLine(text: "x", chords: [SongChord(sym: "C", pos: 0)])]
+        #expect(applyRepeatMarkerRich(lines, count: 1, bracket: "slash", countStyle: "times") == lines)
+        #expect(applyRepeatMarkerRich(lines, count: 2, bracket: "none", countStyle: "none") == lines)
+    }
+
+    @Test func versionOverrideResolvesBracketVsCount() {
+        // A version bracket override keeps the global count; a count override keeps the global bracket.
+        #expect(resolveRepeat(versionStyle: "bar", globalBracket: "none", globalCount: "times") == ("bar", "times"))
+        #expect(resolveRepeat(versionStyle: "times", globalBracket: "slash", globalCount: "none") == ("slash", "times"))
+        #expect(resolveRepeat(versionStyle: "none", globalBracket: "bar", globalCount: "times") == ("none", "none"))
+        #expect(resolveRepeat(versionStyle: "", globalBracket: "pipe", globalCount: "bister") == ("pipe", "bister"))
+    }
+}
+
+// MARK: - Song verified flag + edit-log diff
+
+struct SongVerifiedAndEditLogTests {
+
+    private func result(title: String, verified: Bool = false, sections: [SongImportSection]) -> SongImportResult {
+        SongImportResult(
+            title: title, author: "A", copyright: "", ccliNumber: "", key: "C", tempo: "",
+            songNumber: "", tags: "", verses: [],
+            versions: [SongImportVersion(name: "", sections: sections)], verified: verified)
+    }
+
+    @Test func verifiedExportsAndParses() {
+        // Export side: songDictV2 carries the flag only when true.
+        let song = Song(title: "Test")
+        #expect(ExportService.songDictV2(song)["verified"] == nil)
+        song.verified = true
+        #expect(ExportService.songDictV2(song)["verified"] as? Bool == true)
+        // Import side: round-trips back through the GOAT parser.
+        let json = #"{"song":{"title":"X","verified":true,"versions":[]}}"#
+        #expect(TopPresenterSongImporter.result(fromJSON: json)?.verified == true)
+        #expect(TopPresenterSongImporter.result(fromJSON: #"{"song":{"title":"Y"}}"#)?.verified == false)
+    }
+
+    @Test func editLogDiffSummarizesChanges() {
+        let v1 = SongImportSection(sectionKey: "v1", type: "verse", label: "Strofa 1", order: 0, lines: [SongLine(text: "a")])
+        let old = result(title: "Cântec", sections: [v1])
+
+        let v1edited = SongImportSection(sectionKey: "v1", type: "verse", label: "Strofa 1", order: 0, lines: [SongLine(text: "a schimbat")])
+        let chorus = SongImportSection(sectionKey: "c", type: "chorus", label: "Refren", order: 1, lines: [SongLine(text: "r")])
+        let new = result(title: "Cântec nou", verified: true, sections: [v1edited, chorus])
+
+        let s = ImportService.summarizeChanges(old: old, new: new)
+        #expect(s.contains("Titlu modificat"))
+        #expect(s.contains("Marcat verificat"))
+        #expect(s.contains { $0.contains("Strofa 1") && $0.contains("editat") })
+        #expect(s.contains { $0.contains("Refren") && $0.contains("adăugat") })
+
+        // No changes → no entries.
+        #expect(ImportService.summarizeChanges(old: old, new: old).isEmpty)
+    }
+
+    @Test func deletedSectionIsReported() {
+        let v1 = SongImportSection(sectionKey: "v1", type: "verse", label: "Strofa 1", order: 0, lines: [SongLine(text: "a")])
+        let chorus = SongImportSection(sectionKey: "c", type: "chorus", label: "Refren", order: 1, lines: [SongLine(text: "r")])
+        let old = result(title: "C", sections: [v1, chorus])
+        let new = result(title: "C", sections: [v1])
+        let s = ImportService.summarizeChanges(old: old, new: new)
+        #expect(s.contains { $0.contains("Refren") && $0.contains("șters") })
     }
 }

@@ -25,6 +25,7 @@ enum TextBoxSection: String, CaseIterable, Identifiable {
     case reference = "reference"
     case translationName = "translationName"
     case subtitle = "subtitle"
+    case chords = "chords"            // song-only: chord chart over the lyrics
 
     var id: String { rawValue }
 
@@ -43,6 +44,7 @@ enum TextBoxSection: String, CaseIterable, Identifiable {
         case (.translationName, _): return String(localized: "Traducere", comment: "Text box name — Bible translation name")
         case (.subtitle, "song"): return String(localized: "Etichetă Strofă", comment: "Text box name — Strofa 1 / Refren / Cor")
         case (.subtitle, _): return String(localized: "Subtitlu", comment: "Text box name — verse label / subtitle")
+        case (.chords, _): return String(localized: "Acorduri", comment: "Text box name — chord chart")
         }
     }
 
@@ -57,6 +59,8 @@ enum TextBoxSection: String, CaseIterable, Identifiable {
             return String(localized: "Numele/abrevierea traducerii Bibliei (ex. VDC)", comment: "Box source description")
         case .subtitle:
             return String(localized: "Eticheta strofei la cântece (ex. Strofa 1, Refren)", comment: "Box source description")
+        case .chords:
+            return String(localized: "Acordurile cântecului peste versuri (transpozabile)", comment: "Box source description")
         }
     }
 
@@ -66,6 +70,7 @@ enum TextBoxSection: String, CaseIterable, Identifiable {
         case .reference: return "bookmark.fill"
         case .translationName: return "character.book.closed.fill"
         case .subtitle: return "text.line.last.and.arrowtriangle.forward"
+        case .chords: return "guitars.fill"
         }
     }
 
@@ -75,6 +80,7 @@ enum TextBoxSection: String, CaseIterable, Identifiable {
         case .reference: return .orange
         case .translationName: return .purple
         case .subtitle: return .green
+        case .chords: return .pink
         }
     }
 }
@@ -1505,6 +1511,14 @@ struct LayoutEditorSheet: View {
             && PresentationManager.contentKey(for: pm.liveContent.contentType) == pm.activeProfileKey
     }
 
+    /// A small chord chart shown on the editor canvas when no song is live, so the
+    /// Acorduri box can be positioned/styled.
+    static let sampleChordLines: [SongLine] = [
+        SongLine(text: "Ce mare ești Tu, Doamne!", chords: [SongChord(sym: "G", pos: 0), SongChord(sym: "D", pos: 11)]),
+        SongLine(text: "Cât de minunate sunt lucrările Tale,", chords: [SongChord(sym: "Em", pos: 0), SongChord(sym: "C", pos: 17)]),
+        SongLine(text: "Întreg pământul cântă slava Ta.", chords: [SongChord(sym: "G", pos: 0), SongChord(sym: "D", pos: 16), SongChord(sym: "G", pos: 23)]),
+    ]
+
     private var sampleVerse: String {
         if liveMatchesProfile, !pm.liveContent.mainText.isEmpty {
             return pm.liveContent.mainText
@@ -1633,7 +1647,15 @@ struct LayoutEditorSheet: View {
             ForEach(pm.orderedBoxTokens(), id: \.self) { token in
                 switch boxIdentity(fromToken: token) {
                 case .section(let section):
-                    if pm.isSectionVisible(section) {
+                    if section == .chords, pm.isSectionVisible(section) {
+                        // Chord chart preview: live song lines, else a sample chart.
+                        let rect = pm.boxFrame(for: section).rect(in: size)
+                        let style = pm.resolvedStyle(for: section)
+                        let lines = pm.liveContent.songLines.isEmpty ? Self.sampleChordLines : pm.transposedSongLines()
+                        ChordChartText(lines: lines, lyricStyle: style,
+                                       chordStyle: pm.resolvedChordRowStyle(), rect: rect, fontScale: fontScale)
+                    } else if section != .chords, pm.isSectionVisible(section),
+                              !(section == .verseContent && pm.activeProfileKey == "song" && pm.isSectionVisible(.chords)) {
                         let text = pm.sectionText(
                             section,
                             main: fields.main, reference: fields.reference,
@@ -2114,6 +2136,26 @@ struct LayoutEditorSheet: View {
     @ViewBuilder
     private func selectedBoxStyleGroup(_ identity: BoxIdentity) -> some View {
         switch identity {
+        case .section(.chords):
+            // The Acorduri box dresses lyrics + chord letters independently.
+            VStack(alignment: .leading, spacing: 10) {
+                textStyleGroup(
+                    title: String(localized: "Versuri", comment: "Chord box — lyric style"),
+                    style: Binding(
+                        get: { pm.boxStyle(for: .chords) },
+                        set: { pm.setBoxStyle($0, for: .chords) }
+                    ),
+                    onEnable: { pm.enableStyleCustomization(for: .chords) }
+                )
+                textStyleGroup(
+                    title: String(localized: "Acorduri (litere)", comment: "Chord box — chord letters style"),
+                    style: Binding(
+                        get: { pm.chordRowStyle() },
+                        set: { pm.setChordRowStyle($0) }
+                    ),
+                    onEnable: { pm.enableChordRowStyleCustomization() }
+                )
+            }
         case .section(let section):
             textStyleGroup(
                 title: boxLabel(for: identity, pm: pm),

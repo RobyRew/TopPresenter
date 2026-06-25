@@ -2,8 +2,9 @@
 //  HistoryView.swift
 //  TopPresenter
 //
-//  The presentation-history window: what songs and Bible passages were shown,
-//  how often, and when. Reads the separate HistoryStore; exports CSV / JSON.
+//  The presentation-history view (sidebar ▸ History, in the main window): what
+//  songs and Bible passages were shown, how often, and when. Reads the separate
+//  HistoryStore; exports CSV / JSON.
 //
 
 import SwiftUI
@@ -35,7 +36,7 @@ struct HistoryView: View {
                 biblePane
             }
         }
-        .frame(minWidth: 820, minHeight: 520)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onAppear(perform: reload)
     }
 

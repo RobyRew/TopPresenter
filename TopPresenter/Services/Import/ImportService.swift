@@ -733,6 +733,22 @@ final class ImportService {
             tags: result.tags
         )
         song.collection = collection
+        applyResult(result, to: song, modelContext: modelContext)
+        return song
+    }
+
+    /// Apply a parsed GOAT result onto a song: set every scalar field, then CLEAR its
+    /// existing version graph + verse cache and rebuild them. Used by import (on a fresh
+    /// song) and by the song editor's Cancel-revert (rebuild from an open snapshot).
+    static func applyResult(_ result: SongImportResult, to song: Song, modelContext: ModelContext) {
+        song.title = result.title
+        song.author = result.author
+        song.copyright = result.copyright
+        song.ccliNumber = result.ccliNumber
+        song.key = result.key
+        song.tempo = result.tempo
+        song.songNumber = result.songNumber
+        song.tags = result.tags
         song.titles = result.titles
         song.language = result.language
         song.themes = result.themes
@@ -742,23 +758,25 @@ final class ImportService {
         song.authorMusic = result.authorMusic
         song.authorTranslation = result.authorTranslation
         song.notes = result.notes
-        if result.extensionsJSON != "{}" { song.extensionsJSON = result.extensionsJSON }
+        song.verified = result.verified
+        song.extensionsJSON = result.extensionsJSON
         song.media = result.media.map {
             SongMediaRef(role: $0.role, kind: $0.kind, filename: $0.filename, bookmark: $0.bookmark)
         }
-
         if let sb = result.songbook, !sb.name.isEmpty {
             song.songbook = upsertSongbook(sb, modelContext: modelContext)
         }
 
-        // Build the rich version graph and attach it to the song.
+        // Clear the existing graph (cascade deletes sections) before rebuilding.
+        for v in song.versions { modelContext.delete(v) }
+        for verse in song.verses { modelContext.delete(verse) }
+
         let builtVersions = makeVersions(from: result)
         for v in builtVersions { v.song = song }
-        let activeVersion = builtVersions.first
 
         // Flatten the active version into the SongVerse cache (legacy presenter / search / schedule).
         var lyrics = ""
-        if let active = activeVersion {
+        if let active = builtVersions.first {
             for (i, sec) in active.sortedSections.enumerated() {
                 let verse = SongVerse(label: sec.label, verseType: sec.type, text: sec.plainText, order: i)
                 verse.song = song
@@ -770,8 +788,63 @@ final class ImportService {
             authorWords: song.authorWords, songNumber: song.songNumber,
             songbookNumber: song.songbookNumber, lyrics: lyrics
         )
+    }
 
-        return song
+    // MARK: - Edit-log diff (coarse, human-readable change summaries)
+
+    /// Summarize what changed between two parsed song states — for the song editor's
+    /// change log. Versions are matched by order; sections by key. Returns [] when
+    /// nothing meaningful changed.
+    static func summarizeChanges(old: SongImportResult, new: SongImportResult) -> [String] {
+        var out: [String] = []
+        if old.title != new.title { out.append(String(localized: "Titlu modificat", comment: "Edit log")) }
+        if old.author != new.author { out.append(String(localized: "Autor modificat", comment: "Edit log")) }
+        if old.key != new.key { out.append(String(localized: "Ton modificat", comment: "Edit log")) }
+        if old.tempo != new.tempo { out.append(String(localized: "Tempo modificat", comment: "Edit log")) }
+        if old.themes != new.themes { out.append(String(localized: "Teme modificate", comment: "Edit log")) }
+        if old.verified != new.verified {
+            out.append(new.verified ? String(localized: "Marcat verificat", comment: "Edit log")
+                                     : String(localized: "Verificare eliminată", comment: "Edit log"))
+        }
+
+        func vname(_ v: SongImportVersion, _ i: Int) -> String { v.name.isEmpty ? "#\(i + 1)" : v.name }
+        let multi = new.versions.count > 1
+        let maxV = Swift.max(old.versions.count, new.versions.count)
+        for i in 0..<maxV {
+            let ov = i < old.versions.count ? old.versions[i] : nil
+            let nv = i < new.versions.count ? new.versions[i] : nil
+            if let nv, ov == nil {
+                out.append(String(localized: "Versiune «\(vname(nv, i))» adăugată", comment: "Edit log"))
+            } else if let ov, nv == nil {
+                out.append(String(localized: "Versiune «\(vname(ov, i))» ștearsă", comment: "Edit log"))
+            } else if let ov, let nv {
+                out.append(contentsOf: summarizeSectionChanges(old: ov.sections, new: nv.sections,
+                                                               versionName: vname(nv, i), multiVersion: multi))
+            }
+        }
+        return out
+    }
+
+    private static func summarizeSectionChanges(old: [SongImportSection], new: [SongImportSection],
+                                                versionName: String, multiVersion: Bool) -> [String] {
+        func skey(_ s: SongImportSection) -> String { s.sectionKey.isEmpty ? s.label : s.sectionKey }
+        let oldByKey = Dictionary(old.map { (skey($0), $0) }, uniquingKeysWith: { a, _ in a })
+        let newByKey = Dictionary(new.map { (skey($0), $0) }, uniquingKeysWith: { a, _ in a })
+        let suffix = multiVersion ? " (\(versionName))" : ""
+        var out: [String] = []
+        for (k, ns) in newByKey {
+            if let os = oldByKey[k] {
+                if os.lines != ns.lines || os.repeatCount != ns.repeatCount || os.label != ns.label {
+                    out.append(String(localized: "«\(ns.label)» editat", comment: "Edit log") + suffix)
+                }
+            } else {
+                out.append(String(localized: "«\(ns.label)» adăugat", comment: "Edit log") + suffix)
+            }
+        }
+        for (k, os) in oldByKey where newByKey[k] == nil {
+            out.append(String(localized: "«\(os.label)» șters", comment: "Edit log") + suffix)
+        }
+        return out.sorted()
     }
 
     /// Reuse an existing Songbook with the same name, or create and insert a new one.

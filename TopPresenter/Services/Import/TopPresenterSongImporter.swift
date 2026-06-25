@@ -76,6 +76,13 @@ final class TopPresenterSongImporter: SongImporter {
         return results
     }
 
+    /// Parse a GOAT export string (single-song wrapper or bare song object) into a
+    /// result — used by the song editor's snapshot/restore (Cancel-revert).
+    static func result(fromJSON json: String) -> SongImportResult? {
+        guard let data = json.data(using: .utf8) else { return nil }
+        return (try? allResults(from: data, fallbackTitle: ""))?.first
+    }
+
     /// Every song in a file: 1 for a single-song doc, N for a legacy bundle.
     static func allResults(from data: Data, fallbackTitle: String = "") throws -> [SongImportResult] {
         guard let root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else {
@@ -184,7 +191,8 @@ final class TopPresenterSongImporter: SongImporter {
             notes: (obj["notes"] as? String) ?? "",
             media: media,
             versions: versions,
-            extensionsJSON: extensionsJSON
+            extensionsJSON: extensionsJSON,
+            verified: (obj["verified"] as? Bool) ?? false
         )
     }
 

@@ -113,7 +113,6 @@ struct PresentationCommands: Commands {
 
 // MARK: - View Menu Commands
 struct ViewCommands: Commands {
-    @Environment(\.openWindow) private var openWindow
     var body: some Commands {
         CommandGroup(after: .sidebar) {
             Divider()
@@ -146,7 +145,7 @@ struct ViewCommands: Commands {
             Divider()
 
             Button(String(localized: "Presentation History", comment: "Menu item")) {
-                openWindow(id: WindowIdentifiers.history)
+                NotificationCenter.default.post(name: .navigateToHistory, object: nil)
             }
             .keyboardShortcut("y", modifiers: [.command])
 
@@ -225,6 +224,7 @@ extension Notification.Name {
     static let navigateToMedia = Notification.Name("TopPresenter.navigateToMedia")
     static let navigateToSchedule = Notification.Name("TopPresenter.navigateToSchedule")
     static let navigateToCustomSlides = Notification.Name("TopPresenter.navigateToCustomSlides")
+    static let navigateToHistory = Notification.Name("TopPresenter.navigateToHistory")
     static let focusSearch = Notification.Name("TopPresenter.focusSearch")
     static let quickSearch = Notification.Name("TopPresenter.quickSearch")
 

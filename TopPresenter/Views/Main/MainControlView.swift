@@ -45,10 +45,10 @@ struct MainControlView: View {
             guard let m = libraryManager.selectedBibleModule else { return section }
             let abbr = m.abbreviation.trimmingCharacters(in: .whitespaces)
             let name = m.name.trimmingCharacters(in: .whitespaces)
-            let detail: String
-            if !abbr.isEmpty, !name.isEmpty, abbr != name { detail = "(\(abbr)) \(name)" }
-            else if !abbr.isEmpty { detail = abbr }
-            else { detail = name }
+            let version = !abbr.isEmpty ? abbr : name
+            // Bible - <version> - <Book Ch:Vv>  (reference appended when a verse is selected)
+            let ref = libraryManager.selectedVersesReference.trimmingCharacters(in: .whitespaces)
+            let detail = ref.isEmpty ? version : "\(version) - \(ref)"
             return titled(detail)
         case .songs:
             if let song = libraryManager.selectedSong { return titled(song.title) }
@@ -151,10 +151,19 @@ struct MainControlView: View {
             }
         }
         .onAppear {
-            // Auto-open the presentation output window on app launch
+            // Auto-open the presentation output window on app launch — but only if one
+            // doesn't already exist (state restoration may have re-created it), and
+            // close any duplicates so we never end up with two overlapping outputs.
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                openWindow(id: WindowIdentifiers.presentation, value: "main")
+                presentationManager.dedupePresentationWindows()
+                if !presentationManager.hasPresentationWindow {
+                    openWindow(id: WindowIdentifiers.presentation, value: "main")
+                }
                 presentationManager.isPresentationWindowOpen = true
+                // After the system mounts the window, drop any restored duplicate.
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    presentationManager.dedupePresentationWindows()
+                }
             }
             // Start monitoring screen connect/disconnect
             presentationManager.startScreenMonitoring()
@@ -198,9 +207,11 @@ struct MainControlView: View {
                 ContentAreaView()
                     .frame(minWidth: 500)
 
-                // Preview & controls panel
-                PreviewPanelView()
-                    .frame(minWidth: 300, maxWidth: 400)
+                // Preview & controls panel — hidden for full-width sections (History, Account).
+                if appState.selectedSidebarItem != .history && appState.selectedSidebarItem != .account {
+                    PreviewPanelView()
+                        .frame(minWidth: 300, maxWidth: 400)
+                }
             }
         }
         .navigationTitle(tabTitle)
@@ -875,6 +886,9 @@ private struct NavigationCommandHandler: ViewModifier {
             }
             .onKeyWindowNotification(.navigateToCustomSlides) { _ in
                 appState.selectedSidebarItem = .customSlides
+            }
+            .onKeyWindowNotification(.navigateToHistory) { _ in
+                appState.selectedSidebarItem = .history
             }
             .onKeyWindowNotification(.showKeyboardShortcuts) { _ in
                 showKeyboardShortcuts = true

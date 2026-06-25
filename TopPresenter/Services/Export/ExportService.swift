@@ -373,6 +373,7 @@ final class ExportService {
             return d
         }
         if !media.isEmpty { dict["media"] = media }
+        if song.verified { dict["verified"] = true }
         dict["versions"] = song.sortedVersions.map { versionDictV2($0) }
         if let ext = decodeExt(song.extensionsJSON) { dict["_extensions"] = ext }
         return dict
