@@ -164,6 +164,19 @@ struct ViewCommands: Commands {
     }
 }
 
+// MARK: - Updater (app menu, beside "About")
+struct UpdaterCommands: Commands {
+    @ObservedObject var updater: UpdateController
+    var body: some Commands {
+        CommandGroup(after: .appInfo) {
+            Button(String(localized: "Caută actualizări…", comment: "Menu item")) {
+                updater.checkForUpdates()
+            }
+            .disabled(!updater.canCheckForUpdates)
+        }
+    }
+}
+
 // MARK: - Help Menu Commands
 struct HelpCommands: Commands {
     var body: some Commands {

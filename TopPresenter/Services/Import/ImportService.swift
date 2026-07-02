@@ -419,7 +419,10 @@ final class ImportService {
             }
         }
 
-        let results = try await importer.parseAll(fileURL: fileURL)
+        let name = fileURL.lastPathComponent
+        let results = try await importer.parseAll(fileURL: fileURL).map { r -> SongImportResult in
+            var r = r; if r.sourceFile.isEmpty { r.sourceFile = name }; return r
+        }
         guard let first = results.first else { throw SongImportError.noSongsFound }
         // A bundle file yields many songs; return the first, create the rest too.
         let song = createSongFromResult(first, collection: collection, modelContext: modelContext)
@@ -508,7 +511,10 @@ final class ImportService {
             modelContext.insert(collection)
         }
 
-        let results = try await importer.parseAll(fileURL: fileURL)
+        let name = fileURL.lastPathComponent
+        let results = try await importer.parseAll(fileURL: fileURL).map { r -> SongImportResult in
+            var r = r; if r.sourceFile.isEmpty { r.sourceFile = name }; return r
+        }
         guard !results.isEmpty else { throw SongImportError.noSongsFound }
         for result in results {
             _ = createSongFromResult(result, collection: collection, modelContext: modelContext)
@@ -759,6 +765,7 @@ final class ImportService {
         song.authorTranslation = result.authorTranslation
         song.notes = result.notes
         song.verified = result.verified
+        if !result.sourceFile.isEmpty { song.sourceFile = result.sourceFile }
         song.extensionsJSON = result.extensionsJSON
         song.media = result.media.map {
             SongMediaRef(role: $0.role, kind: $0.kind, filename: $0.filename, bookmark: $0.bookmark)

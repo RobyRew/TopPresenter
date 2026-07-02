@@ -10,5 +10,15 @@
 	<true/>
 	<key>com.apple.security.files.user-selected.read-write</key>
 	<true/>
+	<!-- Sparkle auto-update in a sandboxed app: the app fetches the feed/update
+	     itself (network.client) and talks to Sparkle's Installer/Downloader XPC
+	     services via these per-app mach-lookup global names. -->
+	<key>com.apple.security.network.client</key>
+	<true/>
+	<key>com.apple.security.temporary-exception.mach-lookup.global-name</key>
+	<array>
+		<string>$(PRODUCT_BUNDLE_IDENTIFIER)-spks</string>
+		<string>$(PRODUCT_BUNDLE_IDENTIFIER)-spki</string>
+	</array>
 </dict>
 </plist>

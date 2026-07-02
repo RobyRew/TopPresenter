@@ -862,6 +862,7 @@ struct LayoutEditorButton: View {
                 systemImage: "paintbrush.pointed.fill"
             )
             .font(.callout.weight(.semibold))
+            .lineLimit(1)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 2)
         }
@@ -3131,6 +3132,48 @@ struct LayoutEditorSheet: View {
                 } label: {
                     Label(String(localized: "Interliniar", comment: "Inspector group"), systemImage: "text.word.spacing")
                         .font(.caption.bold())
+                }
+
+                // Multi-verse — how several selected verses render together. Only on
+                // the verse cassette; stored in the theme (exports/imports with it).
+                if selection == BoxIdentity.section(.verseContent) {
+                    GroupBox {
+                        VStack(alignment: .leading, spacing: 8) {
+                            labeledRow(String(localized: "Aranjare:", comment: "Setting label")) {
+                                Picker("", selection: ilBinding(\.multiVerseLayoutRaw)) {
+                                    Text(String(localized: "În linie", comment: "Multi-verse layout")).tag("inline")
+                                    Text(String(localized: "Rând nou", comment: "Multi-verse layout")).tag("newLine")
+                                }
+                                .pickerStyle(.segmented)
+                                .controlSize(.small)
+                            }
+                            Toggle(isOn: ilBinding(\.multiVerseShowNumbers)) {
+                                Text(String(localized: "Afișează numărul fiecărui verset", comment: "Setting label")).font(.caption)
+                            }
+                            .toggleStyle(.switch).controlSize(.small)
+                            .help(String(localized: "Prefixează fiecare verset cu numărul lui, ex. „(3) Fiindcă atât de mult…”.", comment: "Tooltip"))
+
+                            Toggle(isOn: ilBinding(\.multiVerseCustomEnabled)) {
+                                Text(String(localized: "Text personalizat la multi-verset", comment: "Setting label")).font(.caption)
+                            }
+                            .toggleStyle(.switch).controlSize(.small)
+                            .help(String(localized: "Când sunt afișate 2+ versete, textul trece prin șablonul de mai jos.", comment: "Tooltip"))
+
+                            if pm.contentOptions(for: "bible").multiVerseCustomEnabled {
+                                TextField(String(localized: "Șablon", comment: "Custom multi-verse template"),
+                                          text: ilBinding(\.multiVerseCustomText), axis: .vertical)
+                                    .textFieldStyle(.roundedBorder)
+                                    .lineLimit(2...4)
+                                    .font(.caption)
+                                Text(String(localized: "Simboluri: {verses} = versetele, {ref} = referința, {n} = câte versete. Fără {verses}, versetele se adaugă la final.", comment: "Custom template hint"))
+                                    .font(.caption2).foregroundStyle(.tertiary)
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    } label: {
+                        Label(String(localized: "Multi-verset", comment: "Inspector group"), systemImage: "text.justify.leading")
+                            .font(.caption.bold())
+                    }
                 }
             }
 

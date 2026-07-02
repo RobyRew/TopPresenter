@@ -104,7 +104,7 @@ The design studio behind everything you see on screen:
 
 ### 🪟 Multi-Window Tabs
 
-⌘T opens native tabs — each with its own module, Bible translation, and selection. Tabs are titled by **type + name + reference** (e.g. *Bible - EDC100 - Ioan 3:16*, *Songs — Înaintea Ta venim*), or rename any tab manually. One output, driven by whichever tab presses Show.
+⌘T opens native tabs — each with its own module, Bible translation, and selection. Tabs are titled by **type + (lang) version + reference** (e.g. *Bible - (RO) EDC100 - Ioan 3:16*, *Songs — Înaintea Ta venim*), or rename any tab manually. One output, driven by whichever tab presses Show.
 
 ### 🧭 Sidebar &amp; History
 

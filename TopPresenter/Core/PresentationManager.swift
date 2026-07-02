@@ -359,6 +359,17 @@ final class PresentationManager {
         var interlinearColumnSpacing: Double = 12
         var interlinearRowSpacing: Double = 2
 
+        // MARK: Multi-verse (Bible) — how several selected verses render together.
+        /// "inline" (one flowing paragraph) | "newLine" (each verse on its own line).
+        var multiVerseLayoutRaw: String = "inline"
+        /// Prefix each verse with its number, e.g. "(3) For God so loved…".
+        var multiVerseShowNumbers: Bool = false
+        /// Wrap the joined verses in a custom template when 2+ verses show.
+        var multiVerseCustomEnabled: Bool = false
+        /// Template used when `multiVerseCustomEnabled`. Tokens: {verses} {ref} {n}.
+        /// If it omits {verses}, the verses are appended after the template.
+        var multiVerseCustomText: String = ""
+
         init() {}
 
         init(from decoder: Decoder) throws {
@@ -377,6 +388,10 @@ final class PresentationManager {
             interlinearMorphScale = try c.decodeIfPresent(Double.self, forKey: .interlinearMorphScale) ?? 0.38
             interlinearColumnSpacing = try c.decodeIfPresent(Double.self, forKey: .interlinearColumnSpacing) ?? 12
             interlinearRowSpacing = try c.decodeIfPresent(Double.self, forKey: .interlinearRowSpacing) ?? 2
+            multiVerseLayoutRaw = try c.decodeIfPresent(String.self, forKey: .multiVerseLayoutRaw) ?? "inline"
+            multiVerseShowNumbers = try c.decodeIfPresent(Bool.self, forKey: .multiVerseShowNumbers) ?? false
+            multiVerseCustomEnabled = try c.decodeIfPresent(Bool.self, forKey: .multiVerseCustomEnabled) ?? false
+            multiVerseCustomText = try c.decodeIfPresent(String.self, forKey: .multiVerseCustomText) ?? ""
         }
     }
 
@@ -402,6 +417,14 @@ final class PresentationManager {
 
     func setContentOptions(_ options: ContentOptions, for key: String) {
         mutateProfile(key) { $0.options = options }
+    }
+
+    /// Multi-verse rendering settings for the active Bible theme — the single
+    /// source of truth now that these live in the theme (not global defaults).
+    /// Read by the preview card, the verse controls (live push), and BibleView.
+    var bibleMultiVerse: (layout: String, showNumbers: Bool, customEnabled: Bool, customText: String) {
+        let o = contentOptions(for: "bible")
+        return (o.multiVerseLayoutRaw, o.multiVerseShowNumbers, o.multiVerseCustomEnabled, o.multiVerseCustomText)
     }
 
     static func transformText(_ text: String, raw: String) -> String {

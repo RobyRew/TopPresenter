@@ -68,8 +68,6 @@ struct PanelHeader: View {
 struct PresentationPreviewCard: View {
     @Environment(PresentationManager.self) private var pm
     @Environment(LibraryManager.self) private var libraryManager
-    @AppStorage("multiVerseLayout") private var multiVerseLayout: String = "inline"
-    @AppStorage("showVerseNumberPrefix") private var showVerseNumberPrefix: Bool = false
     @AppStorage("interlinearLiveEnabled") private var interlinearLiveEnabled = true
 
     /// Pass `true` when rendering Bible content so the translation name is populated.
@@ -102,8 +100,10 @@ struct PresentationPreviewCard: View {
     private var pendingText: String {
         if let pendingContent { return pendingContent.text }
         guard !libraryManager.selectedVerses.isEmpty else { return "" }
+        let mv = pm.bibleMultiVerse
         return libraryManager.formattedSelectedVersesText(
-            layout: multiVerseLayout, showPrefix: showVerseNumberPrefix
+            layout: mv.layout, showPrefix: mv.showNumbers,
+            customEnabled: mv.customEnabled, customTemplate: mv.customText
         )
     }
 
@@ -470,8 +470,6 @@ struct PresentationPreviewCard: View {
 struct VerseSlideControlsBar: View {
     @Environment(PresentationManager.self) private var pm
     @Environment(LibraryManager.self) private var libraryManager
-    @AppStorage("multiVerseLayout") private var multiVerseLayout: String = "inline"
-    @AppStorage("showVerseNumberPrefix") private var showVerseNumberPrefix: Bool = false
 
     /// Whether there's anything live on screen.
     private var isLive: Bool {
@@ -479,33 +477,39 @@ struct VerseSlideControlsBar: View {
     }
 
     private var formattedText: String {
-        libraryManager.formattedSelectedVersesText(layout: multiVerseLayout, showPrefix: showVerseNumberPrefix)
+        let mv = pm.bibleMultiVerse
+        return libraryManager.formattedSelectedVersesText(
+            layout: mv.layout, showPrefix: mv.showNumbers,
+            customEnabled: mv.customEnabled, customTemplate: mv.customText
+        )
     }
 
     /// How many verses can fit in the verse text box from the current starting verse.
     /// Font and padding are scaled to the target screen (1080p reference) so the
     /// count matches what the output actually renders.
     private var maxFittingCount: Int {
-        libraryManager.versesCountThatFits(
+        let mv = pm.bibleMultiVerse
+        return libraryManager.versesCountThatFits(
             fontSize: pm.fontSize * pm.targetFontScale,
             fontName: pm.fontName,
             lineSpacing: pm.lineSpacing,
             padding: pm.padding * pm.targetFontScale,
             screenSize: pm.verseBoxPointSize,
-            layout: multiVerseLayout,
-            showPrefix: showVerseNumberPrefix
+            layout: mv.layout,
+            showPrefix: mv.showNumbers
         )
     }
 
     private func runAutoFill() {
+        let mv = pm.bibleMultiVerse
         libraryManager.autoFillVerses(
             fontSize: pm.fontSize * pm.targetFontScale,
             fontName: pm.fontName,
             lineSpacing: pm.lineSpacing,
             padding: pm.padding * pm.targetFontScale,
             screenSize: pm.verseBoxPointSize,
-            layout: multiVerseLayout,
-            showPrefix: showVerseNumberPrefix
+            layout: mv.layout,
+            showPrefix: mv.showNumbers
         )
     }
 
@@ -814,6 +818,7 @@ struct PresentationControlsBar: View {
         }
         .buttonStyle(.bordered)
         .controlSize(.small)
+        .lineLimit(1)
     }
 }
 
@@ -1276,15 +1281,14 @@ struct StyleQuickSettings: View {
     var sections: Set<SettingsSection> = SettingsSection.allSet
 
     enum SettingsSection: Hashable {
-        case multiVerse, general, songOptions, output
+        case general, songOptions, output
 
-        static let allSet: Set<SettingsSection> = [.multiVerse, .general, .output]
+        static let allSet: Set<SettingsSection> = [.general, .output]
     }
 
     @Environment(\.openSettings) private var openSettings
     @Environment(PresentationManager.self) private var pm
 
-    @AppStorage("settingsExpanded_multiVerse") private var multiVerseExpanded: Bool = false
     @AppStorage("settingsExpanded_general") private var generalExpanded: Bool = false
     @AppStorage("settingsExpanded_songOptions") private var songOptionsExpanded: Bool = true
     @AppStorage("settingsExpanded_output") private var outputExpanded: Bool = false
@@ -1295,28 +1299,13 @@ struct StyleQuickSettings: View {
     @AppStorage("song_repeatBracket") private var songRepeatBracket: String = "none"
     @AppStorage("song_repeatCount") private var songRepeatCount: String = "times"
 
-    // General settings
-    @AppStorage("showVerseNumbers") private var showVerseNumbers: Bool = true
-    @AppStorage("showCrossReferences") private var showCrossReferences: Bool = false
-    @AppStorage("showFootnotes") private var showFootnotes: Bool = false
+    // General settings — the interlinear grid is a live on/off; everything else
+    // (verse numbers, multi-verse layout, custom text) is now in the theme.
     @AppStorage("interlinearLiveEnabled") private var interlinearLiveEnabled = true
-    @AppStorage("multiVerseLayout") private var multiVerseLayout: String = "inline"
-    @AppStorage("showVerseNumberPrefix") private var showVerseNumberPrefix: Bool = false
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 2) {
-                if sections.contains(.multiVerse) {
-                    // ─── Multi-Verse ───
-                    settingsSection(
-                        title: String(localized: "Multi-Verse", comment: "Settings section"),
-                        icon: "text.justify.leading",
-                        isExpanded: $multiVerseExpanded
-                    ) {
-                        multiVerseSection
-                    }
-                }
-
                 if sections.contains(.general) {
                     // ─── General ───
                     settingsSection(
@@ -1399,33 +1388,6 @@ struct StyleQuickSettings: View {
             }
 
             Divider()
-        }
-    }
-
-    // MARK: - Multi-Verse Section
-
-    @ViewBuilder
-    private var multiVerseSection: some View {
-        // Layout
-        HStack {
-            Text(String(localized: "Layout:", comment: "Setting label"))
-                .font(.caption)
-                .frame(width: 55, alignment: .trailing)
-            Picker("", selection: $multiVerseLayout) {
-                Text(String(localized: "Inline", comment: "Layout option")).tag("inline")
-                Text(String(localized: "New Line", comment: "Layout option")).tag("newLine")
-            }
-            .pickerStyle(.segmented)
-            .controlSize(.small)
-        }
-
-        // Verse prefix
-        HStack {
-            Text("")
-                .frame(width: 55)
-            Toggle(String(localized: "Show verse number prefix", comment: "Setting label"), isOn: $showVerseNumberPrefix)
-                .font(.caption)
-                .controlSize(.small)
         }
     }
 
@@ -1544,6 +1506,8 @@ struct StyleQuickSettings: View {
                         .font(.caption2)
                     Text(String(localized: "Toate setările de proiecție...", comment: "Button"))
                         .font(.caption)
+                        .lineLimit(1)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
             .buttonStyle(.borderless)
@@ -1555,21 +1519,22 @@ struct StyleQuickSettings: View {
 
     @ViewBuilder
     private var generalSection: some View {
-        // Quick-access toggles relevant during presentation
+        // Quick-access LIVE toggles. The verse-number / multi-verse options now
+        // live in the Layout Editor (verse cassette); only genuinely live controls
+        // belong here. The interlinear grid is a per-session on/off switch.
         VStack(alignment: .leading, spacing: 4) {
-            HStack {
-                Text("")
-                    .frame(width: 55)
-                VStack(alignment: .leading, spacing: 4) {
-                    Toggle(String(localized: "Afișează numerele versetelor", comment: "Setting label"), isOn: $showVerseNumbers)
-                    Toggle(String(localized: "Afișează referințe încrucișate", comment: "Setting label"), isOn: $showCrossReferences)
-                    Toggle(String(localized: "Afișează note de subsol", comment: "Setting label"), isOn: $showFootnotes)
-                    if pm.contentOptions(for: "bible").interlinearModeRaw != "off" {
-                        Toggle(String(localized: "Afișează interliniar (grilă)", comment: "Setting label"), isOn: $interlinearLiveEnabled)
-                    }
+            if pm.contentOptions(for: "bible").interlinearModeRaw != "off" {
+                HStack {
+                    Text("")
+                        .frame(width: 55)
+                    Toggle(String(localized: "Afișează interliniar (grilă)", comment: "Setting label"), isOn: $interlinearLiveEnabled)
+                        .font(.caption)
+                        .controlSize(.small)
                 }
-                .font(.caption)
-                .controlSize(.small)
+            } else {
+                Text(String(localized: "Opțiunile de conținut se află în Editorul de aspect.", comment: "General panel hint"))
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
             }
         }
 
@@ -1584,6 +1549,8 @@ struct StyleQuickSettings: View {
                         .font(.caption2)
                     Text(String(localized: "Mai multe setări...", comment: "Button"))
                         .font(.caption)
+                        .lineLimit(1)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
             .buttonStyle(.borderless)

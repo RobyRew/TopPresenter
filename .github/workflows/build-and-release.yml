@@ -42,6 +42,12 @@ jobs:
 
       - name: Build
         run: |
+          # Monotonic CFBundleVersion so Sparkle can tell releases apart (the project's
+          # CURRENT_PROJECT_VERSION is a fixed 1). Ad-hoc code signing ("-") so the app's
+          # entitlements (sandbox + Sparkle XPC) actually apply and the in-app updater's
+          # installer works — no Apple certs needed (Gatekeeper still asks for right-click
+          # → Open, exactly as before). Swap "-" for a Developer ID identity + add
+          # notarization later for silent updates; see UPDATES.md.
           xcodebuild \
             -scheme "$SCHEME" \
             -project "$PRODUCT_NAME.xcodeproj" \
@@ -49,9 +55,11 @@ jobs:
             -derivedDataPath build \
             -destination 'platform=macOS' \
             CODE_SIGN_IDENTITY="-" \
+            CODE_SIGN_STYLE=Manual \
             CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_ALLOWED=YES \
             DEVELOPMENT_TEAM="" \
+            CURRENT_PROJECT_VERSION=${{ github.run_number }} \
             clean build
 
       - name: Run Unit Tests
@@ -121,8 +129,14 @@ jobs:
     runs-on: macos-15
     permissions:
       contents: write
+    env:
+      # Empty until you add the repo secret — the appcast step then no-ops (CI stays green).
+      SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
 
     steps:
+      - name: Checkout (for appcast scripts)
+        uses: actions/checkout@v5
+
       - name: Download artifact
         uses: actions/download-artifact@v5
         with:
@@ -159,6 +173,21 @@ jobs:
             TopPresenter-*.zip
             TopPresenter-*.dmg
 
+      - name: Publish appcast (beta channel)
+        if: ${{ env.SPARKLE_PRIVATE_KEY != '' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ZIP: TopPresenter-${{ needs.build.outputs.version }}.zip
+          DOWNLOAD_URL: https://github.com/${{ github.repository }}/releases/download/${{ needs.build.outputs.prerelease_tag }}/TopPresenter-${{ needs.build.outputs.version }}.zip
+          SHORT_VERSION: ${{ needs.build.outputs.prerelease_version }}
+          BUILD_VERSION: ${{ github.run_number }}
+          CHANNEL: beta
+          REPO: ${{ github.repository }}
+          NOTES: ${{ github.event.head_commit.message }}
+        run: |
+          chmod +x scripts/publish_appcast.sh
+          scripts/publish_appcast.sh
+
   # Stable release on final version tags (v1.0.0, v1.1.0, etc.)
   release:
     name: Stable Release
@@ -167,8 +196,13 @@ jobs:
     runs-on: macos-15
     permissions:
       contents: write
+    env:
+      SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
 
     steps:
+      - name: Checkout (for appcast scripts)
+        uses: actions/checkout@v5
+
       - name: Download artifact
         uses: actions/download-artifact@v5
         with:
@@ -189,3 +223,17 @@ jobs:
           files: |
             TopPresenter-*.zip
             TopPresenter-*.dmg
+
+      - name: Publish appcast (stable channel)
+        if: ${{ env.SPARKLE_PRIVATE_KEY != '' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ZIP: TopPresenter-${{ needs.build.outputs.version }}.zip
+          DOWNLOAD_URL: https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/TopPresenter-${{ needs.build.outputs.version }}.zip
+          SHORT_VERSION: ${{ needs.build.outputs.version }}
+          BUILD_VERSION: ${{ github.run_number }}
+          CHANNEL: ""
+          REPO: ${{ github.repository }}
+        run: |
+          chmod +x scripts/publish_appcast.sh
+          scripts/publish_appcast.sh

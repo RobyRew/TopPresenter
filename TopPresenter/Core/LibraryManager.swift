@@ -39,6 +39,9 @@ final class LibraryManager {
     var songSearchQuery: String = ""
     var songSearchResults: [SongSearchResult] = []
     var isSongSearching: Bool = false
+    /// The song-LIBRARY browser's live filter text (distinct from the Quick Search
+    /// overlay above). Shared so clickable chips in the detail can search by tag/source.
+    var songLibraryQuery: String = ""
 
     /// When set, the Songs view presents the visual song editor for this song.
     var songToEdit: Song?
@@ -133,12 +136,26 @@ final class LibraryManager {
     }
 
     /// Formatted text for selected verses, respecting layout and prefix settings.
-    func formattedSelectedVersesText(layout: String = "inline", showPrefix: Bool = false) -> String {
+    /// When `customEnabled` and 2+ verses are selected, the joined verses are run
+    /// through `customTemplate` (tokens: {verses} {ref} {n}); a template without
+    /// {verses} gets the verses appended so they're never lost.
+    func formattedSelectedVersesText(layout: String = "inline", showPrefix: Bool = false,
+                                     customEnabled: Bool = false, customTemplate: String = "") -> String {
         if selectedVerses.isEmpty { return "" }
         let separator = layout == "newLine" ? "\n" : " "
-        return selectedVerses.map { v in
+        let joined = selectedVerses.map { v in
             showPrefix ? "(\(v.verseNumber)) \(v.text)" : v.text
         }.joined(separator: separator)
+
+        guard customEnabled, selectedVerses.count > 1 else { return joined }
+        let template = customTemplate.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !template.isEmpty else { return joined }
+        var out = template
+            .replacingOccurrences(of: "{verses}", with: joined)
+            .replacingOccurrences(of: "{ref}", with: selectedVersesReference)
+            .replacingOccurrences(of: "{n}", with: "\(selectedVerses.count)")
+        if !template.contains("{verses}") { out += separator + joined }
+        return out
     }
 
     /// Navigate to previous/next verse in the current chapter.

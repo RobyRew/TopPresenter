@@ -47,8 +47,8 @@ struct BiblePreviewPanel: View {
                 Divider()
             }
 
-            // Operational quick settings (styling lives in the Layout Editor)
-            StyleQuickSettings(sections: [.multiVerse, .general, .output])
+            // Operational quick settings (styling + multi-verse live in the Layout Editor)
+            StyleQuickSettings(sections: [.general, .output])
 
             Divider()
 

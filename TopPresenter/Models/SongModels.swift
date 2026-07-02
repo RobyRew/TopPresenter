@@ -149,6 +149,7 @@ final class Song {
     var verified: Bool = false         // user-confirmed "checked & good" (round-trips through GOAT)
     var modifiedDate: Date = Date.now  // last edit — drives sort + the change log
     var editLogJSON: String = "[]"     // [SongEditEntry] — coarse change log (internal, not exported)
+    var sourceFile: String = ""        // filename this song was imported from (e.g. "1000-tongues.json")
 
     var collection: SongCollection?
     var songbook: Songbook?
@@ -205,6 +206,23 @@ final class Song {
     var editLog: [SongEditEntry] {
         get { tpDecodeJSON(editLogJSON, as: [SongEditEntry].self, fallback: []) }
         set { editLogJSON = tpEncodeJSON(newValue, fallback: "[]") }
+    }
+
+    /// Best-effort web link captured from `_extensions` — scrapers store the song's
+    /// source page URL (e.g. `_extensions.melodia.url`). nil when none is present.
+    var webURL: URL? {
+        guard let data = extensionsJSON.data(using: .utf8),
+              let obj = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else { return nil }
+        func find(_ any: Any) -> String? {
+            if let dict = any as? [String: Any] {
+                for key in ["url", "sourceUrl", "songUrl", "pageUrl", "link", "href"] {
+                    if let s = dict[key] as? String, s.hasPrefix("http") { return s }
+                }
+                for (_, v) in dict { if let f = find(v) { return f } }
+            }
+            return nil
+        }
+        return find(obj).flatMap { URL(string: $0) }
     }
 
     /// Denormalized, lowercased search blob used by the scalable library browser.

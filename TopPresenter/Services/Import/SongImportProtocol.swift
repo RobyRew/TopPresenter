@@ -44,7 +44,8 @@ extension SongImporter {
             if format.fileExtensions.contains(fileURL.pathExtension.lowercased()) ||
                fileURL.pathExtension.isEmpty {
                 do {
-                    let result = try await parse(fileURL: fileURL)
+                    var result = try await parse(fileURL: fileURL)
+                    result.sourceFile = fileURL.lastPathComponent
                     results.append(result)
                 } catch {
                     // Skip files that can't be parsed
@@ -90,6 +91,8 @@ struct SongImportResult {
     var extensionsJSON: String = "{}"
     /// User-confirmed "checked & good" flag (GOAT `verified`).
     var verified: Bool = false
+    /// Filename this result was parsed from (stamped by the import pipeline).
+    var sourceFile: String = ""
 }
 
 struct SongImportVerse {

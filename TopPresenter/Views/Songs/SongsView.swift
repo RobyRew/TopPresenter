@@ -146,7 +146,11 @@ struct SongListPanel: View {
     @AppStorage("song_repeatBracket") private var repeatBracket = "none"
     @AppStorage("song_repeatCount") private var repeatCount = "times"
 
-    @State private var query = ""
+    /// Lives on LibraryManager so detail-panel chips can set it to search.
+    private var query: String { libraryManager.songLibraryQuery }
+    private var queryBinding: Binding<String> {
+        Binding(get: { libraryManager.songLibraryQuery }, set: { libraryManager.songLibraryQuery = $0 })
+    }
     @State private var isGrid = false
     @State private var sortKey: SongSortKey = .title
     @State private var languageFilter = ""        // "" = all
@@ -222,10 +226,10 @@ struct SongListPanel: View {
         VStack(spacing: 6) {
             HStack(spacing: 6) {
                 Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-                TextField(String(localized: "Caută cântece…", comment: "Search"), text: $query)
+                TextField(String(localized: "Caută cântece…", comment: "Search"), text: queryBinding)
                     .textFieldStyle(.plain)
                 if !query.isEmpty {
-                    Button { query = "" } label: { Image(systemName: "xmark.circle.fill") }
+                    Button { libraryManager.songLibraryQuery = "" } label: { Image(systemName: "xmark.circle.fill") }
                         .buttonStyle(.plain).foregroundStyle(.secondary)
                 }
             }
@@ -292,12 +296,62 @@ struct SongListPanel: View {
         .padding(8)
     }
 
+    /// `filtered` grouped by the active sort key (A-Z initial / book / language /
+    /// artist initial). Empty key = a single ungrouped section (Recente). Order is
+    /// preserved from `filtered`, which is already sorted.
+    private var grouped: [(key: String, songs: [Song])] {
+        let songs = filtered
+        if sortKey == .recent { return [("", songs)] }
+        func keyFor(_ s: Song) -> String {
+            switch sortKey {
+            case .title: return initialLetter(s.title)
+            case .author: return s.author.isEmpty ? "—" : initialLetter(s.author)
+            case .songbook: return s.songbook?.name ?? String(localized: "Fără carte", comment: "No songbook")
+            case .language: return s.language.isEmpty ? "—" : s.language.uppercased()
+            case .recent: return ""
+            }
+        }
+        var order: [String] = []
+        var map: [String: [Song]] = [:]
+        for s in songs {
+            let k = keyFor(s)
+            if map[k] == nil { order.append(k); map[k] = [] }
+            map[k]?.append(s)
+        }
+        return order.map { ($0, map[$0] ?? []) }
+    }
+
+    /// First letter (diacritic-folded) for an A-Z heading; "#" for non-letters.
+    private func initialLetter(_ s: String) -> String {
+        guard let c = s.trimmingCharacters(in: .whitespaces).first else { return "#" }
+        let u = String(c).folding(options: .diacriticInsensitive, locale: nil).uppercased()
+        return u.range(of: "[A-Z]", options: .regularExpression) != nil ? u : "#"
+    }
+
+    /// A very subtle group heading.
+    private func subtleHeader(_ text: String) -> some View {
+        Text(text)
+            .font(.caption2.weight(.semibold))
+            .foregroundStyle(.tertiary)
+            .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var songSelection: Binding<UUID?> {
+        Binding(get: { libraryManager.selectedSong?.id },
+                set: { id in if let id, let s = filtered.first(where: { $0.id == id }) { libraryManager.selectSong(s) } })
+    }
+
     private var listView: some View {
-        List(filtered, selection: Binding(
-            get: { libraryManager.selectedSong?.id },
-            set: { id in if let id, let s = filtered.first(where: { $0.id == id }) { libraryManager.selectSong(s) } }
-        )) { song in
-            songRow(song).tag(song.id)
+        List(selection: songSelection) {
+            ForEach(grouped, id: \.key) { group in
+                if group.key.isEmpty {
+                    ForEach(group.songs) { song in songRow(song).tag(song.id) }
+                } else {
+                    Section {
+                        ForEach(group.songs) { song in songRow(song).tag(song.id) }
+                    } header: { subtleHeader(group.key) }
+                }
+            }
         }
         .listStyle(.inset)
     }
@@ -319,42 +373,54 @@ struct SongListPanel: View {
 
     private var gridView: some View {
         ScrollView {
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 164), spacing: 10)], spacing: 10) {
-                ForEach(filtered) { song in
-                    Button { libraryManager.selectSong(song) } label: {
-                        VStack(spacing: 0) {
-                            SongThemeSlideView(text: firstSlideText(song), fontSize: 8)
-                                .frame(height: 62)
-                                .clipped()
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text(song.title).font(.callout.weight(.medium)).lineLimit(2)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                if !song.author.isEmpty {
-                                    Text(song.author).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
-                                }
-                                HStack { songBadges(song); Spacer() }
-                            }
-                            .padding(8)
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 164), spacing: 10)], spacing: 10, pinnedViews: [.sectionHeaders]) {
+                ForEach(grouped, id: \.key) { group in
+                    Section {
+                        ForEach(group.songs) { song in gridCell(song) }
+                    } header: {
+                        if !group.key.isEmpty {
+                            subtleHeader(group.key)
+                                .padding(.horizontal, 2).padding(.vertical, 3)
+                                .background(.bar)
                         }
-                        .frame(height: 132, alignment: .top)
-                        .background(
-                            libraryManager.selectedSong?.id == song.id
-                                ? Color.accentColor.opacity(0.18)
-                                : Color.secondary.opacity(0.08),
-                            in: RoundedRectangle(cornerRadius: 10)
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 10)
-                                .stroke(libraryManager.selectedSong?.id == song.id ? Color.accentColor : Color.clear, lineWidth: 1.5)
-                        )
-                        .clipShape(RoundedRectangle(cornerRadius: 10))
                     }
-                    .buttonStyle(.plain)
-                    .contextMenu { songMenu(song) }
                 }
             }
             .padding(8)
         }
+    }
+
+    private func gridCell(_ song: Song) -> some View {
+        Button { libraryManager.selectSong(song) } label: {
+            VStack(spacing: 0) {
+                SongThemeSlideView(text: firstSlideText(song), fontSize: 8)
+                    .frame(height: 62)
+                    .clipped()
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(song.title).font(.callout.weight(.medium)).lineLimit(2)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    if !song.author.isEmpty {
+                        Text(song.author).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+                    }
+                    HStack { songBadges(song); Spacer() }
+                }
+                .padding(8)
+            }
+            .frame(height: 132, alignment: .top)
+            .background(
+                libraryManager.selectedSong?.id == song.id
+                    ? Color.accentColor.opacity(0.18)
+                    : Color.secondary.opacity(0.08),
+                in: RoundedRectangle(cornerRadius: 10)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(libraryManager.selectedSong?.id == song.id ? Color.accentColor : Color.clear, lineWidth: 1.5)
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+        }
+        .buttonStyle(.plain)
+        .contextMenu { songMenu(song) }
     }
 
     private func firstSlideText(_ song: Song) -> String {
@@ -477,7 +543,8 @@ struct SongDetailPanel: View {
     @ViewBuilder
     private func header(song: Song, version: SongVersion?) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 8) {
+            HStack(alignment: .top, spacing: 8) {
+                // Left column: Title · Book (middle) · Artist (max half width).
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 6) {
                         Text(song.title).font(.title3.bold()).lineLimit(2)
@@ -486,13 +553,34 @@ struct SongDetailPanel: View {
                                 .help(String(localized: "Verificat", comment: "Verified"))
                         }
                     }
+                    if let sb = song.songbook {
+                        searchText(sb.name + (song.songbookNumber.isEmpty ? "" : " #\(song.songbookNumber)"),
+                                   query: sb.name, font: .caption)
+                    }
                     if !song.author.isEmpty {
-                        Text(song.author).font(.subheadline).foregroundStyle(.secondary)
+                        searchText(song.author, query: song.author, font: .subheadline)
+                            .lineLimit(1).truncationMode(.tail)
+                            .frame(maxWidth: 280, alignment: .leading)   // artist ≈ half the panel
                     }
                 }
-                Spacer()
-                // Chord/key chip on top, Edit button directly under it.
+                Spacer(minLength: 8)
+                // Right column: presentation history on top, key/chords, then Edit (lower).
                 VStack(alignment: .trailing, spacing: 6) {
+                    if let h = songHistory(song) {
+                        Button { appState.selectedSidebarItem = .history } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: "clock.arrow.circlepath").font(.caption2)
+                                Text(String(localized: "Prezentat \(h.timesPresented)×", comment: "History chip"))
+                                Text("·").foregroundStyle(.secondary)
+                                Text(Self.histFmt.string(from: h.lastPresented))
+                            }
+                            .font(.caption).padding(.horizontal, 8).padding(.vertical, 3)
+                            .background(Color.accentColor.opacity(0.14), in: Capsule())
+                            .lineLimit(1)
+                        }
+                        .buttonStyle(.plain)
+                        .help(String(localized: "Deschide istoricul prezentărilor", comment: "History tooltip"))
+                    }
                     if songHasChords(song) {
                         SongChordControl(song: song, version: version)
                     } else if let key = version?.key, !key.isEmpty {
@@ -505,80 +593,99 @@ struct SongDetailPanel: View {
                         libraryManager.songToEdit = song
                     } label: {
                         Label(String(localized: "Editează", comment: "Edit button"), systemImage: "pencil")
-                            .frame(minWidth: 96)
+                            .frame(minWidth: 100)
                     }
                     .buttonStyle(.borderedProminent).controlSize(.large)
                     .help(String(localized: "Editează cântecul", comment: "Edit tooltip"))
                 }
             }
-            HStack(spacing: 8) {
-                if song.sortedVersions.count > 1 {
-                    Picker("", selection: Binding(
-                        get: { (libraryManager.selectedSongVersion ?? song.activeVersion)?.id },
-                        set: { id in
-                            if let id, let v = song.versions.first(where: { $0.id == id }) {
-                                libraryManager.selectSongVersion(v)
-                            }
-                        }
-                    )) {
-                        ForEach(song.sortedVersions) { v in
-                            Text(v.name.isEmpty ? String(localized: "Versiune", comment: "Version") : v.name)
-                                .tag(Optional(v.id))
+            if song.sortedVersions.count > 1 {
+                Picker("", selection: Binding(
+                    get: { (libraryManager.selectedSongVersion ?? song.activeVersion)?.id },
+                    set: { id in
+                        if let id, let v = song.versions.first(where: { $0.id == id }) {
+                            libraryManager.selectSongVersion(v)
                         }
                     }
-                    .labelsHidden().fixedSize()
-                }
-                if !song.style.isEmpty { infoChip(song.style) }
-                if let sb = song.songbook {
-                    infoChip(sb.name + (song.songbookNumber.isEmpty ? "" : " #\(song.songbookNumber)"))
-                }
-                if let h = songHistory(song) {
-                    Button { appState.selectedSidebarItem = .history } label: {
-                        infoChip(String(localized: "Prezentat \(h.timesPresented)× · \(Self.histFmt.string(from: h.lastPresented))", comment: "Song history chip"))
+                )) {
+                    ForEach(song.sortedVersions) { v in
+                        Text(v.name.isEmpty ? String(localized: "Versiune", comment: "Version") : v.name)
+                            .tag(Optional(v.id))
                     }
-                    .buttonStyle(.plain)
-                    .help(String(localized: "Deschide istoricul prezentărilor", comment: "History tooltip"))
                 }
-                Spacer()
+                .labelsHidden().fixedSize()
             }
 
-            // Quick song facts.
+            // Quick song facts — most chips search for more songs with that value.
             infoRow(song: song, version: version)
         }
         .padding(.horizontal).padding(.vertical, 8)
     }
 
-    /// A compact row of song facts shown above the slides.
+    /// A compact row of song facts shown above the slides. Tag-like chips are
+    /// clickable and refine the library search; source file + web link are special.
     @ViewBuilder
     private func infoRow(song: Song, version: SongVersion?) -> some View {
         let tempo = (version?.tempo.isEmpty == false ? version?.tempo : nil) ?? (song.tempo.isEmpty ? nil : song.tempo)
         let lang = (version?.language.isEmpty == false ? version?.language : nil) ?? (song.language.isEmpty ? nil : song.language)
         let sectionCount = version?.sections.count ?? 0
-        let source: String? = {
-            if let name = song.collection?.name, !name.isEmpty { return name }
-            let fmt = song.collection?.sourceFormat ?? ""
-            return fmt.isEmpty ? nil : fmt
-        }()
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 6) {
-                if let source {
-                    Label(source, systemImage: "tray.and.arrow.down")
+                if !song.sourceFile.isEmpty {
+                    Label(song.sourceFile, systemImage: "doc.text")
                         .font(.caption).labelStyle(.titleAndIcon)
                         .padding(.horizontal, 8).padding(.vertical, 3)
-                        .background(.quaternary, in: Capsule())
-                        .lineLimit(1)
-                        .help(String(localized: "Sursa importului", comment: "Import source tooltip"))
+                        .background(.quaternary, in: Capsule()).lineLimit(1)
+                        .help(String(localized: "Fișierul importat", comment: "Import file tooltip"))
+                } else if let col = song.collection?.name, !col.isEmpty {
+                    searchChip(col, query: col, systemImage: "tray.and.arrow.down")
+                }
+                if let url = song.webURL {
+                    Link(destination: url) {
+                        Label(String(localized: "Pe web", comment: "Web link chip"), systemImage: "link")
+                            .font(.caption).labelStyle(.titleAndIcon)
+                            .padding(.horizontal, 8).padding(.vertical, 3)
+                            .background(Color.accentColor.opacity(0.14), in: Capsule())
+                    }
+                    .help(url.absoluteString)
                 }
                 if !song.ccliNumber.isEmpty { infoChip("CCLI \(song.ccliNumber)") }
                 if let tempo { infoChip("\(tempo) BPM") }
-                if let lang { infoChip(lang.uppercased()) }
+                if let lang { searchChip(lang.uppercased(), query: lang) }
+                if !song.style.isEmpty { searchChip(song.style, query: song.style) }
                 if sectionCount > 0 { infoChip(String(localized: "\(sectionCount) secțiuni", comment: "Section count")) }
-                ForEach(song.themes.prefix(4), id: \.self) { infoChip($0) }
+                ForEach(song.themes.prefix(5), id: \.self) { searchChip($0, query: $0) }
                 if !song.editLog.isEmpty {
                     infoChip(String(localized: "Modificat \(Self.histFmt.string(from: song.modifiedDate))", comment: "Modified date"))
                 }
             }
         }
+    }
+
+    /// A chip that, when clicked, sets the library search to `query` (find similar).
+    private func searchChip(_ text: String, query: String, systemImage: String? = nil) -> some View {
+        Button { libraryManager.songLibraryQuery = query } label: {
+            Group {
+                if let systemImage {
+                    Label(text, systemImage: systemImage).labelStyle(.titleAndIcon)
+                } else {
+                    Text(text)
+                }
+            }
+            .font(.caption).padding(.horizontal, 8).padding(.vertical, 3)
+            .background(.quaternary, in: Capsule()).lineLimit(1)
+        }
+        .buttonStyle(.plain)
+        .help(String(localized: "Caută cântece cu „\(query)”", comment: "Search-by-chip tooltip"))
+    }
+
+    /// Plain text that doubles as a search chip (used for author/book in the title block).
+    private func searchText(_ text: String, query: String, font: Font) -> some View {
+        Button { libraryManager.songLibraryQuery = query } label: {
+            Text(text).font(font).foregroundStyle(.secondary)
+        }
+        .buttonStyle(.plain)
+        .help(String(localized: "Caută „\(query)”", comment: "Search tooltip"))
     }
 
     /// This song's presentation-history summary (nil if never presented).

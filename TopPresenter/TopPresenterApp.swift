@@ -15,6 +15,8 @@ struct TopPresenterApp: App {
     @State private var videoPlayerService: VideoPlayerService
     /// Separate, isolated store for presentation history (its own DB file).
     @State private var historyStore: HistoryStore
+    /// Sparkle-backed auto-updater (launch + scheduled checks, quiet prompts).
+    @StateObject private var updateController = UpdateController()
     /// Handles output-wide menu commands (black/freeze/clear/font) exactly once —
     /// they act on the shared PresentationManager, not per window/tab.
     private let commandRouter: PresentationCommandRouter
@@ -63,6 +65,7 @@ struct TopPresenterApp: App {
                 .environment(audioPlayerManager)
                 .environment(videoPlayerService)
                 .environment(historyStore)
+                .environmentObject(updateController)
                 .frame(minWidth: 1100, minHeight: 700)
         }
         .modelContainer(sharedModelContainer)
@@ -71,6 +74,7 @@ struct TopPresenterApp: App {
             FileCommands()
             ViewCommands()
             PresentationCommands()
+            UpdaterCommands(updater: updateController)
             HelpCommands()
         }
 
@@ -96,6 +100,7 @@ struct TopPresenterApp: App {
             SettingsView()
                 .environment(AppState())
                 .environment(presentationManager)
+                .environmentObject(updateController)
         }
         .modelContainer(sharedModelContainer)
     }

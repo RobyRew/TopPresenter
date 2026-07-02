@@ -705,8 +705,6 @@ struct BibleVerseRow: View {
 struct BibleGridNavigationView: View {
     @Environment(LibraryManager.self) private var libraryManager
     @Environment(PresentationManager.self) private var presentationManager
-    @AppStorage("multiVerseLayout") private var multiVerseLayout: String = "inline"
-    @AppStorage("showVerseNumberPrefix") private var showVerseNumberPrefix: Bool = false
     @AppStorage("showBookCategoryColors") private var showBookCategoryColors: Bool = true
     @AppStorage("showBookCategoryLabels") private var showBookCategoryLabels: Bool = true
 
@@ -1027,10 +1025,13 @@ struct BibleGridNavigationView: View {
                         }
 
                         ScrollView {
-                            Text(libraryManager.formattedSelectedVersesText(
-                                layout: multiVerseLayout,
-                                showPrefix: showVerseNumberPrefix
-                            ))
+                            Text({
+                                let mv = presentationManager.bibleMultiVerse
+                                return libraryManager.formattedSelectedVersesText(
+                                    layout: mv.layout, showPrefix: mv.showNumbers,
+                                    customEnabled: mv.customEnabled, customTemplate: mv.customText
+                                )
+                            }())
                             .font(.body)
                             .textSelection(.enabled)
                             .frame(maxWidth: .infinity, alignment: .leading)

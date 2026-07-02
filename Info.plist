@@ -2,6 +2,20 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<!-- Sparkle auto-update (see UPDATES.md). Replace SUPublicEDKey with the EdDSA
+	     public key from `generate_keys`; the appcast is published to GitHub Pages. -->
+	<key>SUFeedURL</key>
+	<string>https://robyrew.github.io/TopPresenter/appcast.xml</string>
+	<key>SUPublicEDKey</key>
+	<string>4X2KEouvDSSL8Yyj8xr8OmxVFnGGSk1L2olrXkkm8CM=</string>
+	<key>SUEnableAutomaticChecks</key>
+	<true/>
+	<key>SUScheduledCheckInterval</key>
+	<integer>7200</integer>
+	<key>SUAutomaticallyUpdate</key>
+	<false/>
+	<key>SUEnableInstallerLauncherService</key>
+	<true/>
 	<key>CFBundleIconFile</key>
 	<string>AppIcon</string>
 	<key>CFBundleIconName</key>

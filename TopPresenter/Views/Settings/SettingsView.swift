@@ -44,6 +44,11 @@ struct SettingsView: View {
                 .tabItem {
                     Label(String(localized: "Proiecție", comment: "Settings tab"), systemImage: "display")
                 }
+
+            UpdatesSettingsTab()
+                .tabItem {
+                    Label(String(localized: "Actualizări", comment: "Settings tab"), systemImage: "arrow.triangle.2.circlepath")
+                }
         }
         .frame(width: 550, height: 480)
     }
@@ -53,7 +58,6 @@ struct SettingsView: View {
 struct InterfaceSettingsTab: View {
     @AppStorage("startupSection") private var startupSection: String = "bible"
     @AppStorage("confirmBeforeDelete") private var confirmBeforeDelete: Bool = true
-    @AppStorage("showVerseNumbers") private var showVerseNumbers: Bool = true
     @AppStorage("forceTouchClearAction") private var forceTouchAction: String = "clearAll"
 
     var body: some View {
@@ -66,7 +70,6 @@ struct InterfaceSettingsTab: View {
                 }
 
                 Toggle(String(localized: "Confirmă înainte de ștergere", comment: "Setting label"), isOn: $confirmBeforeDelete)
-                Toggle(String(localized: "Afișează numerele versetelor", comment: "Setting label"), isOn: $showVerseNumbers)
             }
 
             Section(String(localized: "Acțiuni Trackpad", comment: "Settings section")) {
@@ -97,8 +100,8 @@ struct InterfaceSettingsTab: View {
 struct BibleSettingsTab: View {
     @AppStorage("autoSelectFirstModule") private var autoSelectFirstModule: Bool = true
     @AppStorage("rememberLastModule") private var rememberLastModule: Bool = true
-    @AppStorage("showCrossReferences") private var showCrossReferences: Bool = false
-    @AppStorage("showFootnotes") private var showFootnotes: Bool = false
+    // Same key BibleView's footnote chip uses, so this actually toggles footnotes.
+    @AppStorage("bibleShowFootnotes") private var showFootnotes: Bool = false
     @AppStorage("showBookCategoryColors") private var showBookCategoryColors: Bool = true
     @AppStorage("showBookCategoryLabels") private var showBookCategoryLabels: Bool = true
 
@@ -110,7 +113,6 @@ struct BibleSettingsTab: View {
             }
 
             Section(String(localized: "Conținut", comment: "Settings section")) {
-                Toggle(String(localized: "Afișează referințe încrucișate", comment: "Setting label"), isOn: $showCrossReferences)
                 Toggle(String(localized: "Afișează note de subsol", comment: "Setting label"), isOn: $showFootnotes)
             }
 

@@ -45,8 +45,10 @@ struct MainControlView: View {
             guard let m = libraryManager.selectedBibleModule else { return section }
             let abbr = m.abbreviation.trimmingCharacters(in: .whitespaces)
             let name = m.name.trimmingCharacters(in: .whitespaces)
-            let version = !abbr.isEmpty ? abbr : name
-            // Bible - <version> - <Book Ch:Vv>  (reference appended when a verse is selected)
+            let lang = m.language.trimmingCharacters(in: .whitespaces).uppercased()
+            let versionBase = !abbr.isEmpty ? abbr : name
+            // Bible - (RO) EDC100 - <Book Ch:Vv>  (lang prefix + reference when selected)
+            let version = lang.isEmpty ? versionBase : "(\(lang)) \(versionBase)"
             let ref = libraryManager.selectedVersesReference.trimmingCharacters(in: .whitespaces)
             let detail = ref.isEmpty ? version : "\(version) - \(ref)"
             return titled(detail)
@@ -210,7 +212,7 @@ struct MainControlView: View {
                 // Preview & controls panel — hidden for full-width sections (History, Account).
                 if appState.selectedSidebarItem != .history && appState.selectedSidebarItem != .account {
                     PreviewPanelView()
-                        .frame(minWidth: 300, maxWidth: 400)
+                        .frame(minWidth: 330, maxWidth: 440)
                 }
             }
         }
