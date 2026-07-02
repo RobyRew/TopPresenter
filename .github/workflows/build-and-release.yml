@@ -129,8 +129,12 @@ jobs:
     runs-on: macos-15
     permissions:
       contents: write
+      pages: write        # deploy the appcast to Pages (no gh-pages branch)
+      id-token: write     # required by actions/deploy-pages
+    environment:
+      name: github-pages
     env:
-      # Empty until you add the repo secret — the appcast step then no-ops (CI stays green).
+      # Empty until you add the repo secret — the appcast steps then no-op (CI stays green).
       SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
 
     steps:
@@ -173,20 +177,33 @@ jobs:
             TopPresenter-*.zip
             TopPresenter-*.dmg
 
-      - name: Publish appcast (beta channel)
+      - name: Build signed appcast (beta channel)
         if: ${{ env.SPARKLE_PRIVATE_KEY != '' }}
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ZIP: TopPresenter-${{ needs.build.outputs.version }}.zip
           DOWNLOAD_URL: https://github.com/${{ github.repository }}/releases/download/${{ needs.build.outputs.prerelease_tag }}/TopPresenter-${{ needs.build.outputs.version }}.zip
           SHORT_VERSION: ${{ needs.build.outputs.prerelease_version }}
           BUILD_VERSION: ${{ github.run_number }}
           CHANNEL: beta
-          REPO: ${{ github.repository }}
+          FEED_URL: https://robyrew.github.io/TopPresenter/appcast.xml
           NOTES: ${{ github.event.head_commit.message }}
         run: |
           chmod +x scripts/publish_appcast.sh
           scripts/publish_appcast.sh
+
+      - name: Setup Pages
+        if: ${{ env.SPARKLE_PRIVATE_KEY != '' }}
+        uses: actions/configure-pages@v5
+
+      - name: Upload appcast artifact
+        if: ${{ env.SPARKLE_PRIVATE_KEY != '' }}
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - name: Deploy appcast to Pages
+        if: ${{ env.SPARKLE_PRIVATE_KEY != '' }}
+        uses: actions/deploy-pages@v4
 
   # Stable release on final version tags (v1.0.0, v1.1.0, etc.)
   release:
@@ -196,6 +213,10 @@ jobs:
     runs-on: macos-15
     permissions:
       contents: write
+      pages: write        # deploy the appcast to Pages (no gh-pages branch)
+      id-token: write     # required by actions/deploy-pages
+    environment:
+      name: github-pages
     env:
       SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
 
@@ -224,16 +245,29 @@ jobs:
             TopPresenter-*.zip
             TopPresenter-*.dmg
 
-      - name: Publish appcast (stable channel)
+      - name: Build signed appcast (stable channel)
         if: ${{ env.SPARKLE_PRIVATE_KEY != '' }}
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ZIP: TopPresenter-${{ needs.build.outputs.version }}.zip
           DOWNLOAD_URL: https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/TopPresenter-${{ needs.build.outputs.version }}.zip
           SHORT_VERSION: ${{ needs.build.outputs.version }}
           BUILD_VERSION: ${{ github.run_number }}
           CHANNEL: ""
-          REPO: ${{ github.repository }}
+          FEED_URL: https://robyrew.github.io/TopPresenter/appcast.xml
         run: |
           chmod +x scripts/publish_appcast.sh
           scripts/publish_appcast.sh
+
+      - name: Setup Pages
+        if: ${{ env.SPARKLE_PRIVATE_KEY != '' }}
+        uses: actions/configure-pages@v5
+
+      - name: Upload appcast artifact
+        if: ${{ env.SPARKLE_PRIVATE_KEY != '' }}
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - name: Deploy appcast to Pages
+        if: ${{ env.SPARKLE_PRIVATE_KEY != '' }}
+        uses: actions/deploy-pages@v4

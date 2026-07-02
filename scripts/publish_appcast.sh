@@ -1,26 +1,27 @@
 #!/usr/bin/env bash
 #
-# publish_appcast.sh — EdDSA-sign a release zip and publish/append it to the Sparkle
-# appcast on the gh-pages branch. Reusable across macOS apps (copy this file + wire the
-# two CI jobs; see UPDATES.md).
+# publish_appcast.sh — EdDSA-sign a release zip and build ./site/appcast.xml for
+# GitHub Pages. The workflow then deploys ./site via actions/deploy-pages — there is
+# NO gh-pages branch; the feed is deployed straight from CI (source = GitHub Actions).
+# Reusable across macOS apps (copy this file + wire the Pages steps; see UPDATES.md).
 #
 # Required env:
 #   ZIP            path to the packaged app zip (e.g. TopPresenter-0.1.0.zip)
 #   DOWNLOAD_URL   public URL where that zip is downloadable (GitHub release asset)
 #   SHORT_VERSION  human version shown to users (e.g. 0.1.0 or 0.1.0-alpha.3)
 #   BUILD_VERSION  monotonic CFBundleVersion Sparkle compares (e.g. the CI run number)
+#   FEED_URL       the live appcast URL — fetched first so prior items are preserved
+#                  (Pages deploys replace the whole site; there's no branch to accrue on)
 #   CHANNEL        "" for stable, or "beta"
 #   NOTES          release notes (plain text / HTML)
-#   REPO           owner/name (for the gh-pages clone)
 #   SPARKLE_PRIVATE_KEY   the EdDSA private key (secret)
-#   GITHUB_TOKEN          token with contents:write (for pushing gh-pages)
 #   SPARKLE_VERSION       Sparkle tools version to fetch (default 2.9.3)
 #   MAX_ITEMS             keep at most N items in the appcast (default 40)
 #
 set -euo pipefail
 
-: "${ZIP:?}" "${DOWNLOAD_URL:?}" "${SHORT_VERSION:?}" "${BUILD_VERSION:?}" "${REPO:?}"
-: "${SPARKLE_PRIVATE_KEY:?}" "${GITHUB_TOKEN:?}"
+: "${ZIP:?}" "${DOWNLOAD_URL:?}" "${SHORT_VERSION:?}" "${BUILD_VERSION:?}" "${FEED_URL:?}"
+: "${SPARKLE_PRIVATE_KEY:?}"
 CHANNEL="${CHANNEL:-}"
 NOTES="${NOTES:-}"
 SPARKLE_VERSION="${SPARKLE_VERSION:-2.9.3}"
@@ -38,22 +39,21 @@ ED_SIG="$(printf '%s' "$SIG_LINE" | sed -n 's/.*edSignature="\([^"]*\)".*/\1/p')
 LENGTH="$(printf '%s' "$SIG_LINE" | sed -n 's/.*length="\([^"]*\)".*/\1/p')"
 [ -z "$LENGTH" ] && LENGTH="$(stat -f%z "$ZIP" 2>/dev/null || stat -c%s "$ZIP")"
 
-# 3) Check out the existing appcast from gh-pages (or start fresh).
-rm -rf pages
-if git clone --depth 1 --branch gh-pages "https://x-access-token:${GITHUB_TOKEN}@github.com/${REPO}.git" pages 2>/dev/null; then :; else
-  mkdir pages && ( cd pages && git init -q && git checkout -qb gh-pages \
-    && git remote add origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${REPO}.git" )
-fi
+# 3) Seed ./site with the CURRENTLY PUBLISHED appcast so older items survive this
+#    deploy (each Pages deploy replaces the whole site). 404/none -> start fresh.
+mkdir -p site
+curl -sfL "$FEED_URL" -o site/appcast.xml || rm -f site/appcast.xml
 
-# 4) Insert/replace this version's <item> at the top of the channel (reliable via python).
+# 4) Insert/replace this version's <item> at the top of the channel.
 ED_SIG="$ED_SIG" LENGTH="$LENGTH" DOWNLOAD_URL="$DOWNLOAD_URL" \
 SHORT_VERSION="$SHORT_VERSION" BUILD_VERSION="$BUILD_VERSION" CHANNEL="$CHANNEL" \
-NOTES="$NOTES" MAX_ITEMS="$MAX_ITEMS" APPCAST="pages/appcast.xml" \
+NOTES="$NOTES" MAX_ITEMS="$MAX_ITEMS" APPCAST="site/appcast.xml" \
 python3 "$(dirname "$0")/appcast_upsert.py"
 
-# 5) Commit + push.
-cd pages
-git add appcast.xml
-git -c user.email="ci@toppresenter.local" -c user.name="TopPresenter CI" \
-  commit -m "appcast: ${SHORT_VERSION}" || { echo "appcast unchanged"; exit 0; }
-git push origin gh-pages
+# 5) A tiny landing page so the Pages root isn't a 404.
+cat > site/index.html <<'HTML'
+<!doctype html><meta charset="utf-8"><title>TopPresenter updates</title>
+<p>TopPresenter Sparkle update feed: <a href="appcast.xml">appcast.xml</a></p>
+HTML
+
+echo "Built site/appcast.xml (channel='${CHANNEL:-stable}', version=${SHORT_VERSION})."

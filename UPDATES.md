@@ -16,7 +16,8 @@ same setup to reuse for every future macOS app (see *Reuse* below).
 
 ## ✅ Status for THIS repo (TopPresenter) — already configured
 The one-time setup below is **done**: EdDSA keys generated, `SUPublicEDKey` set in `Info.plist`,
-`SPARKLE_PRIVATE_KEY` added as a repo secret, GitHub Pages serving the `gh-pages` branch at
+`SPARKLE_PRIVATE_KEY` added as a repo secret, GitHub Pages source = **GitHub Actions** (the appcast is
+deployed straight from CI — **there is no `gh-pages` branch**, only `main`), served at
 `https://robyrew.github.io/TopPresenter/`. **Just push to `main`** and CI publishes the appcast; the app
 updates itself. Signing is **ad-hoc for now** (see note below — Gatekeeper still says "unidentified
 developer" on first open of each version; upgrade to Developer ID later for a clean, silent experience).
@@ -34,8 +35,9 @@ The steps below are kept for reference and for reusing this setup in future apps
 3. **Add the repo secret**: GitHub ▸ Settings ▸ Secrets and variables ▸ Actions ▸ New secret
    `SPARKLE_PRIVATE_KEY` = the exported private key. (Never commit it.)
    *Until this secret exists, the CI appcast step no-ops and CI stays green.*
-4. **Enable GitHub Pages**: push once so CI creates the `gh-pages` branch (it publishes
-   `appcast.xml` there), then Settings ▸ Pages ▸ Source = *Deploy from branch* → `gh-pages` / root.
+4. **Enable GitHub Pages** with **Source = GitHub Actions** (Settings ▸ Pages). CI builds
+   `site/appcast.xml` and deploys it via `actions/deploy-pages` — no `gh-pages` branch, nothing to
+   commit into the repo; the feed lives entirely in Pages deployments.
 5. **Confirm the feed URL**: `Info.plist ▸ SUFeedURL` = `https://<owner>.github.io/<repo>/appcast.xml`
    (currently `https://robyrew.github.io/TopPresenter/appcast.xml`).
 
