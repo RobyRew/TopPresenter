@@ -61,12 +61,14 @@ enum ImportFileStatus: Equatable, Sendable {
     }
 }
 
-/// Known media file extensions
+/// Known media file extensions — nonisolated: immutable Sendable constants read by
+/// the background classification chain (the default MainActor isolation would
+/// otherwise actor-bind them).
 private enum MediaExtensions {
-    static let image = Set(["jpg", "jpeg", "png", "gif", "bmp", "tiff", "tif", "heic", "heif", "webp", "svg", "ico"])
-    static let audio = Set(["mp3", "wav", "aac", "m4a", "flac", "aiff", "aif", "ogg", "wma", "opus"])
-    static let video = Set(["mp4", "mov", "avi", "mkv", "m4v", "wmv", "webm", "mpg", "mpeg", "flv"])
-    static let all = image.union(audio).union(video)
+    nonisolated static let image = Set(["jpg", "jpeg", "png", "gif", "bmp", "tiff", "tif", "heic", "heif", "webp", "svg", "ico"])
+    nonisolated static let audio = Set(["mp3", "wav", "aac", "m4a", "flac", "aiff", "aif", "ogg", "wma", "opus"])
+    nonisolated static let video = Set(["mp4", "mov", "avi", "mkv", "m4v", "wmv", "webm", "mpg", "mpeg", "flv"])
+    nonisolated static let all = image.union(audio).union(video)
 }
 
 /// Service that classifies dropped files and performs batch imports.
@@ -77,7 +79,7 @@ final class DragDropImportHandler {
     /// drone footage (or any video/image) sitting in a Documents tree, which
     /// would otherwise beach-ball the app and spam AppleFSCompression. Media is
     /// intentionally excluded: this walk feeds the Bible/Song import flow.
-    static let bibleSongExtensions: Set<String> = {
+    nonisolated static let bibleSongExtensions: Set<String> = {
         var exts = Set<String>()
         for fmt in SupportedBibleFormat.allCases { exts.formUnion(fmt.fileExtensions.map { $0.lowercased() }) }
         for fmt in SupportedSongFormat.allCases { exts.formUnion(fmt.fileExtensions.map { $0.lowercased() }) }
@@ -86,7 +88,11 @@ final class DragDropImportHandler {
 
     /// True when a file's extension is a Bible/Song type we can import. Folders
     /// are handled separately (recursed / treated as a USFM Bible).
-    static func isImportableFile(_ url: URL) -> Bool {
+    /// The whole classification chain below is `nonisolated`: pure file inspection
+    /// that runs on a background task (Task.detached) so a big folder walk never
+    /// blocks the UI — with the project's default MainActor isolation it would
+    /// otherwise be actor-bound (Swift 6 error).
+    nonisolated static func isImportableFile(_ url: URL) -> Bool {
         bibleSongExtensions.contains(url.pathExtension.lowercased())
     }
 
@@ -101,7 +107,7 @@ final class DragDropImportHandler {
     }
 
     /// Classify a single file URL into a category.
-    static func classify(_ url: URL) -> DroppedFileCategory {
+    nonisolated static func classify(_ url: URL) -> DroppedFileCategory {
         let ext = url.pathExtension.lowercased()
 
         // Check PowerPoint first (these are songs)
@@ -148,7 +154,7 @@ final class DragDropImportHandler {
     }
 
     /// Classify multiple URLs.
-    static func classify(_ urls: [URL]) -> [PendingImportFile] {
+    nonisolated static func classify(_ urls: [URL]) -> [PendingImportFile] {
         urls.map { PendingImportFile(url: $0, category: classify($0)) }
     }
 
@@ -160,7 +166,7 @@ final class DragDropImportHandler {
     ///   • any other folder (e.g. a language folder of `.json` Bibles, or a tree
     ///     of them) → recursed; every contained file/USFM-folder is collected
     /// Hidden files and macOS junk (.DS_Store) are skipped. Deduplicated, sorted.
-    static func expandToImportableFiles(_ urls: [URL]) -> [URL] {
+    nonisolated static func expandToImportableFiles(_ urls: [URL]) -> [URL] {
         let fm = FileManager.default
         var out: [URL] = []
         var seen = Set<String>()
@@ -192,7 +198,7 @@ final class DragDropImportHandler {
 
     /// Expand + classify a mixed file/folder selection, keeping only the ones we
     /// can actually import (drops `.unknown`).
-    static func classifyExpanded(_ urls: [URL]) -> [PendingImportFile] {
+    nonisolated static func classifyExpanded(_ urls: [URL]) -> [PendingImportFile] {
         classify(expandToImportableFiles(urls)).filter {
             if case .unknown = $0.category { return false }
             return true

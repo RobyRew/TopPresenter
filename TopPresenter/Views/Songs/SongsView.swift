@@ -1147,13 +1147,14 @@ struct SongImportSheet: View {
                 urls: selectedURLs,
                 collectionName: targetName,
                 modelContext: modelContext,
-                duplicateResolution: resolution
-            ) { progress, status in
-                Task { @MainActor in
-                    importProgress = progress
-                    importStatusText = status
+                duplicateResolution: resolution,
+                progressHandler: { progress, status in
+                    Task { @MainActor in
+                        importProgress = progress
+                        importStatusText = status
+                    }
                 }
-            }
+            )
 
             await MainActor.run {
                 isImporting = false

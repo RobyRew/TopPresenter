@@ -34,7 +34,9 @@ enum HistoryExportService {
         return rows.joined(separator: "\n")
     }
 
-    private static func csvEscape(_ s: String) -> String {
+    // nonisolated: pure string helper — with the project's default MainActor
+    // isolation, `cols.map(csvEscape)` would otherwise be an actor hop (Swift 6 error).
+    private nonisolated static func csvEscape(_ s: String) -> String {
         guard s.contains(",") || s.contains("\"") || s.contains("\n") else { return s }
         return "\"" + s.replacingOccurrences(of: "\"", with: "\"\"") + "\""
     }

@@ -305,7 +305,9 @@ final class ImportService {
 
     /// Auto-detect Bible format from file content and extension.
     /// Returns the detected format, or nil if unknown.
-    static func detectBibleFormat(fileURL: URL) -> SupportedBibleFormat? {
+    /// nonisolated: pure file inspection (Data/FileManager reads) — called from the
+    /// background classification walk (Task.detached), so it must not hop to MainActor.
+    nonisolated static func detectBibleFormat(fileURL: URL) -> SupportedBibleFormat? {
         let ext = fileURL.pathExtension.lowercased()
 
         // Check for TopPresenter JSON first (priority format)
@@ -683,7 +685,8 @@ final class ImportService {
     }
 
     /// Auto-detect song format from file content
-    static func detectSongFormat(fileURL: URL) -> SupportedSongFormat? {
+    /// nonisolated: pure file inspection — see detectBibleFormat.
+    nonisolated static func detectSongFormat(fileURL: URL) -> SupportedSongFormat? {
         let ext = fileURL.pathExtension.lowercased()
 
         // PowerPoint files
