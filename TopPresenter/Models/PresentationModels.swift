@@ -48,6 +48,9 @@ final class MediaItem {
     @Attribute(.externalStorage) var thumbnailData: Data?
     /// Security-scoped bookmark data for persistent file access
     @Attribute(.externalStorage) var bookmarkData: Data?
+    /// Playable length in seconds (video/audio; 0 = unknown/not applicable).
+    /// Additive with inline default — lightweight migration, backfilled lazily.
+    var durationSeconds: Double = 0
 
     init(name: String, filePath: String, mediaType: String) {
         self.id = UUID()
@@ -207,7 +210,11 @@ final class ScheduleItem {
     var content: String
     var subtitle: String
     var order: Int
-    var referenceID: String?  // UUID string of the referenced Bible verse or song
+    var referenceID: String?  // legacy, unused — kept for stored data compatibility
+    /// Stable library reference (SessionItemPayload as JSON). "{}" for legacy
+    /// free-form items. Additive with inline default — lightweight migration.
+    /// title/content/subtitle stay as DISPLAY SNAPSHOTS captured at add-time.
+    var payloadJSON: String = "{}"
 
     var schedule: ServiceSchedule?
 
@@ -260,6 +267,13 @@ final class LiveContent {
     /// deck, item within schedule) — drives "show only on first/last slide".
     var slideIndex: Int = 0
     var slideCount: Int = 1
+    /// Live full-screen media: "image" | "video" (audio never claims the output).
+    var mediaKind: String = ""
+    /// Resolved URL of the live full-screen media (image rendering reads it).
+    var mediaURL: URL? = nil
+    /// Image decoded at present time (inside the file's security scope), so the
+    /// output window never has to re-open the sandboxed file itself.
+    var mediaImage: NSImage? = nil
 
     var isFirstSlide: Bool { slideIndex <= 0 }
     var isLastSlide: Bool { slideIndex >= slideCount - 1 }
@@ -294,6 +308,9 @@ final class LiveContent {
         clearSongMeta()
         slideIndex = 0
         slideCount = 1
+        mediaKind = ""
+        mediaURL = nil
+        mediaImage = nil
     }
 
     private func clearRichSources() {
@@ -361,6 +378,12 @@ final class LiveContent {
     }
 
     func setVideo() {
+        setMedia(kind: "video", url: nil)
+    }
+
+    /// Marks the output as showing full-screen media (image or video). Audio
+    /// plays through AudioPlayerManager and never claims the visual output.
+    func setMedia(kind: String, url: URL?, image: NSImage? = nil) {
         self.mainText = ""
         self.reference = ""
         self.subtitle = ""
@@ -368,6 +391,9 @@ final class LiveContent {
         self.contentType = .media
         self.mainRuns = []
         clearRichSources()
+        self.mediaKind = kind
+        self.mediaURL = url
+        self.mediaImage = image
     }
 }
 

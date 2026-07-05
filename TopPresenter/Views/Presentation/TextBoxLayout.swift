@@ -972,9 +972,12 @@ struct ThemeGalleryView: View {
             TextField(String(localized: "Numele temei", comment: "Theme name field"), text: $newThemeName)
             Button(String(localized: "Salvează", comment: "Save button")) {
                 let name = newThemeName.trimmingCharacters(in: .whitespacesAndNewlines)
+                // Non-profile hosts (e.g. the Media panel) tag as universal —
+                // only bible/song/text are real profile formats.
+                let raw = ["bible", "song", "text"].contains(format ?? "") ? format! : "all"
                 pm.saveCurrentAsTheme(
                     named: name.isEmpty ? String(localized: "Temă fără nume", comment: "Default theme name") : name,
-                    formatRaw: format ?? "all"
+                    formatRaw: raw
                 )
             }
             Button(String(localized: "Anulează", comment: "Cancel button"), role: .cancel) { }

@@ -44,8 +44,26 @@ struct PresentationOutputView: View {
             // toggling black doesn't tear down the player view mid-playback.
             if pm.liveContent.isLive,
                pm.liveContent.contentType == .media,
+               pm.liveContent.mediaKind != "image",
                let player = videoService.player {
                 OutputVideoView(player: player, fills: pm.fullscreenVideoFillRaw == "fill")
+                    .ignoresSafeArea()
+                    .transition(.opacity)
+            }
+
+            // Full-screen image layer (Media module → Proiectează on a photo).
+            // The image was decoded at present time inside the file's security
+            // scope; honors the same fit/fill preference as video.
+            if pm.liveContent.isLive,
+               pm.liveContent.contentType == .media,
+               pm.liveContent.mediaKind == "image",
+               let image = pm.liveContent.mediaImage {
+                Image(nsImage: image)
+                    .resizable()
+                    .aspectRatio(contentMode: pm.fullscreenVideoFillRaw == "fill" ? .fill : .fit)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Color.black)
+                    .clipped()
                     .ignoresSafeArea()
                     .transition(.opacity)
             }
@@ -74,7 +92,7 @@ struct PresentationOutputView: View {
     /// drives the enter/exit animations of every box.
     private var liveFingerprint: String {
         let l = pm.liveContent
-        return "\(l.isLive)|\(l.contentType)|\(l.mainText)|\(l.reference)|\(l.subtitle)|\(l.translationName)|\(l.slideIndex)/\(l.slideCount)"
+        return "\(l.isLive)|\(l.contentType)|\(l.mainText)|\(l.reference)|\(l.subtitle)|\(l.translationName)|\(l.slideIndex)/\(l.slideCount)|\(l.mediaKind)|\(l.mediaURL?.lastPathComponent ?? "")"
     }
 
     // MARK: - Background Layer

@@ -11,10 +11,14 @@ import SwiftData
 @main
 struct TopPresenterApp: App {
     @State private var presentationManager: PresentationManager
-    @State private var audioPlayerManager = AudioPlayerManager()
+    @State private var audioPlayerManager: AudioPlayerManager
     @State private var videoPlayerService: VideoPlayerService
     /// Separate, isolated store for presentation history (its own DB file).
     @State private var historyStore: HistoryStore
+    /// Session-only song pins („Fixează sus") — app-global, clears on quit.
+    @State private var pinStore = PinStore()
+    /// THE session runner — one live output ⇒ one running session, app-global.
+    @State private var sessionRunner: SessionRunner
     /// Sparkle-backed auto-updater (launch + scheduled checks, quiet prompts).
     @StateObject private var updateController = UpdateController()
     /// Handles output-wide menu commands (black/freeze/clear/font) exactly once —
@@ -27,9 +31,16 @@ struct TopPresenterApp: App {
         let pm = PresentationManager()
         pm.videoService = video
         pm.historyStore = history
+        let audio = AudioPlayerManager()
+        let runner = SessionRunner()
+        runner.pm = pm
+        runner.video = video
+        runner.audio = audio
+        _audioPlayerManager = State(initialValue: audio)
         _videoPlayerService = State(initialValue: video)
         _historyStore = State(initialValue: history)
         _presentationManager = State(initialValue: pm)
+        _sessionRunner = State(initialValue: runner)
         commandRouter = PresentationCommandRouter(pm: pm)
     }
 
@@ -65,6 +76,8 @@ struct TopPresenterApp: App {
                 .environment(audioPlayerManager)
                 .environment(videoPlayerService)
                 .environment(historyStore)
+                .environment(pinStore)
+                .environment(sessionRunner)
                 .environmentObject(updateController)
                 .frame(minWidth: 1100, minHeight: 700)
         }

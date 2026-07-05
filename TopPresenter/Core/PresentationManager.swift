@@ -2840,9 +2840,17 @@ final class PresentationManager {
 
     /// Marks the output as showing full-screen video.
     func showVideo() {
+        showMedia(kind: "video", url: nil)
+    }
+
+    /// Marks the output as showing full-screen media (image or video). Images are
+    /// decoded HERE — inside the caller's security scope — so the output window
+    /// never re-opens the sandboxed file; video renders via the shared VideoPlayerService.
+    func showMedia(kind: String, url: URL?) {
         guard !isFrozen else { return }
+        let image: NSImage? = (kind == "image") ? url.flatMap { NSImage(contentsOf: $0) } : nil
         presentContent { [self] in
-            liveContent.setVideo()
+            liveContent.setMedia(kind: kind, url: url, image: image)
             liveContent.isLive = true
             isBlackScreen = false
         }

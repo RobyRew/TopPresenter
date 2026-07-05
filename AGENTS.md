@@ -30,7 +30,10 @@ TopPresenter/
 │   ├── Constants.swift         WindowIdentifiers, SupportedBibleFormat, SupportedExportFormat,
 │   │                           USFMBookIDs, BibleBookCategory, PresentationDefaults
 │   ├── DataMigration.swift     SchemaV1 + TopPresenterMigrationPlan (SchemaMigrationPlan)
-│   ├── LibraryManager.swift    @Observable — Bible & Song navigation, search, verse caching
+│   ├── LibraryManager.swift    @Observable — Bible & Song navigation, search, verse caching,
+│   │                           selectedMediaItem/selectedSchedule mirrors (drive tab title + panels)
+│   ├── PinStore.swift          @Observable — session-only song pins („Fixează sus"); APP-GLOBAL
+│   │                           (one per app, injected beside historyStore), in-memory only
 │   └── PresentationManager.swift @Observable — live output state, screen management,
 │                               freeze/black/clear, all display settings (UserDefaults)
 │
@@ -57,6 +60,15 @@ TopPresenter/
 │   │   └── PowerPointSongImporter.swift (native Swift ZIP/XML parser)
 │   ├── Export/
 │   │   └── ExportService.swift         Bible (JSON/TXT/CSV) + Song (JSON/XML/TXT)
+│   ├── Media/
+│   │   └── MediaPresenter.swift        THE one way a MediaItem goes live (grid, panel, runner)
+│   ├── Sessions/
+│   │   ├── SessionModels.swift         SessionItemPayload (stable refs) + Draft + Resolution
+│   │   ├── SessionService.swift        resolver REGISTRY (SessionItemResolving per itemType),
+│   │   │                               append/create; new item kinds plug in here
+│   │   ├── SessionRunner.swift         @Observable APP-GLOBAL runner — THE one presenter for
+│   │   │                               schedule items (ScheduleView + panel never call pm.show*)
+│   │   └── SessionArchive.swift        .tpschedule flat-JSON import/export + requiredMedia manifest
 │   ├── Audio/
 │   │   └── AudioPlayerManager.swift    @Observable — AVAudioPlayer wrapper
 │   └── Video/
@@ -77,8 +89,8 @@ TopPresenter/
 │   │       └── CustomSlidesPreviewPanel.swift
 │   ├── Bible/         BibleView.swift, BibleExportSheet.swift
 │   ├── Songs/         SongsView.swift
-│   ├── Media/         MediaView.swift
-│   ├── Schedule/      ScheduleView.swift
+│   ├── Media/         MediaView.swift (presentable grid), MediaLibrary.swift (MediaKind + filter)
+│   ├── Schedule/      ScheduleView.swift, AddToSessionMenu.swift (shared right-click fragment)
 │   ├── CustomSlides/  CustomSlidesView.swift
 │   ├── Presentation/  PresentationOutputView.swift, TextBoxLayout.swift
 │   ├── Import/        BatchImportSheet.swift, BatchExportSheet.swift
@@ -181,8 +193,11 @@ TopPresenter/
 - The editor is called **"Editor de Teme"** everywhere (sheet title, toolbar, menu, footer button)
 - Editor tabs: Layout / Text / Fundal / **Tranziții** — NO output/hardware settings in the editor; screen/window-level/transition/disconnect live in Settings (⌘,) ▸ Proiecție (`ProjectionSettingsTab`) AND compactly in the right bar's **Ieșire** disclosure (StyleQuickSettings `.output`, beneath General). Themes describe the LOOK, Settings describe the DEVICE
 - **Per-presenter options** (`ContentOptions` keyed "bible"/"song"/"text", theme-persisted, resilient decoding): text transform (none/upper/lower), uppercase reference/title. Applied at RENDER time via `pm.displayFields(main:reference:translation:subtitle:contentKey:)` — output uses the live content key, the preview card uses its panel's `formatHint`. Extend ContentOptions (with decodeIfPresent defaults) when a presenter needs a new option
-- Media module output prefs (NOT theme): `videoLoopsByDefault`, `fullscreenVideoFillRaw` — live in Settings ▸ Proiecție ▸ Media
-- Toolbar rules: per-view items are conditional on `appState.selectedSidebarItem`; the Media filter Picker binds `@AppStorage("mediaTypeFilter")` which MediaView reads (never write UserDefaults directly from toolbar bindings); Freeze sits next to Black/Clear in the presentation group
+- Media module output prefs (NOT theme): `videoLoopsByDefault`, `fullscreenVideoFillRaw` — Settings ▸ Proiecție ▸ Media AND the Media panel's StyleQuickSettings `.media` section
+- Toolbar rules: per-view items are conditional on `appState.selectedSidebarItem`; the media kind filter lives in MediaView's OWN header (segmented `@AppStorage("mediaTypeFilter")` — the old toolbar Picker was removed, one filter UI); Freeze sits next to Black/Clear in the presentation group
+- **Tabs auto-name only (v10.4)** — the manual "Rename Tab" toolbar button/alert was REMOVED; `autoTabTitle` in MainControlView derives per module (bible: "(RO) EDC100 – ref", songs, media, schedule: session name + date via the testable `MainControlView.scheduleTabDetail(name:date:)`). Don't reintroduce `@SceneStorage("tabCustomName")`
+- **Media is a PRESENTABLE module (v10.4)**: MediaView = type tabs (Toate|Foto|Video|Audio) + rich grid (video/audio `durationSeconds` badges, artwork thumbnails via async `MediaThumbnailFactory`) + search on `libraryManager.mediaLibraryQuery`; selection = `libraryManager.selectedMediaItem` (NO notifications). The panel mirrors Bible/Songs anatomy and steps prev/next through `MediaLibrary.filter(...)` — THE one ordering shared with the grid. ALL "present media" paths go through `MediaPresenter.present` (fullscreen image = `pm.showMedia(kind:"image")` decodes the NSImage inside the caller's security scope → `LiveContent.mediaImage`; video = shared `VideoPlayerService`; audio = plays only, never claims the output). New media kinds = a `MediaKind` case + classify rule + icon
+- **Sessions (v10.4)**: `ScheduleItem.payloadJSON` (= `SessionItemPayload`, resilient Codable) stores STABLE refs — song `HistoryStore.songKey` (+ optional versionID/versionName), bible translation-abbrev + book/chapter/verse numbers, media id + name fallback; `title/content/subtitle` remain display SNAPSHOTS. Resolution via `SessionService.resolve` (registry of `SessionItemResolving` per itemType — extend there, don't grow a switch); misses → `.missing` (greyed row + ⚠, runner skips). `SessionRunner` (app-global @Observable) is THE ONLY presenter for schedule items — slide-by-slide next/prev (songs expand via `buildSongSlides` with the CURRENT song options at present time), jump-to-item, `presentOnce` for one-shots. „Adaugă la sesiune" = shared `AddToSessionMenu` fragment in the Bible verse / song / media context menus („Sesiune nouă…" creates instantly, no sheet). `.tpschedule` = FLAT JSON (`SessionArchive`, schemaVersion 1, format "TopPresenter Session" REQUIRED on import) + `requiredMedia` manifest; media re-links by id→name on import — media files are NOT embedded
 - **Sidebar (v10.2)** = `SidebarItem.contentItems` (bible/songs/media/schedule/customSlides) in the top `List`, + a PINNED bottom group (`utilityItems` = `.history`, `.account` as selectable destinations, plus a **Settings** button via `@Environment(\.openSettings)`). `.history`→`HistoryView`, `.account`→`ProfileView` (local prefs, `@AppStorage` only — no login) route through `ContentAreaView`; both return `EmptyView` in `PreviewPanelView` and the preview column is HIDDEN for them in `MainControlView` (full-width). Any new switch over `SidebarItem` must handle `.history` + `.account`
 - **Single output window**: locate it via `presentationWindows` (plural) and call `dedupePresentationWindows()` (closes extras) at the top of `showPresentationWindow`/`movePresentationWindow`/`positionOnScreen` + after the launch auto-open (guarded by `hasPresentationWindow`); the presentation `WindowGroup` is `.restorationBehavior(.disabled)`. This killed the "two overlapping outputs" (state-restoration + auto-open) bug — don't reintroduce an unguarded `openWindow(.presentation)`
 - **Song verified flag + edit log (v10.2)**: `Song.verified` (Bool, round-trips through GOAT — `songDictV2` writes `"verified"`, `TopPresenterSongImporter` reads it), `Song.modifiedDate` (drives the Recente sort), `Song.editLogJSON`→`editLog: [SongEditEntry]` (coarse change log, INTERNAL — not exported). The song editor snapshots the song to GOAT on open (`ExportService.exportSongToTopPresenterJSON`); **Renunță** reverts via `ImportService.applyResult(_:to:modelContext:)` (the GOAT→Song builder extracted from `createSongFromResult` — clears + rebuilds versions/sections, reused by import too); **Gata** diffs old↔new via `ImportService.summarizeChanges(old:new:)` → appends edit-log entries. `SectionEditorCard` uses `@FocusState` so clicking a section drives the editor preview. Library: verified badge in `songBadges`, "Doar verificate" filter + `verificat`/✓ search token, sort header chips (`SongSortKey` = A-Z/Artist/Carte/Limbă/Recente). Song slide thumbnails have PREVIEW + trash (delete = remove the section behind the slide, `.confirmationDialog`)
@@ -342,8 +357,9 @@ Unsigned builds require users to right-click → Open, or run `xattr -cr TopPres
 |-------------|-----------|-------|
 | Bible | `"format"` | `"TopPresenter Bible"` |
 | Songs | `"format"` | `"TopPresenter Songs"` |
+| Session (.tpschedule) | `"format"` | `"TopPresenter Session"` |
 
-All TopPresenter exports embed this identifier so importers can reliably distinguish them from generic JSON.
+All TopPresenter exports embed this identifier so importers can reliably distinguish them from generic JSON. Import MUST check the field is PRESENT (strict probe) — resilient decoders default it, which would accept foreign JSON. UTIs: `com.robyrew.toppresenter.theme` (package) + `com.robyrew.toppresenter.schedule` (public.json).
 
 ---
 

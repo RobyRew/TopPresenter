@@ -140,6 +140,7 @@ enum SongSortKey: String, CaseIterable, Identifiable {
 struct SongListPanel: View {
     @Environment(LibraryManager.self) private var libraryManager
     @Environment(PresentationManager.self) private var presentationManager
+    @Environment(PinStore.self) private var pinStore
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \SongCollection.name) private var collections: [SongCollection]
     @AppStorage("song_maxLinesPerSlide") private var maxLines: Int = 6
@@ -157,6 +158,8 @@ struct SongListPanel: View {
     @State private var collectionFilter: UUID?    // nil = all
     @State private var onlyWithMedia = false
     @State private var onlyVerified = false
+    /// Grid cell under the pointer — reveals its pin toggle on hover.
+    @State private var hoveredSongID: UUID?
 
     private var sourceSongs: [Song] {
         if let id = collectionFilter, let col = collections.first(where: { $0.id == id }) {
@@ -296,12 +299,22 @@ struct SongListPanel: View {
         .padding(8)
     }
 
+    /// Sentinel group key for the session pins — \u{0} can never collide with an
+    /// A-Z initial, book name, or language code.
+    static let pinnedGroupKey = "\u{0}pinned"
+
     /// `filtered` grouped by the active sort key (A-Z initial / book / language /
     /// artist initial). Empty key = a single ungrouped section (Recente). Order is
-    /// preserved from `filtered`, which is already sorted.
+    /// preserved from `filtered`, which is already sorted. Pinned songs float into
+    /// a single "Fixate" group prepended on top (they appear ONLY there).
     private var grouped: [(key: String, songs: [Song])] {
-        let songs = filtered
-        if sortKey == .recent { return [("", songs)] }
+        let (pinned, songs) = PinStore.partition(filtered, pinnedIDs: pinStore.pinnedSongIDs)
+        var groups: [(key: String, songs: [Song])] = []
+        if !pinned.isEmpty { groups.append((Self.pinnedGroupKey, pinned)) }
+        if sortKey == .recent {
+            groups.append(("", songs))
+            return groups
+        }
         func keyFor(_ s: Song) -> String {
             switch sortKey {
             case .title: return initialLetter(s.title)
@@ -318,7 +331,7 @@ struct SongListPanel: View {
             if map[k] == nil { order.append(k); map[k] = [] }
             map[k]?.append(s)
         }
-        return order.map { ($0, map[$0] ?? []) }
+        return groups + order.map { ($0, map[$0] ?? []) }
     }
 
     /// First letter (diacritic-folded) for an A-Z heading; "#" for non-letters.
@@ -336,6 +349,34 @@ struct SongListPanel: View {
             .frame(maxWidth: .infinity, alignment: .leading)
     }
 
+    /// Group heading, with the pinned ("Fixate") group getting a pin icon and a
+    /// clear-all-pins button; every other key renders the plain subtle header.
+    @ViewBuilder
+    private func groupHeader(_ key: String) -> some View {
+        if key == Self.pinnedGroupKey {
+            HStack(spacing: 4) {
+                Image(systemName: "pin.fill")
+                    .font(.caption2)
+                    .foregroundStyle(Color.accentColor)
+                Text(String(localized: "Fixate", comment: "Pinned songs group heading"))
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Button {
+                    pinStore.clearPins()
+                } label: {
+                    Image(systemName: "xmark.circle")
+                        .font(.caption2)
+                }
+                .buttonStyle(.borderless)
+                .foregroundStyle(.tertiary)
+                .help(String(localized: "Șterge toate fixările", comment: "Tooltip — clear session pins"))
+            }
+        } else {
+            subtleHeader(key)
+        }
+    }
+
     private var songSelection: Binding<UUID?> {
         Binding(get: { libraryManager.selectedSong?.id },
                 set: { id in if let id, let s = filtered.first(where: { $0.id == id }) { libraryManager.selectSong(s) } })
@@ -349,7 +390,7 @@ struct SongListPanel: View {
                 } else {
                     Section {
                         ForEach(group.songs) { song in songRow(song).tag(song.id) }
-                    } header: { subtleHeader(group.key) }
+                    } header: { groupHeader(group.key) }
                 }
             }
         }
@@ -379,7 +420,7 @@ struct SongListPanel: View {
                         ForEach(group.songs) { song in gridCell(song) }
                     } header: {
                         if !group.key.isEmpty {
-                            subtleHeader(group.key)
+                            groupHeader(group.key)
                                 .padding(.horizontal, 2).padding(.vertical, 3)
                                 .background(.bar)
                         }
@@ -420,6 +461,27 @@ struct SongListPanel: View {
             .clipShape(RoundedRectangle(cornerRadius: 10))
         }
         .buttonStyle(.plain)
+        .overlay(alignment: .topTrailing) {
+            // Pin toggle: always visible when pinned, revealed on hover otherwise.
+            if pinStore.isPinned(song.id) || hoveredSongID == song.id {
+                Button { pinStore.togglePin(song.id) } label: {
+                    Image(systemName: pinStore.isPinned(song.id) ? "pin.fill" : "pin")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(pinStore.isPinned(song.id) ? Color.accentColor : .secondary)
+                        .padding(4)
+                        .background(.thinMaterial, in: Circle())
+                }
+                .buttonStyle(.plain)
+                .padding(4)
+                .help(pinStore.isPinned(song.id)
+                        ? String(localized: "Anulează fixarea", comment: "Tooltip — unpin song")
+                        : String(localized: "Fixează sus", comment: "Tooltip — pin song to top"))
+            }
+        }
+        .onHover { inside in
+            if inside { hoveredSongID = song.id }
+            else if hoveredSongID == song.id { hoveredSongID = nil }
+        }
         .contextMenu { songMenu(song) }
     }
 
@@ -432,9 +494,17 @@ struct SongListPanel: View {
 
     @ViewBuilder
     private func songMenu(_ song: Song) -> some View {
+        Button { pinStore.togglePin(song.id) } label: {
+            Label(pinStore.isPinned(song.id)
+                    ? String(localized: "Anulează fixarea", comment: "Menu — unpin song")
+                    : String(localized: "Fixează sus", comment: "Menu — pin song to top for this session"),
+                  systemImage: pinStore.isPinned(song.id) ? "pin.slash" : "pin")
+        }
+        Divider()
         Button { projectFirstSlide(song) } label: {
             Label(String(localized: "Proiectează", comment: "Menu"), systemImage: "play.fill")
         }
+        AddToSessionMenu(draft: { .song(song, version: nil) })
         Button { libraryManager.selectSong(song) } label: {
             Label(String(localized: "Deschide", comment: "Menu"), systemImage: "eye")
         }
@@ -494,6 +564,11 @@ struct SongListPanel: View {
     @ViewBuilder
     private func songBadges(_ song: Song) -> some View {
         HStack(spacing: 4) {
+            if pinStore.isPinned(song.id) {
+                Image(systemName: "pin.fill")
+                    .font(.system(size: 10)).foregroundStyle(Color.accentColor)
+                    .help(String(localized: "Fixat pentru această sesiune", comment: "Pinned badge"))
+            }
             if song.verified {
                 Image(systemName: "checkmark.seal.fill")
                     .font(.system(size: 10)).foregroundStyle(.green)

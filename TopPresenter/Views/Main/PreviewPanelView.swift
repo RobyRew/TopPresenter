@@ -96,6 +96,15 @@ struct PresentationPreviewCard: View {
     }
     var pendingContent: PendingContent? = nil
 
+    /// Media the hosting panel wants previewed (Media tab / session runner) — the
+    /// card renders it letterboxed on black instead of the text-box pipeline.
+    struct PendingMedia {
+        var thumbnail: NSImage?
+        var kindRaw: String
+        var name: String
+    }
+    var pendingMedia: PendingMedia? = nil
+
     /// What would go live next: the panel-supplied content, or the Bible selection.
     private var pendingText: String {
         if let pendingContent { return pendingContent.text }
@@ -224,6 +233,30 @@ struct PresentationPreviewCard: View {
                 // Background layers — per-content override or global
                 if pm.isBlackScreen {
                     // Full black — nothing else rendered
+                } else if pm.liveContent.isLive, pm.liveContent.contentType == .media {
+                    // Live full-screen media mirror (image decoded at present time;
+                    // video shows a placeholder — the real frames play on the output).
+                    if let image = pm.liveContent.mediaImage {
+                        Image(nsImage: image)
+                            .resizable()
+                            .aspectRatio(contentMode: pm.fullscreenVideoFillRaw == "fill" ? .fill : .fit)
+                            .frame(width: size.width, height: size.height)
+                            .clipped()
+                    } else {
+                        mediaPlaceholder(kind: pm.liveContent.mediaKind,
+                                         name: pm.liveContent.mediaURL?.lastPathComponent ?? "")
+                    }
+                } else if let media = pendingMedia {
+                    // Pending media preview — letterboxed thumbnail, dimmed like text previews.
+                    if let thumb = media.thumbnail {
+                        Image(nsImage: thumb)
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(width: size.width, height: size.height)
+                            .opacity(0.85)
+                    } else {
+                        mediaPlaceholder(kind: media.kindRaw, name: media.name)
+                    }
                 } else {
                     let bg = pm.activeBackground(forKey: activeContentKey, frozen: false)
                     if bg.showColor {
@@ -255,6 +288,24 @@ struct PresentationPreviewCard: View {
                     )
             )
             .shadow(radius: 2)
+    }
+
+    /// Icon + filename placeholder for media without a renderable frame
+    /// (videos/audio in preview, images whose decode failed).
+    private func mediaPlaceholder(kind: String, name: String) -> some View {
+        VStack(spacing: 8) {
+            Image(systemName: (MediaKind(rawValue: kind) ?? .image).systemImage)
+                .font(.system(size: 32))
+                .foregroundStyle(.secondary)
+            if !name.isEmpty {
+                Text(name)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 12)
+            }
+        }
     }
 
     @ViewBuilder
@@ -1281,7 +1332,7 @@ struct StyleQuickSettings: View {
     var sections: Set<SettingsSection> = SettingsSection.allSet
 
     enum SettingsSection: Hashable {
-        case general, songOptions, output
+        case general, songOptions, media, output
 
         static let allSet: Set<SettingsSection> = [.general, .output]
     }
@@ -1291,6 +1342,7 @@ struct StyleQuickSettings: View {
 
     @AppStorage("settingsExpanded_general") private var generalExpanded: Bool = false
     @AppStorage("settingsExpanded_songOptions") private var songOptionsExpanded: Bool = true
+    @AppStorage("settingsExpanded_media") private var mediaExpanded: Bool = true
     @AppStorage("settingsExpanded_output") private var outputExpanded: Bool = false
 
     // Song options
@@ -1325,6 +1377,17 @@ struct StyleQuickSettings: View {
                         isExpanded: $songOptionsExpanded
                     ) {
                         songOptionsSection
+                    }
+                }
+
+                if sections.contains(.media) {
+                    // ─── Media (output prefs for fullscreen media) ───
+                    settingsSection(
+                        title: String(localized: "Media", comment: "Settings section"),
+                        icon: "photo.on.rectangle",
+                        isExpanded: $mediaExpanded
+                    ) {
+                        mediaSection
                     }
                 }
 
@@ -1439,6 +1502,32 @@ struct StyleQuickSettings: View {
         }
         Text(String(localized: "Se combină: ex. „‖: … :‖ (×2)”. Marcajele apar la strofele cu ×N ≥ 2.", comment: "Repeat hint"))
             .font(.system(size: 10)).foregroundStyle(.tertiary)
+    }
+
+    // MARK: - Media Section (module output prefs — device-level, NOT theme)
+
+    @ViewBuilder
+    private var mediaSection: some View {
+        @Bindable var pmBinding = pm
+
+        Toggle(String(localized: "Redă video în buclă", comment: "Setting label"), isOn: $pmBinding.videoLoopsByDefault)
+            .font(.caption)
+            .controlSize(.small)
+            .help(String(localized: "Videoclipurile proiectate reiau de la capăt automat.", comment: "Tooltip"))
+
+        HStack {
+            Text(String(localized: "Umplere:", comment: "Setting label — fullscreen media fill"))
+                .font(.caption)
+                .frame(width: 70, alignment: .trailing)
+            Picker("", selection: $pmBinding.fullscreenVideoFillRaw) {
+                Text(String(localized: "Încadrează", comment: "Media fill — fit")).tag("fit")
+                Text(String(localized: "Umple", comment: "Media fill — fill")).tag("fill")
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .controlSize(.small)
+        }
+        .help(String(localized: "Cum umple imaginea/videoclipul ecranul de proiecție.", comment: "Tooltip"))
     }
 
     // MARK: - Ieșire Section (output screen, compact)

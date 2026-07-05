@@ -4,31 +4,54 @@
 //
 //  Created by Cosmin Calin on 04/04/2026.
 //
+//  Right-side panel for Schedule sessions — driven entirely by the shared
+//  SessionRunner (the panel never calls pm.show* itself): current-item preview,
+//  runner transport (start/prev/next/jump), and the running order with
+//  missing-item indicators.
+//
 
 import SwiftUI
 import SwiftData
 
-/// Right-side panel for Schedule: current/next item preview, go-live controls, running order.
 struct SchedulePreviewPanel: View {
     @Environment(PresentationManager.self) private var pm
-    @Environment(\.openWindow) private var openWindow
+    @Environment(LibraryManager.self) private var libraryManager
+    @Environment(SessionRunner.self) private var runner
+    @Environment(\.modelContext) private var modelContext
 
-    @State private var currentSchedule: ServiceSchedule?
-    @State private var currentItemIndex: Int = 0
+    /// The session shown here: the RUNNING one wins, else the browsed selection.
+    private var schedule: ServiceSchedule? {
+        if runner.isRunning, let id = runner.activeScheduleID,
+           let running = try? modelContext.fetch(FetchDescriptor<ServiceSchedule>(
+               predicate: #Predicate { $0.id == id })).first {
+            return running
+        }
+        return libraryManager.selectedSchedule
+    }
 
     private var sortedItems: [ScheduleItem] {
-        currentSchedule?.sortedItems ?? []
+        schedule?.sortedItems ?? []
+    }
+
+    private var runningThis: Bool {
+        runner.isRunning && runner.activeScheduleID == schedule?.id
+    }
+
+    /// The item the panel focuses on: the runner's current item while running,
+    /// else the first item of the browsed session.
+    private var currentIndex: Int {
+        runningThis ? min(runner.itemIndex, max(sortedItems.count - 1, 0)) : 0
     }
 
     private var currentItem: ScheduleItem? {
-        guard currentItemIndex >= 0, currentItemIndex < sortedItems.count else { return nil }
-        return sortedItems[currentItemIndex]
+        guard currentIndex >= 0, currentIndex < sortedItems.count else { return nil }
+        return sortedItems[currentIndex]
     }
 
     private var nextItem: ScheduleItem? {
-        let nextIdx = currentItemIndex + 1
-        guard nextIdx < sortedItems.count else { return nil }
-        return sortedItems[nextIdx]
+        let next = currentIndex + 1
+        guard next < sortedItems.count else { return nil }
+        return sortedItems[next]
     }
 
     private var isLive: Bool {
@@ -41,47 +64,39 @@ struct SchedulePreviewPanel: View {
 
             Divider()
 
-            // Current item preview — previews the selected item before it goes live
-            PresentationPreviewCard(pendingContent: pendingPreviewContent)
+            // Current item preview — resolved from the library, like it will project.
+            PresentationPreviewCard(pendingContent: pendingPreviewContent,
+                                    pendingMedia: pendingPreviewMedia)
                 .padding()
 
             Divider()
 
-            // Schedule navigation controls
-            scheduleControlsBar
+            runnerControlsBar
                 .padding(.horizontal, 10)
                 .padding(.vertical, 8)
 
             Divider()
 
-            // Presentation controls
             PresentationControlsBar()
                 .padding(.horizontal)
                 .padding(.vertical, 8)
 
             Divider()
 
-            // Running order (compact list of items)
             runningOrderList
 
             Divider()
 
-            // Theme switcher + Layout Editor access
             PanelFooter()
         }
         .background(.background)
-        .onKeyWindowNotification(.scheduleSelected) { notification in
-            if let schedule = notification.object as? ServiceSchedule {
-                currentSchedule = schedule
-                currentItemIndex = 0
-            }
-        }
     }
 
-    // MARK: - Schedule Controls Bar
-    private var scheduleControlsBar: some View {
+    // MARK: - Runner Controls Bar
+
+    private var runnerControlsBar: some View {
         VStack(spacing: 6) {
-            // Current item info
+            // Current item info + position
             if let item = currentItem {
                 HStack(spacing: 6) {
                     Image(systemName: iconForType(item.itemType))
@@ -92,60 +107,75 @@ struct SchedulePreviewPanel: View {
                         .foregroundStyle(Color.accentColor)
                         .lineLimit(1)
                     Spacer()
-                    Text("\(currentItemIndex + 1)/\(sortedItems.count)")
+                    if runningThis, let item = currentItem {
+                        let slides = runner.slideCount(of: item, context: modelContext)
+                        if slides > 1 {
+                            Text(verbatim: "slide \(runner.slideIndex + 1)/\(slides) · ")
+                                .font(.caption2.monospacedDigit())
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    Text(verbatim: "\(currentIndex + 1)/\(sortedItems.count)")
                         .font(.caption2.monospacedDigit())
                         .foregroundStyle(.secondary)
                 }
             }
 
-            // Nav + Go Live
+            // Transport: prev / start·stop / next
             HStack(spacing: 8) {
                 Button {
-                    if currentItemIndex > 0 {
-                        currentItemIndex -= 1
-                    }
+                    runner.previous(context: modelContext)
                 } label: {
                     Image(systemName: "chevron.left")
                         .font(.body.weight(.semibold))
                         .frame(width: 34, height: 34)
                 }
                 .buttonStyle(.bordered)
-                .disabled(currentItemIndex <= 0)
+                .disabled(!runningThis)
                 .keyboardShortcut(.leftArrow, modifiers: [])
+                .help(String(localized: "Slide-ul / elementul anterior", comment: "Tooltip"))
 
-                Button {
-                    if let item = currentItem {
-                        showItem(item)
+                if runningThis {
+                    Button {
+                        runner.stop()
+                        pm.clearOutput()
+                    } label: {
+                        Label(String(localized: "Oprește", comment: "Control button — stop session"),
+                              systemImage: "stop.fill")
+                            .font(.body.weight(.semibold))
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 36)
                     }
-                } label: {
-                    Label(
-                        isLive
-                            ? String(localized: "Hide", comment: "Control button")
-                            : String(localized: "Go Live", comment: "Control button"),
-                        systemImage: isLive ? "eye.slash.fill" : "play.fill"
-                    )
-                    .font(.body.weight(.semibold))
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 36)
+                    .buttonStyle(.borderedProminent)
+                    .tint(.red)
+                } else {
+                    Button {
+                        if let schedule { runner.start(schedule, context: modelContext) }
+                    } label: {
+                        Label(String(localized: "Pornește sesiunea", comment: "Control button — start session"),
+                              systemImage: "play.fill")
+                            .font(.body.weight(.semibold))
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 36)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .keyboardShortcut(.return, modifiers: [])
+                    .disabled(schedule == nil || sortedItems.isEmpty)
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(isLive ? .orange : .accentColor)
-                .keyboardShortcut(.return, modifiers: [])
-                .disabled(currentItem == nil)
 
                 Button {
-                    if currentItemIndex < sortedItems.count - 1 {
-                        currentItemIndex += 1
-                    }
+                    runner.next(context: modelContext)
                 } label: {
                     Image(systemName: "chevron.right")
                         .font(.body.weight(.semibold))
                         .frame(width: 34, height: 34)
                 }
                 .buttonStyle(.bordered)
-                .disabled(currentItemIndex >= sortedItems.count - 1)
+                .disabled(!runningThis)
                 .keyboardShortcut(.rightArrow, modifiers: [])
+                .help(String(localized: "Slide-ul / elementul următor", comment: "Tooltip"))
             }
+            .lineLimit(1)
 
             // Next item preview
             if let next = nextItem {
@@ -161,12 +191,16 @@ struct SchedulePreviewPanel: View {
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                     Spacer()
+                    Text(String(localized: "\(sortedItems.count - currentIndex - 1) rămase", comment: "Remaining session items"))
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
                 }
             }
         }
     }
 
     // MARK: - Running Order List
+
     private var runningOrderList: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 2) {
@@ -174,7 +208,7 @@ struct SchedulePreviewPanel: View {
                     Text(String(localized: "Running Order", comment: "Section title"))
                         .font(.caption.bold())
                     Spacer()
-                    Text("\(sortedItems.count) items")
+                    Text(String(localized: "\(sortedItems.count) items", comment: "Item count"))
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
@@ -189,53 +223,7 @@ struct SchedulePreviewPanel: View {
                         .padding()
                 } else {
                     ForEach(Array(sortedItems.enumerated()), id: \.element.id) { index, item in
-                        Button {
-                            currentItemIndex = index
-                        } label: {
-                            HStack(spacing: 8) {
-                                // Position number
-                                Text("\(index + 1)")
-                                    .font(.caption2.monospacedDigit().bold())
-                                    .foregroundStyle(index == currentItemIndex ? .white : .secondary)
-                                    .frame(width: 20)
-
-                                Image(systemName: iconForType(item.itemType))
-                                    .font(.caption2)
-                                    .foregroundStyle(index == currentItemIndex ? .white : .secondary)
-                                    .frame(width: 14)
-
-                                VStack(alignment: .leading, spacing: 1) {
-                                    Text(item.title)
-                                        .font(.caption)
-                                        .foregroundStyle(index == currentItemIndex ? .white : .primary)
-                                        .lineLimit(1)
-                                    if !item.subtitle.isEmpty {
-                                        Text(item.subtitle)
-                                            .font(.caption2)
-                                            .foregroundStyle(index == currentItemIndex ? .white.opacity(0.7) : .secondary)
-                                            .lineLimit(1)
-                                    }
-                                }
-
-                                Spacer()
-
-                                // Live indicator
-                                if index == currentItemIndex && isLive {
-                                    Circle()
-                                        .fill(.red)
-                                        .frame(width: 6, height: 6)
-                                }
-                            }
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 4)
-                            .background(
-                                index == currentItemIndex
-                                    ? Color.accentColor
-                                    : Color.clear,
-                                in: RoundedRectangle(cornerRadius: 4)
-                            )
-                        }
-                        .buttonStyle(.plain)
+                        runningOrderRow(index: index, item: item)
                     }
                 }
             }
@@ -243,42 +231,108 @@ struct SchedulePreviewPanel: View {
         }
     }
 
-    // MARK: - Helpers
+    @ViewBuilder
+    private func runningOrderRow(index: Int, item: ScheduleItem) -> some View {
+        let isCurrent = index == currentIndex && runningThis
+        let isMissing = SessionService.resolve(item, context: modelContext).isMissing
 
-    /// Maps the current schedule item to preview content, mirroring showItem(_:).
-    private var pendingPreviewContent: PresentationPreviewCard.PendingContent {
-        guard let item = currentItem else { return .init(text: "", reference: "") }
-        switch item.itemType {
-        case "bible":
-            return .init(text: item.content, reference: item.subtitle)
-        case "song":
-            return .init(text: item.content, reference: item.title, subtitle: item.subtitle)
-        case "blank":
+        Button {
+            if runningThis {
+                runner.jump(toItem: index, context: modelContext)
+            } else if let schedule {
+                // Not running yet — clicking an item starts the session THERE.
+                runner.start(schedule, context: modelContext)
+                runner.jump(toItem: index, context: modelContext)
+            }
+        } label: {
+            HStack(spacing: 8) {
+                Text(verbatim: "\(index + 1)")
+                    .font(.caption2.monospacedDigit().bold())
+                    .foregroundStyle(isCurrent ? .white : .secondary)
+                    .frame(width: 20)
+
+                Image(systemName: iconForType(item.itemType))
+                    .font(.caption2)
+                    .foregroundStyle(isCurrent ? .white : .secondary)
+                    .frame(width: 14)
+
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(item.title)
+                        .font(.caption)
+                        .foregroundStyle(isCurrent ? .white : .primary)
+                        .lineLimit(1)
+                    if !item.subtitle.isEmpty {
+                        Text(item.subtitle)
+                            .font(.caption2)
+                            .foregroundStyle(isCurrent ? .white.opacity(0.7) : .secondary)
+                            .lineLimit(1)
+                    }
+                }
+
+                Spacer()
+
+                if isMissing {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.caption2)
+                        .foregroundStyle(.orange)
+                }
+                if isCurrent && isLive {
+                    Circle()
+                        .fill(.red)
+                        .frame(width: 6, height: 6)
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 4)
+            .opacity(isMissing ? 0.55 : 1)
+            .background(
+                isCurrent ? Color.accentColor : Color.clear,
+                in: RoundedRectangle(cornerRadius: 4)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: - Preview mapping
+
+    /// Resolve the current item for the preview card — text-based kinds.
+    private var pendingPreviewContent: PresentationPreviewCard.PendingContent? {
+        guard let item = currentItem else { return nil }
+        switch SessionService.resolve(item, context: modelContext) {
+        case let .bible(text, reference, _):
+            return .init(text: text, reference: reference)
+        case let .song(song, version):
+            // First slide's text as the preview — built with the SAME current
+            // song options the runner presents with.
+            let d = UserDefaults.standard
+            let first = buildSongSlides(
+                song: song, version: version ?? song.activeVersion,
+                maxLines: (d.object(forKey: "song_maxLinesPerSlide") as? Int) ?? 6,
+                bilingual: (d.object(forKey: "song_bilingual") as? Bool) ?? false,
+                language: nil,
+                bracket: d.string(forKey: "song_repeatBracket") ?? "none",
+                countStyle: d.string(forKey: "song_repeatCount") ?? "times"
+            ).first
+            return .init(text: first?.text ?? song.title, reference: song.title,
+                         subtitle: first?.label ?? "", lines: first?.lines ?? [])
+        case let .text(title, content):
+            return .init(text: content, reference: title)
+        case .blank:
             return .init(text: "", reference: "")
-        default:
-            return .init(text: item.content, reference: item.title)
+        case .missing(let reason):
+            return .init(text: reason, reference: item.title)
+        case .media:
+            return nil   // handled by pendingPreviewMedia
         }
     }
 
-    private func showItem(_ item: ScheduleItem) {
-        if isLive {
-            pm.clearOutput()
-            return
-        }
-        let index = currentItemIndex
-        let count = max(sortedItems.count, 1)
-        switch item.itemType {
-        case "bible":
-            pm.showBibleVerse(text: item.content, reference: item.subtitle, slideIndex: index, slideCount: count)
-        case "song":
-            pm.showSongVerse(text: item.content, title: item.title, verseLabel: item.subtitle, slideIndex: index, slideCount: count)
-        case "text":
-            pm.showCustomText(text: item.content, title: item.title, slideIndex: index, slideCount: count)
-        case "blank":
-            pm.goBlack()
-        default:
-            pm.showCustomText(text: item.content, title: item.title, slideIndex: index, slideCount: count)
-        }
+    /// Resolve the current item for the preview card — media kind.
+    private var pendingPreviewMedia: PresentationPreviewCard.PendingMedia? {
+        guard let item = currentItem,
+              case let .media(mediaItem) = SessionService.resolve(item, context: modelContext)
+        else { return nil }
+        let thumb = mediaItem.thumbnailData.flatMap { NSImage(data: $0) }
+        return .init(thumbnail: thumb, kindRaw: mediaItem.mediaType, name: mediaItem.name)
     }
 
     private func iconForType(_ type: String) -> String {

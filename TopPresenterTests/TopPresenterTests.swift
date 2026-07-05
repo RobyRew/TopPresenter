@@ -2731,3 +2731,365 @@ struct SongVerifiedAndEditLogTests {
         #expect(s.contains { $0.contains("Refren") && $0.contains("șters") })
     }
 }
+
+// MARK: - PinStore Tests (session-only song pins)
+
+struct PinStoreTests {
+    @Test @MainActor func toggleAndClearSemantics() {
+        let store = PinStore()
+        let a = UUID(), b = UUID()
+        #expect(!store.hasPins)
+
+        store.togglePin(a)
+        #expect(store.isPinned(a))
+        #expect(!store.isPinned(b))
+        #expect(store.hasPins)
+
+        store.togglePin(a)   // toggle off
+        #expect(!store.isPinned(a))
+        #expect(!store.hasPins)
+
+        store.togglePin(a); store.togglePin(b)
+        store.clearPins()
+        #expect(!store.isPinned(a) && !store.isPinned(b))
+        #expect(!store.hasPins)
+    }
+
+    @Test @MainActor func partitionPreservesOrderAndExcludesPinnedFromRest() {
+        let s1 = Song(title: "Alfa"), s2 = Song(title: "Beta"), s3 = Song(title: "Gama")
+        let songs = [s1, s2, s3]
+
+        // Empty pins → everything in rest, order intact.
+        let none = PinStore.partition(songs, pinnedIDs: [])
+        #expect(none.pinned.isEmpty)
+        #expect(none.rest.map(\.id) == songs.map(\.id))
+
+        // Pin the middle one → floats out of rest, both halves keep input order.
+        let some = PinStore.partition(songs, pinnedIDs: [s2.id])
+        #expect(some.pinned.map(\.id) == [s2.id])
+        #expect(some.rest.map(\.id) == [s1.id, s3.id])
+
+        // Pin all (plus an unknown id) → rest empty, order preserved.
+        let all = PinStore.partition(songs, pinnedIDs: Set(songs.map(\.id) + [UUID()]))
+        #expect(all.pinned.map(\.id) == songs.map(\.id))
+        #expect(all.rest.isEmpty)
+    }
+}
+
+// MARK: - Session Tests (stable refs, resolution, runner navigation)
+
+@MainActor
+struct SessionTests {
+    private func makeInMemoryContext() throws -> ModelContext {
+        let container = try ModelContainer(
+            for: Schema(versionedSchema: SchemaV2.self),
+            configurations: [ModelConfiguration(isStoredInMemoryOnly: true)]
+        )
+        return ModelContext(container)
+    }
+
+    // MARK: Payload round-trip + resilience
+
+    @Test func payloadRoundTripsAndDecodesMissingKeys() {
+        var p = SessionItemPayload()
+        p.translation = "EDC100"; p.bookNumber = 43; p.bookName = "Ioan"
+        p.chapter = 3; p.verseStart = 16; p.verseEnd = 17
+        let decoded = SessionItemPayload.decode(fromJSON: p.encodedJSON())
+        #expect(decoded == p)
+
+        // Older/minimal JSON (missing keys) → defaults, no crash.
+        let minimal = SessionItemPayload.decode(fromJSON: #"{"songKey":"ccli:12345"}"#)
+        #expect(minimal.songKey == "ccli:12345")
+        #expect(minimal.translation.isEmpty && minimal.verseStart == 0)
+        // Garbage → empty payload.
+        #expect(SessionItemPayload.decode(fromJSON: "not json").isEmpty)
+    }
+
+    // MARK: Append drafts
+
+    @Test func appendStampsPayloadSnapshotAndOrder() throws {
+        let context = try makeInMemoryContext()
+        let schedule = SessionService.createSession(name: "Duminică", context: context)
+
+        let song = Song(title: "Măreț ești Tu", ccliNumber: "14181")
+        context.insert(song)
+        let media = MediaItem(name: "fundal.jpg", filePath: "/x/fundal.jpg", mediaType: "image")
+        context.insert(media)
+
+        SessionService.append(.bible(translation: "EDC100", bookNumber: 43, bookName: "Ioan",
+                                     chapter: 3, verseStart: 16, verseEnd: 17,
+                                     displayReference: "Ioan 3:16-17", snapshotText: "Fiindcă atât..."),
+                              to: schedule, context: context)
+        SessionService.append(.song(song, version: nil), to: schedule, context: context)
+        SessionService.append(.media(media), to: schedule, context: context)
+        SessionService.append(.blank, to: schedule, context: context)
+
+        let items = schedule.sortedItems
+        #expect(items.map(\.itemType) == ["bible", "song", "media", "blank"])
+        #expect(items.map(\.order) == [0, 1, 2, 3])
+        // Snapshots stay readable.
+        #expect(items[0].title == "Ioan 3:16-17")
+        #expect(items[1].title == "Măreț ești Tu")
+        // Stable refs stamped.
+        #expect(SessionService.payload(for: items[0]).verseStart == 16)
+        #expect(SessionService.payload(for: items[1]).songKey == "ccli:14181")
+        #expect(SessionService.payload(for: items[2]).mediaID == media.id.uuidString)
+    }
+
+    // MARK: Resolution
+
+    @Test func songResolvesByStableKeyAndMediaByIDThenName() throws {
+        let context = try makeInMemoryContext()
+        let schedule = SessionService.createSession(name: "Test", context: context)
+
+        let song = Song(title: "Aleluia", ccliNumber: "777")
+        context.insert(song)
+        let media = MediaItem(name: "intro.mp4", filePath: "/x/intro.mp4", mediaType: "video")
+        context.insert(media)
+        let songItem = SessionService.append(.song(song, version: nil), to: schedule, context: context)
+        let mediaItem = SessionService.append(.media(media), to: schedule, context: context)
+
+        // Song: delete + re-import with a NEW UUID but same CCLI → still resolves.
+        context.delete(song)
+        let reimported = Song(title: "Aleluia (nou)", ccliNumber: "777")
+        context.insert(reimported)
+        try context.save()
+        guard case let .song(resolved, _) = SessionService.resolve(songItem, context: context) else {
+            Issue.record("song did not resolve"); return
+        }
+        #expect(resolved.id == reimported.id)
+
+        // Media: delete + same NAME → resolves by name fallback.
+        context.delete(media)
+        let renamedID = MediaItem(name: "intro.mp4", filePath: "/y/intro.mp4", mediaType: "video")
+        context.insert(renamedID)
+        try context.save()
+        guard case let .media(resolvedMedia) = SessionService.resolve(mediaItem, context: context) else {
+            Issue.record("media did not resolve"); return
+        }
+        #expect(resolvedMedia.id == renamedID.id)
+
+        // Gone entirely → .missing.
+        context.delete(renamedID)
+        context.delete(reimported)
+        try context.save()
+        #expect(SessionService.resolve(songItem, context: context).isMissing)
+        #expect(SessionService.resolve(mediaItem, context: context).isMissing)
+    }
+
+    @Test func bibleResolvesVerseRangeFromLibrary() throws {
+        let context = try makeInMemoryContext()
+        let module = BibleModule(name: "Test Bible", abbreviation: "TB1", language: "ro", sourceFormat: "test")
+        let book = BibleBook(name: "Ioan", bookNumber: 43, testament: "NT")
+        let chapter = BibleChapter(chapterNumber: 3)
+        chapter.verses = [
+            BibleVerse(verseNumber: 16, text: "Fiindcă atât de mult a iubit Dumnezeu lumea"),
+            BibleVerse(verseNumber: 17, text: "Dumnezeu nu a trimis pe Fiul Său ca să judece"),
+        ]
+        book.chapters = [chapter]
+        module.books = [book]
+        context.insert(module)
+        try context.save()
+
+        let schedule = SessionService.createSession(name: "T", context: context)
+        let item = SessionService.append(.bible(translation: "TB1", bookNumber: 43, bookName: "Ioan",
+                                                chapter: 3, verseStart: 16, verseEnd: 17,
+                                                displayReference: "Ioan 3:16-17", snapshotText: "x"),
+                                         to: schedule, context: context)
+
+        guard case let .bible(text, reference, translationName) = SessionService.resolve(item, context: context) else {
+            Issue.record("bible did not resolve"); return
+        }
+        #expect(text.contains("iubit") && text.contains("judece"))
+        #expect(reference == "Ioan 3:16-17")
+        #expect(translationName == "TB1")
+
+        // Unknown translation → missing.
+        let bad = SessionService.append(.bible(translation: "NOPE", bookNumber: 43, bookName: "Ioan",
+                                               chapter: 3, verseStart: 16, verseEnd: 16,
+                                               displayReference: "Ioan 3:16", snapshotText: "x"),
+                                        to: schedule, context: context)
+        #expect(SessionService.resolve(bad, context: context).isMissing)
+    }
+
+    // MARK: Runner navigation
+
+    @Test func runnerWalksItemsSkipsMissingAndClamps() throws {
+        let context = try makeInMemoryContext()
+        let schedule = SessionService.createSession(name: "Flux", context: context)
+        SessionService.append(.text(title: "Bun venit", content: "Salut"), to: schedule, context: context)
+        // A missing item in the middle (media that doesn't exist).
+        let ghost = MediaItem(name: "ghost.mp4", filePath: "/none", mediaType: "video")
+        context.insert(ghost)
+        SessionService.append(.media(ghost), to: schedule, context: context)
+        context.delete(ghost)
+        SessionService.append(.text(title: "Încheiere", content: "Amin"), to: schedule, context: context)
+        try context.save()
+
+        let runner = SessionRunner()   // no pm wired — navigation math only
+        runner.start(schedule, context: context)
+        #expect(runner.isRunning)
+        #expect(runner.itemIndex == 0)
+
+        runner.next(context: context)          // skips the missing media
+        #expect(runner.itemIndex == 2)
+        runner.next(context: context)          // clamped at the end
+        #expect(runner.itemIndex == 2)
+        runner.previous(context: context)      // skips back over the missing one
+        #expect(runner.itemIndex == 0)
+        runner.previous(context: context)      // clamped at the start
+        #expect(runner.itemIndex == 0)
+
+        runner.jump(toItem: 99, context: context)
+        #expect(runner.itemIndex == 2)         // clamped jump
+        runner.stop()
+        #expect(!runner.isRunning)
+    }
+}
+
+// MARK: - Session Archive Tests (.tpschedule round-trip)
+
+@MainActor
+struct SessionArchiveTests {
+    private func makeInMemoryContext() throws -> ModelContext {
+        let container = try ModelContainer(
+            for: Schema(versionedSchema: SchemaV2.self),
+            configurations: [ModelConfiguration(isStoredInMemoryOnly: true)]
+        )
+        return ModelContext(container)
+    }
+
+    @Test func exportImportRoundTripPreservesEverything() throws {
+        let source = try makeInMemoryContext()
+        let schedule = SessionService.createSession(name: "Duminică dimineața", context: source)
+        schedule.notes = "Cu botez"
+        SessionService.append(.bible(translation: "EDC100", bookNumber: 43, bookName: "Ioan",
+                                     chapter: 3, verseStart: 16, verseEnd: 16,
+                                     displayReference: "Ioan 3:16", snapshotText: "Fiindcă atât…"),
+                              to: schedule, context: source)
+        SessionService.append(.text(title: "Anunțuri", content: "Program de vară"), to: schedule, context: source)
+        SessionService.append(.blank, to: schedule, context: source)
+
+        let data = try SessionArchiveService.export(schedule)
+
+        // Import into a FRESH library.
+        let dest = try makeInMemoryContext()
+        let (imported, unresolved) = try SessionArchiveService.importSession(data, context: dest)
+        #expect(imported.name == "Duminică dimineața")
+        #expect(imported.notes == "Cu botez")
+        #expect(unresolved.isEmpty)
+
+        let items = imported.sortedItems
+        #expect(items.map(\.itemType) == ["bible", "text", "blank"])
+        #expect(items.map(\.order) == [0, 1, 2])
+        #expect(items[0].title == "Ioan 3:16")
+        #expect(SessionService.payload(for: items[0]).verseStart == 16)
+        #expect(items[1].content == "Program de vară")
+    }
+
+    @Test func importRelinksMediaByNameAndReportsMissing() throws {
+        let source = try makeInMemoryContext()
+        let schedule = SessionService.createSession(name: "Media test", context: source)
+        let media = MediaItem(name: "intro.mp4", filePath: "/a/intro.mp4", mediaType: "video")
+        source.insert(media)
+        SessionService.append(.media(media), to: schedule, context: source)
+        let ghost = MediaItem(name: "ghost.jpg", filePath: "/a/ghost.jpg", mediaType: "image")
+        source.insert(ghost)
+        SessionService.append(.media(ghost), to: schedule, context: source)
+        let data = try SessionArchiveService.export(schedule)
+
+        // Destination library has "intro.mp4" under a DIFFERENT id, and no ghost.
+        let dest = try makeInMemoryContext()
+        let localIntro = MediaItem(name: "intro.mp4", filePath: "/b/intro.mp4", mediaType: "video")
+        dest.insert(localIntro)
+        try dest.save()
+
+        let (imported, unresolved) = try SessionArchiveService.importSession(data, context: dest)
+        #expect(unresolved == ["ghost.jpg"])
+        let payload = SessionService.payload(for: imported.sortedItems[0])
+        #expect(payload.mediaID == localIntro.id.uuidString)   // re-linked by name
+        // The re-linked item resolves; the ghost is missing.
+        #expect(!SessionService.resolve(imported.sortedItems[0], context: dest).isMissing)
+        #expect(SessionService.resolve(imported.sortedItems[1], context: dest).isMissing)
+    }
+
+    @Test func decodesMinimalAndRejectsForeignJSON() throws {
+        let dest = try makeInMemoryContext()
+        // Older/minimal archive (missing keys everywhere) still imports.
+        let minimal = #"{"format":"TopPresenter Session","items":[{"itemType":"blank"}]}"#
+        let (imported, _) = try SessionArchiveService.importSession(Data(minimal.utf8), context: dest)
+        #expect(imported.sortedItems.count == 1)
+        #expect(imported.sortedItems[0].itemType == "blank")
+
+        // Foreign JSON is rejected with a clear error.
+        #expect(throws: (any Error).self) {
+            try SessionArchiveService.importSession(Data(#"{"hello":1}"#.utf8), context: dest)
+        }
+    }
+}
+
+// MARK: - MediaLibrary Tests (kind classification + shared filter/stepping)
+
+struct MediaLibraryTests {
+    @Test func classifiesByExtension() {
+        #expect(MediaKind.classify(extension: "JPG") == .image)
+        #expect(MediaKind.classify(extension: "heic") == .image)
+        #expect(MediaKind.classify(extension: "mp4") == .video)
+        #expect(MediaKind.classify(extension: "MOV") == .video)
+        #expect(MediaKind.classify(extension: "mp3") == .audio)
+        #expect(MediaKind.classify(extension: "flac") == .audio)
+        #expect(MediaKind.classify(extension: "xyz") == .image)   // permissive fallback
+    }
+
+    @Test @MainActor func filterByKindAndQueryPreservesOrder() {
+        let a = MediaItem(name: "Închinare fundal.jpg", filePath: "/a", mediaType: "image")
+        let b = MediaItem(name: "Intro video.mp4", filePath: "/b", mediaType: "video")
+        let c = MediaItem(name: "Inchinare pian.mp3", filePath: "/c", mediaType: "audio")
+        let items = [a, b, c]
+
+        // "all" + empty query → everything, input order.
+        #expect(MediaLibrary.filter(items, kindRaw: "all", query: "").map(\.id) == items.map(\.id))
+        // Kind filter.
+        #expect(MediaLibrary.filter(items, kindRaw: "video", query: "").map(\.id) == [b.id])
+        // Diacritic-insensitive query matches both "Închinare" and "Inchinare".
+        #expect(MediaLibrary.filter(items, kindRaw: "all", query: "inchinare").map(\.id) == [a.id, c.id])
+        // Query + kind combine.
+        #expect(MediaLibrary.filter(items, kindRaw: "audio", query: "închinare").map(\.id) == [c.id])
+    }
+
+    @Test @MainActor func neighborStepsAndClamps() {
+        let a = MediaItem(name: "a", filePath: "/a", mediaType: "image")
+        let b = MediaItem(name: "b", filePath: "/b", mediaType: "image")
+        let c = MediaItem(name: "c", filePath: "/c", mediaType: "image")
+        let items = [a, b, c]
+
+        #expect(MediaLibrary.neighbor(of: b, in: items, direction: +1)?.id == c.id)
+        #expect(MediaLibrary.neighbor(of: b, in: items, direction: -1)?.id == a.id)
+        // Clamped at the ends.
+        #expect(MediaLibrary.neighbor(of: c, in: items, direction: +1)?.id == c.id)
+        #expect(MediaLibrary.neighbor(of: a, in: items, direction: -1)?.id == a.id)
+        // No selection → first/last depending on direction; empty list → nil.
+        #expect(MediaLibrary.neighbor(of: nil, in: items, direction: +1)?.id == a.id)
+        #expect(MediaLibrary.neighbor(of: nil, in: items, direction: -1)?.id == c.id)
+        #expect(MediaLibrary.neighbor(of: a, in: [], direction: +1) == nil)
+    }
+}
+
+// MARK: - Tab Auto-naming Tests
+
+struct TabAutoNamingTests {
+    @Test @MainActor func scheduleTabDetailCombinesNameAndDate() {
+        // Fixed date: 2026-07-06 (a Monday).
+        var comps = DateComponents(); comps.year = 2026; comps.month = 7; comps.day = 6; comps.hour = 12
+        let date = Calendar(identifier: .gregorian).date(from: comps)!
+
+        let detail = MainControlView.scheduleTabDetail(name: "Sesiune Duminică", date: date)
+        #expect(detail.hasPrefix("Sesiune Duminică – "))
+        #expect(detail.contains("6"))   // day number, locale-independent
+
+        // Empty / whitespace name → just the formatted date (no dangling dash).
+        let noName = MainControlView.scheduleTabDetail(name: "   ", date: date)
+        #expect(!noName.contains("–"))
+        #expect(noName.contains("6"))
+    }
+}

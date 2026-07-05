@@ -25,10 +25,6 @@ struct MainControlView: View {
     @State private var showLayoutEditor = false
     @State private var droppedFiles: [PendingImportFile] = []
     @State private var isDragTargeted = false
-    // Per-tab name: empty = automatic (derived from the active section/module).
-    @SceneStorage("tabCustomName") private var tabCustomName: String = ""
-    @State private var showRenameTab = false
-    @State private var renameDraft = ""
 
     /// Automatic tab title: the section type plus the active selection, e.g.
     /// "Bible - (EDC100) Ediția Dumitru Cornilescu Centenară",
@@ -58,9 +54,20 @@ struct MainControlView: View {
         case .media:
             guard let item = libraryManager.selectedMediaItem else { return section }
             return titled("\(mediaTypeLabel(item.mediaType)) · \(item.name)")
+        case .schedule:
+            guard let s = libraryManager.selectedSchedule else { return section }
+            return titled(Self.scheduleTabDetail(name: s.name, date: s.date))
         default:
             return section
         }
+    }
+
+    /// "Sesiune Duminică – duminică, 6 iul. 2026" — the schedule tab detail.
+    /// Pure + static so it's unit-testable.
+    static func scheduleTabDetail(name: String, date: Date) -> String {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let day = date.formatted(.dateTime.weekday(.wide).day().month(.abbreviated).year())
+        return trimmed.isEmpty ? day : "\(trimmed) – \(day)"
     }
 
     /// Friendly, localized label for a media item's type.
@@ -71,11 +78,6 @@ struct MainControlView: View {
         case "video": return String(localized: "Video", comment: "Media type")
         default: return type.capitalized
         }
-    }
-
-    /// The tab/window title: custom name if set, otherwise automatic.
-    private var tabTitle: String {
-        tabCustomName.isEmpty ? autoTabTitle : tabCustomName
     }
 
     var body: some View {
@@ -216,8 +218,7 @@ struct MainControlView: View {
                 }
             }
         }
-        .navigationTitle(tabTitle)
-        .navigationSubtitle(tabCustomName.isEmpty ? "" : autoTabTitle)
+        .navigationTitle(autoTabTitle)
         .toolbar {
             bibleToolbarContent
             songToolbarContent
@@ -225,29 +226,8 @@ struct MainControlView: View {
             scheduleToolbarContent
             customSlidesToolbarContent
             presentationToolbarContent
-            ToolbarItem(placement: .navigation) {
-                Button {
-                    renameDraft = tabCustomName
-                    showRenameTab = true
-                } label: {
-                    Label(String(localized: "Rename Tab", comment: "Toolbar"), systemImage: "character.cursor.ibeam")
-                }
-                .help(String(localized: "Name this tab", comment: "Toolbar tooltip"))
-            }
         }
         .toolbarRole(.editor)
-        .alert(String(localized: "Name this tab", comment: "Alert title"), isPresented: $showRenameTab) {
-            TextField(String(localized: "Tab name", comment: "Field"), text: $renameDraft)
-            Button(String(localized: "Save", comment: "Button")) {
-                tabCustomName = renameDraft.trimmingCharacters(in: .whitespacesAndNewlines)
-            }
-            Button(String(localized: "Use automatic name", comment: "Button"), role: .destructive) {
-                tabCustomName = ""
-            }
-            Button(String(localized: "Cancel", comment: "Button"), role: .cancel) { }
-        } message: {
-            Text(String(localized: "Leave empty (Use automatic name) to track the section and translation.", comment: "Alert message"))
-        }
     }
 
     // MARK: - Drag & Drop
@@ -435,23 +415,10 @@ struct MainControlView: View {
 
     // MARK: - Media Toolbar Content
 
+    // The kind filter + search + Add live in MediaView's own header now —
+    // one filter UI (same @AppStorage key), no toolbar duplicate.
     @ToolbarContentBuilder
     private var mediaToolbarContent: some ToolbarContent {
-        ToolbarItem(placement: .navigation) {
-            if appState.selectedSidebarItem == .media {
-                Picker(
-                    String(localized: "Filter", comment: "Toolbar picker"),
-                    selection: $mediaTypeFilter
-                ) {
-                    Text(String(localized: "All", comment: "Filter option")).tag("all")
-                    Text(String(localized: "Images", comment: "Filter option")).tag("image")
-                    Text(String(localized: "Audio", comment: "Filter option")).tag("audio")
-                    Text(String(localized: "Video", comment: "Filter option")).tag("video")
-                }
-                .frame(minWidth: 100, maxWidth: 180)
-            }
-        }
-
         ToolbarItem(placement: .automatic) {
             if appState.selectedSidebarItem == .media {
                 Button {
@@ -585,7 +552,6 @@ struct MainControlView: View {
 
     // MARK: - Bible Toolbar View Helpers
 
-    @AppStorage("mediaTypeFilter") private var mediaTypeFilter: String = "all"
     @Query(sort: \BibleModule.name) private var modules: [BibleModule]
     @Query(sort: \SongCollection.name) private var songCollections: [SongCollection]
     @AppStorage("bibleViewMode") private var bibleViewMode: String = "list"

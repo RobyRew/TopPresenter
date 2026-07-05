@@ -56,8 +56,16 @@ final class LibraryManager {
     var songSlideCount: Int = 1
 
     // MARK: - Media State
-    /// The media item highlighted in the Media view — drives the tab title.
+    /// The media item highlighted in the Media view — drives the tab title and
+    /// the right panel's preview + prev/next stepping.
     var selectedMediaItem: MediaItem?
+    /// Media grid search — on the manager so the panel steps the SAME filtered
+    /// ordering the grid shows (mirrors songLibraryQuery).
+    var mediaLibraryQuery: String = ""
+
+    // MARK: - Schedule State
+    /// The session highlighted in the Schedule view — drives the tab title.
+    var selectedSchedule: ServiceSchedule?
 
     // MARK: - Bible Navigation
     /// Switch translation while staying on the same passage where possible.

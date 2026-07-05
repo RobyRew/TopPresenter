@@ -687,6 +687,8 @@ struct BibleVerseRow: View {
             Button(String(localized: "Show on Screen", comment: "Context menu")) {
                 projectVerse()
             }
+            AddToSessionMenu(draft: sessionDraft)
+            Divider()
             Button(String(localized: "Copy Text", comment: "Context menu")) {
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString(verse.text, forType: .string)
@@ -696,6 +698,26 @@ struct BibleVerseRow: View {
                 NSPasteboard.general.setString(verse.fullReference, forType: .string)
             }
         }
+    }
+
+    /// Session draft for this row: the WHOLE current selection when the row is
+    /// part of it (multi-verse range), else just this verse.
+    private func sessionDraft() -> SessionItemDraft? {
+        guard let module = libraryManager.selectedBibleModule,
+              let book = libraryManager.selectedBook,
+              let chapter = libraryManager.selectedChapter else { return nil }
+        let selection = libraryManager.selectedVerses
+        let inSelection = selection.contains { $0.id == verse.id }
+        let verses = (inSelection && !selection.isEmpty) ? selection : [verse]
+        let numbers = verses.map(\.verseNumber).sorted()
+        guard let first = numbers.first, let last = numbers.last else { return nil }
+        let range = first == last ? "\(first)" : "\(first)-\(last)"
+        let reference = "\(book.name) \(chapter.chapterNumber):\(range)"
+        let text = verses.sorted { $0.verseNumber < $1.verseNumber }.map(\.text).joined(separator: " ")
+        return .bible(translation: module.abbreviation, bookNumber: book.bookNumber,
+                      bookName: book.name, chapter: chapter.chapterNumber,
+                      verseStart: first, verseEnd: last,
+                      displayReference: reference, snapshotText: text)
     }
 }
 

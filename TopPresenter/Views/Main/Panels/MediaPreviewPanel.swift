@@ -9,17 +9,31 @@ import SwiftUI
 import SwiftData
 import AVKit
 
-/// Right-side panel for Media: media preview, playback controls, background/fullscreen actions.
+/// Right-side panel for Media — mirrors the Bible/Songs panel anatomy:
+/// header → preview card → navigation/present controls → transport → quick
+/// settings → theme footer. Selection lives on LibraryManager, and prev/next
+/// steps the SAME filtered ordering the grid shows (MediaLibrary.filter).
 struct MediaPreviewPanel: View {
     @Environment(PresentationManager.self) private var pm
     @Environment(AudioPlayerManager.self) private var audioPlayerManager
     @Environment(VideoPlayerService.self) private var videoPlayerService
-    @Environment(\.openWindow) private var openWindow
+    @Environment(LibraryManager.self) private var libraryManager
 
     @Query(sort: \MediaItem.importDate, order: .reverse) private var allMedia: [MediaItem]
+    @AppStorage("mediaTypeFilter") private var kindFilterRaw: String = "all"
 
-    /// The currently selected media item — passed from MediaView or tracked here.
-    @State private var selectedItem: MediaItem?
+    private var selectedItem: MediaItem? { libraryManager.selectedMediaItem }
+
+    /// The grid's exact ordering — stepping can never disagree with what's shown.
+    private var orderedItems: [MediaItem] {
+        MediaLibrary.filter(allMedia, kindRaw: kindFilterRaw, query: libraryManager.mediaLibraryQuery)
+    }
+
+    private var pendingMedia: PresentationPreviewCard.PendingMedia? {
+        guard let item = selectedItem else { return nil }
+        let thumb = item.thumbnailData.flatMap { NSImage(data: $0) }
+        return .init(thumbnail: thumb, kindRaw: item.mediaType, name: item.name)
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -27,20 +41,20 @@ struct MediaPreviewPanel: View {
 
             Divider()
 
-            // Media preview area
-            mediaPreview
+            // Preview: pending media letterboxed; live media mirrored.
+            PresentationPreviewCard(formatHint: "text", pendingMedia: pendingMedia)
                 .padding()
 
             Divider()
 
-            // Media action buttons
-            MediaActionBar(selectedItem: selectedItem)
-                .padding(.horizontal)
+            // Prev / Present / Next — the media counterpart of the verse controls.
+            MediaControlsBar(orderedItems: orderedItems)
+                .padding(.horizontal, 10)
                 .padding(.vertical, 8)
 
             Divider()
 
-            // Presentation controls (Black, Open Output)
+            // Presentation controls (Black, Freeze, Clear)
             PresentationControlsBar()
                 .padding(.horizontal)
                 .padding(.vertical, 8)
@@ -63,177 +77,114 @@ struct MediaPreviewPanel: View {
                 Divider()
             }
 
-            Spacer()
+            // Media output prefs (loop, fit/fill) + output hardware
+            StyleQuickSettings(sections: [.media, .output])
 
             Divider()
 
             // Theme switcher + Layout Editor access
-            PanelFooter()
+            PanelFooter(format: "media")
         }
         .background(.background)
-        .onKeyWindowNotification(.mediaItemSelected) { notification in
-            if let item = notification.object as? MediaItem {
-                selectedItem = item
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var mediaPreview: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 8)
-                .fill(.black)
-                .aspectRatio(16/9, contentMode: .fit)
-
-            if let item = selectedItem {
-                if item.mediaType == "image" {
-                    if let data = item.thumbnailData, let image = NSImage(data: data) {
-                        Image(nsImage: image)
-                            .resizable()
-                            .aspectRatio(contentMode: .fit)
-                            .clipShape(RoundedRectangle(cornerRadius: 8))
-                    } else {
-                        Image(systemName: "photo")
-                            .font(.system(size: 32))
-                            .foregroundStyle(.secondary)
-                    }
-                } else if item.mediaType == "video" {
-                    Image(systemName: "film")
-                        .font(.system(size: 32))
-                        .foregroundStyle(.secondary)
-                } else if item.mediaType == "audio" {
-                    VStack(spacing: 8) {
-                        Image(systemName: "waveform")
-                            .font(.system(size: 32))
-                            .foregroundStyle(.secondary)
-                        Text(item.name)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(2)
-                    }
-                }
-            } else {
-                VStack(spacing: 8) {
-                    Image(systemName: "photo.on.rectangle")
-                        .font(.system(size: 32))
-                        .foregroundStyle(.tertiary)
-                    Text(String(localized: "Select media to preview", comment: "Placeholder"))
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
-                }
-            }
-        }
-        .overlay(
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(Color.gray.opacity(0.3), lineWidth: 1)
-        )
-        .shadow(radius: 2)
     }
 }
 
-// MARK: - Media Action Bar
-struct MediaActionBar: View {
-    let selectedItem: MediaItem?
+// MARK: - Media Controls Bar (prev / present / next)
+
+struct MediaControlsBar: View {
+    let orderedItems: [MediaItem]
 
     @Environment(PresentationManager.self) private var pm
     @Environment(AudioPlayerManager.self) private var audioPlayerManager
     @Environment(VideoPlayerService.self) private var videoPlayerService
+    @Environment(LibraryManager.self) private var libraryManager
+
+    private var selectedItem: MediaItem? { libraryManager.selectedMediaItem }
+    private var liveMediaShowing: Bool {
+        pm.liveContent.isLive && pm.liveContent.contentType == .media
+    }
 
     var body: some View {
         VStack(spacing: 6) {
             if let item = selectedItem {
                 HStack(spacing: 6) {
-                    Image(systemName: iconForMediaType(item.mediaType))
+                    Image(systemName: (MediaKind(rawValue: item.mediaType) ?? .image).systemImage)
                         .font(.caption)
                         .foregroundStyle(Color.accentColor)
                     Text(item.name)
                         .font(.caption.bold())
                         .foregroundStyle(Color.accentColor)
                         .lineLimit(1)
+                        .truncationMode(.middle)
                     Spacer()
-                    Text(item.mediaType.capitalized)
-                        .font(.caption2)
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(Color.accentColor, in: Capsule())
+                    if let badge = item.durationBadge {
+                        Text(badge)
+                            .font(.caption2.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                    }
                 }
             }
 
             HStack(spacing: 8) {
-                if let item = selectedItem {
-                    if item.mediaType == "image" {
-                        Button {
-                            if let url = item.resolvedURL {
-                                let accessing = url.startAccessingSecurityScopedResource()
-                                pm.setBackgroundImage(from: url)
-                                if accessing { url.stopAccessingSecurityScopedResource() }
-                            }
-                        } label: {
-                            Label(
-                                String(localized: "Background", comment: "Button"),
-                                systemImage: "rectangle.inset.filled"
-                            )
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 34)
-                        }
-                        .buttonStyle(.borderedProminent)
-                    }
-
-                    if item.mediaType == "audio" {
-                        Button {
-                            if let url = item.resolvedURL {
-                                let accessing = url.startAccessingSecurityScopedResource()
-                                audioPlayerManager.loadAudio(url: url)
-                                audioPlayerManager.play()
-                                if accessing { url.stopAccessingSecurityScopedResource() }
-                            }
-                        } label: {
-                            Label(
-                                String(localized: "Play Audio", comment: "Button"),
-                                systemImage: "play.fill"
-                            )
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 34)
-                        }
-                        .buttonStyle(.borderedProminent)
-                    }
-
-                    if item.mediaType == "video" {
-                        Button {
-                            if let url = item.resolvedURL {
-                                videoPlayerService.isLooping = pm.videoLoopsByDefault
-                                videoPlayerService.loadVideo(url: url)
-                                videoPlayerService.play()
-                                pm.showVideo()
-                            }
-                        } label: {
-                            Label(
-                                String(localized: "Play Video", comment: "Button"),
-                                systemImage: "play.rectangle.fill"
-                            )
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 34)
-                        }
-                        .buttonStyle(.borderedProminent)
-                    }
-                } else {
-                    Text(String(localized: "No media selected", comment: "Placeholder"))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, minHeight: 34)
+                Button { step(-1) } label: {
+                    Image(systemName: "chevron.left")
+                        .frame(width: 34, height: 34)
                 }
+                .disabled(orderedItems.isEmpty)
+                .help(String(localized: "Media anterioară", comment: "Tooltip"))
+
+                if liveMediaShowing {
+                    Button { pm.clearOutput() } label: {
+                        Label(String(localized: "Ascunde", comment: "Button — hide live media"),
+                              systemImage: "stop.fill")
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 34)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.red)
+                } else {
+                    Button { presentSelected() } label: {
+                        Label(String(localized: "Proiectează", comment: "Button — present media"),
+                              systemImage: "play.fill")
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 34)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(selectedItem == nil)
+                }
+
+                Button { step(+1) } label: {
+                    Image(systemName: "chevron.right")
+                        .frame(width: 34, height: 34)
+                }
+                .disabled(orderedItems.isEmpty)
+                .help(String(localized: "Media următoare", comment: "Tooltip"))
+            }
+            .buttonStyle(.bordered)
+            .lineLimit(1)
+
+            if selectedItem == nil {
+                Text(String(localized: "Selectează un fișier media în galerie.", comment: "Placeholder"))
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
             }
         }
     }
 
-    private func iconForMediaType(_ type: String) -> String {
-        switch type {
-        case "image": return "photo"
-        case "audio": return "waveform"
-        case "video": return "film"
-        default: return "doc"
+    /// Step selection through the grid ordering; while media is live, stepping
+    /// presents the new item immediately (mirrors verse navigation while live).
+    private func step(_ direction: Int) {
+        guard let next = MediaLibrary.neighbor(of: selectedItem, in: orderedItems, direction: direction),
+              next.id != selectedItem?.id else { return }
+        libraryManager.selectedMediaItem = next
+        if liveMediaShowing, next.mediaType != "audio" {
+            presentSelected()
         }
+    }
+
+    private func presentSelected() {
+        guard let item = selectedItem else { return }
+        MediaPresenter.present(item, pm: pm, video: videoPlayerService, audio: audioPlayerManager)
     }
 }
 

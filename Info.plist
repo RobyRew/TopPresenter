@@ -39,6 +39,23 @@
 				</array>
 			</dict>
 		</dict>
+		<dict>
+			<key>UTTypeIdentifier</key>
+			<string>com.robyrew.toppresenter.schedule</string>
+			<key>UTTypeDescription</key>
+			<string>TopPresenter Session</string>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.json</string>
+			</array>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>tpschedule</string>
+				</array>
+			</dict>
+		</dict>
 	</array>
 	<key>CFBundleDocumentTypes</key>
 	<array>
@@ -50,6 +67,16 @@
 			<key>LSItemContentTypes</key>
 			<array>
 				<string>com.robyrew.toppresenter.theme</string>
+			</array>
+		</dict>
+		<dict>
+			<key>CFBundleTypeName</key>
+			<string>TopPresenter Session</string>
+			<key>CFBundleTypeRole</key>
+			<string>Viewer</string>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>com.robyrew.toppresenter.schedule</string>
 			</array>
 		</dict>
 	</array>

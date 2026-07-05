@@ -4,126 +4,173 @@
 //
 //  Created by Cosmin Calin on 14/03/2026.
 //
+//  The Media tab is a PRESENTABLE view, not a storage browser: type tabs
+//  (Toate | Foto | Video | Audio), a rich thumbnail grid (duration badges,
+//  audio artwork), search, and present-first interactions — click selects
+//  (preview in the right panel), double-click/Enter projects. All actions go
+//  through MediaPresenter; selection lives on LibraryManager so the right
+//  panel can step prev/next through the exact same filtered ordering.
+//
 
 import SwiftUI
 import SwiftData
 import UniformTypeIdentifiers
-import AVKit
+import AVFoundation
 
-/// Media management view for images, audio, and video files.
 struct MediaView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(PresentationManager.self) private var presentationManager
     @Environment(AudioPlayerManager.self) private var audioPlayerManager
+    @Environment(VideoPlayerService.self) private var videoPlayerService
     @Environment(LibraryManager.self) private var libraryManager
 
     @Query(sort: \MediaItem.importDate, order: .reverse) private var mediaItems: [MediaItem]
 
-    @AppStorage("mediaTypeFilter") private var mediaTypeFilterRaw: String = "all"
-    @State private var selectedItem: MediaItem?
-    @State private var videoService = VideoPlayerService()
+    /// Kind filter — same storage key the old toolbar filter used ("all" | kind raw).
+    @AppStorage("mediaTypeFilter") private var kindFilterRaw: String = "all"
+    /// Grid cell under the pointer (hover chrome).
+    @State private var hoveredItemID: UUID?
 
-    enum MediaTypeFilter: String, CaseIterable {
-        case all = "All"
-        case image = "Images"
-        case audio = "Audio"
-        case video = "Video"
-
-        var localizedName: String {
-            switch self {
-            case .all: return String(localized: "All", comment: "Media filter")
-            case .image: return String(localized: "Images", comment: "Media filter")
-            case .audio: return String(localized: "Audio", comment: "Media filter")
-            case .video: return String(localized: "Video", comment: "Media filter")
-            }
-        }
+    private var queryBinding: Binding<String> {
+        Binding(get: { libraryManager.mediaLibraryQuery },
+                set: { libraryManager.mediaLibraryQuery = $0 })
     }
 
-    // Driven by the TOOLBAR filter (shared @AppStorage key)
+    /// THE ordering — shared with the right panel via MediaLibrary.filter.
     private var filteredItems: [MediaItem] {
-        switch mediaTypeFilterRaw {
-        case "image": return mediaItems.filter { $0.mediaType == "image" }
-        case "audio": return mediaItems.filter { $0.mediaType == "audio" }
-        case "video": return mediaItems.filter { $0.mediaType == "video" }
-        default: return mediaItems
-        }
+        MediaLibrary.filter(mediaItems, kindRaw: kindFilterRaw, query: libraryManager.mediaLibraryQuery)
     }
 
     var body: some View {
         VStack(spacing: 0) {
-            // Filtering + Add Media live in the WINDOW TOOLBAR (shared filter key)
-
+            header
+            Divider()
             if filteredItems.isEmpty {
-                VStack(spacing: 16) {
-                    Image(systemName: "photo.on.rectangle.angled")
-                        .font(.system(size: 64))
-                        .foregroundStyle(.secondary)
-                    Text(String(localized: "No media files", comment: "Empty state"))
-                        .font(.title2)
-                    Text(String(localized: "Import images, audio, or video files.", comment: "Empty state message"))
-                        .foregroundStyle(.secondary)
-                    Button {
-                        importMedia()
-                    } label: {
-                        Label(
-                            String(localized: "Add Media", comment: "Button"),
-                            systemImage: "plus.circle.fill"
-                        )
-                    }
-                    .buttonStyle(.borderedProminent)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                emptyState
             } else {
-                HSplitView {
-                    // Media grid
-                    ScrollView {
-                        LazyVGrid(columns: [
-                            GridItem(.adaptive(minimum: 120, maximum: 180), spacing: 12)
-                        ], spacing: 12) {
-                            ForEach(filteredItems) { item in
-                                MediaGridItem(item: item, isSelected: selectedItem?.id == item.id)
-                                    .onTapGesture {
-                                        selectedItem = item
-                                        NotificationCenter.default.post(name: .mediaItemSelected, object: item)
-                                    }
-                                    .onTapGesture(count: 2) {
-                                        useMedia(item)
-                                    }
-                                    .contextMenu {
-                                        Button(String(localized: "Use as Background", comment: "Context menu")) {
-                            if item.mediaType == "image", let url = item.resolvedURL {
-                                let accessing = url.startAccessingSecurityScopedResource()
-                                presentationManager.setBackgroundImage(from: url)
-                                if accessing { url.stopAccessingSecurityScopedResource() }
-                            }
-                        }
-                                        Divider()
-
-                                        Button(String(localized: "Delete", comment: "Context menu"), role: .destructive) {
-                                            deleteMedia(item)
-                                        }
-                                    }
-                            }
-                        }
-                        .padding()
-                    }
-                    .frame(minWidth: 300)
-
-                    // Detail panel
-                    if let item = selectedItem {
-                        MediaDetailPanel(item: item, videoService: videoService)
-                            .frame(minWidth: 250, maxWidth: 350)
-                    }
-                }
+                grid
             }
         }
-        .onKeyWindowNotification(.importMedia) { _ in
-            importMedia()
+        .onKeyWindowNotification(.importMedia) { _ in importMedia() }
+    }
+
+    // MARK: - Header (type tabs + search + add)
+
+    private var header: some View {
+        HStack(spacing: 10) {
+            Picker("", selection: $kindFilterRaw) {
+                Text(String(localized: "Toate", comment: "Media kind filter — all")).tag("all")
+                ForEach(MediaKind.allCases) { kind in
+                    Text(kind.filterLabel).tag(kind.rawValue)
+                }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .frame(maxWidth: 320)
+
+            Spacer()
+
+            HStack(spacing: 4) {
+                Image(systemName: "magnifyingglass")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                TextField(String(localized: "Caută media…", comment: "Media search placeholder"),
+                          text: queryBinding)
+                    .textFieldStyle(.plain)
+                    .frame(width: 170)
+                if !libraryManager.mediaLibraryQuery.isEmpty {
+                    Button { libraryManager.mediaLibraryQuery = "" } label: {
+                        Image(systemName: "xmark.circle.fill").font(.caption)
+                    }
+                    .buttonStyle(.borderless)
+                    .foregroundStyle(.tertiary)
+                }
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(.quaternary.opacity(0.5), in: Capsule())
+
+            Button { importMedia() } label: {
+                Label(String(localized: "Adaugă", comment: "Add media button"), systemImage: "plus")
+            }
+            .controlSize(.small)
+            .help(String(localized: "Importă imagini, audio sau video", comment: "Tooltip"))
         }
-        // Mirror the highlighted media item so the tab title can read it.
-        .onChange(of: selectedItem) { _, newValue in
-            libraryManager.selectedMediaItem = newValue
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+    }
+
+    private var emptyState: some View {
+        ContentUnavailableView {
+            Label(String(localized: "Niciun fișier media", comment: "Empty state"),
+                  systemImage: "photo.on.rectangle.angled")
+        } description: {
+            Text(String(localized: "Importă imagini, audio sau video — sau ajustează filtrul/căutarea.", comment: "Empty state message"))
+        } actions: {
+            Button {
+                importMedia()
+            } label: {
+                Label(String(localized: "Adaugă media", comment: "Button"), systemImage: "plus.circle.fill")
+            }
+            .buttonStyle(.borderedProminent)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    // MARK: - Grid
+
+    private var grid: some View {
+        ScrollView {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 150, maximum: 210), spacing: 12)], spacing: 12) {
+                ForEach(filteredItems) { item in
+                    MediaCard(
+                        item: item,
+                        isSelected: libraryManager.selectedMediaItem?.id == item.id,
+                        isHovered: hoveredItemID == item.id
+                    )
+                    .onTapGesture(count: 2) { present(item) }
+                    .onTapGesture { libraryManager.selectedMediaItem = item }
+                    .onHover { inside in
+                        if inside { hoveredItemID = item.id }
+                        else if hoveredItemID == item.id { hoveredItemID = nil }
+                    }
+                    .contextMenu { itemMenu(item) }
+                }
+            }
+            .padding(12)
+        }
+        // Enter projects the selected item — present-first, like the song list.
+        .focusable()
+        .onKeyPress(.return) {
+            guard let item = libraryManager.selectedMediaItem else { return .ignored }
+            present(item)
+            return .handled
+        }
+    }
+
+    @ViewBuilder
+    private func itemMenu(_ item: MediaItem) -> some View {
+        Button { present(item) } label: {
+            Label(String(localized: "Proiectează", comment: "Menu"), systemImage: "play.fill")
+        }
+        if item.mediaType != "audio" {
+            Button { MediaPresenter.setAsBackground(item, pm: presentationManager) } label: {
+                Label(String(localized: "Folosește ca fundal", comment: "Menu"), systemImage: "photo.fill")
+            }
+        }
+        AddToSessionMenu(draft: { .media(item) })
+        Divider()
+        Button(role: .destructive) { deleteMedia(item) } label: {
+            Label(String(localized: "Șterge", comment: "Menu"), systemImage: "trash")
+        }
+    }
+
+    // MARK: - Actions
+
+    private func present(_ item: MediaItem) {
+        libraryManager.selectedMediaItem = item
+        MediaPresenter.present(item, pm: presentationManager,
+                               video: videoPlayerService, audio: audioPlayerManager)
     }
 
     private func importMedia() {
@@ -131,219 +178,141 @@ struct MediaView: View {
         panel.allowedContentTypes = [.image, .audio, .movie, .mpeg4Movie, .mpeg4Audio, .mp3, .wav, .aiff]
         panel.allowsMultipleSelection = true
         panel.canChooseDirectories = false
+        guard panel.runModal() == .OK else { return }
 
-        if panel.runModal() == .OK {
-            for url in panel.urls {
-                let mediaType = classifyMediaType(url)
-                let item = MediaItem(
-                    name: url.lastPathComponent,
-                    filePath: url.path,
-                    mediaType: mediaType
-                )
-
-                // Generate thumbnail for images
-                if mediaType == "image", let image = NSImage(contentsOf: url) {
-                    let thumbnailSize = NSSize(width: 200, height: 200)
-                    let thumbnail = image.resized(to: thumbnailSize)
-                    item.thumbnailData = thumbnail?.tiffRepresentation
-                }
-
-                modelContext.insert(item)
-
-                // Create security-scoped bookmark for persistent access
-                item.createBookmark(from: url)
+        for url in panel.urls {
+            let kind = MediaKind.classify(extension: url.pathExtension)
+            let item = MediaItem(name: url.lastPathComponent, filePath: url.path, mediaType: kind.rawValue)
+            modelContext.insert(item)
+            item.createBookmark(from: url)
+            // Thumbnail + duration are probed asynchronously so a big import
+            // never blocks the UI; the grid updates as they land.
+            Task { @MainActor in
+                item.thumbnailData = await MediaThumbnailFactory.thumbnailData(for: url, kind: kind)
+                try? modelContext.save()
             }
-            try? modelContext.save()
+            MediaPresenter.backfillDurationIfNeeded(item, url: url)
         }
-    }
-
-    private func classifyMediaType(_ url: URL) -> String {
-        let ext = url.pathExtension.lowercased()
-        let imageExts = ["jpg", "jpeg", "png", "gif", "bmp", "tiff", "heic", "webp"]
-        let audioExts = ["mp3", "wav", "aac", "m4a", "flac", "aiff", "ogg", "wma"]
-        let videoExts = ["mp4", "mov", "avi", "mkv", "m4v", "wmv", "webm"]
-
-        if imageExts.contains(ext) { return "image" }
-        if audioExts.contains(ext) { return "audio" }
-        if videoExts.contains(ext) { return "video" }
-        return "image"
-    }
-
-    private func useMedia(_ item: MediaItem) {
-        guard let url = item.resolvedURL else { return }
-        let accessing = url.startAccessingSecurityScopedResource()
-        defer { if accessing { url.stopAccessingSecurityScopedResource() } }
-
-        switch item.mediaType {
-        case "image":
-            presentationManager.setBackgroundImage(from: url)
-        case "audio":
-            audioPlayerManager.loadAudio(url: url)
-            audioPlayerManager.play()
-        case "video":
-            videoService.loadVideo(url: url)
-            videoService.play()
-        default:
-            break
-        }
+        try? modelContext.save()
     }
 
     private func deleteMedia(_ item: MediaItem) {
-        if selectedItem?.id == item.id {
-            selectedItem = nil
+        if libraryManager.selectedMediaItem?.id == item.id {
+            libraryManager.selectedMediaItem = nil
         }
         modelContext.delete(item)
         try? modelContext.save()
     }
 }
 
-// MARK: - Media Grid Item
-struct MediaGridItem: View {
+// MARK: - Media Card (rich grid cell)
+
+struct MediaCard: View {
     let item: MediaItem
     let isSelected: Bool
+    let isHovered: Bool
+
+    private var kind: MediaKind { MediaKind(rawValue: item.mediaType) ?? .image }
 
     var body: some View {
-        VStack(spacing: 4) {
+        VStack(spacing: 0) {
             ZStack {
                 RoundedRectangle(cornerRadius: 8)
                     .fill(.quaternary)
-                    .aspectRatio(1, contentMode: .fit)
 
-                if item.mediaType == "image" {
-                    if let data = item.thumbnailData, let image = NSImage(data: data) {
-                        Image(nsImage: image)
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                            .clipShape(RoundedRectangle(cornerRadius: 8))
-                    } else {
-                        Image(systemName: "photo")
-                            .font(.title)
-                            .foregroundStyle(.secondary)
-                    }
-                } else if item.mediaType == "audio" {
-                    Image(systemName: "waveform")
-                        .font(.title)
-                        .foregroundStyle(.secondary)
-                } else if item.mediaType == "video" {
-                    Image(systemName: "film")
+                if let data = item.thumbnailData, let image = NSImage(data: data) {
+                    Image(nsImage: image)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                } else {
+                    Image(systemName: kind.systemImage)
                         .font(.title)
                         .foregroundStyle(.secondary)
                 }
-            }
-            .overlay(
-                RoundedRectangle(cornerRadius: 8)
-                    .stroke(isSelected ? Color.accentColor : .clear, lineWidth: 3)
-            )
 
-            Text(item.name)
-                .font(.caption)
-                .lineLimit(2)
-                .multilineTextAlignment(.center)
+                // Video gets a subtle play affordance over the thumbnail.
+                if kind == .video, item.thumbnailData != nil {
+                    Image(systemName: "play.circle.fill")
+                        .font(.title2)
+                        .foregroundStyle(.white.opacity(isHovered ? 0.95 : 0.7))
+                        .shadow(radius: 3)
+                }
+            }
+            .aspectRatio(16.0 / 10.0, contentMode: .fit)
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .overlay(alignment: .bottomTrailing) {
+                if let badge = item.durationBadge {
+                    Text(badge)
+                        .font(.system(size: 9, weight: .semibold).monospacedDigit())
+                        .padding(.horizontal, 5).padding(.vertical, 2)
+                        .background(.black.opacity(0.65), in: Capsule())
+                        .foregroundStyle(.white)
+                        .padding(5)
+                }
+            }
+            .overlay(alignment: .topLeading) {
+                Image(systemName: kind.systemImage)
+                    .font(.system(size: 9, weight: .semibold))
+                    .padding(4)
+                    .background(.black.opacity(0.55), in: Circle())
+                    .foregroundStyle(.white)
+                    .padding(5)
+            }
+
+            HStack(spacing: 4) {
+                Text(item.name)
+                    .font(.caption)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 6)
+            .padding(.vertical, 5)
         }
+        .background(
+            isSelected ? Color.accentColor.opacity(0.18) : Color.secondary.opacity(0.08),
+            in: RoundedRectangle(cornerRadius: 10)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(isSelected ? Color.accentColor : Color.clear, lineWidth: 1.5)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .contentShape(RoundedRectangle(cornerRadius: 10))
     }
 }
 
-// MARK: - Media Detail Panel
-struct MediaDetailPanel: View {
-    let item: MediaItem
-    let videoService: VideoPlayerService
+// MARK: - Thumbnails (import-time)
 
-    @Environment(PresentationManager.self) private var presentationManager
-    @Environment(AudioPlayerManager.self) private var audioPlayerManager
-
-    var body: some View {
-        VStack(spacing: 12) {
-            Text(item.name)
-                .font(.headline)
-                .lineLimit(2)
-
-            Text(item.mediaType.capitalized)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-
-            Divider()
-
-            // Preview
-            if item.mediaType == "image" {
-                if let url = item.resolvedURL,
-                   let image = NSImage(contentsOf: url) {
-                    Image(nsImage: image)
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .frame(maxHeight: 200)
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                }
-            } else if item.mediaType == "video" {
-                if let player = videoService.player {
-                    VideoPlayer(player: player)
-                        .frame(height: 200)
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                }
+enum MediaThumbnailFactory {
+    /// Import-time thumbnail: image → resized bitmap; video → first-second frame;
+    /// audio → embedded artwork if present. Returns nil when unavailable.
+    static func thumbnailData(for url: URL, kind: MediaKind) async -> Data? {
+        switch kind {
+        case .image:
+            guard let image = NSImage(contentsOf: url) else { return nil }
+            return image.resized(to: NSSize(width: 320, height: 200))?.tiffRepresentation
+        case .video:
+            let asset = AVURLAsset(url: url)
+            let generator = AVAssetImageGenerator(asset: asset)
+            generator.appliesPreferredTrackTransform = true
+            generator.maximumSize = CGSize(width: 640, height: 400)
+            guard let cg = try? await generator.image(at: CMTime(seconds: 1, preferredTimescale: 600)).image
+            else { return nil }
+            return NSImage(cgImage: cg, size: .zero).tiffRepresentation
+        case .audio:
+            let asset = AVURLAsset(url: url)
+            guard let metadata = try? await asset.load(.commonMetadata) else { return nil }
+            for meta in metadata where meta.commonKey == .commonKeyArtwork {
+                if let data = try? await meta.load(.dataValue) { return data }
             }
-
-            Spacer()
-
-            // Actions
-            VStack(spacing: 8) {
-                if item.mediaType == "image" {
-                    Button {
-                        if let url = item.resolvedURL {
-                            let accessing = url.startAccessingSecurityScopedResource()
-                            presentationManager.setBackgroundImage(from: url)
-                            if accessing { url.stopAccessingSecurityScopedResource() }
-                        }
-                    } label: {
-                        Label(
-                            String(localized: "Set as Background", comment: "Button"),
-                            systemImage: "photo.fill"
-                        )
-                        .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.borderedProminent)
-                }
-
-                if item.mediaType == "audio" {
-                    Button {
-                        if let url = item.resolvedURL {
-                            let accessing = url.startAccessingSecurityScopedResource()
-                            audioPlayerManager.loadAudio(url: url)
-                            audioPlayerManager.play()
-                            if accessing { url.stopAccessingSecurityScopedResource() }
-                        }
-                    } label: {
-                        Label(
-                            String(localized: "Play Audio", comment: "Button"),
-                            systemImage: "play.fill"
-                        )
-                        .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.borderedProminent)
-                }
-
-                if item.mediaType == "video" {
-                    Button {
-                        if let url = item.resolvedURL {
-                            let accessing = url.startAccessingSecurityScopedResource()
-                            videoService.loadVideo(url: url)
-                            videoService.play()
-                            if accessing { url.stopAccessingSecurityScopedResource() }
-                        }
-                    } label: {
-                        Label(
-                            String(localized: "Play Video", comment: "Button"),
-                            systemImage: "play.fill"
-                        )
-                        .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.borderedProminent)
-                }
-            }
+            return nil
         }
-        .padding()
     }
 }
 
 // MARK: - NSImage Extension
+
 extension NSImage {
     func resized(to targetSize: NSSize) -> NSImage? {
         let newImage = NSImage(size: targetSize)

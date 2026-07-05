@@ -249,9 +249,9 @@ extension Notification.Name {
     static let deleteBibleModule = Notification.Name("TopPresenter.deleteBibleModule")
     static let deleteSongCollection = Notification.Name("TopPresenter.deleteSongCollection")
 
-    // Panel communication (content area → preview panel)
-    static let mediaItemSelected = Notification.Name("TopPresenter.mediaItemSelected")
-    static let scheduleSelected = Notification.Name("TopPresenter.scheduleSelected")
+    // Panel communication (content area → preview panel).
+    // Media/schedule selection now flows through LibraryManager (selectedMediaItem /
+    // selectedSchedule) — no notification round-trips.
     static let slideSelected = Notification.Name("TopPresenter.slideSelected")
 
     // Content area toolbar actions
