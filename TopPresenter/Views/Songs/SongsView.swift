@@ -595,6 +595,7 @@ struct SongDetailPanel: View {
     @Environment(LibraryManager.self) private var libraryManager
     @Environment(HistoryStore.self) private var historyStore
     @Environment(AppState.self) private var appState
+    @Environment(\.modelContext) private var modelContext
     @AppStorage("song_maxLinesPerSlide") private var maxLines: Int = 6
     @AppStorage("song_bilingual") private var bilingual: Bool = false
 
@@ -675,20 +676,41 @@ struct SongDetailPanel: View {
                 }
             }
             if song.sortedVersions.count > 1 {
-                Picker("", selection: Binding(
-                    get: { (libraryManager.selectedSongVersion ?? song.activeVersion)?.id },
-                    set: { id in
-                        if let id, let v = song.versions.first(where: { $0.id == id }) {
-                            libraryManager.selectSongVersion(v)
+                HStack(spacing: 6) {
+                    Picker("", selection: Binding(
+                        get: { (libraryManager.selectedSongVersion ?? song.activeVersion)?.id },
+                        set: { id in
+                            if let id, let v = song.versions.first(where: { $0.id == id }) {
+                                libraryManager.selectSongVersion(v)
+                            }
+                        }
+                    )) {
+                        ForEach(song.sortedVersions) { v in
+                            Text(verbatim: (song.originalVersionID == v.id.uuidString ? "★ " : "")
+                                 + (v.name.isEmpty ? String(localized: "Versiune", comment: "Version") : v.name))
+                                .tag(Optional(v.id))
                         }
                     }
-                )) {
-                    ForEach(song.sortedVersions) { v in
-                        Text(v.name.isEmpty ? String(localized: "Versiune", comment: "Version") : v.name)
-                            .tag(Optional(v.id))
+                    .labelsHidden().fixedSize()
+
+                    // Mark the shown version as ORIGINAL — the default that gets
+                    // presented, searched first and exported as "original": true.
+                    let shown = libraryManager.selectedSongVersion ?? song.activeVersion
+                    let isOriginal = shown.map { song.originalVersionID == $0.id.uuidString } ?? false
+                    Button {
+                        guard let shown else { return }
+                        song.originalVersionID = shown.id.uuidString
+                        ImportService.applyOriginalVersionChange(for: song, modelContext: modelContext)
+                    } label: {
+                        Image(systemName: isOriginal ? "star.fill" : "star")
+                            .foregroundStyle(isOriginal ? .yellow : .secondary)
                     }
+                    .buttonStyle(.borderless)
+                    .disabled(isOriginal)
+                    .help(isOriginal
+                          ? String(localized: "Versiunea originală (implicită)", comment: "Tooltip")
+                          : String(localized: "Marchează ca original — devine versiunea implicită", comment: "Tooltip"))
                 }
-                .labelsHidden().fixedSize()
             }
 
             // Quick song facts — most chips search for more songs with that value.
@@ -1852,7 +1874,7 @@ struct SongEditorSheet: View {
                                 onFocus: { focusedSectionID = section.id },
                                 onMoveUp: { move(section, by: -1, in: version) },
                                 onMoveDown: { move(section, by: 1, in: version) },
-                                onDelete: { modelContext.delete(section) },
+                                onDelete: { deleteSection(section, in: version) },
                                 onDuplicate: { duplicateSection(section, in: version) },
                                 onDrop: { draggedID in reorder(draggedID: draggedID, before: section, in: version) }
                             )
@@ -1971,6 +1993,17 @@ struct SongEditorSheet: View {
                             label: "\(songTypeLabel(type)) \(n + 1)", order: n, lines: [SongLine(text: "")])
         s.version = version
         focusedSectionID = s.id
+    }
+
+    /// Delete a strofă: remove it from the version's relationship (so the card
+    /// list refreshes immediately), renumber the remaining sections (no order
+    /// gaps), and delete the model. Committed at „Gata"; „Renunță" still reverts
+    /// via the GOAT snapshot.
+    private func deleteSection(_ section: SongSection, in version: SongVersion) {
+        if focusedSectionID == section.id { focusedSectionID = nil }
+        version.sections.removeAll { $0.id == section.id }
+        modelContext.delete(section)
+        for (i, s) in version.sortedSections.enumerated() { s.order = i }
     }
 
     private func duplicateSection(_ section: SongSection, in version: SongVersion) {

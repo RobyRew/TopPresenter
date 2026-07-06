@@ -172,7 +172,9 @@ final class DragDropImportHandler {
         var seen = Set<String>()
         func add(_ u: URL) { let p = u.standardizedFileURL.path; if seen.insert(p).inserted { out.append(u) } }
         func walk(_ url: URL, depth: Int) {
-            guard depth < 8 else { return }   // guard against pathological trees
+            // Selected folder = 0; recurse through at most TWO subfolder levels —
+            // files INSIDE the 2nd subfolder (depth 3) still import; deeper is ignored.
+            guard depth <= 3 else { return }
             var isDir: ObjCBool = false
             guard fm.fileExists(atPath: url.path, isDirectory: &isDir) else { return }
             if !isDir.boolValue {
@@ -184,6 +186,8 @@ final class DragDropImportHandler {
             }
             // A USFM Bible is a folder of per-book files → one source, kept whole.
             if ImportService.detectBibleFormat(fileURL: url) == .usfm { add(url); return }
+            // Don't descend past the 2nd subfolder level.
+            guard depth < 3 else { return }
             // Otherwise recurse into the folder's children.
             let children = (try? fm.contentsOfDirectory(
                 at: url, includingPropertiesForKeys: [.isDirectoryKey],

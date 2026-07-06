@@ -281,10 +281,16 @@ import SwiftData
         try writeBible(lang1.appendingPathComponent("B.json"))
         try writeBible(lang2deep.appendingPathComponent("C.json"))     // nested subfolder
         try "not a bible".data(using: .utf8)!.write(to: root.appendingPathComponent("readme.txt"))
+        // Beyond the 2-subfolder limit -> must be IGNORED.
+        let tooDeep = root.appendingPathComponent("English/extra/way")
+        try fm.createDirectory(at: tooDeep, withIntermediateDirectories: true)
+        try writeBible(tooDeep.appendingPathComponent("D.json"))
 
-        // Picking the ROOT folder finds every Bible at any depth, ignoring junk.
+        // Picking the ROOT folder finds Bibles up to 2 subfolder levels deep,
+        // ignoring junk and anything deeper.
         let expanded = DragDropImportHandler.expandToImportableFiles([root])
         #expect(expanded.filter { $0.pathExtension == "json" }.count == 3)
+        #expect(!expanded.contains { $0.lastPathComponent == "D.json" })
 
         let pending = DragDropImportHandler.classifyExpanded([root])
         let bibles = pending.filter { if case .bible = $0.category { return true }; return false }

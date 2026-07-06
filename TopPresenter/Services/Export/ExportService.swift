@@ -403,6 +403,7 @@ final class ExportService {
         if !version.notes.isEmpty { dict["notes"] = version.notes }
         if !version.repeatStyle.isEmpty { dict["repeatStyle"] = version.repeatStyle }
         if version.overridesMetadata { dict["overridesMetadata"] = true }
+        if version.song?.originalVersionID == version.id.uuidString { dict["original"] = true }
         if !version.arrangement.isEmpty { dict["arrangement"] = version.arrangement }
         dict["sections"] = version.sortedSections.map { sectionDictV2($0) }
         return dict

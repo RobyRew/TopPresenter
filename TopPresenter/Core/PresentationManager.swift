@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import SwiftData
 import Observation
 import AppKit
 
@@ -123,6 +124,11 @@ final class PresentationManager {
     /// Enable this to show the background color behind content.
     var backgroundEnabled: Bool {
         didSet { UserDefaults.standard.set(backgroundEnabled, forKey: "pm_backgroundEnabled") }
+    }
+    /// Ascunde/Clear hides only the CONTENT — the theme background stays up.
+    /// Part of the look (theme-persisted); default ON, toggleable in Fundal.
+    var backgroundStaysOnHide: Bool {
+        didSet { UserDefaults.standard.set(backgroundStaysOnHide, forKey: "pm_backgroundStaysOnHide") }
     }
 
     // MARK: - Media Helpers (bookmarks + type detection)
@@ -1865,6 +1871,7 @@ final class PresentationManager {
         var globalTextOpacity: Double = 1.0
         // Global background
         var backgroundEnabled: Bool = false
+        var backgroundStaysOnHide: Bool = true
         var backgroundColorHex: String = PresentationDefaults.backgroundColor
         var backgroundOpacity: Double = PresentationDefaults.backgroundOpacity
         var useBackgroundImage: Bool = false
@@ -1894,6 +1901,7 @@ final class PresentationManager {
             globalVAlignRaw = try c.decodeIfPresent(String.self, forKey: .globalVAlignRaw) ?? "center"
             globalTextOpacity = try c.decodeIfPresent(Double.self, forKey: .globalTextOpacity) ?? 1.0
             backgroundEnabled = try c.decodeIfPresent(Bool.self, forKey: .backgroundEnabled) ?? false
+            backgroundStaysOnHide = try c.decodeIfPresent(Bool.self, forKey: .backgroundStaysOnHide) ?? true
             backgroundColorHex = try c.decodeIfPresent(String.self, forKey: .backgroundColorHex) ?? PresentationDefaults.backgroundColor
             backgroundOpacity = try c.decodeIfPresent(Double.self, forKey: .backgroundOpacity) ?? PresentationDefaults.backgroundOpacity
             useBackgroundImage = try c.decodeIfPresent(Bool.self, forKey: .useBackgroundImage) ?? false
@@ -1972,6 +1980,7 @@ final class PresentationManager {
         p.useBackgroundImage = useBackgroundImage
         p.backgroundImageBookmark = UserDefaults.standard.data(forKey: "pm_backgroundImageBookmark")
         p.backgroundMediaTypeRaw = backgroundMediaTypeRaw
+        p.backgroundStaysOnHide = backgroundStaysOnHide
         p.profiles = profiles
         return p
     }
@@ -2277,6 +2286,7 @@ final class PresentationManager {
         backgroundOpacity = p.backgroundOpacity
         useBackgroundImage = p.useBackgroundImage
         backgroundMediaTypeRaw = p.backgroundMediaTypeRaw
+        backgroundStaysOnHide = p.backgroundStaysOnHide
         if let bookmark = p.backgroundImageBookmark {
             UserDefaults.standard.set(bookmark, forKey: "pm_backgroundImageBookmark")
             restoreBackgroundImage(from: bookmark)
@@ -2562,6 +2572,7 @@ final class PresentationManager {
         self.useBackgroundImage = d.bool(forKey: "pm_useBackgroundImage")
         self.backgroundMediaTypeRaw = d.string(forKey: "pm_backgroundMediaTypeRaw") ?? "image" 
         self.backgroundEnabled = d.bool(forKey: "pm_backgroundEnabled") // defaults to false = transparent
+        self.backgroundStaysOnHide = d.object(forKey: "pm_backgroundStaysOnHide") as? Bool ?? true
         self.windowLevel = d.string(forKey: "pm_windowLevel") ?? "alwaysOnTop"
         self.autoFitVerseFont = d.bool(forKey: "pm_autoFitVerseFont")
         self.videoLoopsByDefault = d.object(forKey: "pm_videoLoopsByDefault") as? Bool ?? true
@@ -2720,6 +2731,7 @@ final class PresentationManager {
         flushHistory()              // record the last-shown item (if it dwelled)
         currentSessionKey = ""      // a clear ends the presentation session
         contentChangeKind = "clear"
+        bibleLiveAnchor = nil       // the presented flow ended — ←/→ re-follow selection
         // Resolve the exit duration BEFORE clearing (it needs the live profile).
         let exitDuration = resolvedTransitionDuration(phase: "clear", in: outputProfileKey)
         withAnimation(.easeInOut(duration: exitDuration)) {
@@ -2768,6 +2780,112 @@ final class PresentationManager {
         }
     }
 
+    // MARK: - Live Bible Anchor (the PRESENTED flow, independent of browsing)
+
+    /// What's on the projector: translation + book/chapter + verse range.
+    /// ←/→ advance THIS — browsing/selecting in the Bible list never moves the
+    /// live flow; Show / double-click re-anchor. Ephemeral (not persisted).
+    struct BibleLiveAnchor: Equatable {
+        var translation: String
+        var bookNumber: Int
+        var chapter: Int
+        var verseStart: Int
+        var verseEnd: Int
+    }
+    private(set) var bibleLiveAnchor: BibleLiveAnchor?
+
+    /// Step the live anchor ±1 block (same range size), crossing chapter
+    /// boundaries; `direction: 0` re-presents the anchor in place (used when
+    /// display settings change). Pushes live + updates the anchor. Returns
+    /// false when the anchor can't resolve or can't move further.
+    @discardableResult
+    func stepBibleAnchor(direction: Int, context: ModelContext) -> Bool {
+        guard let anchor = bibleLiveAnchor else { return false }
+        let wanted = anchor.translation.lowercased()
+        let modules = (try? context.fetch(FetchDescriptor<BibleModule>())) ?? []
+        guard let module = modules.first(where: { $0.abbreviation.lowercased() == wanted }),
+              let book = module.books.first(where: { $0.bookNumber == anchor.bookNumber })
+        else { return false }
+
+        let chapters = book.chapters.sorted { $0.chapterNumber < $1.chapterNumber }
+        guard let chapterIdx = chapters.firstIndex(where: { $0.chapterNumber == anchor.chapter }) else { return false }
+        let block = max(anchor.verseEnd - anchor.verseStart + 1, 1)
+
+        var targetChapter = chapters[chapterIdx]
+        var verses = targetChapter.verses.sorted { $0.verseNumber < $1.verseNumber }
+        guard let startIdx = verses.firstIndex(where: { $0.verseNumber >= anchor.verseStart }) else { return false }
+
+        var newStart: Int
+        switch direction {
+        case 0:
+            newStart = startIdx
+        case let d where d > 0:
+            newStart = startIdx + block
+            if newStart >= verses.count {
+                guard chapterIdx + 1 < chapters.count else { return false }
+                targetChapter = chapters[chapterIdx + 1]
+                verses = targetChapter.verses.sorted { $0.verseNumber < $1.verseNumber }
+                newStart = 0
+            }
+        default:
+            newStart = startIdx - block
+            if newStart < 0 {
+                guard chapterIdx > 0 else { return false }
+                targetChapter = chapters[chapterIdx - 1]
+                verses = targetChapter.verses.sorted { $0.verseNumber < $1.verseNumber }
+                newStart = max(verses.count - block, 0)
+            }
+        }
+        guard !verses.isEmpty, newStart >= 0, newStart < verses.count else { return false }
+        let slice = Array(verses[newStart ..< min(newStart + block, verses.count)])
+        guard let first = slice.first, let last = slice.last else { return false }
+
+        // Text: same multi-verse settings as the Bible panel (theme-driven).
+        let mv = bibleMultiVerse
+        let separator = mv.layout == "newLine" ? "\n" : " "
+        var joined = slice
+            .map { mv.showNumbers ? "(\($0.verseNumber)) \($0.text)" : $0.text }
+            .joined(separator: separator)
+        let range = first.verseNumber == last.verseNumber
+            ? "\(first.verseNumber)" : "\(first.verseNumber)-\(last.verseNumber)"
+        let reference = "\(book.name) \(targetChapter.chapterNumber):\(range)"
+        if mv.customEnabled, slice.count > 1 {
+            let template = mv.customText.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !template.isEmpty {
+                var out = template
+                    .replacingOccurrences(of: "{verses}", with: joined)
+                    .replacingOccurrences(of: "{ref}", with: reference)
+                    .replacingOccurrences(of: "{n}", with: "\(slice.count)")
+                if !template.contains("{verses}") { out += separator + joined }
+                joined = out
+            }
+        }
+
+        // Rich casete sources — mirrors the selection-based accessors.
+        let footnote = slice.flatMap { $0.footnotes }
+            .map { $0.marker.isEmpty ? $0.text : "\($0.marker) \($0.text)" }
+            .joined(separator: "\n")
+        let crossRef = slice.flatMap { $0.crossReferences }
+            .flatMap { ref in [ref.label].compactMap { $0 } + ref.targets }
+            .joined(separator: "; ")
+        let lo = first.verseNumber, hi = last.verseNumber
+        let heading = targetChapter.headings
+            .filter { $0.beforeVerse >= lo && $0.beforeVerse <= hi }
+            .map { $0.text }.joined(separator: "\n")
+        let gloss = slice.map { $0.gloss }.filter { !$0.isEmpty }.joined(separator: " ")
+        let runs = slice.count == 1 ? first.runs : []
+        let strongs = slice.count == 1 ? first.runs.compactMap { $0.strong }.joined(separator: " ") : ""
+
+        showBibleVerse(text: joined, reference: reference, translationName: module.abbreviation,
+                       runs: runs, footnote: footnote, crossReference: crossRef, heading: heading,
+                       gloss: gloss, strongs: strongs,
+                       bookNumber: book.bookNumber, bookName: book.name,
+                       chapter: targetChapter.chapterNumber,
+                       verseStart: first.verseNumber, verseEnd: last.verseNumber,
+                       translation: module.abbreviation)
+        return true
+    }
+
     func showBibleVerse(text: String, reference: String, translationName: String = "", runs: [VerseRun] = [],
                         footnote: String = "", crossReference: String = "", heading: String = "",
                         gloss: String = "", strongs: String = "",
@@ -2775,6 +2893,13 @@ final class PresentationManager {
                         verseStart: Int = 0, verseEnd: Int = 0, translation: String = "",
                         slideIndex: Int = 0, slideCount: Int = 1) {
         guard !isFrozen else { return }
+        // Re-anchor the LIVE flow whenever a presenter supplies real coordinates
+        // (Show button, double-click, session runner). Browsing never gets here.
+        if chapter > 0, verseStart > 0, !translation.isEmpty {
+            bibleLiveAnchor = BibleLiveAnchor(translation: translation, bookNumber: bookNumber,
+                                              chapter: chapter, verseStart: verseStart,
+                                              verseEnd: max(verseEnd, verseStart))
+        }
         beginHistory(HistoryItem(contentType: "bible", sessionKey: "\(translation):\(bookNumber):\(chapter)",
                                  translation: translation, translationName: translationName, bookName: bookName,
                                  reference: reference, bookNumber: bookNumber, chapter: chapter,

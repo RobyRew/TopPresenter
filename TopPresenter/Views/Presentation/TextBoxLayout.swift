@@ -2422,7 +2422,10 @@ struct LayoutEditorSheet: View {
                         if enabled {
                             onEnable()
                         } else {
-                            style.wrappedValue.isCustomized = false
+                            // Full reset to sentinels — not just the flag. Stale
+                            // per-box values must never linger, so the box truly
+                            // re-inherits every global parameter from now on.
+                            style.wrappedValue = PresentationManager.BoxTextStyle()
                         }
                     }
                 )) {
@@ -3202,6 +3205,16 @@ struct LayoutEditorSheet: View {
         VStack(alignment: .leading, spacing: 10) {
             GroupBox {
                 VStack(alignment: .leading, spacing: 8) {
+                    Toggle(isOn: pmBinding.backgroundStaysOnHide) {
+                        Text(String(localized: "Fundalul rămâne la Ascundere", comment: "Setting label — background stays on hide"))
+                            .font(.caption)
+                    }
+                    .toggleStyle(.switch)
+                    .controlSize(.small)
+                    .help(String(localized: "La Ascunde/Golește se ascunde doar conținutul — fundalul temei rămâne pe ecran. Dezactivează pentru ecran complet gol.", comment: "Tooltip"))
+
+                    Divider()
+
                     Toggle(isOn: pmBinding.backgroundEnabled) {
                         Text(String(localized: "Culoare de fundal", comment: "Setting label"))
                             .font(.caption)

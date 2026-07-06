@@ -230,10 +230,10 @@ struct PresentationPreviewCard: View {
                 // Black bg (stands in for transparent on projector)
                 Color.black
 
-                // Background layers — per-content override or global
-                if pm.isBlackScreen {
-                    // Full black — nothing else rendered
-                } else if pm.liveContent.isLive, pm.liveContent.contentType == .media {
+                // Background layers — per-content override or global.
+                // NOTE: Black/Freeze affect ONLY the output — the preview keeps
+                // showing content (status badges signal the output state).
+                if pm.liveContent.isLive, pm.liveContent.contentType == .media {
                     // Live full-screen media mirror (image decoded at present time;
                     // video shows a placeholder — the real frames play on the output).
                     if let image = pm.liveContent.mediaImage {
@@ -459,8 +459,17 @@ struct PresentationPreviewCard: View {
             HStack {
                 Spacer()
                 HStack(spacing: 4) {
-                    if pm.isFrozen && isPreviewOnly {
-                        Text("FROZEN")
+                    // Output-state badges — the preview itself never goes black/frozen.
+                    if pm.isBlackScreen {
+                        Text(String(localized: "NEGRU", comment: "Preview badge — output is black"))
+                            .font(.system(size: 8, weight: .bold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 2)
+                            .background(.red.opacity(0.85), in: Capsule())
+                    }
+                    if pm.isFrozen {
+                        Text(String(localized: "ÎNGHEȚAT", comment: "Preview badge — output frozen"))
                             .font(.system(size: 8, weight: .bold))
                             .foregroundStyle(.white)
                             .padding(.horizontal, 5)
@@ -521,6 +530,7 @@ struct PresentationPreviewCard: View {
 struct VerseSlideControlsBar: View {
     @Environment(PresentationManager.self) private var pm
     @Environment(LibraryManager.self) private var libraryManager
+    @Environment(\.modelContext) private var modelContext
 
     /// Whether there's anything live on screen.
     private var isLive: Bool {
@@ -564,9 +574,22 @@ struct VerseSlideControlsBar: View {
         )
     }
 
-    /// Push the current selection to live output.
+    /// Re-render the LIVE content when display settings change. While a bible
+    /// anchor is live this re-presents the ANCHOR (what's on the projector) —
+    /// never the browse selection.
     private func updateLiveOutput() {
         guard pm.liveContent.isLive else { return }
+        if pm.bibleLiveAnchor != nil {
+            _ = pm.stepBibleAnchor(direction: 0, context: modelContext)
+            return
+        }
+        presentSelection()
+    }
+
+    /// Push the current SELECTION live (Show button) — supplies the structured
+    /// coordinates so the live flow re-anchors here.
+    private func presentSelection() {
+        let numbers = libraryManager.selectedVerses.map(\.verseNumber)
         pm.showBibleVerse(
             text: formattedText,
             reference: libraryManager.selectedVersesReference,
@@ -576,25 +599,27 @@ struct VerseSlideControlsBar: View {
             crossReference: libraryManager.selectedVersesCrossRefs,
             heading: libraryManager.selectedVersesHeading,
             gloss: libraryManager.selectedVersesGloss,
-            strongs: libraryManager.selectedVersesStrongs
+            strongs: libraryManager.selectedVersesStrongs,
+            bookNumber: libraryManager.selectedBook?.bookNumber ?? 0,
+            bookName: libraryManager.selectedBook?.name ?? "",
+            chapter: libraryManager.selectedChapter?.chapterNumber ?? 0,
+            verseStart: numbers.min() ?? 0,
+            verseEnd: numbers.max() ?? 0,
+            translation: libraryManager.selectedBibleModule?.abbreviation ?? ""
         )
     }
 
-    /// Navigate verse, re-fill if auto-fill active, and update live output.
+    /// Navigate: while LIVE, ←/→ advance the PRESENTED anchor (browsing stays
+    /// untouched); otherwise they move the browse selection only.
     private func navigate(direction: Int) {
-        let wasLive = pm.liveContent.isLive
         libraryManager.navigateVerse(direction: direction)
         if libraryManager.isAutoFillActive {
             runAutoFill()
         }
-        if wasLive {
-            updateLiveOutput()
-        }
     }
 
-    /// Cross-chapter navigation: advance to next chapter and re-fill.
+    /// Cross-chapter navigation: advance to next chapter and re-fill (selection only).
     private func navigateCrossChapter(direction: Int) {
-        let wasLive = pm.liveContent.isLive
         if direction > 0 {
             libraryManager.advanceToNextChapter()
         } else {
@@ -603,13 +628,17 @@ struct VerseSlideControlsBar: View {
         if libraryManager.isAutoFillActive {
             runAutoFill()
         }
-        if wasLive {
-            updateLiveOutput()
-        }
+    }
+
+    /// While a bible anchor is live, ←/→ drive the anchor — always enabled
+    /// (stepping no-ops at the ends of the module).
+    private var anchoredLive: Bool {
+        pm.liveContent.isLive && pm.bibleLiveAnchor != nil
     }
 
     /// Whether the ← → buttons should be disabled, considering cross-chapter nav.
     private func canNavigate(direction: Int) -> Bool {
+        if anchoredLive { return true }
         if libraryManager.canNavigateVerse(direction: direction) {
             return true
         }
@@ -624,13 +653,20 @@ struct VerseSlideControlsBar: View {
 
     /// Whether pressing ← → at this point would cross a chapter boundary.
     private func wouldCrossChapter(direction: Int) -> Bool {
-        !libraryManager.canNavigateVerse(direction: direction)
+        !anchoredLive
+            && !libraryManager.canNavigateVerse(direction: direction)
             && libraryManager.isAutoFillActive
             && (direction > 0 ? libraryManager.canAdvanceToNextChapter : libraryManager.canReturnToPreviousChapter)
     }
 
-    /// Perform the correct navigation (in-chapter or cross-chapter).
+    /// Perform the correct navigation. LIVE → advance the presented anchor
+    /// (the browse selection stays exactly where the operator left it);
+    /// not live → move the selection (in-chapter or cross-chapter).
     private func performNavigation(direction: Int) {
+        if anchoredLive {
+            _ = pm.stepBibleAnchor(direction: direction, context: modelContext)
+            return
+        }
         if libraryManager.canNavigateVerse(direction: direction) {
             navigate(direction: direction)
         } else if wouldCrossChapter(direction: direction) {
@@ -713,18 +749,9 @@ struct VerseSlideControlsBar: View {
                 )
 
                 // Show button — sends the current selection to the live output
+                // and RE-ANCHORS the presented flow there.
                 Button {
-                    pm.showBibleVerse(
-                        text: formattedText,
-                        reference: libraryManager.selectedVersesReference,
-                        translationName: libraryManager.selectedBibleModule?.abbreviation ?? "",
-                        runs: libraryManager.selectedVersesRuns,
-                        footnote: libraryManager.selectedVersesFootnotes,
-                        crossReference: libraryManager.selectedVersesCrossRefs,
-                        heading: libraryManager.selectedVersesHeading,
-                        gloss: libraryManager.selectedVersesGloss,
-                        strongs: libraryManager.selectedVersesStrongs
-                    )
+                    presentSelection()
                 } label: {
                     Label(
                         String(localized: "Show", comment: "Control button"),

@@ -152,6 +152,10 @@ final class Song {
     var modifiedDate: Date = Date.now  // last edit — drives sort + the change log
     var editLogJSON: String = "[]"     // [SongEditEntry] — coarse change log (internal, not exported)
     var sourceFile: String = ""        // filename this song was imported from (e.g. "1000-tongues.json")
+    /// UUID string of the ORIGINAL version — the default: presented, searched
+    /// first, source of slides. "" = fall back to the first version by order.
+    /// Round-trips through GOAT ("original": true on the version dict).
+    var originalVersionID: String = "" // additive, inline default — lightweight migration
 
     var collection: SongCollection?
     var songbook: Songbook?
@@ -187,7 +191,16 @@ final class Song {
     }
 
     var sortedVersions: [SongVersion] { versions.sorted { $0.order < $1.order } }
-    var activeVersion: SongVersion? { sortedVersions.first }
+    /// The ORIGINAL (default) version: the one marked via `originalVersionID`,
+    /// else the first by order. Presenting other versions stays possible by
+    /// explicit selection (`selectedSongVersion`).
+    var activeVersion: SongVersion? {
+        if !originalVersionID.isEmpty,
+           let original = versions.first(where: { $0.id.uuidString == originalVersionID }) {
+            return original
+        }
+        return sortedVersions.first
+    }
 
     var sortedVerses: [SongVerse] { verses.sorted { $0.order < $1.order } }
     var verseLabels: [String] { sortedVerses.map { $0.label } }

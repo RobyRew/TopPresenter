@@ -129,6 +129,8 @@ final class SongImportVersion {
     var source: String
     var repeatStyle: String
     var overridesMetadata: Bool
+    /// This version is the song's ORIGINAL (default) — GOAT "original": true.
+    var isOriginal: Bool
     var arrangement: [String]
     var sections: [SongImportSection]
 
@@ -155,6 +157,7 @@ final class SongImportVersion {
         source: String = "",
         repeatStyle: String = "",
         overridesMetadata: Bool = false,
+        isOriginal: Bool = false,
         arrangement: [String] = [],
         sections: [SongImportSection] = []
     ) {
@@ -180,6 +183,7 @@ final class SongImportVersion {
         self.source = source
         self.repeatStyle = repeatStyle
         self.overridesMetadata = overridesMetadata
+        self.isOriginal = isOriginal
         self.arrangement = arrangement
         self.sections = sections
     }

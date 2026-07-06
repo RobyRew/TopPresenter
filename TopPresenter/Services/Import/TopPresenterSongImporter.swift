@@ -232,6 +232,7 @@ final class TopPresenterSongImporter: SongImporter {
             source: (obj["source"] as? String) ?? "",
             repeatStyle: (obj["repeatStyle"] as? String) ?? "",
             overridesMetadata: (obj["overridesMetadata"] as? Bool) ?? false,
+            isOriginal: (obj["original"] as? Bool) ?? false,
             arrangement: (obj["arrangement"] as? [String]) ?? [],
             sections: sections
         )

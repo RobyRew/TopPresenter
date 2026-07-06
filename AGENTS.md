@@ -11,8 +11,8 @@
 |-------|-------|
 | **Name** | TopPresenter |
 | **Platform** | macOS 15.7+ |
-| **Language** | Swift 5.0+, SwiftUI, SwiftData |
-| **Xcode** | 16.3+ |
+| **Language** | **Swift 6 language mode** (SWIFT_VERSION 6.0, default MainActor isolation + approachable concurrency), SwiftUI, SwiftData |
+| **Xcode** | 26.3 (17C529) — CI builds on macos-26 with the SAME version; never let CI drift to an older major (it silently ignores Swift-6-era build settings) |
 | **Repo** | https://github.com/RobyRew/TopPresenter |
 | **License** | Apache 2.0 (see `LICENSE` + `NOTICE`) |
 | **Current version** | `0.0.1` (pre-release; bumped to `1.0.0` only when explicitly asked) |
@@ -194,6 +194,12 @@ TopPresenter/
 - Editor tabs: Layout / Text / Fundal / **Tranziții** — NO output/hardware settings in the editor; screen/window-level/transition/disconnect live in Settings (⌘,) ▸ Proiecție (`ProjectionSettingsTab`) AND compactly in the right bar's **Ieșire** disclosure (StyleQuickSettings `.output`, beneath General). Themes describe the LOOK, Settings describe the DEVICE
 - **Per-presenter options** (`ContentOptions` keyed "bible"/"song"/"text", theme-persisted, resilient decoding): text transform (none/upper/lower), uppercase reference/title. Applied at RENDER time via `pm.displayFields(main:reference:translation:subtitle:contentKey:)` — output uses the live content key, the preview card uses its panel's `formatHint`. Extend ContentOptions (with decodeIfPresent defaults) when a presenter needs a new option
 - Media module output prefs (NOT theme): `videoLoopsByDefault`, `fullscreenVideoFillRaw` — Settings ▸ Proiecție ▸ Media AND the Media panel's StyleQuickSettings `.media` section
+- **Live Bible anchor (v10.5)**: `pm.bibleLiveAnchor` snapshots what's PRESENTED (translation+book+chapter+range); ←/→ while live call `pm.stepBibleAnchor(direction:context:)` — browsing/selection NEVER moves the live flow; Show/double-click/session runner re-anchor via the structured params of `showBibleVerse`; `clearOutput` clears the anchor. Don't reintroduce selection-driven live pushes
+- **Black/Freeze are OUTPUT-only**: the preview card always renders content; the output state shows as NEGRU/ÎNGHEȚAT badges. Never blank the preview
+- **Background stays on Hide (v10.5)**: `pm.backgroundStaysOnHide` (theme-persisted, default ON, toggle in Fundal) keeps the theme background rendered when `liveContent.isLive == false`
+- **Personalizează OFF = full reset**: the customize toggle writes a fresh `BoxTextStyle()` (sentinels), never just the flag — stale per-box values must not survive
+- **Song versions (v10.5)**: `Song.originalVersionID` picks the ORIGINAL (default) version; `activeVersion` resolves it (else first by order); import auto-sets `overridesMetadata` on versions whose metadata differs from the first and defaults the original to the first WITH a songbook; GOAT round-trips `"original": true`; star button in the detail panel's version picker calls `ImportService.applyOriginalVersionChange` (re-flattens SongVerse cache + re-links songbook)
+- **Folder import depth**: the selected folder + at most TWO subfolder levels, everywhere (expandToImportableFiles guard + recursiveSongFiles `en.level > 3` skip); dropped FOLDERS expand through the same walk (MainControlView.handleDrop)
 - Toolbar rules: per-view items are conditional on `appState.selectedSidebarItem`; the media kind filter lives in MediaView's OWN header (segmented `@AppStorage("mediaTypeFilter")` — the old toolbar Picker was removed, one filter UI); Freeze sits next to Black/Clear in the presentation group
 - **Tabs auto-name only (v10.4)** — the manual "Rename Tab" toolbar button/alert was REMOVED; `autoTabTitle` in MainControlView derives per module (bible: "(RO) EDC100 – ref", songs, media, schedule: session name + date via the testable `MainControlView.scheduleTabDetail(name:date:)`). Don't reintroduce `@SceneStorage("tabCustomName")`
 - **Media is a PRESENTABLE module (v10.4)**: MediaView = type tabs (Toate|Foto|Video|Audio) + rich grid (video/audio `durationSeconds` badges, artwork thumbnails via async `MediaThumbnailFactory`) + search on `libraryManager.mediaLibraryQuery`; selection = `libraryManager.selectedMediaItem` (NO notifications). The panel mirrors Bible/Songs anatomy and steps prev/next through `MediaLibrary.filter(...)` — THE one ordering shared with the grid. ALL "present media" paths go through `MediaPresenter.present` (fullscreen image = `pm.showMedia(kind:"image")` decodes the NSImage inside the caller's security scope → `LiveContent.mediaImage`; video = shared `VideoPlayerService`; audio = plays only, never claims the output). New media kinds = a `MediaKind` case + classify rule + icon
@@ -301,6 +307,26 @@ xcodebuild \
   clean build
 ```
 Unsigned builds require users to right-click → Open, or run `xattr -cr TopPresenter.app`.
+
+### Signing invariant (DYLD Team-ID crash)
+CI re-signs the packaged app UNIFORMLY ad-hoc, inside-out (Sparkle XPCs → Autoupdate →
+Updater.app → Sparkle.framework → the .app, `--preserve-metadata=entitlements`, NO
+`--options runtime` on ad-hoc) and then `codesign --verify --deep --strict`. Mixed
+signatures (e.g. a dev-team app with ad-hoc Sparkle, or vice versa) crash at launch with
+"different Team IDs" — never ship a bundle whose nested binaries differ from the outer app.
+
+### Swift 6 patterns (established during the migration — follow them)
+- Pure data layers (Constants enums, JSON helpers, Color hex, the whole Bible import
+  parse layer) are `nonisolated` — new pure helpers must be too, or @Model accessors
+  (nonisolated under Swift 6) can't call them.
+- MainActor classes that clean up isolated state on teardown use SE-0371
+  `isolated deinit` (AudioPlayerManager, VideoPlayerService, PresentationManager,
+  PresentationCommandRouter).
+- Bible importers are created FRESH per import (`makeBibleImporter`) — the XML parsers
+  hold mutable state; never share importer instances.
+- **Batch imports run on `BackgroundImportActor` (@ModelActor)** with chunked per-book
+  saves inside `autoreleasepool`; `ImportService.importBible` is nonisolated(nonsending)
+  — call it with a context that BELONGS to the calling isolation, never across.
 
 ---
 

@@ -22,9 +22,10 @@ struct PresentationOutputView: View {
         ZStack {
             if !pm.isBlackScreen {
                 // Background layer — part of the Intrare/Ieșire story: it fades
-                // in from transparency with the first Show and fades back out on
-                // Hide/Clear/ESC (the show/clear methods drive the animation).
-                if pm.liveContent.isLive {
+                // in from transparency with the first Show. On Hide/Clear/ESC the
+                // theme background STAYS up by default (content-only hide) —
+                // toggleable per theme via „Fundalul rămâne la Ascundere" (Fundal).
+                if pm.liveContent.isLive || pm.backgroundStaysOnHide {
                     backgroundLayer
                         .transition(.opacity)
                 }

@@ -671,6 +671,9 @@ final class ImportService {
         let keys: Set<URLResourceKey> = [.isRegularFileKey]
         if let en = FileManager.default.enumerator(at: dir, includingPropertiesForKeys: Array(keys), options: [.skipsHiddenFiles]) {
             for case let f as URL in en {
+                // Same rule as the Bible/Song walk: the selected folder plus at
+                // most TWO subfolder levels (enumerator level 1 = direct child).
+                if en.level > 3 { en.skipDescendants(); continue }
                 guard songFileExtensions.contains(f.pathExtension.lowercased()) else { continue }
                 if (try? f.resourceValues(forKeys: keys))?.isRegularFile == true {
                     out.append(f)
@@ -793,6 +796,12 @@ final class ImportService {
 
         let builtVersions = makeVersions(from: result)
         for v in builtVersions { v.song = song }
+        // GOAT "original": true wins; else finalize picks first-with-songbook.
+        if result.versions.count == builtVersions.count,
+           let idx = result.versions.firstIndex(where: { $0.isOriginal }) {
+            song.originalVersionID = builtVersions[idx].id.uuidString
+        }
+        finalizeVersionMetadata(for: song)
 
         // Flatten the active version into the SongVerse cache (legacy presenter / search / schedule).
         var lyrics = ""
@@ -952,6 +961,66 @@ final class ImportService {
             for sec in version.sortedSections { extraLyrics += " " + sec.plainText }
         }
         if !extraLyrics.isEmpty { song.searchText += " " + extraLyrics.lowercased() }
+        finalizeVersionMetadata(for: song)
+    }
+
+    /// Re-flatten the ACTIVE (original) version into the SongVerse cache +
+    /// searchText, and re-link Song.songbook from the original's songbookName —
+    /// call after changing which version is the original.
+    static func applyOriginalVersionChange(for song: Song, modelContext: ModelContext) {
+        for verse in song.verses { modelContext.delete(verse) }
+        var lyrics = ""
+        if let active = song.activeVersion {
+            for (i, sec) in active.sortedSections.enumerated() {
+                let verse = SongVerse(label: sec.label, verseType: sec.type, text: sec.plainText, order: i)
+                verse.song = song
+                lyrics += " " + sec.plainText
+            }
+            if !active.songbookName.isEmpty {
+                let all = (try? modelContext.fetch(FetchDescriptor<Songbook>())) ?? []
+                song.songbook = all.first { $0.name == active.songbookName } ?? {
+                    let book = Songbook(name: active.songbookName)
+                    modelContext.insert(book)
+                    return book
+                }()
+            }
+        }
+        song.searchText = Song.makeSearchText(
+            title: song.title, titles: song.titles, author: song.author,
+            authorWords: song.authorWords, songNumber: song.songNumber,
+            songbookNumber: song.songbookNumber, lyrics: lyrics
+        )
+        song.modifiedDate = .now
+        try? modelContext.save()
+    }
+
+    /// Auto-stamp „Date proprii pentru versiune" on versions whose imported
+    /// metadata DIFFERS from the first version's (different book, key, author…),
+    /// and pick the ORIGINAL (default) version: keep an explicit user choice if
+    /// still valid, else the first version that references a songbook, else the
+    /// first by order.
+    static func finalizeVersionMetadata(for song: Song) {
+        let versions = song.sortedVersions
+        guard let first = versions.first else { return }
+
+        for v in versions.dropFirst() where !v.overridesMetadata {
+            let differs = v.key != first.key
+                || v.language != first.language
+                || v.author != first.author
+                || v.songbookName != first.songbookName
+                || v.songbookNumber != first.songbookNumber
+                || v.copyright != first.copyright
+                || v.ccliNumber != first.ccliNumber
+                || v.tempo != first.tempo
+                || v.style != first.style
+            if differs { v.overridesMetadata = true }
+        }
+
+        // Respect an explicit still-valid choice; otherwise default the original
+        // to the first version that carries a songbook.
+        if versions.contains(where: { $0.id.uuidString == song.originalVersionID }) { return }
+        let original = versions.first(where: { !$0.songbookName.isEmpty }) ?? first
+        song.originalVersionID = original.id.uuidString
     }
 
     /// Normalized key for duplicate detection (diacritic- and case-insensitive, whitespace-collapsed).

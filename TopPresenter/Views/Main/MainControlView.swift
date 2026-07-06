@@ -281,7 +281,30 @@ struct MainControlView: View {
 
         group.notify(queue: .main) { [self] in
             guard !urls.isEmpty else { return }
-            let classified = DragDropImportHandler.classify(urls)
+            Task {
+                // EXPAND folders first (max 2 subfolder levels, USFM kept whole) —
+                // dropping one or MORE folders now works exactly like the picker.
+                // Direct FILES keep their old classification (incl. media/unknown).
+                // The walk runs off the main actor so a big tree never beach-balls.
+                let classified = await Task.detached(priority: .userInitiated) {
+                    let fm = FileManager.default
+                    var expanded: [URL] = []
+                    for url in urls {
+                        var isDir: ObjCBool = false
+                        if fm.fileExists(atPath: url.path, isDirectory: &isDir), isDir.boolValue {
+                            expanded.append(contentsOf: DragDropImportHandler.expandToImportableFiles([url]))
+                        } else {
+                            expanded.append(url)
+                        }
+                    }
+                    return DragDropImportHandler.classify(expanded)
+                }.value
+                handleClassifiedDrop(classified)
+            }
+        }
+    }
+
+    private func handleClassifiedDrop(_ classified: [PendingImportFile]) {
 
             // Separate by category
             let bibleFiles = classified.filter { if case .bible = $0.category { return true }; return false }
@@ -326,7 +349,6 @@ struct MainControlView: View {
                     message: String(localized: "None of the dropped files were recognized. Supported: Bible modules (.json, .xml, .mybible, .usfm), Songs (.xml, .pptx, .ppt), Media (images, audio, video).", comment: "Alert")
                 )
             }
-        }
     }
 
     // MARK: - Bible Toolbar Helpers
