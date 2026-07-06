@@ -8,13 +8,13 @@
 import Foundation
 
 // MARK: - Window Identifiers
-enum WindowIdentifiers {
+nonisolated enum WindowIdentifiers {
     static let main = "main-control"
     static let presentation = "presentation-output"
 }
 
 // MARK: - Supported File Types
-enum SupportedBibleFormat: String, CaseIterable, Identifiable {
+nonisolated enum SupportedBibleFormat: String, CaseIterable, Identifiable {
     case topPresenter = "toppresenter"
     case osisXML = "osis"
     case zefaniaXML = "zefania"
@@ -67,7 +67,7 @@ enum SupportedBibleFormat: String, CaseIterable, Identifiable {
 }
 
 // MARK: - Supported Export Formats
-enum SupportedExportFormat: String, CaseIterable, Identifiable {
+nonisolated enum SupportedExportFormat: String, CaseIterable, Identifiable {
     case topPresenter = "toppresenter"
     case plainText = "plaintext"
     case csv = "csv"
@@ -100,7 +100,7 @@ enum SupportedExportFormat: String, CaseIterable, Identifiable {
 }
 
 // MARK: - USFM Book Abbreviation Mapping
-enum USFMBookIDs {
+nonisolated enum USFMBookIDs {
     static let mapping: [String: (name: String, number: Int)] = [
         "GEN": ("Genesis", 1), "EXO": ("Exodus", 2), "LEV": ("Leviticus", 3),
         "NUM": ("Numbers", 4), "DEU": ("Deuteronomy", 5), "JOS": ("Joshua", 6),
@@ -129,7 +129,7 @@ enum USFMBookIDs {
 }
 
 // MARK: - MySword/Unbound Book Number Mapping
-enum BibleBookNumbers {
+nonisolated enum BibleBookNumbers {
     /// Maps 1-based book number to (name, testament)
     static let mapping: [Int: (name: String, testament: String)] = {
         var map: [Int: (name: String, testament: String)] = [:]
@@ -143,7 +143,7 @@ enum BibleBookNumbers {
     }()
 }
 
-enum SupportedSongFormat: String, CaseIterable, Identifiable {
+nonisolated enum SupportedSongFormat: String, CaseIterable, Identifiable {
     case topPresenterJSON = "toppresenter-song"
     case openSongXML = "opensong"
     case openLyricsXML = "openlyrics"
@@ -177,7 +177,7 @@ enum SupportedSongFormat: String, CaseIterable, Identifiable {
 }
 
 // MARK: - Supported Song Export Formats
-enum SupportedSongExportFormat: String, CaseIterable, Identifiable {
+nonisolated enum SupportedSongExportFormat: String, CaseIterable, Identifiable {
     case topPresenter = "toppresenter"
     case openLyricsXML = "openlyrics"
     case plainText = "plaintext"
@@ -211,7 +211,7 @@ enum SupportedSongExportFormat: String, CaseIterable, Identifiable {
 }
 
 // MARK: - Presentation Defaults
-enum PresentationDefaults {
+nonisolated enum PresentationDefaults {
     static let fontSize: Double = 48.0
     static let minFontSize: Double = 12.0
     static let maxFontSize: Double = 200.0
@@ -225,7 +225,7 @@ enum PresentationDefaults {
 }
 
 // MARK: - Bible Book Names (English canonical order)
-enum BibleBookNames {
+nonisolated enum BibleBookNames {
     static let oldTestament: [String] = [
         "Genesis", "Exodus", "Leviticus", "Numbers", "Deuteronomy",
         "Joshua", "Judges", "Ruth", "1 Samuel", "2 Samuel",
@@ -252,7 +252,7 @@ enum BibleBookNames {
 // MARK: - Bible Book Categories (for color-coding like BibleShow)
 import SwiftUI
 
-enum BibleBookCategory: String, CaseIterable {
+nonisolated enum BibleBookCategory: String, CaseIterable {
     case law            // Genesis–Deuteronomy (1–5)
     case history        // Joshua–Esther (6–17)
     case wisdom         // Job–Song of Solomon (18–22)
@@ -367,7 +367,7 @@ enum BibleBookCategory: String, CaseIterable {
 }
 
 // MARK: - OSIS Book ID Mapping
-enum OSISBookIDs {
+nonisolated enum OSISBookIDs {
     static let mapping: [String: String] = [
         "Gen": "Genesis", "Exod": "Exodus", "Lev": "Leviticus",
         "Num": "Numbers", "Deut": "Deuteronomy", "Josh": "Joshua",

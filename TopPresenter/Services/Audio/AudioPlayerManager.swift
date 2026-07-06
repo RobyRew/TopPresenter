@@ -156,7 +156,9 @@ final class AudioPlayerManager {
         return String(format: "%d:%02d", minutes, seconds)
     }
 
-    deinit {
+    // isolated deinit (SE-0371, native Swift 6.1+): runs ON the main actor so it
+    // may touch the MainActor-isolated timer state safely.
+    isolated deinit {
         stopTimer()
     }
 }

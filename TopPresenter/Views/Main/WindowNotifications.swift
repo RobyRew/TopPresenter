@@ -111,7 +111,8 @@ final class PresentationCommandRouter {
         on(.resetFontSize) { pm.fontSize = PresentationDefaults.fontSize }
     }
 
-    deinit {
+    // isolated deinit (SE-0371): main-actor teardown may read the isolated tokens.
+    isolated deinit {
         for token in tokens {
             NotificationCenter.default.removeObserver(token)
         }

@@ -205,34 +205,8 @@ final class DragDropImportHandler {
         }
     }
 
-    /// Import all pending Bible files sequentially.
-    static func importBibles(
-        files: [PendingImportFile],
-        modelContext: ModelContext,
-        onUpdate: @escaping (UUID, ImportFileStatus) -> Void
-    ) async -> [BibleModule] {
-        var imported: [BibleModule] = []
-
-        for file in files {
-            guard case .bible(let format) = file.category else { continue }
-
-            onUpdate(file.id, .importing)
-
-            do {
-                let module = try await ImportService.importBible(
-                    fileURL: file.url,
-                    format: format,
-                    modelContext: modelContext
-                )
-                imported.append(module)
-                onUpdate(file.id, .success(module.name))
-            } catch {
-                onUpdate(file.id, .failed(error.localizedDescription))
-            }
-        }
-
-        return imported
-    }
+    // Batch Bible imports route through BackgroundImportActor (own ModelContext,
+    // off-main) — see Services/Import/BackgroundImportActor.swift.
 
     /// Import all pending Song files sequentially.
     static func importSongs(

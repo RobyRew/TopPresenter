@@ -10,13 +10,15 @@ import SwiftData
 
 // MARK: - JSON helpers (blobs keep the rich layer flexible without exploding the table count)
 
-func tpEncodeJSON<T: Encodable>(_ value: T, fallback: String) -> String {
+// nonisolated: pure JSON round-trips — @Model accessors (nonisolated under
+// Swift 6) call these, so they must not be MainActor-bound.
+nonisolated func tpEncodeJSON<T: Encodable>(_ value: T, fallback: String) -> String {
     guard let data = try? JSONEncoder().encode(value),
           let string = String(data: data, encoding: .utf8) else { return fallback }
     return string
 }
 
-func tpDecodeJSON<T: Decodable>(_ string: String, as type: T.Type, fallback: T) -> T {
+nonisolated func tpDecodeJSON<T: Decodable>(_ string: String, as type: T.Type, fallback: T) -> T {
     guard let data = string.data(using: .utf8),
           let value = try? JSONDecoder().decode(T.self, from: data) else { return fallback }
     return value

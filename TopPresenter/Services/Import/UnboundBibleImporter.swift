@@ -12,7 +12,7 @@ import Foundation
 /// Lines beginning with # are comments/metadata.
 /// Data lines have columns: book_number \t chapter \t verse \t subverse \t order \t text
 /// Some variants use fewer columns: book_number \t chapter \t verse \t text
-final class UnboundBibleImporter: BibleImporter {
+nonisolated final class UnboundBibleImporter: BibleImporter {
     let format: SupportedBibleFormat = .unboundBible
 
     func parse(fileURL: URL) async throws -> BibleImportResult {

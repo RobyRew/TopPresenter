@@ -208,22 +208,23 @@ struct BatchImportSheet: View {
     }
 
     private func startBatchImport() {
+        guard !isImporting else { return }   // re-entry guard (double-click, reopen)
         isImporting = true
         completedCount = 0
+        // Fresh run: forget outcomes of a previous invocation of this sheet.
+        for idx in pendingFiles.indices { pendingFiles[idx].status = .pending }
 
         Task {
-            // Import Bibles
-            _ = await DragDropImportHandler.importBibles(
-                files: bibleFiles,
-                modelContext: modelContext
-            ) { fileID, status in
-                Task { @MainActor in
-                    if let idx = pendingFiles.firstIndex(where: { $0.id == fileID }) {
-                        pendingFiles[idx].status = status
-                    }
-                    if case .success = status { completedCount += 1 }
-                    if case .failed = status { completedCount += 1 }
+            // Import Bibles OFF the main actor — BackgroundImportActor owns its
+            // own serialized ModelContext on the shared container (crash fix:
+            // the view's context must never do heavy work across thread hops).
+            let importer = BackgroundImportActor(modelContainer: modelContext.container)
+            await importer.importBibles(files: bibleFiles) { fileID, status in
+                if let idx = pendingFiles.firstIndex(where: { $0.id == fileID }) {
+                    pendingFiles[idx].status = status
                 }
+                if case .success = status { completedCount += 1 }
+                if case .failed = status { completedCount += 1 }
             }
 
             // Import Songs

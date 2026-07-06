@@ -23,7 +23,7 @@ protocol BibleImporter {
 /// One styled segment of a verse. `runs` reconstruct rich text losslessly:
 /// red-letter (`woc`), translator-added/italic (`add`), divine name, quotes —
 /// each optionally carrying a Strong's number + morphology code.
-struct VerseRun: Codable, Equatable {
+nonisolated struct VerseRun: Codable, Equatable {
     var text: String
     /// "plain" | "woc" (words of Christ) | "add" | "divineName" | "quote"
     var kind: String = "plain"
@@ -52,7 +52,7 @@ struct BibleHeading: Codable, Equatable {
     var text: String
 }
 
-struct BibleFootnote: Codable, Equatable {
+nonisolated struct BibleFootnote: Codable, Equatable {
     var marker: String = ""
     var text: String
 }
@@ -63,7 +63,7 @@ struct BibleCrossRef: Codable, Equatable {
 }
 
 /// Result of a Bible import operation
-struct BibleImportResult {
+nonisolated struct BibleImportResult {
     let moduleName: String
     let abbreviation: String
     let language: String
@@ -85,7 +85,7 @@ struct BibleImportResult {
     var extensionsJSON: String? = nil
 }
 
-struct BibleImportBook {
+nonisolated struct BibleImportBook {
     let name: String
     let bookNumber: Int
     let testament: String // "OT" | "NT" | "DC"
@@ -98,14 +98,14 @@ struct BibleImportBook {
     var extensionsJSON: String? = nil
 }
 
-struct BibleImportChapter {
+nonisolated struct BibleImportChapter {
     let chapterNumber: Int
     let verses: [BibleImportVerse]
     var headings: [BibleHeading]? = nil
     var extensionsJSON: String? = nil
 }
 
-struct BibleImportVerse {
+nonisolated struct BibleImportVerse {
     let verseNumber: Int
     let text: String
     /// Rich segments (red-letter / italic / Strong's). nil = plain verse.
@@ -134,7 +134,7 @@ struct BibleImportVerse {
 }
 
 /// Errors that can occur during Bible import
-enum BibleImportError: LocalizedError {
+nonisolated enum BibleImportError: LocalizedError {
     case fileNotFound
     case invalidFormat(String)
     case parsingFailed(String)

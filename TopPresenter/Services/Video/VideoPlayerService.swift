@@ -122,7 +122,8 @@ final class VideoPlayerService {
         scopedURL = nil
     }
 
-    deinit {
+    // isolated deinit (SE-0371): main-actor teardown may read isolated state.
+    isolated deinit {
         if let observer = endObserver {
             NotificationCenter.default.removeObserver(observer)
         }

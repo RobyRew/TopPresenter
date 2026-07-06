@@ -227,7 +227,7 @@ final class BibleVerse {
 }
 
 /// Shared JSON encode helper for stashing rich arrays into the model.
-enum BibleRichData {
+nonisolated enum BibleRichData {
     static func encode<T: Encodable>(_ value: T?) -> String? {
         guard let value, let data = try? JSONEncoder().encode(value),
               let s = String(data: data, encoding: .utf8) else { return nil }

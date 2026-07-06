@@ -14,7 +14,7 @@ import SwiftData
 
 // MARK: - TopPresenter JSON Importer Tests
 
-struct TopPresenterImporterTests {
+@MainActor struct TopPresenterImporterTests {
     let importer = TopPresenterBibleImporter()
 
     @Test func parsesValidJSON() async throws {
@@ -262,7 +262,7 @@ struct TopPresenterImporterTests {
 
 // MARK: - Recursive folder import
 
-struct BibleFolderImportTests {
+@MainActor struct BibleFolderImportTests {
     private func writeBible(_ url: URL) throws {
         let json: [String: Any] = ["format": "TopPresenter Bible", "translation": ["code": "T"], "books": []]
         try JSONSerialization.data(withJSONObject: json).write(to: url)
@@ -294,7 +294,7 @@ struct BibleFolderImportTests {
 
 // MARK: - Zefania XML Importer Tests
 
-struct ZefaniaImporterTests {
+@MainActor struct ZefaniaImporterTests {
     let importer = ZefaniaBibleImporter()
 
     @Test func parsesValidZefaniaXML() async throws {
@@ -377,7 +377,7 @@ struct ZefaniaImporterTests {
 
 /// Every lean Bible importer must map its format's full markup (headings, footnotes,
 /// cross-refs, red-letter, Strong's, morphology) into the GOAT model so exports are rich.
-struct RichBibleExtractionTests {
+@MainActor struct RichBibleExtractionTests {
 
     // MARK: OSIS
 
@@ -493,7 +493,7 @@ struct RichBibleExtractionTests {
 
 // MARK: - Rich-field extraction (song formats → GOAT superset)
 
-struct RichSongExtractionTests {
+@MainActor struct RichSongExtractionTests {
 
     @Test func openLyricsExtractsSongbookVerseOrderCommentsAndTypedAuthors() async throws {
         let xml = """
@@ -586,7 +586,7 @@ struct RichSongExtractionTests {
 
 // MARK: - Bible Import Result Validation Tests
 
-struct BibleImportResultTests {
+@MainActor struct BibleImportResultTests {
     @Test func verseRangeFormatting() {
         let result = BibleImportResult(
             moduleName: "Test",
@@ -617,7 +617,7 @@ struct BibleImportResultTests {
 
 // MARK: - Color Extension Tests
 
-struct ColorExtensionTests {
+@MainActor struct ColorExtensionTests {
     @Test func hexToColor6Digit() {
         let color = Color(hex: "FF0000")
         #expect(color != nil)
@@ -647,7 +647,7 @@ struct ColorExtensionTests {
 
 // MARK: - LiveContent Tests
 
-struct LiveContentTests {
+@MainActor struct LiveContentTests {
     @Test func setBibleVerseUpdatesFields() {
         let content = LiveContent()
         content.setBibleVerse(text: "In the beginning", reference: "Genesis 1:1")
@@ -685,7 +685,7 @@ struct LiveContentTests {
 
 // MARK: - ZIP / PPTX Importer Tests
 
-struct PPTXImporterTests {
+@MainActor struct PPTXImporterTests {
     /// Builds a minimal valid ZIP in memory (stored or deflated entries).
     private func makeZip(entries: [(name: String, data: Data, deflate: Bool)]) -> Data {
         var out = Data()
@@ -840,7 +840,7 @@ struct PPTXImporterTests {
 
 // MARK: - Batch Song Import Tests
 
-struct SongBatchImportTests {
+@MainActor struct SongBatchImportTests {
     private func makeInMemoryContext() throws -> ModelContext {
         let container = try ModelContainer(
             for: Schema(versionedSchema: SchemaV2.self),
@@ -2005,7 +2005,7 @@ struct PresentationManagerTests {
 
 // MARK: - GOAT Song JSON round-trip + new importers
 
-struct SongGoatFormatTests {
+@MainActor struct SongGoatFormatTests {
     private func makeContext() throws -> ModelContext {
         let container = try ModelContainer(
             for: Schema(versionedSchema: SchemaV2.self),
@@ -2169,7 +2169,7 @@ struct SongGoatFormatTests {
 
 // MARK: - Recursive bulk import + duplicate→version
 
-struct SongBulkImportTests {
+@MainActor struct SongBulkImportTests {
     private func makeContext() throws -> ModelContext {
         let container = try ModelContainer(
             for: Schema(versionedSchema: SchemaV2.self),
@@ -2315,7 +2315,7 @@ struct BibleLanguageDetectionTests {
 
 // MARK: - melodia.ro song: chords + arrangement + _extensions round-trip
 
-struct MelodiaSongRoundTripTests {
+@MainActor struct MelodiaSongRoundTripTests {
     private func makeContext() throws -> ModelContext {
         let container = try ModelContainer(
             for: Schema(versionedSchema: SchemaV2.self),
@@ -2389,7 +2389,7 @@ struct MelodiaSongRoundTripTests {
 
 // MARK: - Scraped sources (cantaricrestine / acorduri) import into TopPresenter
 
-struct ScrapedSongsImportTests {
+@MainActor struct ScrapedSongsImportTests {
     private func makeContext() throws -> ModelContext {
         let container = try ModelContainer(
             for: Schema(versionedSchema: SchemaV2.self),
@@ -2552,7 +2552,7 @@ struct HistoryStoreTests {
 
 // MARK: - ChordTransposer
 
-struct ChordTransposerTests {
+@MainActor struct ChordTransposerTests {
 
     @Test func parsesRootQualityAndBass() {
         let c = ChordTransposer.parse("Dm7")
@@ -2627,7 +2627,7 @@ struct ChordTransposerTests {
 
 // MARK: - Chord chart repeat markers
 
-struct ChordChartMarkerTests {
+@MainActor struct ChordChartMarkerTests {
 
     @Test func bracketShiftsFirstLineChordPositions() {
         let lines = [
@@ -2683,7 +2683,7 @@ struct ChordChartMarkerTests {
 
 // MARK: - Song verified flag + edit-log diff
 
-struct SongVerifiedAndEditLogTests {
+@MainActor struct SongVerifiedAndEditLogTests {
 
     private func result(title: String, verified: Bool = false, sections: [SongImportSection]) -> SongImportResult {
         SongImportResult(
@@ -2734,7 +2734,7 @@ struct SongVerifiedAndEditLogTests {
 
 // MARK: - PinStore Tests (session-only song pins)
 
-struct PinStoreTests {
+@MainActor struct PinStoreTests {
     @Test @MainActor func toggleAndClearSemantics() {
         let store = PinStore()
         let a = UUID(), b = UUID()
@@ -3030,7 +3030,7 @@ struct SessionArchiveTests {
 
 // MARK: - MediaLibrary Tests (kind classification + shared filter/stepping)
 
-struct MediaLibraryTests {
+@MainActor struct MediaLibraryTests {
     @Test func classifiesByExtension() {
         #expect(MediaKind.classify(extension: "JPG") == .image)
         #expect(MediaKind.classify(extension: "heic") == .image)
@@ -3077,7 +3077,7 @@ struct MediaLibraryTests {
 
 // MARK: - Tab Auto-naming Tests
 
-struct TabAutoNamingTests {
+@MainActor struct TabAutoNamingTests {
     @Test @MainActor func scheduleTabDetailCombinesNameAndDate() {
         // Fixed date: 2026-07-06 (a Monday).
         var comps = DateComponents(); comps.year = 2026; comps.month = 7; comps.day = 6; comps.hour = 12

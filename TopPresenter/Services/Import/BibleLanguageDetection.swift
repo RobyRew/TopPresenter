@@ -11,7 +11,7 @@ import Foundation
 
 /// Canonical code→display-name map. The app uses custom codes (e.g. "gr" for
 /// Greek, "ebr" for Hebrew), not ISO. One source of truth.
-enum BibleLanguageNames {
+nonisolated enum BibleLanguageNames {
     static let map: [String: String] = [
         "ro": "Română", "en": "English", "de": "Deutsch", "fr": "Français",
         "es": "Español", "it": "Italiano", "hu": "Magyar", "ru": "Русский",
@@ -27,7 +27,7 @@ enum BibleLanguageNames {
 /// When the verse text is in a non-Latin script that contradicts the declared code,
 /// trust the script. Latin scripts are left untouched — letters alone can't tell
 /// ro/en/de apart, so we never override there.
-enum BibleLanguageDetection {
+nonisolated enum BibleLanguageDetection {
     /// Dominant script of a verse-text sample: "gr" | "ebr" | "cyrillic" | "latin" | nil.
     static func script(of sample: String) -> String? {
         var greek = 0, hebrew = 0, cyrillic = 0, latin = 0

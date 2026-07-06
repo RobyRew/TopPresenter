@@ -14,7 +14,7 @@ import Foundation
 /// `<q who="Jesus">`→words-of-Christ runs, `<w lemma="strong:…" morph="…">`→Strong's +
 /// morphology, `<transChange>`→added-words runs, `<divineName>`→divine-name runs, and
 /// the header `<work>` (title/identifier/language/rights)→module metadata.
-final class OSISBibleImporter: BibleImporter {
+nonisolated final class OSISBibleImporter: BibleImporter {
     let format: SupportedBibleFormat = .osisXML
 
     func parse(fileURL: URL) async throws -> BibleImportResult {

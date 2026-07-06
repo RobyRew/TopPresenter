@@ -31,7 +31,7 @@ import Foundation
 ///   }]
 /// }
 /// ```
-final class TopPresenterBibleImporter: BibleImporter {
+nonisolated final class TopPresenterBibleImporter: BibleImporter {
     let format: SupportedBibleFormat = .topPresenter
 
     func parse(fileURL: URL) async throws -> BibleImportResult {

@@ -932,7 +932,8 @@ final class PresentationManager {
         }
     }
 
-    deinit {
+    // isolated deinit (SE-0371): runs on the main actor — may touch isolated state.
+    isolated deinit {
         stopScreenMonitoring()
     }
 

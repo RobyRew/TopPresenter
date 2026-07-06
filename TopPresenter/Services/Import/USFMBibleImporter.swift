@@ -11,7 +11,7 @@ import Foundation
 /// USFM is a widely-used format for Bible translations, developed by United Bible Societies.
 /// Files use backslash markers like \c (chapter), \v (verse), \id (book identifier).
 /// This importer handles a directory of .usfm/.sfm files (one per book) or a single concatenated file.
-final class USFMBibleImporter: BibleImporter {
+nonisolated final class USFMBibleImporter: BibleImporter {
     let format: SupportedBibleFormat = .usfm
 
     func parse(fileURL: URL) async throws -> BibleImportResult {
@@ -368,7 +368,7 @@ final class USFMBibleImporter: BibleImporter {
 /// Turns raw USFM verse markup into GOAT `runs[]`: `\wj…\wj*` → woc,
 /// `\add…\add*` → add, `\nd…\nd*` → divineName, `\w word|strong="…"\w*` → Strong's.
 /// Footnotes/cross-refs are dropped from the run text (they're not verse words).
-enum USFMRich {
+nonisolated enum USFMRich {
     static func parse(_ raw: String, plain: String) -> (runs: [VerseRun]?, woc: Bool) {
         guard raw.contains("\\wj") || raw.contains("\\nd") || raw.contains("\\add") || raw.contains("\\w ") || raw.contains("\\+w ") else {
             return (nil, false)
@@ -500,7 +500,7 @@ enum USFMRich {
 
 /// Pulls `\f …\f*` / `\fe …\fe*` footnotes and `\x …\x*` cross-references out of a
 /// raw USFM verse, mapping them to the GOAT `BibleFootnote` / `BibleCrossRef` types.
-enum USFMNotes {
+nonisolated enum USFMNotes {
     static func footnotes(_ raw: String) -> [BibleFootnote] {
         var notes: [BibleFootnote] = []
         for marker in ["f", "fe"] {

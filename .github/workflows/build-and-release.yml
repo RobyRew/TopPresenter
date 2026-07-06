@@ -15,13 +15,17 @@ concurrency:
 env:
   SCHEME: TopPresenter
   PRODUCT_NAME: TopPresenter
-  XCODE_VERSION: '16.0'
+  # EXACT parity with the dev Mac: Xcode 26.3 (17C529) on the macos-26 arm64
+  # image. Older Xcode (16.x) silently IGNORES the project's Swift 6.x settings
+  # (SWIFT_DEFAULT_ACTOR_ISOLATION, approachable concurrency) — never build the
+  # release with a different major Xcode than the one used for development.
+  XCODE_VERSION: '26.3'
 
 jobs:
   build:
     name: Build & Package
-    runs-on: macos-15
-    timeout-minutes: 30
+    runs-on: macos-26
+    timeout-minutes: 40
     outputs:
       version: ${{ steps.package.outputs.VERSION }}
       prerelease_tag: ${{ steps.package.outputs.PRERELEASE_TAG }}
@@ -29,13 +33,16 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: Select Xcode
-        run: sudo xcode-select -s /Applications/Xcode_${{ env.XCODE_VERSION }}.app/Contents/Developer
-
-      - name: Show Xcode version
-        run: xcodebuild -version
+        run: |
+          sudo xcode-select -s "/Applications/Xcode_${XCODE_VERSION}.app/Contents/Developer" || {
+            echo "::error::Xcode ${XCODE_VERSION} not on this image. Available:"
+            ls /Applications | grep -i '^Xcode' || true
+            exit 1
+          }
+          xcodebuild -version
 
       - name: Resolve dependencies
         run: xcodebuild -resolvePackageDependencies -scheme "$SCHEME" -project "$PRODUCT_NAME.xcodeproj"
@@ -44,10 +51,8 @@ jobs:
         run: |
           # Monotonic CFBundleVersion so Sparkle can tell releases apart (the project's
           # CURRENT_PROJECT_VERSION is a fixed 1). Ad-hoc code signing ("-") so the app's
-          # entitlements (sandbox + Sparkle XPC) actually apply and the in-app updater's
-          # installer works — no Apple certs needed (Gatekeeper still asks for right-click
-          # → Open, exactly as before). Swap "-" for a Developer ID identity + add
-          # notarization later for silent updates; see UPDATES.md.
+          # entitlements (sandbox + Sparkle XPC) apply with no Apple certs; the bundle is
+          # uniformly RE-signed below so every nested binary carries the same identity.
           xcodebuild \
             -scheme "$SCHEME" \
             -project "$PRODUCT_NAME.xcodeproj" \
@@ -62,18 +67,46 @@ jobs:
             CURRENT_PROJECT_VERSION=${{ github.run_number }} \
             clean build
 
-      - name: Run Unit Tests
+      - name: Run unit tests (gate — failures fail the build)
         run: |
           xcodebuild \
             -scheme "$SCHEME" \
             -project "$PRODUCT_NAME.xcodeproj" \
             -destination 'platform=macOS' \
-            -resultBundlePath TestResults.xcresult \
+            -only-testing:TopPresenterTests \
             CODE_SIGN_IDENTITY="-" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
             DEVELOPMENT_TEAM="" \
-            test || true
+            test
+
+      - name: Re-sign uniformly (ad-hoc, inside-out) & verify
+        run: |
+          # DYLD kills the app if the process and a mapped framework carry DIFFERENT
+          # Team IDs ("code signature not valid ... different Team IDs"). Guarantee
+          # uniformity: re-sign every nested Sparkle binary and then the app itself
+          # with the SAME ad-hoc identity, inside-out. No --options runtime here:
+          # hardened runtime + ad-hoc (team-less) signatures = library validation
+          # rejects the frameworks; plain ad-hoc launches everywhere.
+          APP="build/Build/Products/Release/$PRODUCT_NAME.app"
+          SPK="$APP/Contents/Frameworks/Sparkle.framework"
+          for target in \
+            "$SPK/Versions/B/XPCServices/Downloader.xpc" \
+            "$SPK/Versions/B/XPCServices/Installer.xpc" \
+            "$SPK/Versions/B/Autoupdate" \
+            "$SPK/Versions/B/Updater.app" \
+            "$SPK"; do
+            if [ -e "$target" ]; then
+              codesign --force --sign - --preserve-metadata=entitlements "$target"
+            fi
+          done
+          codesign --force --sign - --preserve-metadata=entitlements "$APP"
+          echo "── verify ──"
+          codesign --verify --deep --strict --verbose=2 "$APP"
+          echo "── identities (must ALL be adhoc, no TeamIdentifier) ──"
+          for bin in "$APP" "$SPK" "$SPK/Versions/B/Autoupdate" "$SPK/Versions/B/Updater.app"; do
+            codesign -dv "$bin" 2>&1 | grep -E 'Signature|TeamIdentifier' | sed "s|^|$(basename "$bin"): |"
+          done
 
       - name: Package app
         id: package
@@ -113,7 +146,7 @@ jobs:
             "$GITHUB_WORKSPACE/$PRODUCT_NAME-$VERSION.dmg"
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: TopPresenter-${{ env.VERSION }}
           path: |
@@ -126,7 +159,7 @@ jobs:
     name: Pre-release (Alpha)
     needs: build
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    runs-on: macos-15
+    runs-on: macos-26
     permissions:
       contents: write
       pages: write        # deploy the appcast to Pages (no gh-pages branch)
@@ -139,10 +172,10 @@ jobs:
 
     steps:
       - name: Checkout (for appcast scripts)
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: Download artifact
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           pattern: TopPresenter-*
           merge-multiple: true
@@ -151,7 +184,7 @@ jobs:
         run: echo "SHORT_SHA=${GITHUB_SHA::7}" >> $GITHUB_ENV
 
       - name: Create alpha pre-release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ needs.build.outputs.prerelease_tag }}
           name: "TopPresenter ${{ needs.build.outputs.prerelease_version }}"
@@ -193,24 +226,24 @@ jobs:
 
       - name: Setup Pages
         if: ${{ env.SPARKLE_PRIVATE_KEY != '' }}
-        uses: actions/configure-pages@v5
+        uses: actions/configure-pages@v6
 
       - name: Upload appcast artifact
         if: ${{ env.SPARKLE_PRIVATE_KEY != '' }}
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v5
         with:
           path: site
 
       - name: Deploy appcast to Pages
         if: ${{ env.SPARKLE_PRIVATE_KEY != '' }}
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
 
   # Stable release on final version tags (v1.0.0, v1.1.0, etc.)
   release:
     name: Stable Release
     needs: build
     if: startsWith(github.ref, 'refs/tags/v') && !contains(github.ref_name, '-')
-    runs-on: macos-15
+    runs-on: macos-26
     permissions:
       contents: write
       pages: write        # deploy the appcast to Pages (no gh-pages branch)
@@ -222,16 +255,16 @@ jobs:
 
     steps:
       - name: Checkout (for appcast scripts)
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: Download artifact
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           pattern: TopPresenter-*
           merge-multiple: true
 
       - name: Create stable release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           name: "TopPresenter ${{ github.ref_name }}"
           generate_release_notes: true
@@ -260,14 +293,14 @@ jobs:
 
       - name: Setup Pages
         if: ${{ env.SPARKLE_PRIVATE_KEY != '' }}
-        uses: actions/configure-pages@v5
+        uses: actions/configure-pages@v6
 
       - name: Upload appcast artifact
         if: ${{ env.SPARKLE_PRIVATE_KEY != '' }}
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v5
         with:
           path: site
 
       - name: Deploy appcast to Pages
         if: ${{ env.SPARKLE_PRIVATE_KEY != '' }}
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5

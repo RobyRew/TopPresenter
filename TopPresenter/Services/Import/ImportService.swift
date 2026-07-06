@@ -13,23 +13,20 @@ import SwiftData
 final class ImportService {
     // MARK: - Importer Registries
 
-    /// Registered Bible importers. Add new importers here to support additional formats.
-    private static let bibleImporters: [SupportedBibleFormat: BibleImporter] = {
-        var importers: [SupportedBibleFormat: BibleImporter] = [:]
-        let topPresenterImporter = TopPresenterBibleImporter()
-        importers[topPresenterImporter.format] = topPresenterImporter
-        let osisImporter = OSISBibleImporter()
-        importers[osisImporter.format] = osisImporter
-        let zefaniaImporter = ZefaniaBibleImporter()
-        importers[zefaniaImporter.format] = zefaniaImporter
-        let mySwordImporter = MySwordBibleImporter()
-        importers[mySwordImporter.format] = mySwordImporter
-        let usfmImporter = USFMBibleImporter()
-        importers[usfmImporter.format] = usfmImporter
-        let unboundImporter = UnboundBibleImporter()
-        importers[unboundImporter.format] = unboundImporter
-        return importers
-    }()
+    /// Fresh importer per import (nonisolated factory). The XML importers carry
+    /// mutable parser state, so SHARED instances were a latent data race —
+    /// a new instance per call is correct and lets imports run off-main.
+    /// Add new importers here to support additional formats.
+    nonisolated private static func makeBibleImporter(for format: SupportedBibleFormat) -> (any BibleImporter)? {
+        switch format {
+        case .topPresenter: return TopPresenterBibleImporter()
+        case .osisXML: return OSISBibleImporter()
+        case .zefaniaXML: return ZefaniaBibleImporter()
+        case .mySword: return MySwordBibleImporter()
+        case .usfm: return USFMBibleImporter()
+        case .unboundBible: return UnboundBibleImporter()
+        }
+    }
 
     /// Registered Song importers. Add new importers here to support additional formats.
     private static let songImporters: [SupportedSongFormat: SongImporter] = {
@@ -63,7 +60,7 @@ final class ImportService {
 
     /// Thrown by `importBible(resolution: .ask)` when a same-code module exists,
     /// so the UI can present the Replace/Merge/Keep-both/Cancel dialog.
-    struct BibleConflict: Error {
+    struct BibleConflict: Error, Sendable {
         let code: String
         let existingName: String
         let existingVerses: Int
@@ -72,28 +69,32 @@ final class ImportService {
     }
 
     /// Cancelled by the user — callers should ignore silently.
-    struct BibleImportCancelled: Error {}
+    struct BibleImportCancelled: Error, Sendable {}
 
     /// Finds an already-imported module by code (case-insensitive abbreviation).
-    static func existingBibleModule(code: String, modelContext: ModelContext) -> BibleModule? {
+    nonisolated static func existingBibleModule(code: String, modelContext: ModelContext) -> BibleModule? {
         let needle = code.lowercased()
         guard !needle.isEmpty else { return nil }
         let all = (try? modelContext.fetch(FetchDescriptor<BibleModule>())) ?? []
         return all.first { $0.abbreviation.lowercased() == needle }
     }
 
-    static func importBible(
+    /// nonisolated(nonsending): runs on the CALLER's isolation and operates only
+    /// on the passed context — call it from the main actor with the main context
+    /// (single-file UI imports) or from BackgroundImportActor with ITS context
+    /// (batch imports, fully off-main). Never mix contexts across isolations.
+    nonisolated static func importBible(
         fileURL: URL,
         format: SupportedBibleFormat,
         modelContext: ModelContext,
         resolution: BibleConflictResolution = .keepBoth,
-        progressHandler: ((Double, String) -> Void)? = nil
+        progressHandler: (@MainActor @Sendable (Double, String) -> Void)? = nil
     ) async throws -> BibleModule {
-        guard let importer = bibleImporters[format] else {
+        guard let importer = makeBibleImporter(for: format) else {
             throw BibleImportError.unsupportedFormat(format.displayName)
         }
 
-        progressHandler?(0.1, String(localized: "Reading file...", comment: "Import progress"))
+        await progressHandler?(0.1, String(localized: "Reading file...", comment: "Import progress"))
 
         // Start accessing security-scoped resource
         let accessing = fileURL.startAccessingSecurityScopedResource()
@@ -120,10 +121,10 @@ final class ImportService {
             case .cancel:
                 throw BibleImportCancelled()
             case .merge:
-                progressHandler?(0.5, String(localized: "Merging...", comment: "Import progress"))
+                await progressHandler?(0.5, String(localized: "Merging...", comment: "Import progress"))
                 mergeBible(result, into: existing, modelContext: modelContext)
                 try modelContext.save()
-                progressHandler?(1.0, String(localized: "Complete!", comment: "Import progress"))
+                await progressHandler?(1.0, String(localized: "Complete!", comment: "Import progress"))
                 return existing
             case .replace:
                 modelContext.delete(existing)
@@ -132,7 +133,7 @@ final class ImportService {
             }
         }
 
-        progressHandler?(0.5, String(localized: "Importing books...", comment: "Import progress"))
+        await progressHandler?(0.5, String(localized: "Importing books...", comment: "Import progress"))
 
         // Correct an obviously-wrong declared language from the verse-text script
         // (e.g. a Greek/Hebrew module mistakenly tagged "ro"). Latin scripts are
@@ -170,64 +171,73 @@ final class ImportService {
         let totalBooks = result.books.count
 
         for (index, importBook) in result.books.enumerated() {
-            let book = BibleBook(
-                name: importBook.name,
-                bookNumber: importBook.bookNumber,
-                testament: importBook.testament,
-                nameEnglish: importBook.nameEnglish,
-                abbreviation: importBook.abbreviation,
-                abbreviationEnglish: importBook.abbreviationEnglish,
-                expectedChapters: importBook.expectedChapters,
-                introduction: importBook.introduction ?? "",
-                extensionsJSON: importBook.extensionsJSON
-            )
-            book.module = module
-
-            for importChapter in importBook.chapters {
-                let chapter = BibleChapter(
-                    chapterNumber: importChapter.chapterNumber,
-                    headingsJSON: BibleRichData.encode(importChapter.headings),
-                    extensionsJSON: importChapter.extensionsJSON
+            // autoreleasepool: the chapter/verse loops churn thousands of
+            // transient Foundation objects — drain them per book so a whole-Bible
+            // import can't balloon the heap (the malloc-corruption crash class).
+            autoreleasepool {
+                let book = BibleBook(
+                    name: importBook.name,
+                    bookNumber: importBook.bookNumber,
+                    testament: importBook.testament,
+                    nameEnglish: importBook.nameEnglish,
+                    abbreviation: importBook.abbreviation,
+                    abbreviationEnglish: importBook.abbreviationEnglish,
+                    expectedChapters: importBook.expectedChapters,
+                    introduction: importBook.introduction ?? "",
+                    extensionsJSON: importBook.extensionsJSON
                 )
-                chapter.book = book
+                book.module = module
 
-                for importVerse in importChapter.verses {
-                    let verse = BibleVerse(
-                        verseNumber: importVerse.verseNumber,
-                        text: importVerse.text,
-                        runsJSON: BibleRichData.encode(importVerse.runs),
-                        footnotesJSON: BibleRichData.encode(importVerse.footnotes),
-                        crossRefsJSON: BibleRichData.encode(importVerse.crossReferences),
-                        hasWordsOfChrist: importVerse.hasWordsOfChrist,
-                        gloss: importVerse.gloss,
-                        extensionsJSON: importVerse.extensionsJSON
+                for importChapter in importBook.chapters {
+                    let chapter = BibleChapter(
+                        chapterNumber: importChapter.chapterNumber,
+                        headingsJSON: BibleRichData.encode(importChapter.headings),
+                        extensionsJSON: importChapter.extensionsJSON
                     )
-                    verse.chapter = chapter
+                    chapter.book = book
+
+                    for importVerse in importChapter.verses {
+                        let verse = BibleVerse(
+                            verseNumber: importVerse.verseNumber,
+                            text: importVerse.text,
+                            runsJSON: BibleRichData.encode(importVerse.runs),
+                            footnotesJSON: BibleRichData.encode(importVerse.footnotes),
+                            crossRefsJSON: BibleRichData.encode(importVerse.crossReferences),
+                            hasWordsOfChrist: importVerse.hasWordsOfChrist,
+                            gloss: importVerse.gloss,
+                            extensionsJSON: importVerse.extensionsJSON
+                        )
+                        verse.chapter = chapter
+                    }
                 }
             }
 
+            // Chunked persistence: one save per book keeps the context's pending
+            // object graph small instead of one massive end-of-import save.
+            try modelContext.save()
+
             let progress = 0.5 + (Double(index + 1) / Double(totalBooks)) * 0.4
-            progressHandler?(progress, String(localized: "Importing \(importBook.name)...", comment: "Import progress"))
+            await progressHandler?(progress, String(localized: "Importing \(importBook.name)...", comment: "Import progress"))
         }
 
-        progressHandler?(0.95, String(localized: "Saving...", comment: "Import progress"))
+        await progressHandler?(0.95, String(localized: "Saving...", comment: "Import progress"))
         try modelContext.save()
-        progressHandler?(1.0, String(localized: "Complete!", comment: "Import progress"))
+        await progressHandler?(1.0, String(localized: "Complete!", comment: "Import progress"))
 
         return module
     }
 
     /// Total verse count of a parsed result (for the conflict dialog stats).
-    static func verseCount(of result: BibleImportResult) -> Int {
+    nonisolated static func verseCount(of result: BibleImportResult) -> Int {
         result.books.reduce(0) { $0 + $1.chapters.reduce(0) { $0 + $1.verses.count } }
     }
 
-    static func verseCount(of module: BibleModule) -> Int {
+    nonisolated static func verseCount(of module: BibleModule) -> Int {
         module.books.reduce(0) { $0 + $1.chapters.reduce(0) { $0 + $1.verses.count } }
     }
 
     /// Disambiguated name when keeping both ("Name", "Name (2)", "Name (3)"…).
-    private static func uniqueModuleName(_ base: String, modelContext: ModelContext) -> String {
+    nonisolated private static func uniqueModuleName(_ base: String, modelContext: ModelContext) -> String {
         let all = (try? modelContext.fetch(FetchDescriptor<BibleModule>())) ?? []
         let names = Set(all.map { $0.name })
         if !names.contains(base) { return base }
@@ -239,7 +249,7 @@ final class ImportService {
     /// Fills in only what the existing module is MISSING: new books, new
     /// chapters in existing books, and new verses in existing chapters. Verses
     /// already present are left untouched (the existing copy wins).
-    private static func mergeBible(_ result: BibleImportResult, into module: BibleModule, modelContext: ModelContext) {
+    nonisolated private static func mergeBible(_ result: BibleImportResult, into module: BibleModule, modelContext: ModelContext) {
         // Fill in module-level metadata the existing copy is missing.
         if module.aboutText.isEmpty { module.aboutText = result.about }
         if module.copyright.isEmpty { module.copyright = result.copyright }

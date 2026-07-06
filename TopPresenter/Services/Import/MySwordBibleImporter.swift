@@ -12,7 +12,7 @@ import SQLite3
 /// MySword uses SQLite databases with a `Bible` table containing columns:
 /// Book (int), Chapter (int), Verse (int), Scripture (text with GBF tags).
 /// A `Details` table holds module metadata.
-final class MySwordBibleImporter: BibleImporter {
+nonisolated final class MySwordBibleImporter: BibleImporter {
     let format: SupportedBibleFormat = .mySword
 
     func parse(fileURL: URL) async throws -> BibleImportResult {
@@ -236,7 +236,7 @@ final class MySwordBibleImporter: BibleImporter {
 /// `<TS>…<Ts>`→headings, `<RF>…<Rf>`→footnotes, `<RX>…<Rx>`→cross-references,
 /// red `<FR>…<Fr>`→words-of-Christ runs, `<FI>…<Fi>`→added-words runs,
 /// `<WG####>`/`<WH####>`→Strong's (attached to the preceding word), `<WT…>`→morphology.
-enum MySwordGBF {
+nonisolated enum MySwordGBF {
     struct Result {
         var text: String = ""
         var runs: [VerseRun]? = nil

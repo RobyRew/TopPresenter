@@ -9,7 +9,7 @@ import SwiftData
 
 // MARK: - Schema Version 1 (Initial)
 enum SchemaV1: VersionedSchema {
-    static var versionIdentifier = Schema.Version(1, 0, 0)
+    static let versionIdentifier = Schema.Version(1, 0, 0)
 
     static var models: [any PersistentModel.Type] {
         [
@@ -35,7 +35,7 @@ enum SchemaV1: VersionedSchema {
 // defaults — so V1→V2 is a lightweight migration (no data loss, no custom code).
 // SongVerse is retained as the flattened presentation cache of a song's active version.
 enum SchemaV2: VersionedSchema {
-    static var versionIdentifier = Schema.Version(2, 0, 0)
+    static let versionIdentifier = Schema.Version(2, 0, 0)
 
     static var models: [any PersistentModel.Type] {
         [

@@ -11,7 +11,7 @@ import Foundation
 /// Maps the full Zefania feature set into the GOAT model: `<CAPTION>`→headings,
 /// `<NOTE>`→footnotes, `<XREF>`→cross-references, red `<STYLE>`→words-of-Christ runs,
 /// `<gr str>`→Strong's numbers, and `<INFORMATION>`→module metadata.
-final class ZefaniaBibleImporter: BibleImporter {
+nonisolated final class ZefaniaBibleImporter: BibleImporter {
     let format: SupportedBibleFormat = .zefaniaXML
 
     func parse(fileURL: URL) async throws -> BibleImportResult {
