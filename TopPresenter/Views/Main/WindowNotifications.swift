@@ -97,9 +97,11 @@ final class PresentationCommandRouter {
 
     init(pm: PresentationManager) {
         let center = NotificationCenter.default
-        func on(_ name: Notification.Name, _ handler: @escaping () -> Void) {
+        func on(_ name: Notification.Name, _ handler: @escaping @MainActor () -> Void) {
             tokens.append(center.addObserver(forName: name, object: nil, queue: .main) { _ in
-                handler()
+                // queue: .main guarantees main-thread delivery; the observer
+                // closure is typed nonisolated @Sendable, so assert isolation.
+                MainActor.assumeIsolated(handler)
             })
         }
 

@@ -1262,7 +1262,9 @@ struct ForceTouchDetector: NSViewRepresentable {
             return nil
         }
 
-        deinit {
+        // isolated deinit (SE-0371): runs on the main actor — NSEvent monitor
+        // teardown touches NSView-isolated state.
+        isolated deinit {
             removeMonitor()
         }
     }

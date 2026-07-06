@@ -3600,11 +3600,14 @@ struct LayoutEditorSheet: View {
     @ViewBuilder
     private func transitionRow(
         label: String, help: String,
-        get: @escaping () -> String, set: @escaping (String) -> Void
+        get: @escaping @MainActor () -> String, set: @escaping @MainActor (String) -> Void
     ) -> some View {
         labeledRow(label) {
+            // `{ get() }` not `get` — passing the function value directly makes the
+            // compiler emit an @isolated(any) reabstraction thunk that crashes
+            // swift-frontend (Xcode 26.2 IRGen, SmallVector capacity abort).
             Picker("", selection: Binding(
-                get: get,
+                get: { get() },
                 set: { raw in
                     set(raw)
                     playTransitionPreview(raw)

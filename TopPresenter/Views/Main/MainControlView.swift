@@ -8,6 +8,7 @@
 import SwiftUI
 import SwiftData
 import UniformTypeIdentifiers
+import os
 
 /// The main control window - split into sidebar, content area, and preview panel.
 struct MainControlView: View {
@@ -265,9 +266,8 @@ struct MainControlView: View {
     }
 
     private func handleDrop(providers: [NSItemProvider]) {
-        // Provider callbacks arrive on arbitrary threads — serialize the appends.
-        let lock = NSLock()
-        var urls: [URL] = []
+        // Provider callbacks arrive on arbitrary threads — collect behind a lock.
+        let collected = OSAllocatedUnfairLock(initialState: [URL]())
         let group = DispatchGroup()
 
         for provider in providers {
@@ -277,14 +277,13 @@ struct MainControlView: View {
                 if let data = data as? Data,
                    let urlString = String(data: data, encoding: .utf8),
                    let url = URL(string: urlString) {
-                    lock.lock()
-                    urls.append(url)
-                    lock.unlock()
+                    collected.withLock { $0.append(url) }
                 }
             }
         }
 
         group.notify(queue: .main) { [self] in
+            let urls = collected.withLock { $0 }
             guard !urls.isEmpty else { return }
             Task {
                 // EXPAND folders first (max 2 subfolder levels, USFM kept whole) —

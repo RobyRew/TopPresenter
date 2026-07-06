@@ -927,7 +927,11 @@ final class PresentationManager {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            self?.handleScreenConfigurationChange()
+            // queue: .main guarantees main-thread delivery; the closure is just
+            // typed nonisolated @Sendable, so assert the isolation for Swift 6.
+            MainActor.assumeIsolated {
+                self?.handleScreenConfigurationChange()
+            }
         }
     }
 

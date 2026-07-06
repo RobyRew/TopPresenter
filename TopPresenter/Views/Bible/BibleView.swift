@@ -8,6 +8,7 @@
 import SwiftUI
 import SwiftData
 import UniformTypeIdentifiers
+import os
 
 /// Main Bible view with module selection, book/chapter navigation, search, and verse display.
 struct BibleView: View {
@@ -1388,16 +1389,16 @@ struct BibleImportSheet: View {
     /// Load dropped file URLs asynchronously, then route them.
     private func loadDroppedURLs(_ providers: [NSItemProvider]) {
         let group = DispatchGroup()
-        let lock = NSLock()
-        var urls: [URL] = []
+        // Provider callbacks arrive on arbitrary threads — collect behind a lock.
+        let collected = OSAllocatedUnfairLock(initialState: [URL]())
         for p in providers where p.canLoadObject(ofClass: URL.self) {
             group.enter()
             _ = p.loadObject(ofClass: URL.self) { url, _ in
-                if let url { lock.lock(); urls.append(url); lock.unlock() }
+                if let url { collected.withLock { $0.append(url) } }
                 group.leave()
             }
         }
-        group.notify(queue: .main) { handleSelectedURLs(urls) }
+        group.notify(queue: .main) { handleSelectedURLs(collected.withLock { $0 }) }
     }
 
     /// One file → inline single-import flow (detect/override format). Multiple
