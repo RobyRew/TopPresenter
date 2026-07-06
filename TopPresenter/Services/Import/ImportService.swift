@@ -654,6 +654,7 @@ final class ImportService {
 
         if result.collection != nil {
             try? modelContext.save()
+            NotificationCenter.default.post(name: .libraryDidChange, object: nil)
         }
         progressHandler?(1.0, String(localized: "Gata!", comment: "Import progress"))
         return result
@@ -817,6 +818,7 @@ final class ImportService {
             authorWords: song.authorWords, songNumber: song.songNumber,
             songbookNumber: song.songbookNumber, lyrics: lyrics
         )
+        NotificationCenter.default.post(name: .libraryDidChange, object: nil)
     }
 
     // MARK: - Edit-log diff (coarse, human-readable change summaries)
@@ -992,6 +994,7 @@ final class ImportService {
         )
         song.modifiedDate = .now
         try? modelContext.save()
+        NotificationCenter.default.post(name: .libraryDidChange, object: nil)
     }
 
     /// Auto-stamp „Date proprii pentru versiune" on versions whose imported

@@ -254,6 +254,10 @@ extension Notification.Name {
     // selectedSchedule) — no notification round-trips.
     static let slideSelected = Notification.Name("TopPresenter.slideSelected")
 
+    /// The song/media/session library changed (import, edit, delete) —
+    /// SearchIndex listens and schedules a debounced background rebuild.
+    static let libraryDidChange = Notification.Name("TopPresenter.libraryDidChange")
+
     // Content area toolbar actions
     static let importMedia = Notification.Name("TopPresenter.importMedia")
     static let addScheduleItem = Notification.Name("TopPresenter.addScheduleItem")

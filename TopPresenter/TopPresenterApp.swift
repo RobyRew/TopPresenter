@@ -19,6 +19,9 @@ struct TopPresenterApp: App {
     @State private var pinStore = PinStore()
     /// THE session runner — one live output ⇒ one running session, app-global.
     @State private var sessionRunner: SessionRunner
+    /// Search/browse backbone: off-main-built projections + token index for the
+    /// whole library (30-60k songs stay instant). App-global.
+    @State private var searchIndex = SearchIndex()
     /// Sparkle-backed auto-updater (launch + scheduled checks, quiet prompts).
     @StateObject private var updateController = UpdateController()
     /// Handles output-wide menu commands (black/freeze/clear/font) exactly once —
@@ -78,8 +81,10 @@ struct TopPresenterApp: App {
                 .environment(historyStore)
                 .environment(pinStore)
                 .environment(sessionRunner)
+                .environment(searchIndex)
                 .environmentObject(updateController)
                 .frame(minWidth: 1100, minHeight: 700)
+                .task { searchIndex.configure(container: sharedModelContainer) }
         }
         .modelContainer(sharedModelContainer)
         .defaultSize(width: 1400, height: 900)

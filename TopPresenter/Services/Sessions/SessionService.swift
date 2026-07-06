@@ -53,6 +53,7 @@ enum SessionService {
         let schedule = ServiceSchedule(name: trimmed.isEmpty ? fallback : trimmed, date: date)
         context.insert(schedule)
         try? context.save()
+        NotificationCenter.default.post(name: .libraryDidChange, object: nil)
         return schedule
     }
 
@@ -155,11 +156,26 @@ private struct SongItemResolver: SessionItemResolving {
             if !item.content.isEmpty { return .text(title: item.title, content: item.content) }
             return .missing(String(localized: "Cântec fără referință", comment: "Missing session item reason"))
         }
-        let songs = (try? context.fetch(FetchDescriptor<Song>())) ?? []
-        guard let song = songs.first(where: {
-            HistoryStore.songKey(ccli: $0.ccliNumber, title: $0.title,
-                                 source: $0.collection?.sourceFormat ?? "") == p.songKey
-        }) else {
+        // FAST PATH: "ccli:NNN" keys resolve via an indexed predicate — a 60k-song
+        // library must never be fetched wholesale just to find one song.
+        let song: Song?
+        if p.songKey.hasPrefix("ccli:") {
+            let ccli = String(p.songKey.dropFirst(5))
+            var d = FetchDescriptor<Song>(predicate: #Predicate { $0.ccliNumber == ccli })
+            d.fetchLimit = 8
+            song = ((try? context.fetch(d)) ?? []).first {
+                HistoryStore.songKey(ccli: $0.ccliNumber, title: $0.title,
+                                     source: $0.collection?.sourceFormat ?? "") == p.songKey
+            }
+        } else {
+            // Title-based keys need the normalized comparison — full scan fallback.
+            let songs = (try? context.fetch(FetchDescriptor<Song>())) ?? []
+            song = songs.first {
+                HistoryStore.songKey(ccli: $0.ccliNumber, title: $0.title,
+                                     source: $0.collection?.sourceFormat ?? "") == p.songKey
+            }
+        }
+        guard let song else {
             return .missing(String(localized: "„\(p.songTitle)” nu mai e în bibliotecă", comment: "Missing session item reason"))
         }
         // Arrangement: exact id → name match → active version.

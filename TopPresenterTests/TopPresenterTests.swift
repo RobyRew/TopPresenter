@@ -3081,6 +3081,78 @@ struct SessionArchiveTests {
     }
 }
 
+// MARK: - Search Index Tests (token inverted index + folding)
+
+struct SearchIndexTests {
+    @Test func tokenIndexPrefixMatchAndIntersection() {
+        let blobs = [
+            searchFold("Măreț ești Tu Doamne mare"),      // 0
+            searchFold("Ce mare ești Tu Isuse"),           // 1
+            searchFold("Aleluia cântați Domnului"),        // 2
+        ]
+        let idx = SongTokenIndex.build(blobs: blobs)
+
+        // Prefix match, diacritic-insensitive.
+        #expect(idx.candidates(prefix: "mare") == Set([0, 1]))
+        #expect(idx.candidates(prefix: "mar") == Set([0, 1]))       // "maret" + "mare"
+        // Multi-token AND.
+        #expect(idx.match(queryTokens: ["mare", "isuse"]) == Set([1]))
+        #expect(idx.match(queryTokens: ["mare", "aleluia"])?.isEmpty == true)
+        // Empty query → nil (no filter).
+        #expect(idx.match(queryTokens: []) == nil)
+        // Diacritic query folds the same way.
+        #expect(searchTokens("Cântați") == ["cantati"])
+        #expect(idx.match(queryTokens: searchTokens("cântați")) == Set([2]))
+    }
+}
+
+// MARK: - Bible Reference Parser Tests
+
+struct BibleReferenceParserTests {
+    private let books: [BookIndexEntry] = [
+        .init(moduleID: UUID(), bookNumber: 43, name: "Ioan", folded: "ioan",
+              abbreviationFolded: "in", chapterCount: 21),
+        .init(moduleID: UUID(), bookNumber: 62, name: "1 Ioan", folded: "1 ioan",
+              abbreviationFolded: "1in", chapterCount: 5),
+        .init(moduleID: UUID(), bookNumber: 46, name: "1 Corinteni", folded: "1 corinteni",
+              abbreviationFolded: "1cor", chapterCount: 16),
+        .init(moduleID: UUID(), bookNumber: 19, name: "Psalmii", folded: "psalmii",
+              abbreviationFolded: "ps", chapterCount: 150),
+    ]
+
+    @Test func parsesSimpleAndRangedReferences() {
+        let simple = BibleReferenceParser.parse("ioan 3:16", books: books)
+        #expect(simple == BibleReferenceMatch(bookNumber: 43, bookName: "Ioan",
+                                              chapter: 3, verseStart: 16, verseEnd: 16))
+        // Space instead of colon + range.
+        let range = BibleReferenceParser.parse("1 corinteni 13 4-7", books: books)
+        #expect(range?.bookNumber == 46)
+        #expect(range?.chapter == 13)
+        #expect(range?.verseStart == 4)
+        #expect(range?.verseEnd == 7)
+        // Chapter only.
+        let chapter = BibleReferenceParser.parse("Psalmii 23", books: books)
+        #expect(chapter == BibleReferenceMatch(bookNumber: 19, bookName: "Psalmii",
+                                               chapter: 23, verseStart: nil, verseEnd: nil))
+    }
+
+    @Test func matchesPrefixesAbbreviationsAndLeadingDigits() {
+        // Prefix: shortest name wins ("ioan" → Ioan, not 1 Ioan).
+        #expect(BibleReferenceParser.parse("ioan 1:1", books: books)?.bookNumber == 43)
+        // Leading-digit book.
+        #expect(BibleReferenceParser.parse("1 ioan 4:8", books: books)?.bookNumber == 62)
+        // Abbreviation.
+        #expect(BibleReferenceParser.parse("ps 23:1", books: books)?.bookNumber == 19)
+        // Diacritics in the query.
+        #expect(BibleReferenceParser.parse("PSALMII 23", books: books)?.bookNumber == 19)
+        // Fuzzy word match with leading digit: "1 cor 13".
+        #expect(BibleReferenceParser.parse("1 cor 13", books: books)?.bookNumber == 46)
+        // Non-references stay nil.
+        #expect(BibleReferenceParser.parse("maret esti tu", books: books) == nil)
+        #expect(BibleReferenceParser.parse("ioan", books: books) == nil)
+    }
+}
+
 // MARK: - Tab Auto-naming Tests
 
 @MainActor struct TabAutoNamingTests {

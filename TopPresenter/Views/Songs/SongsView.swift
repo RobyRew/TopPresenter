@@ -107,6 +107,7 @@ struct SongsView: View {
         }
         modelContext.delete(collection)
         try? modelContext.save()
+        NotificationCenter.default.post(name: .libraryDidChange, object: nil)
     }
 }
 
@@ -141,6 +142,7 @@ struct SongListPanel: View {
     @Environment(LibraryManager.self) private var libraryManager
     @Environment(PresentationManager.self) private var presentationManager
     @Environment(PinStore.self) private var pinStore
+    @Environment(SearchIndex.self) private var index
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \SongCollection.name) private var collections: [SongCollection]
     @AppStorage("song_maxLinesPerSlide") private var maxLines: Int = 6
@@ -161,56 +163,49 @@ struct SongListPanel: View {
     /// Grid cell under the pointer — reveals its pin toggle on hover.
     @State private var hoveredSongID: UUID?
 
-    private var sourceSongs: [Song] {
-        if let id = collectionFilter, let col = collections.first(where: { $0.id == id }) {
-            return col.songs
-        }
-        return collections.flatMap { $0.songs }
-    }
+    private var availableLanguages: [String] { index.availableLanguages }
 
-    private var availableLanguages: [String] {
-        Array(Set(sourceSongs.map(\.language).filter { !$0.isEmpty })).sorted()
-    }
+    /// PROJECTION-based filtering: candidates come from the token inverted index
+    /// (O(µs) even at 60k songs), ordering comes from the per-generation sort
+    /// cache — no SwiftData model is touched per keystroke or per row.
+    private var filtered: [SongIndexEntry] {
+        var tokens = searchTokens(query)
+        // "verificat" / "✓" tokens act as the verified filter, like before.
+        var mustBeVerified = onlyVerified
+        tokens.removeAll { tok in
+            if tok == "verificat" || tok == "✓" { mustBeVerified = true; return true }
+            return false
+        }
+        let hits = index.songTokens.match(queryTokens: tokens)   // nil = no text filter
+        if hits?.isEmpty == true { return [] }
 
-    private var filtered: [Song] {
-        let tokens = query.lowercased().split(separator: " ").map(String.init)
-        var songs = sourceSongs.filter { song in
-            if !languageFilter.isEmpty && song.language != languageFilter { return false }
-            if onlyWithMedia && song.media.isEmpty { return false }
-            if onlyVerified && !song.verified { return false }
-            guard !tokens.isEmpty else { return true }
-            // "verificat" / "✓" match verified songs, alongside the text search.
-            let hay = song.searchText.isEmpty ? song.title.lowercased() : song.searchText
-            return tokens.allSatisfy { tok in
-                if (tok == "verificat" || tok == "✓"), song.verified { return true }
-                return hay.contains(tok)
-            }
+        let order = index.sortedOrder(for: sortKey)
+        var out: [SongIndexEntry] = []
+        out.reserveCapacity(hits?.count ?? min(order.count, 4096))
+        for i in order {
+            if let hits, !hits.contains(i) { continue }
+            let e = index.songs[Int(i)]
+            if let id = collectionFilter, e.collectionID != id { continue }
+            if !languageFilter.isEmpty, e.language != languageFilter { continue }
+            if onlyWithMedia, !e.hasMedia { continue }
+            if mustBeVerified, !e.verified { continue }
+            out.append(e)
         }
-        switch sortKey {
-        case .title:
-            songs.sort { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
-        case .author:
-            songs.sort { $0.author.localizedStandardCompare($1.author) == .orderedAscending }
-        case .songbook:
-            songs.sort { ($0.songbook?.name ?? "\u{10FFFF}").localizedStandardCompare($1.songbook?.name ?? "\u{10FFFF}") == .orderedAscending }
-        case .language:
-            songs.sort {
-                let c = $0.language.localizedStandardCompare($1.language)
-                return c == .orderedSame
-                    ? $0.title.localizedStandardCompare($1.title) == .orderedAscending
-                    : c == .orderedAscending
-            }
-        case .recent:
-            songs.sort { $0.modifiedDate > $1.modifiedDate }
-        }
-        return songs
+        return out
     }
 
     var body: some View {
         VStack(spacing: 0) {
             toolbar
             Divider()
-            if filtered.isEmpty {
+            if index.songs.isEmpty && index.isBuilding {
+                VStack(spacing: 10) {
+                    ProgressView()
+                    Text(String(localized: "Se indexează biblioteca…", comment: "Index building"))
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if filtered.isEmpty {
                 ContentUnavailableView(
                     String(localized: "Niciun cântec", comment: "Empty"),
                     systemImage: "magnifyingglass",
@@ -223,6 +218,13 @@ struct SongListPanel: View {
                 listView
             }
         }
+    }
+
+    /// Fetch the real @Model for an entry ON DEMAND (selection, menu actions).
+    private func withSong(_ id: UUID, _ action: (Song) -> Void) {
+        var d = FetchDescriptor<Song>(predicate: #Predicate { $0.id == id })
+        d.fetchLimit = 1
+        if let song = (try? modelContext.fetch(d))?.first { action(song) }
     }
 
     private var toolbar: some View {
@@ -307,29 +309,38 @@ struct SongListPanel: View {
     /// artist initial). Empty key = a single ungrouped section (Recente). Order is
     /// preserved from `filtered`, which is already sorted. Pinned songs float into
     /// a single "Fixate" group prepended on top (they appear ONLY there).
-    private var grouped: [(key: String, songs: [Song])] {
-        let (pinned, songs) = PinStore.partition(filtered, pinnedIDs: pinStore.pinnedSongIDs)
-        var groups: [(key: String, songs: [Song])] = []
+    private var grouped: [(key: String, songs: [SongIndexEntry])] {
+        let entries = filtered
+        var pinned: [SongIndexEntry] = []
+        var rest: [SongIndexEntry] = []
+        if pinStore.hasPins {
+            for e in entries {
+                if pinStore.isPinned(e.id) { pinned.append(e) } else { rest.append(e) }
+            }
+        } else {
+            rest = entries
+        }
+        var groups: [(key: String, songs: [SongIndexEntry])] = []
         if !pinned.isEmpty { groups.append((Self.pinnedGroupKey, pinned)) }
         if sortKey == .recent {
-            groups.append(("", songs))
+            groups.append(("", rest))
             return groups
         }
-        func keyFor(_ s: Song) -> String {
+        func keyFor(_ e: SongIndexEntry) -> String {
             switch sortKey {
-            case .title: return initialLetter(s.title)
-            case .author: return s.author.isEmpty ? "—" : initialLetter(s.author)
-            case .songbook: return s.songbook?.name ?? String(localized: "Fără carte", comment: "No songbook")
-            case .language: return s.language.isEmpty ? "—" : s.language.uppercased()
+            case .title: return initialLetter(e.title)
+            case .author: return e.author.isEmpty ? "—" : initialLetter(e.author)
+            case .songbook: return e.songbookName.isEmpty ? String(localized: "Fără carte", comment: "No songbook") : e.songbookName
+            case .language: return e.language.isEmpty ? "—" : e.language.uppercased()
             case .recent: return ""
             }
         }
         var order: [String] = []
-        var map: [String: [Song]] = [:]
-        for s in songs {
-            let k = keyFor(s)
+        var map: [String: [SongIndexEntry]] = [:]
+        for e in rest {
+            let k = keyFor(e)
             if map[k] == nil { order.append(k); map[k] = [] }
-            map[k]?.append(s)
+            map[k]?.append(e)
         }
         return groups + order.map { ($0, map[$0] ?? []) }
     }
@@ -379,17 +390,17 @@ struct SongListPanel: View {
 
     private var songSelection: Binding<UUID?> {
         Binding(get: { libraryManager.selectedSong?.id },
-                set: { id in if let id, let s = filtered.first(where: { $0.id == id }) { libraryManager.selectSong(s) } })
+                set: { id in if let id { withSong(id) { libraryManager.selectSong($0) } } })
     }
 
     private var listView: some View {
         List(selection: songSelection) {
             ForEach(grouped, id: \.key) { group in
                 if group.key.isEmpty {
-                    ForEach(group.songs) { song in songRow(song).tag(song.id) }
+                    ForEach(group.songs) { entry in songRow(entry).tag(entry.id) }
                 } else {
                     Section {
-                        ForEach(group.songs) { song in songRow(song).tag(song.id) }
+                        ForEach(group.songs) { entry in songRow(entry).tag(entry.id) }
                     } header: { groupHeader(group.key) }
                 }
             }
@@ -397,19 +408,19 @@ struct SongListPanel: View {
         .listStyle(.inset)
     }
 
-    private func songRow(_ song: Song) -> some View {
+    private func songRow(_ entry: SongIndexEntry) -> some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(song.title).font(.body).lineLimit(1)
+            Text(entry.title).font(.body).lineLimit(1)
             HStack(spacing: 6) {
-                if !song.author.isEmpty {
-                    Text(song.author).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                if !entry.author.isEmpty {
+                    Text(entry.author).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                 }
                 Spacer()
-                songBadges(song)
+                songBadges(entry)
             }
         }
         .padding(.vertical, 2)
-        .contextMenu { songMenu(song) }
+        .contextMenu { songMenu(entry) }
     }
 
     private var gridView: some View {
@@ -431,104 +442,113 @@ struct SongListPanel: View {
         }
     }
 
-    private func gridCell(_ song: Song) -> some View {
-        Button { libraryManager.selectSong(song) } label: {
+    private func gridCell(_ entry: SongIndexEntry) -> some View {
+        Button { withSong(entry.id) { libraryManager.selectSong($0) } } label: {
             VStack(spacing: 0) {
-                SongThemeSlideView(text: firstSlideText(song), fontSize: 8)
+                SongThemeSlideView(text: entry.firstLine.isEmpty ? entry.title : entry.firstLine, fontSize: 8)
                     .frame(height: 62)
                     .clipped()
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(song.title).font(.callout.weight(.medium)).lineLimit(2)
+                    Text(entry.title).font(.callout.weight(.medium)).lineLimit(2)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                    if !song.author.isEmpty {
-                        Text(song.author).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+                    if !entry.author.isEmpty {
+                        Text(entry.author).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
                     }
-                    HStack { songBadges(song); Spacer() }
+                    HStack { songBadges(entry); Spacer() }
                 }
                 .padding(8)
             }
             .frame(height: 132, alignment: .top)
             .background(
-                libraryManager.selectedSong?.id == song.id
+                libraryManager.selectedSong?.id == entry.id
                     ? Color.accentColor.opacity(0.18)
                     : Color.secondary.opacity(0.08),
                 in: RoundedRectangle(cornerRadius: 10)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 10)
-                    .stroke(libraryManager.selectedSong?.id == song.id ? Color.accentColor : Color.clear, lineWidth: 1.5)
+                    .stroke(libraryManager.selectedSong?.id == entry.id ? Color.accentColor : Color.clear, lineWidth: 1.5)
             )
             .clipShape(RoundedRectangle(cornerRadius: 10))
         }
         .buttonStyle(.plain)
         .overlay(alignment: .topTrailing) {
             // Pin toggle: always visible when pinned, revealed on hover otherwise.
-            if pinStore.isPinned(song.id) || hoveredSongID == song.id {
-                Button { pinStore.togglePin(song.id) } label: {
-                    Image(systemName: pinStore.isPinned(song.id) ? "pin.fill" : "pin")
+            if pinStore.isPinned(entry.id) || hoveredSongID == entry.id {
+                Button { pinStore.togglePin(entry.id) } label: {
+                    Image(systemName: pinStore.isPinned(entry.id) ? "pin.fill" : "pin")
                         .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(pinStore.isPinned(song.id) ? Color.accentColor : .secondary)
+                        .foregroundStyle(pinStore.isPinned(entry.id) ? Color.accentColor : .secondary)
                         .padding(4)
                         .background(.thinMaterial, in: Circle())
                 }
                 .buttonStyle(.plain)
                 .padding(4)
-                .help(pinStore.isPinned(song.id)
+                .help(pinStore.isPinned(entry.id)
                         ? String(localized: "Anulează fixarea", comment: "Tooltip — unpin song")
                         : String(localized: "Fixează sus", comment: "Tooltip — pin song to top"))
             }
         }
         .onHover { inside in
-            if inside { hoveredSongID = song.id }
-            else if hoveredSongID == song.id { hoveredSongID = nil }
+            if inside { hoveredSongID = entry.id }
+            else if hoveredSongID == entry.id { hoveredSongID = nil }
         }
-        .contextMenu { songMenu(song) }
-    }
-
-    private func firstSlideText(_ song: Song) -> String {
-        if let section = song.activeVersion?.sortedSections.first, !section.plainText.isEmpty {
-            return section.plainText
-        }
-        return song.sortedVerses.first?.text ?? song.title
+        .contextMenu { songMenu(entry) }
     }
 
     @ViewBuilder
-    private func songMenu(_ song: Song) -> some View {
-        Button { pinStore.togglePin(song.id) } label: {
-            Label(pinStore.isPinned(song.id)
+    private func songMenu(_ entry: SongIndexEntry) -> some View {
+        Button { pinStore.togglePin(entry.id) } label: {
+            Label(pinStore.isPinned(entry.id)
                     ? String(localized: "Anulează fixarea", comment: "Menu — unpin song")
                     : String(localized: "Fixează sus", comment: "Menu — pin song to top for this session"),
-                  systemImage: pinStore.isPinned(song.id) ? "pin.slash" : "pin")
+                  systemImage: pinStore.isPinned(entry.id) ? "pin.slash" : "pin")
         }
         Divider()
-        Button { projectFirstSlide(song) } label: {
+        Button { withSong(entry.id) { projectFirstSlide($0) } } label: {
             Label(String(localized: "Proiectează", comment: "Menu"), systemImage: "play.fill")
         }
-        AddToSessionMenu(draft: { .song(song, version: nil) })
-        Button { libraryManager.selectSong(song) } label: {
+        AddToSessionMenu(draft: { fetchSong(entry.id).map { .song($0, version: nil) } })
+        Button { withSong(entry.id) { libraryManager.selectSong($0) } } label: {
             Label(String(localized: "Deschide", comment: "Menu"), systemImage: "eye")
         }
         Button {
-            libraryManager.selectSong(song)
-            libraryManager.songEditVersionID = nil
-            libraryManager.songEditSectionKey = nil
-            libraryManager.songToEdit = song
+            withSong(entry.id) { song in
+                libraryManager.selectSong(song)
+                libraryManager.songEditVersionID = nil
+                libraryManager.songEditSectionKey = nil
+                libraryManager.songToEdit = song
+            }
         } label: {
             Label(String(localized: "Editează…", comment: "Menu"), systemImage: "pencil")
         }
-        Button { song.verified.toggle(); song.modifiedDate = .now } label: {
-            Label(song.verified ? String(localized: "Scoate verificarea", comment: "Menu")
-                                : String(localized: "Marchează verificat", comment: "Menu"),
-                  systemImage: song.verified ? "checkmark.seal.fill" : "checkmark.seal")
+        Button {
+            withSong(entry.id) { song in
+                song.verified.toggle()
+                song.modifiedDate = .now
+                try? modelContext.save()
+                NotificationCenter.default.post(name: .libraryDidChange, object: nil)
+            }
+        } label: {
+            Label(entry.verified ? String(localized: "Scoate verificarea", comment: "Menu")
+                                 : String(localized: "Marchează verificat", comment: "Menu"),
+                  systemImage: entry.verified ? "checkmark.seal.fill" : "checkmark.seal")
         }
         Divider()
-        Button { exportSong(song) } label: {
+        Button { withSong(entry.id) { exportSong($0) } } label: {
             Label(String(localized: "Exportă JSON…", comment: "Menu"), systemImage: "square.and.arrow.up")
         }
         Divider()
-        Button(role: .destructive) { deleteSong(song) } label: {
+        Button(role: .destructive) { withSong(entry.id) { deleteSong($0) } } label: {
             Label(String(localized: "Șterge cântecul", comment: "Menu"), systemImage: "trash")
         }
+    }
+
+    /// Optional-returning fetch for closures that need a Song value.
+    private func fetchSong(_ id: UUID) -> Song? {
+        var d = FetchDescriptor<Song>(predicate: #Predicate { $0.id == id })
+        d.fetchLimit = 1
+        return (try? modelContext.fetch(d))?.first
     }
 
     private func projectFirstSlide(_ song: Song) {
@@ -559,24 +579,25 @@ struct SongListPanel: View {
         }
         modelContext.delete(song)
         try? modelContext.save()
+        NotificationCenter.default.post(name: .libraryDidChange, object: nil)
     }
 
     @ViewBuilder
-    private func songBadges(_ song: Song) -> some View {
+    private func songBadges(_ entry: SongIndexEntry) -> some View {
         HStack(spacing: 4) {
-            if pinStore.isPinned(song.id) {
+            if pinStore.isPinned(entry.id) {
                 Image(systemName: "pin.fill")
                     .font(.system(size: 10)).foregroundStyle(Color.accentColor)
                     .help(String(localized: "Fixat pentru această sesiune", comment: "Pinned badge"))
             }
-            if song.verified {
+            if entry.verified {
                 Image(systemName: "checkmark.seal.fill")
                     .font(.system(size: 10)).foregroundStyle(.green)
                     .help(String(localized: "Verificat", comment: "Verified badge"))
             }
-            if song.versions.count > 1 { badge("\(song.versions.count)×", color: .purple) }
-            if !song.language.isEmpty { badge(song.language.uppercased(), color: .blue) }
-            if !song.songNumber.isEmpty { badge("#\(song.songNumber)", color: .gray) }
+            if entry.versionCount > 1 { badge("\(entry.versionCount)×", color: .purple) }
+            if !entry.language.isEmpty { badge(entry.language.uppercased(), color: .blue) }
+            if !entry.songNumber.isEmpty { badge("#\(entry.songNumber)", color: .gray) }
         }
     }
 

@@ -14,6 +14,7 @@ struct MainControlView: View {
     @Environment(AppState.self) private var appState
     @Environment(PresentationManager.self) private var presentationManager
     @Environment(LibraryManager.self) private var libraryManager
+    @Environment(SearchIndex.self) private var searchIndex
     @Environment(\.modelContext) private var modelContext
     @Environment(\.openWindow) private var openWindow
 
@@ -139,7 +140,7 @@ struct MainControlView: View {
 
             // Quick Search overlay (⌘K)
             if showQuickSearch {
-                QuickSearchOverlay(isPresented: $showQuickSearch)
+                QuickSearchPalette(isPresented: $showQuickSearch)
                     .transition(.opacity.combined(with: .scale(scale: 0.97)))
             }
         }
@@ -153,6 +154,10 @@ struct MainControlView: View {
             case .customSlides: presentationManager.activeProfileKey = "text"
             default: break // Media/Schedule keep the last edited profile
             }
+        }
+        // Keep the ⌘K verse full-text index pointed at the ACTIVE translation.
+        .onChange(of: libraryManager.selectedBibleModule?.id, initial: true) { _, id in
+            if let id { searchIndex.indexVerses(moduleID: id) }
         }
         .onAppear {
             // Auto-open the presentation output window on app launch — but only if one

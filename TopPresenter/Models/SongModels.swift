@@ -157,6 +157,10 @@ final class Song {
     /// Round-trips through GOAT ("original": true on the version dict).
     var originalVersionID: String = "" // additive, inline default — lightweight migration
 
+    // DB indexes: predicate lookups (id/ccli) + title sorting stay fast at 60k
+    // songs. Index-only schema change → lightweight migration.
+    #Index<Song>([\.id], [\.title], [\.ccliNumber])
+
     var collection: SongCollection?
     var songbook: Songbook?
 

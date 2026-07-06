@@ -194,6 +194,7 @@ struct MediaView: View {
             MediaPresenter.backfillDurationIfNeeded(item, url: url)
         }
         try? modelContext.save()
+        NotificationCenter.default.post(name: .libraryDidChange, object: nil)
     }
 
     private func deleteMedia(_ item: MediaItem) {
@@ -202,6 +203,7 @@ struct MediaView: View {
         }
         modelContext.delete(item)
         try? modelContext.save()
+        NotificationCenter.default.post(name: .libraryDidChange, object: nil)
     }
 }
 
