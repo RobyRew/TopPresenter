@@ -145,7 +145,15 @@ private struct PaletteRowItem: Identifiable {
 private struct PaletteSection: Identifiable {
     let id: String
     let title: String
+    /// Already sliced for display (collapsed cap or full carried set).
     let rows: [PaletteRowItem]
+    /// TOTAL matches in the index (can exceed what was carried to the UI).
+    let total: Int
+    let expanded: Bool
+    /// More rows available than shown (collapsed) — or collapsible (expanded).
+    let expandable: Bool
+    /// Expanded, but the index holds more than the carried 50.
+    let truncated: Bool
 }
 
 // MARK: - Palette
@@ -164,6 +172,14 @@ struct QuickSearchPalette: View {
     @State private var query = ""
     @State private var hits = PaletteHits.none
     @State private var selectedIndex = 0
+    /// Sections the user expanded via „Arată mai multe" — reset per query.
+    @State private var expandedSections: Set<String> = []
+    /// Set ONLY by keyboard navigation — hover/click never scroll the list.
+    @State private var scrollTarget: String?
+    /// While keyboard-scrolling, the list moves under a stationary cursor —
+    /// ignore hover "selection" until this passes (mouse regains control by
+    /// actually moving after the window).
+    @State private var suppressHoverUntil: Date = .distantPast
     @FocusState private var fieldFocused: Bool
 
     @AppStorage("song_maxLinesPerSlide") private var maxLines: Int = 6
@@ -179,13 +195,22 @@ struct QuickSearchPalette: View {
     private var sections: [PaletteSection] {
         var out: [PaletteSection] = []
         var idx = 0
-        func add(_ id: String, _ title: String, _ results: [PaletteResult]) {
+        func add(_ id: String, _ title: String, _ results: [PaletteResult],
+                 total: Int? = nil, collapsed: Int = .max) {
             guard !results.isEmpty else { return }
-            let rows = results.map { r -> PaletteRowItem in
+            let total = total ?? results.count
+            let expanded = expandedSections.contains(id)
+            let visible = expanded ? results : Array(results.prefix(collapsed))
+            let rows = visible.map { r -> PaletteRowItem in
                 defer { idx += 1 }
                 return PaletteRowItem(flatIndex: idx, result: r)
             }
-            out.append(PaletteSection(id: id, title: title, rows: rows))
+            out.append(PaletteSection(
+                id: id, title: title, rows: rows, total: total,
+                expanded: expanded,
+                expandable: results.count > min(collapsed, results.count) || expanded,
+                truncated: expanded && total > results.count
+            ))
         }
 
         if isQueryEmpty {
@@ -199,16 +224,16 @@ struct QuickSearchPalette: View {
             add("ref", String(localized: "Referință biblică", comment: "Palette section"), [.reference(ref)])
         }
         add("songs", String(localized: "Cântece", comment: "Palette section"),
-            hits.songsByTitle.map { .song($0) })
+            hits.songsByTitle.map { .song($0) }, total: hits.songsByTitleTotal, collapsed: 8)
         add("verses",
             String(localized: "Versete (\(libraryManager.selectedBibleModule?.abbreviation ?? ""))", comment: "Palette section"),
-            hits.verses.map { .verse($0) })
+            hits.verses.map { .verse($0) }, total: hits.versesTotal, collapsed: 6)
         add("songContent", String(localized: "Cântece – potrivire în versuri", comment: "Palette section"),
-            hits.songsByContent.map { .song($0) })
+            hits.songsByContent.map { .song($0) }, total: hits.songsByContentTotal, collapsed: 6)
         add("media", String(localized: "Media", comment: "Palette section"),
-            hits.media.map { .media($0) })
+            hits.media.map { .media($0) }, total: hits.mediaTotal, collapsed: 5)
         add("sessions", String(localized: "Sesiuni", comment: "Palette section"),
-            hits.sessions.map { .session($0) })
+            hits.sessions.map { .session($0) }, total: hits.sessionsTotal, collapsed: 5)
         return out
     }
 
@@ -288,6 +313,7 @@ struct QuickSearchPalette: View {
             guard !trimmed.isEmpty else {
                 hits = .none
                 selectedIndex = 0
+                expandedSections = []
                 return
             }
             try? await Task.sleep(for: .milliseconds(30))
@@ -299,16 +325,12 @@ struct QuickSearchPalette: View {
             guard !Task.isCancelled else { return }
             hits = result
             selectedIndex = 0
+            expandedSections = []
+            scrollTarget = flatResults.first?.id
         }
         .onKeyPress(.escape) { dismiss(); return .handled }
-        .onKeyPress(.downArrow) {
-            selectedIndex = min(selectedIndex + 1, max(flatResults.count - 1, 0))
-            return .handled
-        }
-        .onKeyPress(.upArrow) {
-            selectedIndex = max(selectedIndex - 1, 0)
-            return .handled
-        }
+        .onKeyPress(.downArrow) { moveSelection(+1); return .handled }
+        .onKeyPress(.upArrow) { moveSelection(-1); return .handled }
         .onKeyPress(keys: [.return], phases: .down) { press in
             guard let result = selectedResult else { return .ignored }
             if press.modifiers.contains(.command) {
@@ -318,6 +340,17 @@ struct QuickSearchPalette: View {
             }
             return .handled
         }
+    }
+
+    /// Keyboard navigation: moves the selection, requests a MINIMAL scroll,
+    /// and briefly suppresses hover-selection (the list is about to move under
+    /// the stationary cursor).
+    private func moveSelection(_ delta: Int) {
+        let flat = flatResults
+        guard !flat.isEmpty else { return }
+        selectedIndex = min(max(selectedIndex + delta, 0), flat.count - 1)
+        suppressHoverUntil = Date.now.addingTimeInterval(0.25)
+        scrollTarget = flat[selectedIndex].id
     }
 
     // MARK: Pieces
@@ -360,14 +393,7 @@ struct QuickSearchPalette: View {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 1) {
                     ForEach(sections) { section in
-                        Text(section.title)
-                            .font(.system(size: 10.5, weight: .semibold))
-                            .tracking(0.7)
-                            .textCase(.uppercase)
-                            .foregroundStyle(.tertiary)
-                            .padding(.horizontal, 16)
-                            .padding(.top, 10)
-                            .padding(.bottom, 3)
+                        sectionHeader(section)
                         ForEach(section.rows) { row in
                             PaletteRow(result: row.result,
                                        isSelected: row.flatIndex == selectedIndex,
@@ -381,8 +407,21 @@ struct QuickSearchPalette: View {
                                 .contentShape(Rectangle())
                                 .onTapGesture { selectedIndex = row.flatIndex; open(row.result) }
                                 .onHover { inside in
-                                    if inside { selectedIndex = row.flatIndex }
+                                    // The mouse only steals selection when it
+                                    // MOVES — not when the list scrolls under
+                                    // a stationary cursor during arrow keys.
+                                    if inside, Date.now >= suppressHoverUntil {
+                                        selectedIndex = row.flatIndex
+                                    }
                                 }
+                        }
+                        if section.truncated {
+                            Text(String(localized: "afișate \(section.rows.count) din \(section.total) — rafinează căutarea",
+                                        comment: "Palette truncation note"))
+                                .font(.system(size: 10.5))
+                                .foregroundStyle(.tertiary)
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 5)
                         }
                     }
                     if index.isIndexingVerses, !isQueryEmpty {
@@ -397,12 +436,49 @@ struct QuickSearchPalette: View {
                 }
                 .padding(.vertical, 6)
             }
-            .onChange(of: selectedIndex) { _, newIndex in
-                let flat = flatResults
-                guard newIndex >= 0, newIndex < flat.count else { return }
-                proxy.scrollTo(flat[newIndex].id, anchor: .center)
+            // Keyboard-only autoscroll: minimal movement (anchor nil), never
+            // re-centering, never fired by hover/click.
+            .onChange(of: scrollTarget) { _, target in
+                if let target { proxy.scrollTo(target, anchor: nil) }
             }
         }
+    }
+
+    private func sectionHeader(_ section: PaletteSection) -> some View {
+        HStack(spacing: 6) {
+            Text(section.title)
+                .font(.system(size: 10.5, weight: .semibold))
+                .tracking(0.7)
+                .textCase(.uppercase)
+                .foregroundStyle(.tertiary)
+            Spacer(minLength: 4)
+            Text(String(localized: "\(section.total) rezultate", comment: "Palette section count"))
+                .font(.system(size: 10))
+                .foregroundStyle(.quaternary)
+            if section.expandable {
+                Button {
+                    if section.expanded {
+                        expandedSections.remove(section.id)
+                    } else {
+                        expandedSections.insert(section.id)
+                    }
+                    selectedIndex = min(selectedIndex, max(flatResults.count - 1, 0))
+                } label: {
+                    HStack(spacing: 3) {
+                        Text(section.expanded
+                             ? String(localized: "Mai puține", comment: "Palette collapse")
+                             : String(localized: "Arată mai multe", comment: "Palette expand"))
+                        Image(systemName: section.expanded ? "chevron.up" : "chevron.down")
+                    }
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 10)
+        .padding(.bottom, 3)
     }
 
     @ViewBuilder

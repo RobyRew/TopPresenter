@@ -85,7 +85,7 @@ struct TopPresenterApp: App {
                 .environment(searchIndex)
                 .environmentObject(updateController)
                 .frame(minWidth: 1100, minHeight: 700)
-                .task { searchIndex.configure(container: sharedModelContainer) }
+                .task { searchIndex.configure(container: sharedModelContainer, history: historyStore) }
         }
         .modelContainer(sharedModelContainer)
         .defaultSize(width: 1400, height: 900)

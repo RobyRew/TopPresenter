@@ -3113,15 +3113,25 @@ struct PaletteSearchTests {
         SongIndexEntry(id: UUID(), title: title, author: author, language: "", songNumber: "",
                        songbookName: "", collectionID: nil, collectionName: "", versionCount: 1,
                        hasMedia: false, verified: false, modifiedDate: .now,
-                       firstLine: "", blob: searchFold("\(title) \(author) \(lyrics)"))
+                       firstLine: "", blob: searchFold("\(title) \(author) \(lyrics)"),
+                       songKey: HistoryStore.songKey(ccli: "", title: title, source: ""))
     }
 
-    private func snapshot(songs: [SongIndexEntry] = [], verses: [VerseIndexEntry] = []) -> PaletteSnapshot {
+    private func verse(_ book: Int, _ bookName: String, _ chapter: Int, _ v: Int,
+                       _ text: String, moduleID: UUID = UUID()) -> VerseIndexEntry {
+        VerseIndexEntry(moduleID: moduleID, bookNumber: book, bookName: bookName,
+                        chapter: chapter, verse: v, text: text, folded: searchFold(text))
+    }
+
+    private func snapshot(songs: [SongIndexEntry] = [], verses: [VerseIndexEntry] = [],
+                          books: [BookIndexEntry] = [],
+                          presentCounts: [String: Int] = [:]) -> PaletteSnapshot {
         PaletteSnapshot(songs: songs,
                         songTokens: TokenIndex.build(blobs: songs.map(\.blob)),
                         verses: verses,
                         verseTokens: TokenIndex.build(blobs: verses.map(\.folded)),
-                        media: [], sessions: [], books: [])
+                        media: [], sessions: [], books: books,
+                        presentCounts: presentCounts)
     }
 
     @Test func fuzzyPrefixToleratesTypos() {
@@ -3181,22 +3191,124 @@ struct PaletteSearchTests {
     }
 
     @Test func verseTokenSearchFindsPhrasesAndTypos() {
-        let mod = UUID()
         let verses = [
-            VerseIndexEntry(moduleID: mod, bookNumber: 1, bookName: "Geneza", chapter: 1, verse: 1,
-                            text: "La început, Dumnezeu a făcut cerurile și pământul.",
-                            folded: searchFold("La început, Dumnezeu a făcut cerurile și pământul.")),
-            VerseIndexEntry(moduleID: mod, bookNumber: 43, bookName: "Ioan", chapter: 3, verse: 16,
-                            text: "Fiindcă atât de mult a iubit Dumnezeu lumea",
-                            folded: searchFold("Fiindcă atât de mult a iubit Dumnezeu lumea")),
+            verse(1, "Geneza", 1, 1, "La început, Dumnezeu a făcut cerurile și pământul."),
+            verse(43, "Ioan", 3, 16, "Fiindcă atât de mult a iubit Dumnezeu lumea"),
         ]
         let s = snapshot(verses: verses)
         // Whole phrase ranks first.
         #expect(PaletteSearch.run("facut cerurile", in: s).verses.first?.bookNumber == 1)
         // Typo'd verse word still matches via fuzzy.
         #expect(PaletteSearch.run("ceruriel", in: s).verses.count == 1)
-        // Both verses share "dumnezeu".
-        #expect(PaletteSearch.run("dumnezeu", in: s).verses.count == 2)
+        // Both verses share "dumnezeu"; the total travels with the hits.
+        let both = PaletteSearch.run("dumnezeu", in: s)
+        #expect(both.verses.count == 2)
+        #expect(both.versesTotal == 2)
+    }
+
+    private var romanianBooks: [BookIndexEntry] {
+        let mod = UUID()
+        return [
+            .init(moduleID: mod, bookNumber: 40, name: "Matei", folded: "matei",
+                  abbreviationFolded: "mt", chapterCount: 28),
+            .init(moduleID: mod, bookNumber: 44, name: "Faptele Apostolilor", folded: "faptele apostolilor",
+                  abbreviationFolded: "fa", chapterCount: 28),
+            .init(moduleID: mod, bookNumber: 48, name: "Galateni", folded: "galateni",
+                  abbreviationFolded: "gal", chapterCount: 6),
+            .init(moduleID: mod, bookNumber: 22, name: "Cântarea Cântărilor", folded: "cantarea cantarilor",
+                  abbreviationFolded: "cant", chapterCount: 8),
+        ]
+    }
+
+    @Test func bookHintResolvesAnyTokenPosition() {
+        let books = romanianBooks
+        // Book word in ANY position, remaining tokens = the text query.
+        let hint1 = PaletteSearch.bookHint(tokens: ["isus", "fapte"], books: books)
+        #expect(hint1?.book.bookNumber == 44)
+        #expect(hint1?.remaining == ["isus"])
+        let hint2 = PaletteSearch.bookHint(tokens: ["fapte", "isus"], books: books)
+        #expect(hint2?.book.bookNumber == 44)
+        #expect(hint2?.remaining == ["isus"])
+        // "galile" is Galileea (text), not Galateni — no prefix match, no hint.
+        #expect(PaletteSearch.bookHint(tokens: ["isus", "galile"], books: books) == nil)
+        // All-numeric remainder is a REFERENCE — parser owns it, no hint.
+        #expect(PaletteSearch.bookHint(tokens: ["matei", "1", "2"], books: books) == nil)
+        // Single token = no hint (nothing left to search).
+        #expect(PaletteSearch.bookHint(tokens: ["fapte"], books: books) == nil)
+    }
+
+    @Test func bookScopedVersesRankAboveGlobalMatches() {
+        let verses = [
+            // Luca-style verse containing BOTH words as text (global match).
+            verse(42, "Luca", 24, 19, "Ce s-a întâmplat cu Isus, prooroc puternic în fapte și cuvinte"),
+            // Verse IN Faptele Apostolilor containing doar "isus" (scoped match).
+            verse(44, "Faptele Apostolilor", 1, 1, "Teofile, am vorbit despre tot ce a început Isus să facă"),
+        ]
+        let s = snapshot(verses: verses, books: romanianBooks)
+        let hits = PaletteSearch.run("isus fapte", in: s).verses
+        // Faptele verse first (book-scoped), the Luca text match after.
+        #expect(hits.first?.bookNumber == 44)
+        #expect(hits.count == 2)
+    }
+
+    @Test func globalVerseFillSpreadsAcrossBooksThenRelaxes() {
+        let verses = [
+            verse(40, "Matei", 1, 1, "Isus unu"),
+            verse(40, "Matei", 1, 2, "Isus doi"),
+            verse(40, "Matei", 1, 3, "Isus trei"),
+            verse(41, "Marcu", 1, 1, "Isus la Marcu"),
+        ]
+        let s = snapshot(verses: verses)
+        let r = PaletteSearch.run("isus", in: s)
+        // Diversity first (max 2/book), then relaxed fill keeps everything reachable.
+        #expect(r.verses.map(\.bookNumber) == [40, 40, 41, 40])
+        #expect(r.versesTotal == 4)
+    }
+
+    @Test func popularSongsRankFirstWithinBucket() {
+        let a = song("Isus e viu")
+        let b = song("Isus, Numele minunat")
+        let s = snapshot(songs: [a, b],
+                         presentCounts: [b.songKey: 12])
+        // Alphabetical would put A first — popularity boosts B.
+        #expect(PaletteSearch.run("isus", in: s).songsByTitle.map(\.title)
+                == ["Isus, Numele minunat", "Isus e viu"])
+    }
+}
+
+// MARK: - Search Index Builder Order Tests
+
+@MainActor struct SearchIndexBuilderOrderTests {
+    /// Relationship arrays are unordered — the verse index must come out in
+    /// canonical Bible order regardless of insertion order.
+    @Test func verseIndexIsCanonicallyOrdered() async throws {
+        let container = try ModelContainer(
+            for: Schema(versionedSchema: SchemaV2.self),
+            configurations: [ModelConfiguration(isStoredInMemoryOnly: true)]
+        )
+        let context = ModelContext(container)
+        let module = BibleModule(name: "Test", abbreviation: "TST", sourceFormat: "test")
+        context.insert(module)
+        let book = BibleBook(name: "Matei", bookNumber: 40, testament: "NT")
+        book.module = module
+        context.insert(book)
+        // Chapters and verses inserted deliberately OUT of order.
+        for chapterNumber in [2, 1] {
+            let chapter = BibleChapter(chapterNumber: chapterNumber)
+            chapter.book = book
+            context.insert(chapter)
+            for verseNumber in [3, 1, 2] {
+                let verse = BibleVerse(verseNumber: verseNumber, text: "c\(chapterNumber) v\(verseNumber)")
+                verse.chapter = chapter
+                context.insert(verse)
+            }
+        }
+        try context.save()
+
+        let builder = SearchIndexBuilder(modelContainer: container)
+        let payload = await builder.buildVerses(moduleID: module.id)
+        #expect(payload.verses.map { "\($0.chapter):\($0.verse)" }
+                == ["1:1", "1:2", "1:3", "2:1", "2:2", "2:3"])
     }
 }
 

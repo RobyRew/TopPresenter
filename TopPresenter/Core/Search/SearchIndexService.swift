@@ -34,6 +34,8 @@ nonisolated struct SongIndexEntry: Sendable, Identifiable, Equatable {
     let firstLine: String
     /// Folded (lowercased, diacritic-insensitive) searchable text.
     let blob: String
+    /// Stable history key (HistoryStore.songKey) — palette popularity ranking.
+    let songKey: String
 }
 
 nonisolated struct MediaIndexEntry: Sendable, Identifiable {
@@ -222,6 +224,9 @@ nonisolated struct PaletteSnapshot: Sendable {
     let media: [MediaIndexEntry]
     let sessions: [SessionIndexEntry]
     let books: [BookIndexEntry]
+    /// songKey → distinct presentation sessions (HistoryStore) — church
+    /// staples rank above never-presented songs at equal match quality.
+    let presentCounts: [String: Int]
 }
 
 /// One query's results, pre-ranked and capped — the palette renders this state
@@ -235,15 +240,23 @@ nonisolated struct PaletteHits: Sendable {
     let reference: BibleReferenceMatch?
     /// Songs whose TITLE matches the query (prefix hits first).
     let songsByTitle: [SongIndexEntry]
+    let songsByTitleTotal: Int
     /// Songs matched only in lyrics/author — ranked BELOW verses.
     let songsByContent: [SongIndexEntry]
+    let songsByContentTotal: Int
     let verses: [VerseIndexEntry]
+    let versesTotal: Int
     let media: [MediaIndexEntry]
+    let mediaTotal: Int
     let sessions: [SessionIndexEntry]
+    let sessionsTotal: Int
 
     static let none = PaletteHits(query: "", tokens: [], reference: nil,
-                                  songsByTitle: [], songsByContent: [],
-                                  verses: [], media: [], sessions: [])
+                                  songsByTitle: [], songsByTitleTotal: 0,
+                                  songsByContent: [], songsByContentTotal: 0,
+                                  verses: [], versesTotal: 0,
+                                  media: [], mediaTotal: 0,
+                                  sessions: [], sessionsTotal: 0)
     var isEmpty: Bool {
         reference == nil && songsByTitle.isEmpty && songsByContent.isEmpty
             && verses.isEmpty && media.isEmpty && sessions.isEmpty
@@ -251,26 +264,29 @@ nonisolated struct PaletteHits: Sendable {
 }
 
 nonisolated enum PaletteSearch {
-    /// Full palette query: reference parse + ranked songs (typo-tolerant) +
-    /// verse full-text (token index, typo-tolerant) + media + sessions.
-    static func run(_ rawQuery: String, in s: PaletteSnapshot,
-                    titleLimit: Int = 8, contentLimit: Int = 6, verseLimit: Int = 6,
-                    mediaLimit: Int = 5, sessionLimit: Int = 5) -> PaletteHits {
+    /// Full palette query: reference parse + ranked songs (typo-tolerant,
+    /// popularity-boosted) + verse full-text (book-aware, typo-tolerant) +
+    /// media + sessions. `carry` results per category travel to the UI (the
+    /// palette shows a collapsed slice + „Arată mai multe"); each category
+    /// also reports its TOTAL match count.
+    static func run(_ rawQuery: String, in s: PaletteSnapshot, carry: Int = 50) -> PaletteHits {
         let trimmed = rawQuery.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return .none }
         let toks = searchTokens(trimmed)
         let folded = searchFold(trimmed)
-        let songs = rankedSongs(toks, folded: toks.joined(separator: " "), in: s,
-                                titleLimit: titleLimit, contentLimit: contentLimit)
+        let songs = rankedSongs(toks, folded: toks.joined(separator: " "), in: s, carry: carry)
+        let verses = verseHits(folded, tokens: toks, in: s, carry: carry)
+        let mediaAll = s.media.filter { $0.folded.contains(folded) }
+        let sessionsAll = s.sessions.filter { $0.folded.contains(folded) }
         return PaletteHits(
             query: trimmed,
             tokens: toks,
             reference: BibleReferenceParser.parse(trimmed, books: s.books),
-            songsByTitle: songs.title,
-            songsByContent: songs.content,
-            verses: verseHits(folded, tokens: toks, in: s, limit: verseLimit),
-            media: Array(s.media.filter { $0.folded.contains(folded) }.prefix(mediaLimit)),
-            sessions: Array(s.sessions.filter { $0.folded.contains(folded) }.prefix(sessionLimit))
+            songsByTitle: songs.title, songsByTitleTotal: songs.titleTotal,
+            songsByContent: songs.content, songsByContentTotal: songs.contentTotal,
+            verses: verses.picked, versesTotal: verses.total,
+            media: Array(mediaAll.prefix(carry)), mediaTotal: mediaAll.count,
+            sessions: Array(sessionsAll.prefix(carry)), sessionsTotal: sessionsAll.count
         )
     }
 
@@ -292,12 +308,12 @@ nonisolated enum PaletteSearch {
     }
 
     /// Splits song hits by WHERE they matched: title (prefix hits first, then
-    /// title-contains) vs. lyrics/author only. Alphabetical inside each bucket.
+    /// title-contains) vs. lyrics/author only. Inside each bucket: most-often
+    /// presented first (HistoryStore counts), then alphabetical.
     private static func rankedSongs(
-        _ toks: [String], folded: String, in s: PaletteSnapshot,
-        titleLimit: Int, contentLimit: Int
-    ) -> (title: [SongIndexEntry], content: [SongIndexEntry]) {
-        guard !toks.isEmpty, let hits = matchTokens(toks, index: s.songTokens) else { return ([], []) }
+        _ toks: [String], folded: String, in s: PaletteSnapshot, carry: Int
+    ) -> (title: [SongIndexEntry], titleTotal: Int, content: [SongIndexEntry], contentTotal: Int) {
+        guard !toks.isEmpty, let hits = matchTokens(toks, index: s.songTokens) else { return ([], 0, [], 0) }
         var prefix: [SongIndexEntry] = [], titleHit: [SongIndexEntry] = [], rest: [SongIndexEntry] = []
         for i in hits {
             let e = s.songs[Int(i)]
@@ -306,25 +322,99 @@ nonisolated enum PaletteSearch {
             else if toks.allSatisfy({ t.contains($0) }) { titleHit.append(e) }
             else { rest.append(e) }
         }
-        prefix.sort { $0.title < $1.title }
-        titleHit.sort { $0.title < $1.title }
-        rest.sort { $0.title < $1.title }
-        return (Array((prefix + titleHit).prefix(titleLimit)), Array(rest.prefix(contentLimit)))
+        let byPopularity: (SongIndexEntry, SongIndexEntry) -> Bool = { a, b in
+            let pa = s.presentCounts[a.songKey] ?? 0
+            let pb = s.presentCounts[b.songKey] ?? 0
+            if pa != pb { return pa > pb }
+            return a.title < b.title
+        }
+        prefix.sort(by: byPopularity)
+        titleHit.sort(by: byPopularity)
+        rest.sort(by: byPopularity)
+        return (Array((prefix + titleHit).prefix(carry)), prefix.count + titleHit.count,
+                Array(rest.prefix(carry)), rest.count)
     }
 
-    /// Verse full-text via the token index (no linear scan over 31k rows):
-    /// whole-phrase hits rank first, then all-token hits, in canonical order.
-    private static func verseHits(_ folded: String, tokens: [String],
-                                  in s: PaletteSnapshot, limit: Int) -> [VerseIndexEntry] {
-        guard folded.count >= 3,
-              let hits = matchTokens(tokens, index: s.verseTokens), !hits.isEmpty else { return [] }
-        var phrase: [Int32] = [], rest: [Int32] = []
-        for i in hits.sorted() {
-            if s.verses[Int(i)].folded.contains(folded) { phrase.append(i) }
-            else { rest.append(i) }
-            if phrase.count >= limit { break }
+    /// A query token naming a Bible book → scope hint ("isus fapte" = Isus in
+    /// Faptele Apostolilor), ANY token position. STRICT matching only (exact
+    /// name/abbrev → name/abbrev prefix, shortest name wins) — never the
+    /// reference parser's fuzzy fallback ("isus cant" must not hint Cântarea).
+    /// All-numeric remainders are references — the parser owns those.
+    static func bookHint(tokens: [String], books: [BookIndexEntry])
+        -> (book: BookIndexEntry, remaining: [String])? {
+        guard tokens.count >= 2, !books.isEmpty else { return nil }
+        for (idx, tok) in tokens.enumerated() where !tok.allSatisfy(\.isNumber) {
+            var matches = books.filter { $0.folded == tok || (!$0.abbreviationFolded.isEmpty && $0.abbreviationFolded == tok) }
+            if matches.isEmpty, tok.count >= 3 {
+                matches = books.filter { $0.folded.hasPrefix(tok) || $0.abbreviationFolded.hasPrefix(tok) }
+            }
+            guard let book = matches.min(by: { $0.folded.count < $1.folded.count }) else { continue }
+            var remaining = tokens
+            remaining.remove(at: idx)
+            guard !remaining.isEmpty, !remaining.allSatisfy({ $0.allSatisfy(\.isNumber) }) else { return nil }
+            return (book, remaining)
         }
-        return (phrase + rest).prefix(limit).map { s.verses[Int($0)] }
+        return nil
+    }
+
+    /// Verse full-text via the token index — two passes:
+    ///  1. BOOK-SCOPED: a token naming a book scopes the remaining tokens to
+    ///     that book; those verses rank FIRST.
+    ///  2. GLOBAL: all tokens as text, phrase hits first, canonical order,
+    ///     capped at 2 per book while filling (spread across books), then
+    ///     relaxed so „Arată mai multe" still reaches everything carried.
+    private static func verseHits(_ folded: String, tokens: [String],
+                                  in s: PaletteSnapshot, carry: Int)
+        -> (picked: [VerseIndexEntry], total: Int) {
+        guard folded.count >= 3 else { return ([], 0) }
+
+        var picked: [Int32] = []
+        var pickedSet = Set<Int32>()
+        var matchedUnion = Set<Int32>()
+
+        func fill(_ ordered: [Int32], perBookCap: Int?) {
+            var perBook: [Int: Int] = [:]
+            for i in ordered {
+                guard picked.count < carry else { return }
+                guard !pickedSet.contains(i) else { continue }
+                if let cap = perBookCap {
+                    let book = s.verses[Int(i)].bookNumber
+                    if perBook[book, default: 0] >= cap { continue }
+                    perBook[book, default: 0] += 1
+                }
+                pickedSet.insert(i)
+                picked.append(i)
+            }
+        }
+
+        /// Phrase-containing hits first, then the rest — both in index
+        /// (= canonical Bible) order.
+        func phraseRanked(_ hits: Set<Int32>, phrase: String) -> [Int32] {
+            var withPhrase: [Int32] = [], rest: [Int32] = []
+            for i in hits.sorted() {
+                if s.verses[Int(i)].folded.contains(phrase) { withPhrase.append(i) }
+                else { rest.append(i) }
+            }
+            return withPhrase + rest
+        }
+
+        // Pass 1 — book-scoped.
+        if let (book, remaining) = bookHint(tokens: tokens, books: s.books),
+           let scoped = matchTokens(remaining, index: s.verseTokens) {
+            let inBook = Set(scoped.filter { s.verses[Int($0)].bookNumber == book.bookNumber })
+            matchedUnion.formUnion(inBook)
+            fill(phraseRanked(inBook, phrase: remaining.joined(separator: " ")), perBookCap: nil)
+        }
+
+        // Pass 2 — global full-text.
+        if let hits = matchTokens(tokens, index: s.verseTokens), !hits.isEmpty {
+            matchedUnion.formUnion(hits)
+            let ordered = phraseRanked(hits, phrase: folded)
+            fill(ordered, perBookCap: 2)
+            fill(ordered, perBookCap: nil)
+        }
+
+        return (picked.map { s.verses[Int($0)] }, matchedUnion.count)
     }
 }
 
@@ -378,7 +468,9 @@ actor SearchIndexBuilder {
                     verified: song.verified,
                     modifiedDate: song.modifiedDate,
                     firstLine: firstLines[song.id] ?? "",
-                    blob: searchFold(blobSource)
+                    blob: searchFold(blobSource),
+                    songKey: HistoryStore.songKey(ccli: song.ccliNumber, title: song.title,
+                                                  source: song.collection?.sourceFormat ?? "")
                 ))
             }
         }
@@ -416,8 +508,10 @@ actor SearchIndexBuilder {
                 chapterCount: book.chapters.count
             ))
             autoreleasepool {
-                for chapter in book.chapters {
-                    for verse in chapter.verses {
+                // Relationship arrays are UNORDERED — sort, so index position
+                // IS canonical Bible order (ranking tie-breaks depend on it).
+                for chapter in book.chapters.sorted(by: { $0.chapterNumber < $1.chapterNumber }) {
+                    for verse in chapter.verses.sorted(by: { $0.verseNumber < $1.verseNumber }) {
                         verses.append(VerseIndexEntry(
                             moduleID: moduleID, bookNumber: book.bookNumber,
                             bookName: book.name, chapter: chapter.chapterNumber,
@@ -447,10 +541,13 @@ final class SearchIndex {
     private(set) var activeVerseModuleID: UUID?
     private(set) var isBuilding = false
     private(set) var isIndexingVerses = false
+    /// songKey → distinct presentation sessions — palette popularity ranking.
+    private(set) var presentCounts: [String: Int] = [:]
     /// Bumps on every publish — cheap invalidation key for cached sort orders.
     private(set) var generation = 0
 
     @ObservationIgnored private var builder: SearchIndexBuilder?
+    @ObservationIgnored private weak var historyStore: HistoryStore?
     @ObservationIgnored private var rebuildTask: Task<Void, Never>?
     @ObservationIgnored private var verseTask: Task<Void, Never>?
     @ObservationIgnored private var observer: (any NSObjectProtocol)?
@@ -461,9 +558,10 @@ final class SearchIndex {
     // MARK: Lifecycle
 
     /// Idempotent — call once from the app root.
-    func configure(container: ModelContainer) {
+    func configure(container: ModelContainer, history: HistoryStore? = nil) {
         guard builder == nil else { return }
         builder = SearchIndexBuilder(modelContainer: container)
+        historyStore = history
         observer = NotificationCenter.default.addObserver(
             forName: .libraryDidChange, object: nil, queue: .main
         ) { [weak self] _ in
@@ -496,6 +594,10 @@ final class SearchIndex {
         availableLanguages = songsPayload.languages
         media = extra.media
         sessions = extra.sessions
+        if let historyStore {
+            presentCounts = Dictionary(uniqueKeysWithValues:
+                historyStore.songSummaries().map { ($0.songKey, $0.timesPresented) })
+        }
         sortCache.removeAll()
         generation += 1
         isBuilding = false
@@ -509,7 +611,8 @@ final class SearchIndex {
     func snapshot() -> PaletteSnapshot {
         PaletteSnapshot(songs: songs, songTokens: songTokens,
                         verses: verses, verseTokens: verseTokens,
-                        media: media, sessions: sessions, books: books)
+                        media: media, sessions: sessions, books: books,
+                        presentCounts: presentCounts)
     }
 
     /// Build (or reuse) the full-text verse index for the active translation.

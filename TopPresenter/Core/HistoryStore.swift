@@ -140,7 +140,9 @@ final class HistoryStore {
     // MARK: Stable keys
 
     /// Stable song identity: CCLI if present, else normalized title + source.
-    static func songKey(ccli: String, title: String, source: String) -> String {
+    /// nonisolated: pure string logic — the SearchIndexBuilder actor stamps it
+    /// on every SongIndexEntry off-main.
+    nonisolated static func songKey(ccli: String, title: String, source: String) -> String {
         let c = ccli.trimmingCharacters(in: .whitespacesAndNewlines)
         if !c.isEmpty { return "ccli:" + c }
         let t = title.lowercased().folding(options: .diacriticInsensitive, locale: nil)
