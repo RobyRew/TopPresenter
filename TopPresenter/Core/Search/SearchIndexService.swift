@@ -74,13 +74,13 @@ nonisolated struct VerseIndexEntry: Sendable {
 /// Sorted unique tokens + postings lists (indices into the entries array).
 /// Query tokens match by PREFIX (binary search over the sorted token table),
 /// posting lists are unioned per query token and intersected across tokens.
-nonisolated struct SongTokenIndex: Sendable {
+nonisolated struct TokenIndex: Sendable {
     let tokens: [String]
     let postings: [[Int32]]
 
-    static let empty = SongTokenIndex(tokens: [], postings: [])
+    static let empty = TokenIndex(tokens: [], postings: [])
 
-    static func build(blobs: [String]) -> SongTokenIndex {
+    static func build(blobs: [String]) -> TokenIndex {
         var map: [String: [Int32]] = [:]
         map.reserveCapacity(blobs.count * 8)
         for (i, blob) in blobs.enumerated() {
@@ -93,7 +93,7 @@ nonisolated struct SongTokenIndex: Sendable {
             }
         }
         let sorted = map.keys.sorted()
-        return SongTokenIndex(tokens: sorted, postings: sorted.map { map[$0]! })
+        return TokenIndex(tokens: sorted, postings: sorted.map { map[$0]! })
     }
 
     /// Entry indices whose blob contains a token starting with `prefix`.
@@ -125,6 +125,55 @@ nonisolated struct SongTokenIndex: Sendable {
         }
         return result
     }
+
+    /// Typo tolerance: entry indices with a token whose PREFIX is within
+    /// `maxDistance` edits of `token` ("amaizng" → "amazing", "grce" → "grace").
+    /// Linear vocabulary scan with a banded early-exit DP — run OFF-main only.
+    func fuzzyCandidates(token: String, maxDistance: Int) -> Set<Int32> {
+        guard maxDistance > 0, !tokens.isEmpty else { return [] }
+        let q = token.unicodeScalars.map(\.value)
+        guard q.count > maxDistance else { return [] }
+        var out = Set<Int32>()
+        for (ti, t) in tokens.enumerated() {
+            // Prefix semantics: only the first count+maxDistance scalars matter.
+            guard t.count >= q.count - maxDistance else { continue }
+            let tScalars = t.unicodeScalars.prefix(q.count + maxDistance).map(\.value)
+            if Self.prefixDistanceWithin(q, tScalars, maxDistance) {
+                out.formUnion(postings[ti])
+            }
+        }
+        return out
+    }
+
+    /// True when SOME prefix of `t` is within `d` edits of `q` (Levenshtein DP
+    /// over dp[q-consumed][t-consumed]; answer = min of the last row).
+    static func prefixDistanceWithin(_ q: [UInt32], _ t: [UInt32], _ d: Int) -> Bool {
+        let m = q.count, n = t.count
+        guard n > 0 else { return m <= d }
+        var prev = Array(0...n)
+        var cur = [Int](repeating: 0, count: n + 1)
+        for i in 1...m {
+            cur[0] = i
+            var rowMin = i
+            for j in 1...n {
+                let cost = q[i - 1] == t[j - 1] ? 0 : 1
+                cur[j] = min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + cost)
+                rowMin = min(rowMin, cur[j])
+            }
+            if rowMin > d { return false }
+            swap(&prev, &cur)
+        }
+        return prev.min().map { $0 <= d } ?? false
+    }
+
+    /// Allowed edit distance per query-token length (short tokens never fuzz).
+    static func fuzzyDistance(for token: String) -> Int {
+        switch token.count {
+        case ..<4: return 0
+        case 4...6: return 1
+        default: return 2
+        }
+    }
 }
 
 // MARK: - Folding
@@ -140,13 +189,117 @@ nonisolated func searchTokens(_ query: String) -> [String] {
         .map(String.init)
 }
 
+// MARK: - Palette search (pure + Sendable — runs in a detached task)
+
+/// Immutable capture of everything the ⌘K palette searches. Arrays are CoW —
+/// taking a snapshot is O(1); the detached query never touches the MainActor.
+nonisolated struct PaletteSnapshot: Sendable {
+    let songs: [SongIndexEntry]
+    let songTokens: TokenIndex
+    let verses: [VerseIndexEntry]
+    let verseTokens: TokenIndex
+    let media: [MediaIndexEntry]
+    let sessions: [SessionIndexEntry]
+    let books: [BookIndexEntry]
+}
+
+/// One query's results, pre-ranked and capped — the palette renders this state
+/// verbatim (no recomputation in `body`).
+nonisolated struct PaletteHits: Sendable {
+    let query: String
+    /// Folded query tokens — used for match highlighting in rows.
+    let tokens: [String]
+    let reference: BibleReferenceMatch?
+    let songs: [SongIndexEntry]
+    let verses: [VerseIndexEntry]
+    let media: [MediaIndexEntry]
+    let sessions: [SessionIndexEntry]
+
+    static let none = PaletteHits(query: "", tokens: [], reference: nil,
+                                  songs: [], verses: [], media: [], sessions: [])
+    var isEmpty: Bool {
+        reference == nil && songs.isEmpty && verses.isEmpty && media.isEmpty && sessions.isEmpty
+    }
+}
+
+nonisolated enum PaletteSearch {
+    /// Full palette query: reference parse + ranked songs (typo-tolerant) +
+    /// verse full-text (token index, typo-tolerant) + media + sessions.
+    static func run(_ rawQuery: String, in s: PaletteSnapshot,
+                    songLimit: Int = 10, verseLimit: Int = 8,
+                    mediaLimit: Int = 5, sessionLimit: Int = 5) -> PaletteHits {
+        let trimmed = rawQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return .none }
+        let toks = searchTokens(trimmed)
+        let folded = searchFold(trimmed)
+        return PaletteHits(
+            query: trimmed,
+            tokens: toks,
+            reference: BibleReferenceParser.parse(trimmed, books: s.books),
+            songs: rankedSongs(toks, folded: toks.joined(separator: " "), in: s, limit: songLimit),
+            verses: verseHits(folded, tokens: toks, in: s, limit: verseLimit),
+            media: Array(s.media.filter { $0.folded.contains(folded) }.prefix(mediaLimit)),
+            sessions: Array(s.sessions.filter { $0.folded.contains(folded) }.prefix(sessionLimit))
+        )
+    }
+
+    /// AND across query tokens; a token with zero exact-prefix hits falls back
+    /// to its fuzzy candidates so one typo doesn't blank the whole search.
+    static func matchTokens(_ toks: [String], index: TokenIndex) -> Set<Int32>? {
+        guard !toks.isEmpty else { return nil }
+        var result: Set<Int32>? = nil
+        for tok in toks {
+            var c = index.candidates(prefix: tok)
+            if c.isEmpty {
+                c = index.fuzzyCandidates(token: tok, maxDistance: TokenIndex.fuzzyDistance(for: tok))
+            }
+            result = result.map { $0.intersection(c) } ?? c
+            if result?.isEmpty == true { return result }
+        }
+        return result
+    }
+
+    /// Ranking: title-prefix → title-contains → lyrics/author → alphabetical.
+    private static func rankedSongs(_ toks: [String], folded: String,
+                                    in s: PaletteSnapshot, limit: Int) -> [SongIndexEntry] {
+        guard !toks.isEmpty, let hits = matchTokens(toks, index: s.songTokens) else { return [] }
+        var prefix: [SongIndexEntry] = [], titleHit: [SongIndexEntry] = [], rest: [SongIndexEntry] = []
+        for i in hits {
+            let e = s.songs[Int(i)]
+            let t = searchFold(e.title)
+            if t.hasPrefix(folded) { prefix.append(e) }
+            else if toks.allSatisfy({ t.contains($0) }) { titleHit.append(e) }
+            else { rest.append(e) }
+        }
+        prefix.sort { $0.title < $1.title }
+        titleHit.sort { $0.title < $1.title }
+        rest.sort { $0.title < $1.title }
+        return Array((prefix + titleHit + rest).prefix(limit))
+    }
+
+    /// Verse full-text via the token index (no linear scan over 31k rows):
+    /// whole-phrase hits rank first, then all-token hits, in canonical order.
+    private static func verseHits(_ folded: String, tokens: [String],
+                                  in s: PaletteSnapshot, limit: Int) -> [VerseIndexEntry] {
+        guard folded.count >= 3,
+              let hits = matchTokens(tokens, index: s.verseTokens), !hits.isEmpty else { return [] }
+        var phrase: [Int32] = [], rest: [Int32] = []
+        for i in hits.sorted() {
+            if s.verses[Int(i)].folded.contains(folded) { phrase.append(i) }
+            else { rest.append(i) }
+            if phrase.count >= limit { break }
+        }
+        return (phrase + rest).prefix(limit).map { s.verses[Int($0)] }
+    }
+}
+
 // MARK: - Off-main builder
 
 @ModelActor
 actor SearchIndexBuilder {
     struct SongsPayload: Sendable {
         let entries: [SongIndexEntry]
-        let tokens: SongTokenIndex
+        let tokens: TokenIndex
         let languages: [String]
     }
 
@@ -194,7 +347,7 @@ actor SearchIndexBuilder {
                 ))
             }
         }
-        let tokenIndex = SongTokenIndex.build(blobs: entries.map(\.blob))
+        let tokenIndex = TokenIndex.build(blobs: entries.map(\.blob))
         return SongsPayload(entries: entries, tokens: tokenIndex,
                             languages: languages.sorted())
     }
@@ -213,10 +366,10 @@ actor SearchIndexBuilder {
 
     /// Verse full-text index for ONE translation (the active one) — ~31k rows,
     /// built once per module switch, off-main.
-    func buildVerses(moduleID: UUID) -> (books: [BookIndexEntry], verses: [VerseIndexEntry]) {
+    func buildVerses(moduleID: UUID) -> (books: [BookIndexEntry], verses: [VerseIndexEntry], tokens: TokenIndex) {
         var d = FetchDescriptor<BibleModule>(predicate: #Predicate { $0.id == moduleID })
         d.fetchLimit = 1
-        guard let module = (try? modelContext.fetch(d))?.first else { return ([], []) }
+        guard let module = (try? modelContext.fetch(d))?.first else { return ([], [], .empty) }
 
         var books: [BookIndexEntry] = []
         var verses: [VerseIndexEntry] = []
@@ -240,7 +393,7 @@ actor SearchIndexBuilder {
                 }
             }
         }
-        return (books, verses)
+        return (books, verses, TokenIndex.build(blobs: verses.map(\.folded)))
     }
 }
 
@@ -249,14 +402,16 @@ actor SearchIndexBuilder {
 @Observable
 final class SearchIndex {
     private(set) var songs: [SongIndexEntry] = []
-    private(set) var songTokens: SongTokenIndex = .empty
+    private(set) var songTokens: TokenIndex = .empty
     private(set) var availableLanguages: [String] = []
     private(set) var media: [MediaIndexEntry] = []
     private(set) var sessions: [SessionIndexEntry] = []
     private(set) var books: [BookIndexEntry] = []
     private(set) var verses: [VerseIndexEntry] = []
+    private(set) var verseTokens: TokenIndex = .empty
     private(set) var activeVerseModuleID: UUID?
     private(set) var isBuilding = false
+    private(set) var isIndexingVerses = false
     /// Bumps on every publish — cheap invalidation key for cached sort orders.
     private(set) var generation = 0
 
@@ -309,8 +464,17 @@ final class SearchIndex {
         sortCache.removeAll()
         generation += 1
         isBuilding = false
+        // System Spotlight mirrors the same projections (find songs outside the app).
+        SpotlightIndexer.reindex(songs: songs, sessions: sessions)
         // The verse index follows the active module across rebuilds.
         if let moduleID = activeVerseModuleID { indexVerses(moduleID: moduleID, force: true) }
+    }
+
+    /// O(1) capture for the palette's detached query.
+    func snapshot() -> PaletteSnapshot {
+        PaletteSnapshot(songs: songs, songTokens: songTokens,
+                        verses: verses, verseTokens: verseTokens,
+                        media: media, sessions: sessions, books: books)
     }
 
     /// Build (or reuse) the full-text verse index for the active translation.
@@ -318,12 +482,15 @@ final class SearchIndex {
         guard force || moduleID != activeVerseModuleID else { return }
         activeVerseModuleID = moduleID
         verseTask?.cancel()
+        isIndexingVerses = true
         verseTask = Task { [weak self] in
             guard let builder = self?.builder else { return }
             let payload = await builder.buildVerses(moduleID: moduleID)
             guard !Task.isCancelled, self?.activeVerseModuleID == moduleID else { return }
             self?.books = payload.books
             self?.verses = payload.verses
+            self?.verseTokens = payload.tokens
+            self?.isIndexingVerses = false
             self?.generation += 1
         }
     }

@@ -17,7 +17,12 @@ final class LibraryManager {
     var selectedChapter: BibleChapter? {
         didSet { refreshCachedVerses() }
     }
-    var selectedVerses: [BibleVerse] = []
+    var selectedVerses: [BibleVerse] = [] {
+        didSet { selectedVerseIDs = Set(selectedVerses.map(\.id)) }
+    }
+    /// O(1) row-selection lookups — a chapter's rows must never scan the
+    /// selection array per render (Psalmi 119 = 176 rows × every click).
+    private(set) var selectedVerseIDs: Set<UUID> = []
     var bibleSearchQuery: String = ""
     var bibleSearchResults: [BibleSearchResult] = []
     var isBibleSearching: Bool = false

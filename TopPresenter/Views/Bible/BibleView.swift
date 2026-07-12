@@ -459,13 +459,9 @@ struct BibleContentPanel: View {
                         .lineLimit(3)
                 }
                 .contentShape(Rectangle())
-                .onTapGesture(count: 2) {
-                    presentationManager.showBibleVerse(
-                        text: result.text,
-                        reference: result.reference,
-                        translationName: libraryManager.selectedBibleModule?.abbreviation ?? ""
-                    )
-                }
+                // Single tap only — the old stacked double+single pair made
+                // every click wait the double-click interval for nothing
+                // (both gestures did the same present).
                 .onTapGesture {
                     presentationManager.showBibleVerse(
                         text: result.text,
@@ -508,14 +504,23 @@ struct BibleContentPanel: View {
             // Verses list — section headings (pericopes) interleaved before
             // the verse they precede when the Titluri toggle is on.
             let verses = chapter.sortedVerses
-            let allHeadings = chapter.headings
+            let allHeadings = showHeadings ? chapter.headings : []
+            // A heading attaches to the FIRST verse whose number is ≥ its
+            // beforeVerse (robust to versification gaps) — mapped once here,
+            // not filtered per row.
+            let headingsByVerse: [UUID: [BibleHeading]] = {
+                guard !allHeadings.isEmpty else { return [:] }
+                var map: [UUID: [BibleHeading]] = [:]
+                for h in allHeadings.sorted(by: { $0.beforeVerse < $1.beforeVerse }) {
+                    guard let v = verses.first(where: { $0.verseNumber >= h.beforeVerse }) else { continue }
+                    map[v.id, default: []].append(h)
+                }
+                return map
+            }()
             List {
-                ForEach(Array(verses.enumerated()), id: \.element.id) { idx, verse in
-                    if showHeadings {
-                        // A heading attaches to the first verse whose number is
-                        // ≥ its beforeVerse (robust to versification gaps).
-                        let prev = idx > 0 ? verses[idx - 1].verseNumber : Int.min
-                        ForEach(Array(allHeadings.filter { $0.beforeVerse > prev && $0.beforeVerse <= verse.verseNumber }.enumerated()), id: \.offset) { _, h in
+                ForEach(verses, id: \.id) { verse in
+                    if let attached = headingsByVerse[verse.id] {
+                        ForEach(Array(attached.enumerated()), id: \.offset) { _, h in
                             headingRow(h)
                         }
                     }
@@ -533,6 +538,26 @@ struct BibleContentPanel: View {
     }
 }
 
+// MARK: - Decoded runs cache
+
+/// `BibleVerse.runs` JSON-decodes on EVERY access — far too heavy to run per
+/// list-row render (a selection change re-renders every row in the chapter).
+/// Decode once per verse per session; re-imports mint new verse UUIDs, so
+/// entries can't go stale.
+@MainActor
+final class VerseRunsCache {
+    static let shared = VerseRunsCache()
+    private var cache: [UUID: [VerseRun]] = [:]
+
+    func runs(for verse: BibleVerse) -> [VerseRun] {
+        if let hit = cache[verse.id] { return hit }
+        if cache.count > 4096 { cache.removeAll(keepingCapacity: true) }
+        let decoded = verse.runs
+        cache[verse.id] = decoded
+        return decoded
+    }
+}
+
 // MARK: - Bible Verse Row
 struct BibleVerseRow: View {
     let verse: BibleVerse
@@ -545,13 +570,13 @@ struct BibleVerseRow: View {
     @AppStorage("bibleShowStrong") private var showStrong: Bool = false
 
     private var isSelected: Bool {
-        libraryManager.selectedVerses.contains { $0.id == verse.id }
+        libraryManager.selectedVerseIDs.contains(verse.id)
     }
 
     /// Verse text with words-of-Christ colored (red-letter) — only when the runs
     /// reconstruct the text exactly, otherwise plain.
     private var verseText: Text {
-        let runs = verse.runs
+        let runs = VerseRunsCache.shared.runs(for: verse)
         guard !runs.isEmpty, runs.contains(where: { $0.kind == "woc" }) else {
             return Text(verse.text)
         }
@@ -562,7 +587,9 @@ struct BibleVerseRow: View {
         }
     }
 
-    private var strongList: String { verse.runs.compactMap { $0.strong }.joined(separator: " ") }
+    private var strongList: String {
+        VerseRunsCache.shared.runs(for: verse).compactMap { $0.strong }.joined(separator: " ")
+    }
 
     /// Best-effort jump to a cross-reference like "Ioan 3:16" / "1 In 4:9".
     private func jump(to ref: String) {
@@ -674,16 +701,20 @@ struct BibleVerseRow: View {
             in: RoundedRectangle(cornerRadius: 6)
         )
         .contentShape(Rectangle())
-        .onTapGesture(count: 2) {
+        // simultaneousGesture, NOT a second onTapGesture: stacked single+double
+        // tap gestures make AppKit wait the double-click interval before
+        // delivering the single click — selection felt laggy. This way the
+        // single tap selects INSTANTLY; a double-click selects then projects.
+        .gesture(TapGesture(count: 2).onEnded {
             projectVerse()   // double-click sends to presentation
-        }
-        .onTapGesture {
+        })
+        .simultaneousGesture(TapGesture().onEnded {
             if NSEvent.modifierFlags.contains(.command) {
                 libraryManager.toggleVerseSelection(verse)
             } else {
                 libraryManager.selectVerse(verse)
             }
-        }
+        })
         .contextMenu {
             Button(String(localized: "Show on Screen", comment: "Context menu")) {
                 projectVerse()
@@ -985,7 +1016,7 @@ struct BibleGridNavigationView: View {
                 ScrollView {
                     LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 10), spacing: 6) {
                         ForEach(chapter.sortedVerses) { verse in
-                            let isSelected = libraryManager.selectedVerses.contains { $0.id == verse.id }
+                            let isSelected = libraryManager.selectedVerseIDs.contains(verse.id)
 
                             Button {
                                 if NSEvent.modifierFlags.contains(.command) {

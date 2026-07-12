@@ -7,6 +7,7 @@
 
 import SwiftUI
 import SwiftData
+import CoreSpotlight
 
 @main
 struct TopPresenterApp: App {
@@ -128,6 +129,7 @@ struct TopPresenterApp: App {
 /// library selections), so different tabs can sit in different modules with
 /// different Bible sources at the same time.
 struct MainWindowRoot: View {
+    @Environment(\.modelContext) private var modelContext
     @State private var appState = AppState()
     @State private var libraryManager = LibraryManager()
 
@@ -135,5 +137,31 @@ struct MainWindowRoot: View {
         MainControlView()
             .environment(appState)
             .environment(libraryManager)
+            // System Spotlight result clicked → jump straight to the item.
+            .onContinueUserActivity(CSSearchableItemActionType) { activity in
+                guard let raw = activity.userInfo?[CSSearchableItemActivityIdentifier] as? String,
+                      let (kind, id) = SpotlightIndexer.parse(identifier: raw) else { return }
+                openFromSpotlight(kind: kind, id: id)
+            }
+    }
+
+    private func openFromSpotlight(kind: String, id: UUID) {
+        switch kind {
+        case "song":
+            var d = FetchDescriptor<Song>(predicate: Song.predicate(forID: id))
+            d.fetchLimit = 1
+            guard let song = (try? modelContext.fetch(d))?.first else { return }
+            appState.selectedSidebarItem = .songs
+            if let col = song.collection { libraryManager.selectCollection(col) }
+            libraryManager.selectSong(song)
+        case "session":
+            var d = FetchDescriptor<ServiceSchedule>(predicate: ServiceSchedule.predicate(forID: id))
+            d.fetchLimit = 1
+            guard let schedule = (try? modelContext.fetch(d))?.first else { return }
+            appState.selectedSidebarItem = .schedule
+            libraryManager.selectedSchedule = schedule
+        default:
+            break
+        }
     }
 }

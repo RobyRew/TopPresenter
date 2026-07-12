@@ -3090,7 +3090,7 @@ struct SearchIndexTests {
             searchFold("Ce mare ești Tu Isuse"),           // 1
             searchFold("Aleluia cântați Domnului"),        // 2
         ]
-        let idx = SongTokenIndex.build(blobs: blobs)
+        let idx = TokenIndex.build(blobs: blobs)
 
         // Prefix match, diacritic-insensitive.
         #expect(idx.candidates(prefix: "mare") == Set([0, 1]))
@@ -3103,6 +3103,99 @@ struct SearchIndexTests {
         // Diacritic query folds the same way.
         #expect(searchTokens("Cântați") == ["cantati"])
         #expect(idx.match(queryTokens: searchTokens("cântați")) == Set([2]))
+    }
+}
+
+// MARK: - Palette Search Tests (typo tolerance + verse token search)
+
+struct PaletteSearchTests {
+    private func song(_ title: String, author: String = "", lyrics: String = "") -> SongIndexEntry {
+        SongIndexEntry(id: UUID(), title: title, author: author, language: "", songNumber: "",
+                       songbookName: "", collectionID: nil, collectionName: "", versionCount: 1,
+                       hasMedia: false, verified: false, modifiedDate: .now,
+                       firstLine: "", blob: searchFold("\(title) \(author) \(lyrics)"))
+    }
+
+    private func snapshot(songs: [SongIndexEntry] = [], verses: [VerseIndexEntry] = []) -> PaletteSnapshot {
+        PaletteSnapshot(songs: songs,
+                        songTokens: TokenIndex.build(blobs: songs.map(\.blob)),
+                        verses: verses,
+                        verseTokens: TokenIndex.build(blobs: verses.map(\.folded)),
+                        media: [], sessions: [], books: [])
+    }
+
+    @Test func fuzzyPrefixToleratesTypos() {
+        let idx = TokenIndex.build(blobs: [searchFold("Amazing grace how sweet the sound")])
+        // No exact prefix for the typo…
+        #expect(idx.candidates(prefix: "amaizng").isEmpty)
+        // …but the fuzzy fallback finds it (transposition = 2 edits).
+        #expect(idx.fuzzyCandidates(token: "amaizng", maxDistance: 2) == Set([0]))
+        #expect(idx.fuzzyCandidates(token: "grce", maxDistance: 1) == Set([0]))
+        // Distance policy: short tokens never fuzz.
+        #expect(TokenIndex.fuzzyDistance(for: "hai") == 0)
+        #expect(TokenIndex.fuzzyDistance(for: "grace") == 1)
+        #expect(TokenIndex.fuzzyDistance(for: "amazing") == 2)
+    }
+
+    @Test func paletteSearchFindsSongsDespiteTypos() {
+        let s = snapshot(songs: [song("Amazing Grace"), song("Mărire Ție"), song("Ce mare ești Tu")])
+        #expect(PaletteSearch.run("amazing", in: s).songs.first?.title == "Amazing Grace")
+        // One typo'd token + one clean token still AND-match.
+        #expect(PaletteSearch.run("amaizng grace", in: s).songs.first?.title == "Amazing Grace")
+        // Typo over a diacritic word.
+        #expect(PaletteSearch.run("marrire", in: s).songs.first?.title == "Mărire Ție")
+        // Nonsense stays empty.
+        #expect(PaletteSearch.run("xyzzyq", in: s).songs.isEmpty)
+    }
+
+    @Test func verseTokenSearchFindsPhrasesAndTypos() {
+        let mod = UUID()
+        let verses = [
+            VerseIndexEntry(moduleID: mod, bookNumber: 1, bookName: "Geneza", chapter: 1, verse: 1,
+                            text: "La început, Dumnezeu a făcut cerurile și pământul.",
+                            folded: searchFold("La început, Dumnezeu a făcut cerurile și pământul.")),
+            VerseIndexEntry(moduleID: mod, bookNumber: 43, bookName: "Ioan", chapter: 3, verse: 16,
+                            text: "Fiindcă atât de mult a iubit Dumnezeu lumea",
+                            folded: searchFold("Fiindcă atât de mult a iubit Dumnezeu lumea")),
+        ]
+        let s = snapshot(verses: verses)
+        // Whole phrase ranks first.
+        #expect(PaletteSearch.run("facut cerurile", in: s).verses.first?.bookNumber == 1)
+        // Typo'd verse word still matches via fuzzy.
+        #expect(PaletteSearch.run("ceruriel", in: s).verses.count == 1)
+        // Both verses share "dumnezeu".
+        #expect(PaletteSearch.run("dumnezeu", in: s).verses.count == 2)
+    }
+}
+
+// MARK: - Palette Highlight Tests
+
+@MainActor
+struct PaletteHighlightTests {
+    @Test func highlightsDiacriticInsensitiveRanges() {
+        let attr = paletteHighlight("Mărire Ție, Doamne", tokens: ["marire"],
+                                    highlightFont: .body.bold())
+        let colored = attr.runs.filter { $0.foregroundColor != nil }
+        #expect(colored.count == 1)
+        if let run = colored.first {
+            #expect(String(attr.characters[run.range]) == "Mărire")
+        }
+    }
+}
+
+// MARK: - Spotlight Identifier Tests
+
+struct SpotlightIdentifierTests {
+    @Test func parsesKnownKindsAndRejectsJunk() {
+        let id = UUID()
+        let song = SpotlightIndexer.parse(identifier: "song:\(id.uuidString)")
+        #expect(song?.kind == "song")
+        #expect(song?.id == id)
+        let session = SpotlightIndexer.parse(identifier: "session:\(id.uuidString)")
+        #expect(session?.kind == "session")
+        #expect(SpotlightIndexer.parse(identifier: "media:\(id.uuidString)") == nil)
+        #expect(SpotlightIndexer.parse(identifier: "song:not-a-uuid") == nil)
+        #expect(SpotlightIndexer.parse(identifier: "garbage") == nil)
     }
 }
 

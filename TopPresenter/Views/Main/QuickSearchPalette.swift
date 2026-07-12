@@ -2,24 +2,65 @@
 //  QuickSearchPalette.swift
 //  TopPresenter
 //
-//  ⌘K — Spotlight-style command palette over the SearchIndex: songs (title/
-//  author/lyrics via the token inverted index), Bible references ("ioan 3:16",
-//  "1 cor 13 4-7"), full-text verse search in the ACTIVE translation, media and
-//  sessions. Everything reads pre-built in-memory projections — ZERO SwiftData
-//  work per keystroke. Enter opens/navigates; ⌘Enter presents LIVE.
+//  ⌘K — Spotlight-style command palette. The search itself (PaletteSearch.run)
+//  executes ONCE per keystroke in a DETACHED task over an immutable snapshot —
+//  body only renders `hits` state, so typing stays instant on 60k songs +
+//  whole Bibles. Typo-tolerant (fuzzy token fallback), highlighted matches,
+//  recents on empty query. Enter opens/navigates; ⌘Enter presents LIVE.
 //
 
 import SwiftUI
 import SwiftData
 
+// MARK: - Recents (last opened/presented items, persisted)
+
+struct PaletteRecent: Codable, Equatable, Identifiable {
+    var kind: String              // "song" | "media" | "session" | "verse" | "reference"
+    var uuid: UUID?               // song / media / session
+    var bookNumber: Int = 0       // verse / reference
+    var chapter: Int = 0
+    var verseStart: Int = 0
+    var verseEnd: Int = 0
+    var title: String
+    var subtitle: String
+
+    var id: String { "\(kind):\(uuid?.uuidString ?? "\(bookNumber):\(chapter):\(verseStart)-\(verseEnd)")" }
+}
+
+/// Last 10 items opened/presented from the palette — shown on empty query.
+@Observable
+final class PaletteRecentsStore {
+    static let shared = PaletteRecentsStore()
+    private static let key = "palette_recents_v1"
+
+    private(set) var items: [PaletteRecent] = []
+
+    init() {
+        if let data = UserDefaults.standard.data(forKey: Self.key),
+           let decoded = try? JSONDecoder().decode([PaletteRecent].self, from: data) {
+            items = decoded
+        }
+    }
+
+    func record(_ recent: PaletteRecent) {
+        items.removeAll { $0.id == recent.id }
+        items.insert(recent, at: 0)
+        if items.count > 10 { items.removeLast(items.count - 10) }
+        if let data = try? JSONEncoder().encode(items) {
+            UserDefaults.standard.set(data, forKey: Self.key)
+        }
+    }
+}
+
 // MARK: - Results
 
-private enum PaletteResult: Identifiable {
+private enum PaletteResult {
     case reference(BibleReferenceMatch)
     case song(SongIndexEntry)
     case verse(VerseIndexEntry)
     case media(MediaIndexEntry)
     case session(SessionIndexEntry)
+    case recent(PaletteRecent)
 
     var id: String {
         switch self {
@@ -28,14 +69,21 @@ private enum PaletteResult: Identifiable {
         case .verse(let v): return "verse:\(v.bookNumber):\(v.chapter):\(v.verse)"
         case .media(let m): return "media:\(m.id.uuidString)"
         case .session(let s): return "session:\(s.id.uuidString)"
+        case .recent(let r): return "recent:\(r.id)"
         }
     }
+}
+
+private struct PaletteRowItem: Identifiable {
+    let flatIndex: Int
+    let result: PaletteResult
+    var id: String { result.id }
 }
 
 private struct PaletteSection: Identifiable {
     let id: String
     let title: String
-    let results: [PaletteResult]
+    let rows: [PaletteRowItem]
 }
 
 // MARK: - Palette
@@ -52,6 +100,7 @@ struct QuickSearchPalette: View {
     @Binding var isPresented: Bool
 
     @State private var query = ""
+    @State private var hits = PaletteHits.none
     @State private var selectedIndex = 0
     @FocusState private var fieldFocused: Bool
 
@@ -59,61 +108,57 @@ struct QuickSearchPalette: View {
     @AppStorage("song_repeatBracket") private var repeatBracket = "none"
     @AppStorage("song_repeatCount") private var repeatCount = "times"
 
-    // MARK: Search (pure, instant — index only)
+    private let recents = PaletteRecentsStore.shared
+
+    // MARK: Display model (cheap mapping over `hits` state — NO searching here)
+
+    private var isQueryEmpty: Bool { query.trimmingCharacters(in: .whitespaces).isEmpty }
 
     private var sections: [PaletteSection] {
-        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return [] }
         var out: [PaletteSection] = []
+        var idx = 0
+        func add(_ id: String, _ title: String, _ results: [PaletteResult]) {
+            guard !results.isEmpty else { return }
+            let rows = results.map { r -> PaletteRowItem in
+                defer { idx += 1 }
+                return PaletteRowItem(flatIndex: idx, result: r)
+            }
+            out.append(PaletteSection(id: id, title: title, rows: rows))
+        }
 
-        if let ref = BibleReferenceParser.parse(trimmed, books: index.books) {
-            out.append(PaletteSection(
-                id: "ref",
-                title: String(localized: "Referință biblică", comment: "Palette section"),
-                results: [.reference(ref)]
-            ))
+        if isQueryEmpty {
+            add("recents", String(localized: "Recente", comment: "Palette section"),
+                recents.items.map { .recent($0) })
+            return out
         }
-        let songs = index.searchSongs(trimmed, limit: 10)
-        if !songs.isEmpty {
-            out.append(PaletteSection(
-                id: "songs",
-                title: String(localized: "Cântece", comment: "Palette section"),
-                results: songs.map { .song($0) }
-            ))
+        if let ref = hits.reference {
+            add("ref", String(localized: "Referință biblică", comment: "Palette section"), [.reference(ref)])
         }
-        let verses = index.searchVerses(trimmed, limit: 8)
-        if !verses.isEmpty {
-            out.append(PaletteSection(
-                id: "verses",
-                title: String(localized: "Versete (\(libraryManager.selectedBibleModule?.abbreviation ?? ""))", comment: "Palette section"),
-                results: verses.map { .verse($0) }
-            ))
-        }
-        let media = index.searchMedia(trimmed, limit: 5)
-        if !media.isEmpty {
-            out.append(PaletteSection(
-                id: "media",
-                title: String(localized: "Media", comment: "Palette section"),
-                results: media.map { .media($0) }
-            ))
-        }
-        let sessions = index.searchSessions(trimmed, limit: 5)
-        if !sessions.isEmpty {
-            out.append(PaletteSection(
-                id: "sessions",
-                title: String(localized: "Sesiuni", comment: "Palette section"),
-                results: sessions.map { .session($0) }
-            ))
-        }
+        add("songs", String(localized: "Cântece", comment: "Palette section"),
+            hits.songs.map { .song($0) })
+        add("verses",
+            String(localized: "Versete (\(libraryManager.selectedBibleModule?.abbreviation ?? ""))", comment: "Palette section"),
+            hits.verses.map { .verse($0) })
+        add("media", String(localized: "Media", comment: "Palette section"),
+            hits.media.map { .media($0) })
+        add("sessions", String(localized: "Sesiuni", comment: "Palette section"),
+            hits.sessions.map { .session($0) })
         return out
     }
 
-    private var flatResults: [PaletteResult] { sections.flatMap(\.results) }
+    private var flatResults: [PaletteResult] {
+        sections.flatMap { $0.rows.map(\.result) }
+    }
 
     private var selectedResult: PaletteResult? {
         let flat = flatResults
         guard !flat.isEmpty else { return nil }
         return flat[min(selectedIndex, flat.count - 1)]
+    }
+
+    /// Search results are stale while `hits.query` lags the typed query.
+    private var isSearching: Bool {
+        !isQueryEmpty && hits.query != query.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     // MARK: Body
@@ -127,10 +172,15 @@ struct QuickSearchPalette: View {
             VStack(spacing: 0) {
                 searchField
                 Divider()
-                if query.trimmingCharacters(in: .whitespaces).isEmpty {
+                if isQueryEmpty && recents.items.isEmpty {
                     idleHint
                 } else if flatResults.isEmpty {
-                    noResults
+                    if isSearching {
+                        ProgressView().controlSize(.small)
+                            .frame(maxWidth: .infinity, minHeight: 140)
+                    } else {
+                        noResults
+                    }
                 } else {
                     HStack(spacing: 0) {
                         resultsList
@@ -157,6 +207,25 @@ struct QuickSearchPalette: View {
             if let moduleID = libraryManager.selectedBibleModule?.id {
                 index.indexVerses(moduleID: moduleID)
             }
+        }
+        // THE search executor: one detached run per (debounced) keystroke or
+        // index generation bump. body never computes results itself.
+        .task(id: "\(query)#\(index.generation)") {
+            let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else {
+                hits = .none
+                selectedIndex = 0
+                return
+            }
+            try? await Task.sleep(for: .milliseconds(30))
+            guard !Task.isCancelled else { return }
+            let snapshot = index.snapshot()
+            let result = await Task.detached(priority: .userInitiated) {
+                PaletteSearch.run(trimmed, in: snapshot)
+            }.value
+            guard !Task.isCancelled else { return }
+            hits = result
+            selectedIndex = 0
         }
         .onKeyPress(.escape) { dismiss(); return .handled }
         .onKeyPress(.downArrow) {
@@ -192,11 +261,10 @@ struct QuickSearchPalette: View {
             .textFieldStyle(.plain)
             .font(.title3)
             .focused($fieldFocused)
-            .onChange(of: query) { _, _ in selectedIndex = 0 }
 
-            if index.isBuilding {
+            if index.isBuilding || isSearching {
                 ProgressView().controlSize(.small)
-                    .help(String(localized: "Indexul se construiește…", comment: "Tooltip"))
+                    .help(String(localized: "Se caută…", comment: "Tooltip"))
             }
             if !query.isEmpty {
                 Button {
@@ -215,7 +283,6 @@ struct QuickSearchPalette: View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 1) {
-                    var runningIndex = 0
                     ForEach(sections) { section in
                         Text(section.title)
                             .font(.caption2.weight(.semibold))
@@ -223,32 +290,34 @@ struct QuickSearchPalette: View {
                             .padding(.horizontal, 12)
                             .padding(.top, 8)
                             .padding(.bottom, 2)
-                        ForEach(Array(section.results.enumerated()), id: \.element.id) { offset, result in
-                            let flatIdx = runningIndexBase(for: section) + offset
-                            PaletteRow(result: result, isSelected: flatIdx == selectedIndex)
-                                .id(flatIdx)
+                        ForEach(section.rows) { row in
+                            PaletteRow(result: row.result,
+                                       isSelected: row.flatIndex == selectedIndex,
+                                       highlightTokens: hits.tokens)
+                                .id(row.flatIndex)
                                 .contentShape(Rectangle())
-                                .onTapGesture { selectedIndex = flatIdx; open(result) }
+                                .onTapGesture { selectedIndex = row.flatIndex; open(row.result) }
+                                .onHover { inside in
+                                    if inside { selectedIndex = row.flatIndex }
+                                }
                         }
-                        .onAppear { runningIndex += section.results.count }
+                    }
+                    if index.isIndexingVerses, !isQueryEmpty {
+                        HStack(spacing: 6) {
+                            ProgressView().controlSize(.mini)
+                            Text(String(localized: "Se indexează versetele…", comment: "Palette note"))
+                                .font(.caption2).foregroundStyle(.tertiary)
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
                     }
                 }
                 .padding(.vertical, 6)
             }
             .onChange(of: selectedIndex) { _, newIndex in
-                withAnimation(.easeInOut(duration: 0.1)) { proxy.scrollTo(newIndex, anchor: .center) }
+                proxy.scrollTo(newIndex, anchor: .center)
             }
         }
-    }
-
-    /// Flat index where a section's results start.
-    private func runningIndexBase(for section: PaletteSection) -> Int {
-        var base = 0
-        for s in sections {
-            if s.id == section.id { return base }
-            base += s.results.count
-        }
-        return base
     }
 
     private var previewPane: some View {
@@ -267,7 +336,8 @@ struct QuickSearchPalette: View {
                 }
             case .verse(let v):
                 Label("\(v.bookName) \(v.chapter):\(v.verse)", systemImage: "text.quote").font(.headline)
-                Text(v.text).font(.callout).foregroundStyle(.secondary).lineLimit(10).padding(.top, 4)
+                Text(paletteHighlight(v.text, tokens: hits.tokens, highlightFont: .callout.weight(.semibold)))
+                    .font(.callout).foregroundStyle(.secondary).lineLimit(10).padding(.top, 4)
             case .reference(let r):
                 Label(referenceLabel(r), systemImage: "book.fill").font(.headline)
                 Text(referencePreviewText(r))
@@ -280,6 +350,9 @@ struct QuickSearchPalette: View {
                 Label(s.name, systemImage: "list.bullet.rectangle").font(.headline).lineLimit(2)
                 Text(s.date.formatted(date: .complete, time: .omitted))
                     .font(.caption).foregroundStyle(.secondary)
+            case .recent(let r):
+                Label(r.title, systemImage: PaletteRow.icon(forKind: r.kind)).font(.headline).lineLimit(2)
+                if !r.subtitle.isEmpty { Text(r.subtitle).font(.caption).foregroundStyle(.secondary) }
             case nil:
                 EmptyView()
             }
@@ -304,6 +377,8 @@ struct QuickSearchPalette: View {
             Image(systemName: "magnifyingglass").font(.title).foregroundStyle(.tertiary)
             Text(String(localized: "Niciun rezultat pentru „\(query)”", comment: "Palette empty"))
                 .font(.subheadline).foregroundStyle(.secondary)
+            Text(String(localized: "Am căutat și cu toleranță la greșeli de scriere", comment: "Palette empty note"))
+                .font(.caption2).foregroundStyle(.tertiary)
         }
         .frame(maxWidth: .infinity, minHeight: 140)
     }
@@ -372,7 +447,11 @@ struct QuickSearchPalette: View {
         case .session(let s):
             appState.selectedSidebarItem = .schedule
             withModel(ServiceSchedule.self, id: s.id) { libraryManager.selectedSchedule = $0 }
+        case .recent(let r):
+            openRecent(r)
+            return
         }
+        recents.record(makeRecent(result))
         dismiss()
     }
 
@@ -380,18 +459,7 @@ struct QuickSearchPalette: View {
     private func present(_ result: PaletteResult) {
         switch result {
         case .song(let e):
-            withModel(Song.self, id: e.id) { song in
-                let version = song.activeVersion
-                let slides = buildSongSlides(song: song, version: version, maxLines: maxLines,
-                                             bilingual: false, language: nil,
-                                             bracket: repeatBracket, countStyle: repeatCount)
-                guard let first = slides.first else { return }
-                libraryManager.selectSong(song)
-                libraryManager.selectSongSlide(text: first.text, label: first.label, index: 0, count: first.total)
-                pm.showSongVerse(text: first.text, title: song.title, verseLabel: first.label,
-                                 slideIndex: 0, slideCount: first.total,
-                                 song: song, version: version, lines: first.lines)
-            }
+            presentSong(id: e.id)
         case .verse(let v):
             presentVerses([v], bookName: v.bookName, chapter: v.chapter)
         case .reference(let r):
@@ -407,8 +475,27 @@ struct QuickSearchPalette: View {
                 appState.selectedSidebarItem = .schedule
                 libraryManager.selectedSchedule = schedule
             }
+        case .recent(let r):
+            presentRecent(r)
+            return
         }
+        recents.record(makeRecent(result))
         dismiss()
+    }
+
+    private func presentSong(id: UUID) {
+        withModel(Song.self, id: id) { song in
+            let version = song.activeVersion
+            let slides = buildSongSlides(song: song, version: version, maxLines: maxLines,
+                                         bilingual: false, language: nil,
+                                         bracket: repeatBracket, countStyle: repeatCount)
+            guard let first = slides.first else { return }
+            libraryManager.selectSong(song)
+            libraryManager.selectSongSlide(text: first.text, label: first.label, index: 0, count: first.total)
+            pm.showSongVerse(text: first.text, title: song.title, verseLabel: first.label,
+                             slideIndex: 0, slideCount: first.total,
+                             song: song, version: version, lines: first.lines)
+        }
     }
 
     /// Push verses live with full coordinates (sets the live Bible anchor).
@@ -440,6 +527,90 @@ struct QuickSearchPalette: View {
         }
     }
 
+    // MARK: Recents plumbing
+
+    private func makeRecent(_ result: PaletteResult) -> PaletteRecent {
+        switch result {
+        case .song(let e):
+            return PaletteRecent(kind: "song", uuid: e.id, title: e.title,
+                                 subtitle: e.author.isEmpty ? e.collectionName : e.author)
+        case .verse(let v):
+            return PaletteRecent(kind: "verse", uuid: nil, bookNumber: v.bookNumber,
+                                 chapter: v.chapter, verseStart: v.verse, verseEnd: v.verse,
+                                 title: "\(v.bookName) \(v.chapter):\(v.verse)",
+                                 subtitle: String(v.text.prefix(90)))
+        case .reference(let r):
+            return PaletteRecent(kind: "reference", uuid: nil, bookNumber: r.bookNumber,
+                                 chapter: r.chapter, verseStart: r.verseStart ?? 0,
+                                 verseEnd: r.verseEnd ?? r.verseStart ?? 0,
+                                 title: referenceLabel(r),
+                                 subtitle: String(localized: "Sari la pasaj", comment: "Palette row subtitle"))
+        case .media(let m):
+            return PaletteRecent(kind: "media", uuid: m.id, title: m.name,
+                                 subtitle: m.mediaType.capitalized)
+        case .session(let s):
+            return PaletteRecent(kind: "session", uuid: s.id, title: s.name,
+                                 subtitle: s.date.formatted(date: .abbreviated, time: .omitted))
+        case .recent(let r):
+            return r
+        }
+    }
+
+    private func openRecent(_ r: PaletteRecent) {
+        switch r.kind {
+        case "song":
+            guard let id = r.uuid else { return }
+            appState.selectedSidebarItem = .songs
+            withModel(Song.self, id: id) { song in
+                if let col = song.collection { libraryManager.selectCollection(col) }
+                libraryManager.selectSong(song)
+            }
+        case "media":
+            guard let id = r.uuid else { return }
+            appState.selectedSidebarItem = .media
+            withModel(MediaItem.self, id: id) { libraryManager.selectedMediaItem = $0 }
+        case "session":
+            guard let id = r.uuid else { return }
+            appState.selectedSidebarItem = .schedule
+            withModel(ServiceSchedule.self, id: id) { libraryManager.selectedSchedule = $0 }
+        case "verse", "reference":
+            navigateBible(bookNumber: r.bookNumber, chapter: r.chapter,
+                          verse: r.verseStart > 0 ? r.verseStart : nil)
+        default:
+            return
+        }
+        recents.record(r)
+        dismiss()
+    }
+
+    private func presentRecent(_ r: PaletteRecent) {
+        switch r.kind {
+        case "song":
+            guard let id = r.uuid else { return }
+            presentSong(id: id)
+        case "media":
+            guard let id = r.uuid else { return }
+            withModel(MediaItem.self, id: id) { item in
+                MediaPresenter.present(item, pm: pm, video: videoPlayerService, audio: audioPlayerManager)
+            }
+        case "session":
+            openRecent(r)
+            return
+        case "verse", "reference":
+            // Resolve coordinates against the ACTIVE module's verse index.
+            let verses = index.verses.filter {
+                $0.bookNumber == r.bookNumber && $0.chapter == r.chapter
+                    && (r.verseStart == 0 || ($0.verse >= r.verseStart && $0.verse <= max(r.verseEnd, r.verseStart)))
+            }
+            guard let first = verses.first else { return }
+            presentVerses(verses, bookName: first.bookName, chapter: first.chapter)
+        default:
+            return
+        }
+        recents.record(r)
+        dismiss()
+    }
+
     /// Predicate + fetchLimit 1 — never fetch-all to find one row.
     private func withModel<T: PersistentModel>(_ type: T.Type, id: UUID, _ action: (T) -> Void)
         where T: IdentifiableByUUID {
@@ -451,8 +622,30 @@ struct QuickSearchPalette: View {
     private func dismiss() {
         isPresented = false
         query = ""
+        hits = .none
         selectedIndex = 0
     }
+}
+
+// MARK: - Match highlighting
+
+/// Accent + heavier weight on every (folded) occurrence of the query tokens.
+/// `range(of:options:)` handles diacritics natively („marire” finds „Mărire”).
+func paletteHighlight(_ text: String, tokens: [String], highlightFont: Font) -> AttributedString {
+    var attr = AttributedString(text)
+    for tok in tokens where tok.count >= 2 {
+        var start = text.startIndex
+        while start < text.endIndex,
+              let r = text.range(of: tok, options: [.caseInsensitive, .diacriticInsensitive],
+                                 range: start..<text.endIndex) {
+            if let ar = Range(r, in: attr) {
+                attr[ar].foregroundColor = .accentColor
+                attr[ar].font = highlightFont
+            }
+            start = r.upperBound
+        }
+    }
+    return attr
 }
 
 // MARK: - UUID predicate helper (SwiftData #Predicate needs concrete key paths)
@@ -476,6 +669,7 @@ extension ServiceSchedule: IdentifiableByUUID {
 private struct PaletteRow: View {
     let result: PaletteResult
     let isSelected: Bool
+    let highlightTokens: [String]
 
     var body: some View {
         HStack(spacing: 10) {
@@ -486,9 +680,13 @@ private struct PaletteRow: View {
                 .background(color.opacity(0.13), in: RoundedRectangle(cornerRadius: 6))
 
             VStack(alignment: .leading, spacing: 1) {
-                Text(title).font(.callout.weight(.medium)).lineLimit(1)
+                Text(paletteHighlight(title, tokens: highlightTokens,
+                                      highlightFont: .callout.weight(.bold)))
+                    .font(.callout.weight(.medium)).lineLimit(1)
                 if !subtitle.isEmpty {
-                    Text(subtitle).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                    Text(paletteHighlight(subtitle, tokens: highlightTokens,
+                                          highlightFont: .caption.weight(.bold)))
+                        .font(.caption).foregroundStyle(.secondary).lineLimit(1)
                 }
             }
             Spacer(minLength: 4)
@@ -500,6 +698,17 @@ private struct PaletteRow: View {
         .padding(.horizontal, 6)
     }
 
+    static func icon(forKind kind: String) -> String {
+        switch kind {
+        case "song": return "music.note"
+        case "verse": return "text.quote"
+        case "reference": return "book.fill"
+        case "media": return "photo.on.rectangle"
+        case "session": return "list.bullet.rectangle"
+        default: return "clock.arrow.circlepath"
+        }
+    }
+
     private var icon: String {
         switch result {
         case .reference: return "book.fill"
@@ -507,6 +716,7 @@ private struct PaletteRow: View {
         case .verse: return "text.quote"
         case .media(let m): return (MediaKind(rawValue: m.mediaType) ?? .image).systemImage
         case .session: return "list.bullet.rectangle"
+        case .recent(let r): return Self.icon(forKind: r.kind)
         }
     }
 
@@ -517,6 +727,7 @@ private struct PaletteRow: View {
         case .verse: return .green
         case .media: return .orange
         case .session: return .teal
+        case .recent: return .gray
         }
     }
 
@@ -531,6 +742,7 @@ private struct PaletteRow: View {
         case .verse(let v): return "\(v.bookName) \(v.chapter):\(v.verse)"
         case .media(let m): return m.name
         case .session(let s): return s.name
+        case .recent(let r): return r.title
         }
     }
 
@@ -541,6 +753,7 @@ private struct PaletteRow: View {
         case .verse(let v): return String(v.text.prefix(90))
         case .media(let m): return m.mediaType.capitalized
         case .session(let s): return s.date.formatted(date: .abbreviated, time: .omitted)
+        case .recent(let r): return r.subtitle
         }
     }
 }
