@@ -74,6 +74,68 @@ private enum PaletteResult {
     }
 }
 
+extension PaletteResult {
+    fileprivate var iconName: String {
+        switch self {
+        case .reference: return "book.fill"
+        case .song: return "music.note"
+        case .verse: return "text.quote"
+        case .media(let m): return (MediaKind(rawValue: m.mediaType) ?? .image).systemImage
+        case .session: return "list.bullet.rectangle"
+        case .recent(let r): return PaletteRow.icon(forKind: r.kind)
+        }
+    }
+
+    fileprivate var tint: Color {
+        switch self {
+        case .reference: return .blue
+        case .song: return .purple
+        case .verse: return .green
+        case .media: return .orange
+        case .session: return .teal
+        case .recent: return .gray
+        }
+    }
+
+    fileprivate var titleText: String {
+        switch self {
+        case .reference(let r):
+            if let vs = r.verseStart, let ve = r.verseEnd {
+                return vs == ve ? "\(r.bookName) \(r.chapter):\(vs)" : "\(r.bookName) \(r.chapter):\(vs)-\(ve)"
+            }
+            return "\(r.bookName) \(r.chapter)"
+        case .song(let e): return e.title
+        case .verse(let v): return "\(v.bookName) \(v.chapter):\(v.verse)"
+        case .media(let m): return m.name
+        case .session(let s): return s.name
+        case .recent(let r): return r.title
+        }
+    }
+
+    fileprivate var subtitleText: String {
+        switch self {
+        case .reference: return String(localized: "Sari la pasaj", comment: "Palette row subtitle")
+        case .song(let e): return e.author.isEmpty ? e.collectionName : e.author
+        case .verse(let v): return String(v.text.prefix(90))
+        case .media(let m): return m.mediaType.capitalized
+        case .session(let s): return s.date.formatted(date: .abbreviated, time: .omitted)
+        case .recent(let r): return r.subtitle
+        }
+    }
+
+    /// Small kind label for the preview header.
+    fileprivate var kindLabel: String {
+        switch self {
+        case .reference: return String(localized: "Referință", comment: "Palette kind")
+        case .song: return String(localized: "Cântec", comment: "Palette kind")
+        case .verse: return String(localized: "Verset", comment: "Palette kind")
+        case .media: return String(localized: "Media", comment: "Palette kind")
+        case .session: return String(localized: "Sesiune", comment: "Palette kind")
+        case .recent: return String(localized: "Recent", comment: "Palette kind")
+        }
+    }
+}
+
 private struct PaletteRowItem: Identifiable {
     let flatIndex: Int
     let result: PaletteResult
@@ -165,10 +227,13 @@ struct QuickSearchPalette: View {
 
     var body: some View {
         ZStack {
-            Color.black.opacity(0.35)
+            Color.black.opacity(0.4)
                 .ignoresSafeArea()
                 .onTapGesture { dismiss() }
 
+            // The panel HUGS its content — never `.frame(maxHeight:)` here: a
+            // max-height frame is greedy (min(proposed, max)), which rendered a
+            // 480-pt slab with the content floating loose inside it.
             VStack(spacing: 0) {
                 searchField
                 Divider()
@@ -177,28 +242,32 @@ struct QuickSearchPalette: View {
                 } else if flatResults.isEmpty {
                     if isSearching {
                         ProgressView().controlSize(.small)
-                            .frame(maxWidth: .infinity, minHeight: 140)
+                            .frame(maxWidth: .infinity, minHeight: 150)
                     } else {
                         noResults
                     }
                 } else {
+                    // Fixed results height (Spotlight-style) — the panel keeps
+                    // one stable size while typing instead of jumping around.
                     HStack(spacing: 0) {
                         resultsList
-                            .frame(width: 400)
+                            .frame(width: 396)
                         Divider()
                         previewPane
                             .frame(maxWidth: .infinity)
                     }
+                    .frame(height: 356)
                 }
                 Divider()
                 footerBar
             }
-            .frame(width: 720)
-            .frame(maxHeight: 480)
-            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
-            .overlay(RoundedRectangle(cornerRadius: 16).stroke(.white.opacity(0.08)))
-            .shadow(color: .black.opacity(0.35), radius: 28, y: 12)
-            .padding(.top, 110)
+            .frame(width: 700)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .strokeBorder(.white.opacity(0.09), lineWidth: 1))
+            .shadow(color: .black.opacity(0.42), radius: 38, y: 16)
+            .padding(.top, 100)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
         .onAppear {
@@ -252,14 +321,14 @@ struct QuickSearchPalette: View {
     private var searchField: some View {
         HStack(spacing: 12) {
             Image(systemName: "magnifyingglass")
-                .font(.title2)
+                .font(.system(size: 18, weight: .medium))
                 .foregroundStyle(.secondary)
             TextField(
                 String(localized: "Cântece, Ioan 3:16, versete, media, sesiuni…", comment: "Palette placeholder"),
                 text: $query
             )
             .textFieldStyle(.plain)
-            .font(.title3)
+            .font(.system(size: 19))
             .focused($fieldFocused)
 
             if index.isBuilding || isSearching {
@@ -271,12 +340,15 @@ struct QuickSearchPalette: View {
                     query = ""
                     selectedIndex = 0
                 } label: {
-                    Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 14))
+                        .foregroundStyle(.tertiary)
                 }
                 .buttonStyle(.plain)
             }
         }
-        .padding(16)
+        .padding(.horizontal, 18)
+        .padding(.vertical, 15)
     }
 
     private var resultsList: some View {
@@ -285,11 +357,13 @@ struct QuickSearchPalette: View {
                 LazyVStack(alignment: .leading, spacing: 1) {
                     ForEach(sections) { section in
                         Text(section.title)
-                            .font(.caption2.weight(.semibold))
+                            .font(.system(size: 10.5, weight: .semibold))
+                            .tracking(0.7)
+                            .textCase(.uppercase)
                             .foregroundStyle(.tertiary)
-                            .padding(.horizontal, 12)
-                            .padding(.top, 8)
-                            .padding(.bottom, 2)
+                            .padding(.horizontal, 16)
+                            .padding(.top, 10)
+                            .padding(.bottom, 3)
                         ForEach(section.rows) { row in
                             PaletteRow(result: row.result,
                                        isSelected: row.flatIndex == selectedIndex,
@@ -308,7 +382,7 @@ struct QuickSearchPalette: View {
                             Text(String(localized: "Se indexează versetele…", comment: "Palette note"))
                                 .font(.caption2).foregroundStyle(.tertiary)
                         }
-                        .padding(.horizontal, 12)
+                        .padding(.horizontal, 16)
                         .padding(.vertical, 6)
                     }
                 }
@@ -320,88 +394,165 @@ struct QuickSearchPalette: View {
         }
     }
 
+    @ViewBuilder
     private var previewPane: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            switch selectedResult {
-            case .song(let e):
-                Label(e.title, systemImage: "music.note").font(.headline).lineLimit(2)
-                if !e.author.isEmpty { Text(e.author).font(.caption).foregroundStyle(.secondary) }
-                if !e.songbookName.isEmpty { Text(e.songbookName).font(.caption2).foregroundStyle(.tertiary) }
-                if !e.firstLine.isEmpty {
-                    Text(e.firstLine)
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(6)
-                        .padding(.top, 4)
+        if let result = selectedResult {
+            VStack(alignment: .leading, spacing: 0) {
+                // Header: tinted icon chip + title + kind.
+                HStack(alignment: .top, spacing: 11) {
+                    Image(systemName: result.iconName)
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundStyle(result.tint)
+                        .frame(width: 36, height: 36)
+                        .background(result.tint.opacity(0.14),
+                                    in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(result.titleText)
+                            .font(.system(size: 14, weight: .semibold))
+                            .lineLimit(2)
+                        Text(result.kindLabel)
+                            .font(.system(size: 10.5, weight: .medium))
+                            .tracking(0.5)
+                            .textCase(.uppercase)
+                            .foregroundStyle(.tertiary)
+                    }
+                    Spacer(minLength: 0)
                 }
-            case .verse(let v):
-                Label("\(v.bookName) \(v.chapter):\(v.verse)", systemImage: "text.quote").font(.headline)
-                Text(paletteHighlight(v.text, tokens: hits.tokens, highlightFont: .callout.weight(.semibold)))
-                    .font(.callout).foregroundStyle(.secondary).lineLimit(10).padding(.top, 4)
-            case .reference(let r):
-                Label(referenceLabel(r), systemImage: "book.fill").font(.headline)
-                Text(referencePreviewText(r))
-                    .font(.callout).foregroundStyle(.secondary).lineLimit(10).padding(.top, 4)
-            case .media(let m):
-                Label(m.name, systemImage: (MediaKind(rawValue: m.mediaType) ?? .image).systemImage)
-                    .font(.headline).lineLimit(2)
-                Text(m.mediaType.capitalized).font(.caption).foregroundStyle(.secondary)
-            case .session(let s):
-                Label(s.name, systemImage: "list.bullet.rectangle").font(.headline).lineLimit(2)
-                Text(s.date.formatted(date: .complete, time: .omitted))
-                    .font(.caption).foregroundStyle(.secondary)
-            case .recent(let r):
-                Label(r.title, systemImage: PaletteRow.icon(forKind: r.kind)).font(.headline).lineLimit(2)
-                if !r.subtitle.isEmpty { Text(r.subtitle).font(.caption).foregroundStyle(.secondary) }
-            case nil:
-                EmptyView()
+
+                Divider().padding(.vertical, 11)
+
+                switch result {
+                case .song(let e):
+                    VStack(alignment: .leading, spacing: 8) {
+                        if !e.author.isEmpty { previewMeta("person", e.author) }
+                        if !e.songbookName.isEmpty { previewMeta("book.closed", e.songbookName) }
+                        if e.versionCount > 1 {
+                            previewMeta("square.stack",
+                                        String(localized: "\(e.versionCount) versiuni", comment: "Palette preview"))
+                        }
+                        if !e.firstLine.isEmpty {
+                            Text(e.firstLine)
+                                .font(.system(size: 12.5))
+                                .italic()
+                                .foregroundStyle(.secondary)
+                                .lineLimit(5)
+                                .padding(10)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(.quaternary.opacity(0.4),
+                                            in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                        }
+                    }
+                case .verse(let v):
+                    Text(paletteHighlight(v.text, tokens: hits.tokens,
+                                          highlightFont: .system(size: 13, weight: .semibold)))
+                        .font(.system(size: 13))
+                        .foregroundStyle(.secondary)
+                        .lineSpacing(3)
+                        .lineLimit(11)
+                case .reference(let r):
+                    Text(referencePreviewText(r))
+                        .font(.system(size: 13))
+                        .foregroundStyle(.secondary)
+                        .lineSpacing(3)
+                        .lineLimit(11)
+                case .media(let m):
+                    previewMeta("tag", m.mediaType.capitalized)
+                case .session(let s):
+                    previewMeta("calendar", s.date.formatted(date: .complete, time: .omitted))
+                case .recent(let r):
+                    if !r.subtitle.isEmpty {
+                        Text(r.subtitle)
+                            .font(.system(size: 13))
+                            .foregroundStyle(.secondary)
+                            .lineSpacing(3)
+                            .lineLimit(11)
+                    }
+                }
+                Spacer(minLength: 0)
             }
-            Spacer(minLength: 0)
+            .padding(16)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        } else {
+            Color.clear
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .padding(14)
+    }
+
+    private func previewMeta(_ icon: String, _ text: String) -> some View {
+        HStack(spacing: 7) {
+            Image(systemName: icon)
+                .font(.system(size: 11))
+                .foregroundStyle(.tertiary)
+                .frame(width: 14)
+            Text(text)
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+        }
     }
 
     private var idleHint: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: 16) {
             Text(String(localized: "Caută în toată biblioteca", comment: "Palette hint title"))
-                .font(.headline).foregroundStyle(.secondary)
-            Text(String(localized: "cântece · Ioan 3:16 · text din versete · media · sesiuni", comment: "Palette hint"))
-                .font(.caption).foregroundStyle(.tertiary)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(.secondary)
+            HStack(spacing: 8) {
+                hintChip("music.note", String(localized: "Cântece", comment: "Palette hint chip"), .purple)
+                hintChip("book.fill", "Ioan 3:16", .blue)
+                hintChip("text.quote", String(localized: "Versete", comment: "Palette hint chip"), .green)
+                hintChip("photo.on.rectangle", "Media", .orange)
+                hintChip("list.bullet.rectangle", String(localized: "Sesiuni", comment: "Palette hint chip"), .teal)
+            }
         }
-        .frame(maxWidth: .infinity, minHeight: 140)
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 38)
+    }
+
+    private func hintChip(_ icon: String, _ label: String, _ tint: Color) -> some View {
+        HStack(spacing: 5) {
+            Image(systemName: icon).font(.system(size: 10)).foregroundStyle(tint)
+            Text(label).font(.system(size: 11)).foregroundStyle(.secondary)
+        }
+        .padding(.horizontal, 9)
+        .padding(.vertical, 5)
+        .background(.quaternary.opacity(0.5), in: Capsule())
     }
 
     private var noResults: some View {
-        VStack(spacing: 8) {
-            Image(systemName: "magnifyingglass").font(.title).foregroundStyle(.tertiary)
+        VStack(spacing: 9) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 26))
+                .foregroundStyle(.quaternary)
             Text(String(localized: "Niciun rezultat pentru „\(query)”", comment: "Palette empty"))
-                .font(.subheadline).foregroundStyle(.secondary)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(.secondary)
             Text(String(localized: "Am căutat și cu toleranță la greșeli de scriere", comment: "Palette empty note"))
-                .font(.caption2).foregroundStyle(.tertiary)
+                .font(.system(size: 11))
+                .foregroundStyle(.tertiary)
         }
-        .frame(maxWidth: .infinity, minHeight: 140)
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 38)
     }
 
     private var footerBar: some View {
-        HStack(spacing: 14) {
+        HStack(spacing: 16) {
             keyHint("↩", String(localized: "Deschide", comment: "Palette key hint"))
             keyHint("⌘↩", String(localized: "Proiectează", comment: "Palette key hint"))
             keyHint("↑↓", String(localized: "Navighează", comment: "Palette key hint"))
             Spacer()
             keyHint("esc", String(localized: "Închide", comment: "Palette key hint"))
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 8)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 7)
+        .background(.quaternary.opacity(0.25))
     }
 
     private func keyHint(_ key: String, _ label: String) -> some View {
-        HStack(spacing: 4) {
+        HStack(spacing: 5) {
             Text(key)
-                .font(.caption2.weight(.semibold).monospaced())
+                .font(.system(size: 10, weight: .semibold, design: .monospaced))
                 .padding(.horizontal, 5).padding(.vertical, 2)
-                .background(.quaternary, in: RoundedRectangle(cornerRadius: 4))
-            Text(label).font(.caption2).foregroundStyle(.secondary)
+                .background(.quaternary.opacity(0.7), in: RoundedRectangle(cornerRadius: 4, style: .continuous))
+            Text(label).font(.system(size: 11)).foregroundStyle(.secondary)
         }
     }
 
@@ -673,29 +824,39 @@ private struct PaletteRow: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            Image(systemName: icon)
-                .font(.body)
-                .foregroundStyle(color)
-                .frame(width: 26, height: 26)
-                .background(color.opacity(0.13), in: RoundedRectangle(cornerRadius: 6))
+            Image(systemName: result.iconName)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(result.tint)
+                .frame(width: 28, height: 28)
+                .background(result.tint.opacity(isSelected ? 0.22 : 0.13),
+                            in: RoundedRectangle(cornerRadius: 7, style: .continuous))
 
             VStack(alignment: .leading, spacing: 1) {
-                Text(paletteHighlight(title, tokens: highlightTokens,
-                                      highlightFont: .callout.weight(.bold)))
-                    .font(.callout.weight(.medium)).lineLimit(1)
+                Text(paletteHighlight(result.titleText, tokens: highlightTokens,
+                                      highlightFont: .system(size: 13, weight: .bold)))
+                    .font(.system(size: 13, weight: .medium))
+                    .lineLimit(1)
+                let subtitle = result.subtitleText
                 if !subtitle.isEmpty {
                     Text(paletteHighlight(subtitle, tokens: highlightTokens,
-                                          highlightFont: .caption.weight(.bold)))
-                        .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                                          highlightFont: .system(size: 11, weight: .bold)))
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
                 }
             }
             Spacer(minLength: 4)
+            if isSelected {
+                Image(systemName: "return")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(.tertiary)
+            }
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
-        .background(isSelected ? Color.accentColor.opacity(0.18) : .clear,
-                    in: RoundedRectangle(cornerRadius: 8))
-        .padding(.horizontal, 6)
+        .background(isSelected ? Color.accentColor.opacity(0.2) : .clear,
+                    in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .padding(.horizontal, 8)
     }
 
     static func icon(forKind kind: String) -> String {
@@ -706,54 +867,6 @@ private struct PaletteRow: View {
         case "media": return "photo.on.rectangle"
         case "session": return "list.bullet.rectangle"
         default: return "clock.arrow.circlepath"
-        }
-    }
-
-    private var icon: String {
-        switch result {
-        case .reference: return "book.fill"
-        case .song: return "music.note"
-        case .verse: return "text.quote"
-        case .media(let m): return (MediaKind(rawValue: m.mediaType) ?? .image).systemImage
-        case .session: return "list.bullet.rectangle"
-        case .recent(let r): return Self.icon(forKind: r.kind)
-        }
-    }
-
-    private var color: Color {
-        switch result {
-        case .reference: return .blue
-        case .song: return .purple
-        case .verse: return .green
-        case .media: return .orange
-        case .session: return .teal
-        case .recent: return .gray
-        }
-    }
-
-    private var title: String {
-        switch result {
-        case .reference(let r):
-            if let vs = r.verseStart, let ve = r.verseEnd {
-                return vs == ve ? "\(r.bookName) \(r.chapter):\(vs)" : "\(r.bookName) \(r.chapter):\(vs)-\(ve)"
-            }
-            return "\(r.bookName) \(r.chapter)"
-        case .song(let e): return e.title
-        case .verse(let v): return "\(v.bookName) \(v.chapter):\(v.verse)"
-        case .media(let m): return m.name
-        case .session(let s): return s.name
-        case .recent(let r): return r.title
-        }
-    }
-
-    private var subtitle: String {
-        switch result {
-        case .reference: return String(localized: "Sari la pasaj", comment: "Palette row subtitle")
-        case .song(let e): return e.author.isEmpty ? e.collectionName : e.author
-        case .verse(let v): return String(v.text.prefix(90))
-        case .media(let m): return m.mediaType.capitalized
-        case .session(let s): return s.date.formatted(date: .abbreviated, time: .omitted)
-        case .recent(let r): return r.subtitle
         }
     }
 }
