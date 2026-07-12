@@ -3274,6 +3274,19 @@ struct PaletteSearchTests {
         #expect(PaletteSearch.run("isus", in: s).songsByTitle.map(\.title)
                 == ["Isus, Numele minunat", "Isus e viu"])
     }
+
+    @Test func bareBookQueryOffersTheBook() {
+        let books = romanianBooks + [.init(moduleID: UUID(), bookNumber: 66, name: "Apocalipsa",
+                                           folded: "apocalipsa", abbreviationFolded: "ap",
+                                           chapterCount: 22)]
+        let s = snapshot(books: books)
+        // "apocal" / "apocalipsa" were dead ends — now they open the book.
+        let partial = PaletteSearch.run("apocal", in: s)
+        #expect(partial.reference?.isBookOnly == true)
+        #expect(partial.reference?.bookNumber == 66)
+        #expect(!partial.isEmpty)
+        #expect(PaletteSearch.run("apocalipsa", in: s).reference?.bookNumber == 66)
+    }
 }
 
 // MARK: - Search Index Builder Order Tests
@@ -3386,7 +3399,37 @@ struct BibleReferenceParserTests {
         #expect(BibleReferenceParser.parse("1 cor 13", books: books)?.bookNumber == 46)
         // Non-references stay nil.
         #expect(BibleReferenceParser.parse("maret esti tu", books: books) == nil)
-        #expect(BibleReferenceParser.parse("ioan", books: books) == nil)
+        // A bare book name now resolves as an OPEN-BOOK reference.
+        let bare = BibleReferenceParser.parse("ioan", books: books)
+        #expect(bare?.isBookOnly == true)
+        #expect(bare?.bookNumber == 43)
+    }
+
+    @Test func bareBookNamesAndVerseClamping() {
+        // Bare book: name prefix ≥ 3 chars or exact abbreviation, shortest wins.
+        #expect(BibleReferenceParser.parse("psal", books: books)
+                == BibleReferenceMatch(bookNumber: 19, bookName: "Psalmii", chapter: 1,
+                                       verseStart: nil, verseEnd: nil, isBookOnly: true))
+        #expect(BibleReferenceParser.parse("1 ioan", books: books)?.isBookOnly == true)
+        #expect(BibleReferenceParser.parse("ps", books: books)?.bookNumber == 19)  // exact abbrev
+        #expect(BibleReferenceParser.parse("io", books: books) == nil)             // 2-char non-abbrev
+        #expect(BibleReferenceParser.parse("xyzzy", books: books) == nil)
+
+        // Verse sanity against indexed per-chapter counts.
+        let counted = [BookIndexEntry(moduleID: UUID(), bookNumber: 66, name: "Apocalipsa",
+                                      folded: "apocalipsa", abbreviationFolded: "ap",
+                                      chapterCount: 22, verseCounts: [22: 21])]
+        // Impossible START verse → falls back to a chapter reference.
+        let dropped = BibleReferenceParser.parse("apocalipsa 22 420", books: counted)
+        #expect(dropped?.chapter == 22)
+        #expect(dropped?.verseStart == nil)
+        #expect(dropped?.isBookOnly == false)
+        // Impossible END verse → clamps to the chapter's last verse.
+        let clamped = BibleReferenceParser.parse("apocalipsa 22:15-420", books: counted)
+        #expect(clamped?.verseStart == 15)
+        #expect(clamped?.verseEnd == 21)
+        // Valid verses untouched.
+        #expect(BibleReferenceParser.parse("apocalipsa 22:20", books: counted)?.verseEnd == 20)
     }
 }
 

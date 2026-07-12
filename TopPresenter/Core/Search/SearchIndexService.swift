@@ -59,6 +59,9 @@ nonisolated struct BookIndexEntry: Sendable {
     let folded: String
     let abbreviationFolded: String
     let chapterCount: Int
+    /// chapterNumber → highest verse number — lets the reference parser reject
+    /// or clamp impossible verses ("Apocalipsa 22:420").
+    var verseCounts: [Int: Int] = [:]
 }
 
 nonisolated struct VerseIndexEntry: Sendable {
@@ -501,17 +504,14 @@ actor SearchIndexBuilder {
         var books: [BookIndexEntry] = []
         var verses: [VerseIndexEntry] = []
         for book in module.books.sorted(by: { $0.bookNumber < $1.bookNumber }) {
-            books.append(BookIndexEntry(
-                moduleID: moduleID, bookNumber: book.bookNumber, name: book.name,
-                folded: searchFold(book.name),
-                abbreviationFolded: searchFold(book.abbreviation),
-                chapterCount: book.chapters.count
-            ))
+            var verseCounts: [Int: Int] = [:]
             autoreleasepool {
                 // Relationship arrays are UNORDERED — sort, so index position
                 // IS canonical Bible order (ranking tie-breaks depend on it).
                 for chapter in book.chapters.sorted(by: { $0.chapterNumber < $1.chapterNumber }) {
-                    for verse in chapter.verses.sorted(by: { $0.verseNumber < $1.verseNumber }) {
+                    let sortedVerses = chapter.verses.sorted(by: { $0.verseNumber < $1.verseNumber })
+                    verseCounts[chapter.chapterNumber] = sortedVerses.last?.verseNumber ?? 0
+                    for verse in sortedVerses {
                         verses.append(VerseIndexEntry(
                             moduleID: moduleID, bookNumber: book.bookNumber,
                             bookName: book.name, chapter: chapter.chapterNumber,
@@ -521,6 +521,13 @@ actor SearchIndexBuilder {
                     }
                 }
             }
+            books.append(BookIndexEntry(
+                moduleID: moduleID, bookNumber: book.bookNumber, name: book.name,
+                folded: searchFold(book.name),
+                abbreviationFolded: searchFold(book.abbreviation),
+                chapterCount: book.chapters.count,
+                verseCounts: verseCounts
+            ))
         }
         return (books, verses, TokenIndex.build(blobs: verses.map(\.folded)))
     }

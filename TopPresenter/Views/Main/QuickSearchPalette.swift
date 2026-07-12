@@ -100,6 +100,7 @@ extension PaletteResult {
     fileprivate var titleText: String {
         switch self {
         case .reference(let r):
+            if r.isBookOnly { return r.bookName }
             if let vs = r.verseStart, let ve = r.verseEnd {
                 return vs == ve ? "\(r.bookName) \(r.chapter):\(vs)" : "\(r.bookName) \(r.chapter):\(vs)-\(ve)"
             }
@@ -114,7 +115,10 @@ extension PaletteResult {
 
     fileprivate var subtitleText: String {
         switch self {
-        case .reference: return String(localized: "Sari la pasaj", comment: "Palette row subtitle")
+        case .reference(let r):
+            return r.isBookOnly
+                ? String(localized: "Deschide cartea", comment: "Palette row subtitle")
+                : String(localized: "Sari la pasaj", comment: "Palette row subtitle")
         case .song(let e): return e.author.isEmpty ? e.collectionName : e.author
         case .verse(let v): return String(v.text.prefix(90))
         case .media(let m): return m.mediaType.capitalized
@@ -646,6 +650,7 @@ struct QuickSearchPalette: View {
     // MARK: Reference helpers (read the in-memory verse index — no SwiftData)
 
     private func referenceLabel(_ r: BibleReferenceMatch) -> String {
+        if r.isBookOnly { return r.bookName }
         if let vs = r.verseStart, let ve = r.verseEnd {
             return vs == ve ? "\(r.bookName) \(r.chapter):\(vs)" : "\(r.bookName) \(r.chapter):\(vs)-\(ve)"
         }
