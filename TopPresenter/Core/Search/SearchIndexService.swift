@@ -86,7 +86,9 @@ nonisolated struct TokenIndex: Sendable {
         for (i, blob) in blobs.enumerated() {
             var seen = Set<Substring>()
             for tok in blob.split(whereSeparator: { !$0.isLetter && !$0.isNumber }) {
-                if tok.count < 2 { continue }
+                // Single letters are noise, but single DIGITS are real content
+                // (songbook numbers, "Cântarea 5") — index them.
+                if tok.count < 2 && !(tok.first?.isNumber ?? false) { continue }
                 if seen.insert(tok).inserted {
                     map[String(tok), default: []].append(Int32(i))
                 }
@@ -114,12 +116,31 @@ nonisolated struct TokenIndex: Sendable {
         return out
     }
 
-    /// AND across query tokens (each by prefix). Empty query → nil (no filter).
+    /// Entry indices whose blob contains EXACTLY `token`.
+    func candidates(exact token: String) -> Set<Int32> {
+        guard !tokens.isEmpty, !token.isEmpty else { return [] }
+        var lo = 0, hi = tokens.count
+        while lo < hi {
+            let mid = (lo + hi) / 2
+            if tokens[mid] < token { lo = mid + 1 } else { hi = mid }
+        }
+        guard lo < tokens.count, tokens[lo] == token else { return [] }
+        return Set(postings[lo])
+    }
+
+    /// Query semantics per token: NUMBERS match exactly ("matei 1 2" must not
+    /// pull every song quoting "Matei 28:19" because 1⊂19, 2⊂28), words match
+    /// by prefix.
+    func candidates(for token: String) -> Set<Int32> {
+        token.allSatisfy(\.isNumber) ? candidates(exact: token) : candidates(prefix: token)
+    }
+
+    /// AND across query tokens. Empty query → nil (no filter).
     func match(queryTokens: [String]) -> Set<Int32>? {
         guard !queryTokens.isEmpty else { return nil }
         var result: Set<Int32>? = nil
         for tok in queryTokens {
-            let c = candidates(prefix: tok)
+            let c = candidates(for: tok)
             result = result.map { $0.intersection(c) } ?? c
             if result?.isEmpty == true { return result }
         }
@@ -204,21 +225,28 @@ nonisolated struct PaletteSnapshot: Sendable {
 }
 
 /// One query's results, pre-ranked and capped — the palette renders this state
-/// verbatim (no recomputation in `body`).
+/// verbatim (no recomputation in `body`). Display priority: reference →
+/// song TITLE matches → verse full-text → songs matched only in lyrics/author
+/// → media → sessions.
 nonisolated struct PaletteHits: Sendable {
     let query: String
     /// Folded query tokens — used for match highlighting in rows.
     let tokens: [String]
     let reference: BibleReferenceMatch?
-    let songs: [SongIndexEntry]
+    /// Songs whose TITLE matches the query (prefix hits first).
+    let songsByTitle: [SongIndexEntry]
+    /// Songs matched only in lyrics/author — ranked BELOW verses.
+    let songsByContent: [SongIndexEntry]
     let verses: [VerseIndexEntry]
     let media: [MediaIndexEntry]
     let sessions: [SessionIndexEntry]
 
     static let none = PaletteHits(query: "", tokens: [], reference: nil,
-                                  songs: [], verses: [], media: [], sessions: [])
+                                  songsByTitle: [], songsByContent: [],
+                                  verses: [], media: [], sessions: [])
     var isEmpty: Bool {
-        reference == nil && songs.isEmpty && verses.isEmpty && media.isEmpty && sessions.isEmpty
+        reference == nil && songsByTitle.isEmpty && songsByContent.isEmpty
+            && verses.isEmpty && media.isEmpty && sessions.isEmpty
     }
 }
 
@@ -226,31 +254,35 @@ nonisolated enum PaletteSearch {
     /// Full palette query: reference parse + ranked songs (typo-tolerant) +
     /// verse full-text (token index, typo-tolerant) + media + sessions.
     static func run(_ rawQuery: String, in s: PaletteSnapshot,
-                    songLimit: Int = 10, verseLimit: Int = 8,
+                    titleLimit: Int = 8, contentLimit: Int = 6, verseLimit: Int = 6,
                     mediaLimit: Int = 5, sessionLimit: Int = 5) -> PaletteHits {
         let trimmed = rawQuery.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return .none }
         let toks = searchTokens(trimmed)
         let folded = searchFold(trimmed)
+        let songs = rankedSongs(toks, folded: toks.joined(separator: " "), in: s,
+                                titleLimit: titleLimit, contentLimit: contentLimit)
         return PaletteHits(
             query: trimmed,
             tokens: toks,
             reference: BibleReferenceParser.parse(trimmed, books: s.books),
-            songs: rankedSongs(toks, folded: toks.joined(separator: " "), in: s, limit: songLimit),
+            songsByTitle: songs.title,
+            songsByContent: songs.content,
             verses: verseHits(folded, tokens: toks, in: s, limit: verseLimit),
             media: Array(s.media.filter { $0.folded.contains(folded) }.prefix(mediaLimit)),
             sessions: Array(s.sessions.filter { $0.folded.contains(folded) }.prefix(sessionLimit))
         )
     }
 
-    /// AND across query tokens; a token with zero exact-prefix hits falls back
-    /// to its fuzzy candidates so one typo doesn't blank the whole search.
+    /// AND across query tokens; a WORD token with zero exact-prefix hits falls
+    /// back to its fuzzy candidates so one typo doesn't blank the whole search.
+    /// Numeric tokens never fuzz — "12" must not drift to "13".
     static func matchTokens(_ toks: [String], index: TokenIndex) -> Set<Int32>? {
         guard !toks.isEmpty else { return nil }
         var result: Set<Int32>? = nil
         for tok in toks {
-            var c = index.candidates(prefix: tok)
-            if c.isEmpty {
+            var c = index.candidates(for: tok)
+            if c.isEmpty, !tok.allSatisfy(\.isNumber) {
                 c = index.fuzzyCandidates(token: tok, maxDistance: TokenIndex.fuzzyDistance(for: tok))
             }
             result = result.map { $0.intersection(c) } ?? c
@@ -259,10 +291,13 @@ nonisolated enum PaletteSearch {
         return result
     }
 
-    /// Ranking: title-prefix → title-contains → lyrics/author → alphabetical.
-    private static func rankedSongs(_ toks: [String], folded: String,
-                                    in s: PaletteSnapshot, limit: Int) -> [SongIndexEntry] {
-        guard !toks.isEmpty, let hits = matchTokens(toks, index: s.songTokens) else { return [] }
+    /// Splits song hits by WHERE they matched: title (prefix hits first, then
+    /// title-contains) vs. lyrics/author only. Alphabetical inside each bucket.
+    private static func rankedSongs(
+        _ toks: [String], folded: String, in s: PaletteSnapshot,
+        titleLimit: Int, contentLimit: Int
+    ) -> (title: [SongIndexEntry], content: [SongIndexEntry]) {
+        guard !toks.isEmpty, let hits = matchTokens(toks, index: s.songTokens) else { return ([], []) }
         var prefix: [SongIndexEntry] = [], titleHit: [SongIndexEntry] = [], rest: [SongIndexEntry] = []
         for i in hits {
             let e = s.songs[Int(i)]
@@ -274,7 +309,7 @@ nonisolated enum PaletteSearch {
         prefix.sort { $0.title < $1.title }
         titleHit.sort { $0.title < $1.title }
         rest.sort { $0.title < $1.title }
-        return Array((prefix + titleHit + rest).prefix(limit))
+        return (Array((prefix + titleHit).prefix(titleLimit)), Array(rest.prefix(contentLimit)))
     }
 
     /// Verse full-text via the token index (no linear scan over 31k rows):

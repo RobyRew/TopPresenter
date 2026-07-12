@@ -3139,13 +3139,45 @@ struct PaletteSearchTests {
 
     @Test func paletteSearchFindsSongsDespiteTypos() {
         let s = snapshot(songs: [song("Amazing Grace"), song("Mărire Ție"), song("Ce mare ești Tu")])
-        #expect(PaletteSearch.run("amazing", in: s).songs.first?.title == "Amazing Grace")
-        // One typo'd token + one clean token still AND-match.
-        #expect(PaletteSearch.run("amaizng grace", in: s).songs.first?.title == "Amazing Grace")
+        #expect(PaletteSearch.run("amazing", in: s).songsByTitle.first?.title == "Amazing Grace")
+        // One typo'd token + one clean token still AND-match (typo'd tokens
+        // can't be verified against the title, so they land in the content bucket).
+        let typo = PaletteSearch.run("amaizng grace", in: s)
+        #expect((typo.songsByTitle + typo.songsByContent).first?.title == "Amazing Grace")
         // Typo over a diacritic word.
-        #expect(PaletteSearch.run("marrire", in: s).songs.first?.title == "Mărire Ție")
+        let dia = PaletteSearch.run("marrire", in: s)
+        #expect((dia.songsByTitle + dia.songsByContent).first?.title == "Mărire Ție")
         // Nonsense stays empty.
-        #expect(PaletteSearch.run("xyzzyq", in: s).songs.isEmpty)
+        let none = PaletteSearch.run("xyzzyq", in: s)
+        #expect(none.songsByTitle.isEmpty && none.songsByContent.isEmpty)
+    }
+
+    @Test func titleMatchesRankAboveLyricsMatches() {
+        let s = snapshot(songs: [
+            song("Isus e viu"),
+            song("Cântare de laudă", lyrics: "isus este domn peste toate"),
+        ])
+        let hits = PaletteSearch.run("isus", in: s)
+        #expect(hits.songsByTitle.map(\.title) == ["Isus e viu"])
+        #expect(hits.songsByContent.map(\.title) == ["Cântare de laudă"])
+    }
+
+    @Test func numericTokensMatchExactlyNotByPrefix() {
+        let s = snapshot(songs: [
+            song("Cântare specială", lyrics: "cum spune in matei 28 19 mergeti"),
+            song("Cântarea 5"),
+        ])
+        // "matei 1 2" must NOT match a song quoting Matei 28:19 (1⊄19, 2⊄28).
+        let wrong = PaletteSearch.run("matei 1 2", in: s)
+        #expect(wrong.songsByTitle.isEmpty && wrong.songsByContent.isEmpty)
+        // The exact numbers DO match.
+        let right = PaletteSearch.run("matei 28 19", in: s)
+        #expect((right.songsByTitle + right.songsByContent).count == 1)
+        // Single digits are indexed and match exactly.
+        #expect(PaletteSearch.run("cantarea 5", in: s).songsByTitle.first?.title == "Cântarea 5")
+        // Numbers never fuzz: "12" must not drift to anything.
+        let idx = TokenIndex.build(blobs: ["psalm 121"])
+        #expect(PaletteSearch.matchTokens(["psalm", "12"], index: idx)?.isEmpty == true)
     }
 
     @Test func verseTokenSearchFindsPhrasesAndTypos() {

@@ -193,14 +193,18 @@ struct QuickSearchPalette: View {
                 recents.items.map { .recent($0) })
             return out
         }
+        // PRIORITY ORDER: reference → song titles → verse text → songs matched
+        // only in lyrics → media → sessions.
         if let ref = hits.reference {
             add("ref", String(localized: "Referință biblică", comment: "Palette section"), [.reference(ref)])
         }
         add("songs", String(localized: "Cântece", comment: "Palette section"),
-            hits.songs.map { .song($0) })
+            hits.songsByTitle.map { .song($0) })
         add("verses",
             String(localized: "Versete (\(libraryManager.selectedBibleModule?.abbreviation ?? ""))", comment: "Palette section"),
             hits.verses.map { .verse($0) })
+        add("songContent", String(localized: "Cântece – potrivire în versuri", comment: "Palette section"),
+            hits.songsByContent.map { .song($0) })
         add("media", String(localized: "Media", comment: "Palette section"),
             hits.media.map { .media($0) })
         add("sessions", String(localized: "Sesiuni", comment: "Palette section"),
@@ -368,7 +372,12 @@ struct QuickSearchPalette: View {
                             PaletteRow(result: row.result,
                                        isSelected: row.flatIndex == selectedIndex,
                                        highlightTokens: hits.tokens)
-                                .id(row.flatIndex)
+                                // Scroll anchor = the ForEach identity (result
+                                // id). NEVER tag rows with the flat INDEX — an
+                                // index-based identity override made lazy rows
+                                // show one result's content under another
+                                // section's header while results changed.
+                                .id(row.id)
                                 .contentShape(Rectangle())
                                 .onTapGesture { selectedIndex = row.flatIndex; open(row.result) }
                                 .onHover { inside in
@@ -389,7 +398,9 @@ struct QuickSearchPalette: View {
                 .padding(.vertical, 6)
             }
             .onChange(of: selectedIndex) { _, newIndex in
-                proxy.scrollTo(newIndex, anchor: .center)
+                let flat = flatResults
+                guard newIndex >= 0, newIndex < flat.count else { return }
+                proxy.scrollTo(flat[newIndex].id, anchor: .center)
             }
         }
     }
