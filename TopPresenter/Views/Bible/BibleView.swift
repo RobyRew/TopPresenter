@@ -399,7 +399,7 @@ struct BibleBooksGridPane: View {
                 .padding(.horizontal, 4)
                 .background(
                     isSelected
-                        ? appAccent
+                        ? appHighlight
                         : showBookCategoryColors ? category.color.opacity(0.26) : Color.gray.opacity(0.12),
                     in: RoundedRectangle(cornerRadius: 6, style: .continuous)
                 )
@@ -543,7 +543,7 @@ struct BibleChaptersPanel: View {
                                     .font(.system(size: 12, weight: .medium, design: .rounded))
                                     .frame(maxWidth: .infinity, minHeight: 28)
                                     .background(
-                                        selected ? appAccent : Color.gray.opacity(0.12),
+                                        selected ? appHighlight : Color.gray.opacity(0.12),
                                         in: RoundedRectangle(cornerRadius: 6, style: .continuous)
                                     )
                                     .foregroundStyle(selected ? .white : .primary)
@@ -910,7 +910,7 @@ struct BibleVerseRow: View {
         .padding(.vertical, 6)
         .padding(.horizontal, 8)
         .background(
-            isSelected ? appAccent.opacity(0.15) : Color.clear,
+            isSelected ? appHighlight.opacity(0.15) : Color.clear,
             in: RoundedRectangle(cornerRadius: 6)
         )
         .contentShape(Rectangle())

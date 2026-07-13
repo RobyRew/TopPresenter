@@ -1953,7 +1953,7 @@ struct LayoutEditorSheet: View {
         .padding(.horizontal, 8)
         .padding(.vertical, 5)
         .background(
-            isSelected ? appAccent.opacity(0.15) : Color.clear,
+            isSelected ? appHighlight.opacity(0.15) : Color.clear,
             in: RoundedRectangle(cornerRadius: 5)
         )
         .help(boxSourceDescription(for: identity, pm: pm))

@@ -361,7 +361,7 @@ struct ScheduleItemRow: View {
         .opacity(isMissing ? 0.5 : 1)
         .background(
             isCurrent ? appAccent.opacity(0.22)
-                : isSelected ? appAccent.opacity(0.12) : Color.clear,
+                : isSelected ? appHighlight.opacity(0.12) : Color.clear,
             in: RoundedRectangle(cornerRadius: 4)
         )
     }

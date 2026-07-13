@@ -102,30 +102,57 @@ struct InterfaceSettingsTab: View {
     @AppStorage("confirmBeforeDelete") private var confirmBeforeDelete: Bool = true
     @AppStorage("forceTouchClearAction") private var forceTouchAction: String = "clearAll"
     @AppStorage("sidebarRowSizeOption") private var sidebarRowSizeRaw = "system"
+    @AppStorage("sidebarCustomIconSize") private var sidebarCustomSize = 14.0
 
     var body: some View {
+        @Bindable var store = AccentStore.shared
+
         Form {
             Section {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(String(localized: "Culoare accent", comment: "Setting label"))
-                    HStack(spacing: 9) {
-                        ForEach(AppAccentOption.allCases) { option in
-                            accentSwatch(option)
-                        }
-                    }
+                colorRow(String(localized: "Culoare accent", comment: "Setting label"),
+                         isSelected: { store.option == $0 },
+                         select: { store.option = $0 },
+                         custom: Binding(get: { store.customAccent },
+                                         set: { store.customAccent = $0; store.option = .custom }),
+                         customActive: store.option == .custom)
+
+                Toggle(String(localized: "Evidențierea folosește accentul", comment: "Setting label"),
+                       isOn: $store.highlightFollowsAccent)
+                if !store.highlightFollowsAccent {
+                    colorRow(String(localized: "Culoare evidențiere", comment: "Setting label"),
+                             isSelected: { store.highlightOption == $0 },
+                             select: { store.highlightOption = $0 },
+                             custom: Binding(get: { store.customHighlight },
+                                             set: { store.customHighlight = $0; store.highlightOption = .custom }),
+                             customActive: store.highlightOption == .custom)
                 }
-                .padding(.vertical, 2)
 
                 Picker(String(localized: "Iconițe bară laterală:", comment: "Setting label"), selection: $sidebarRowSizeRaw) {
                     Text(String(localized: "Sistem", comment: "Sidebar icon size option")).tag("system")
                     Text(String(localized: "Mic", comment: "Sidebar icon size option")).tag("small")
                     Text(String(localized: "Mediu", comment: "Sidebar icon size option")).tag("medium")
                     Text(String(localized: "Mare", comment: "Sidebar icon size option")).tag("large")
+                    Text(String(localized: "Personalizat", comment: "Sidebar icon size option")).tag("custom")
+                }
+                if sidebarRowSizeRaw == "custom" {
+                    HStack(spacing: 10) {
+                        Slider(value: $sidebarCustomSize, in: 11...20, step: 1) {
+                            Text(String(localized: "Mărime", comment: "Setting label"))
+                        } minimumValueLabel: {
+                            Image(systemName: "textformat.size.smaller")
+                        } maximumValueLabel: {
+                            Image(systemName: "textformat.size.larger")
+                        }
+                        Text(verbatim: "\(Int(sidebarCustomSize)) pt")
+                            .monospacedDigit()
+                            .foregroundStyle(.secondary)
+                            .frame(width: 44, alignment: .trailing)
+                    }
                 }
             } header: {
                 Text(String(localized: "Aspect", comment: "Settings section"))
             } footer: {
-                Text(String(localized: "„Sistem” urmează culoarea de accent și mărimea iconițelor din Setările macOS.", comment: "Settings info"))
+                Text(String(localized: "„Sistem” urmează culoarea de accent și mărimea iconițelor din Setările macOS. Evidențierea colorează selecțiile (versete, capitole, rezultate).", comment: "Settings info"))
                     .font(.caption).foregroundStyle(.secondary)
             }
 
@@ -162,14 +189,36 @@ struct InterfaceSettingsTab: View {
         .padding()
     }
 
-    /// One accent swatch (macOS System Settings-style): filled circle,
-    /// selection ring, „Sistem” shows the LIVE system accent.
-    private func accentSwatch(_ option: AppAccentOption) -> some View {
-        let store = AccentStore.shared
-        let isSelected = store.option == option
-        return Button {
-            store.option = option
-        } label: {
+    /// One color channel row (macOS System Settings-style): preset swatches
+    /// + a native ColorPicker well for the fully custom color.
+    private func colorRow(_ label: String,
+                          isSelected: @escaping (AppAccentOption) -> Bool,
+                          select: @escaping (AppAccentOption) -> Void,
+                          custom: Binding<Color>,
+                          customActive: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(label)
+            HStack(spacing: 9) {
+                ForEach(AppAccentOption.presets) { option in
+                    swatch(option, selected: isSelected(option)) { select(option) }
+                }
+                ColorPicker("", selection: custom, supportsOpacity: false)
+                    .labelsHidden()
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 6)
+                            .strokeBorder(Color.primary.opacity(customActive ? 0.8 : 0), lineWidth: 2)
+                            .padding(-3)
+                    )
+                    .help(String(localized: "Personalizat", comment: "Accent option"))
+            }
+        }
+        .padding(.vertical, 2)
+    }
+
+    /// One preset swatch: filled circle, selection ring, „Sistem” shows the
+    /// LIVE system accent with a tiny window glyph.
+    private func swatch(_ option: AppAccentOption, selected: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
             ZStack {
                 Circle()
                     .fill(option.color)
@@ -179,7 +228,7 @@ struct InterfaceSettingsTab: View {
                         .font(.system(size: 8, weight: .bold))
                         .foregroundStyle(.white)
                 }
-                if isSelected {
+                if selected {
                     Circle()
                         .strokeBorder(Color.primary.opacity(0.8), lineWidth: 2)
                         .frame(width: 26, height: 26)

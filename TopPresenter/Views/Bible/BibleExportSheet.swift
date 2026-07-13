@@ -221,7 +221,7 @@ private struct ExportFormatRow: View {
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                .foregroundStyle(isSelected ? appAccent : .secondary)
+                .foregroundStyle(isSelected ? appHighlight : .secondary)
                 .font(.title3)
 
             VStack(alignment: .leading, spacing: 2) {
@@ -250,12 +250,12 @@ private struct ExportFormatRow: View {
         }
         .padding(10)
         .background(
-            isSelected ? appAccent.opacity(0.1) : Color.clear,
+            isSelected ? appHighlight.opacity(0.1) : Color.clear,
             in: RoundedRectangle(cornerRadius: 8)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 8)
-                .stroke(isSelected ? appAccent.opacity(0.4) : Color.clear, lineWidth: 1)
+                .stroke(isSelected ? appHighlight.opacity(0.4) : Color.clear, lineWidth: 1)
         )
     }
 }

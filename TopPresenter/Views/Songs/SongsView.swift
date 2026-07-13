@@ -467,7 +467,7 @@ struct SongListPanel: View {
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 10)
-                    .stroke(libraryManager.selectedSong?.id == entry.id ? appAccent : Color.clear, lineWidth: 1.5)
+                    .stroke(libraryManager.selectedSong?.id == entry.id ? appHighlight : Color.clear, lineWidth: 1.5)
             )
             .clipShape(RoundedRectangle(cornerRadius: 10))
         }
@@ -1110,12 +1110,12 @@ struct SongSlideThumbnail: View {
             .padding(.horizontal, 4).padding(.vertical, 3)
         }
         .background(
-            isSelected ? appAccent.opacity(0.18) : Color.secondary.opacity(0.06),
+            isSelected ? appHighlight.opacity(0.18) : Color.secondary.opacity(0.06),
             in: RoundedRectangle(cornerRadius: 8)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 8)
-                .stroke(isSelected ? appAccent : .clear, lineWidth: 2)
+                .stroke(isSelected ? appHighlight : .clear, lineWidth: 2)
         )
         .contentShape(Rectangle())
     }
@@ -1531,7 +1531,7 @@ struct SongEditorSheet: View {
                                 Text(title).font(.caption.weight(.medium)).lineLimit(1)
                             }
                             .padding(.horizontal, 12).padding(.vertical, 6)
-                            .background(selected ? appAccent : Color.secondary.opacity(0.15), in: Capsule())
+                            .background(selected ? appHighlight : Color.secondary.opacity(0.15), in: Capsule())
                             .foregroundStyle(selected ? .white : .primary)
                         }
                         .buttonStyle(.plain)

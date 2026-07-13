@@ -272,12 +272,12 @@ struct MediaCard: View {
             .padding(.vertical, 5)
         }
         .background(
-            isSelected ? appAccent.opacity(0.18) : Color.secondary.opacity(0.08),
+            isSelected ? appHighlight.opacity(0.18) : Color.secondary.opacity(0.08),
             in: RoundedRectangle(cornerRadius: 10)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 10)
-                .stroke(isSelected ? appAccent : Color.clear, lineWidth: 1.5)
+                .stroke(isSelected ? appHighlight : Color.clear, lineWidth: 1.5)
         )
         .clipShape(RoundedRectangle(cornerRadius: 10))
         .contentShape(RoundedRectangle(cornerRadius: 10))

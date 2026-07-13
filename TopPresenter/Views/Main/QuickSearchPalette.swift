@@ -1013,7 +1013,7 @@ private struct PaletteRow: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
-        .background(isSelected ? appAccent.opacity(0.2) : .clear,
+        .background(isSelected ? appHighlight.opacity(0.2) : .clear,
                     in: RoundedRectangle(cornerRadius: 8, style: .continuous))
         .padding(.horizontal, 8)
     }

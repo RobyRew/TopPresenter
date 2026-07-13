@@ -2,16 +2,19 @@
 //  AppAccent.swift
 //  TopPresenter
 //
-//  App-wide accent color (Settings ▸ Interfață ▸ Culoare accent).
-//  Default = the LIVE macOS system accent (NSColor.controlAccentColor, a
-//  dynamic color — follows System Settings ▸ Appearance changes instantly);
-//  or one of the preset overrides.
+//  App-wide ACCENT + HIGHLIGHT colors (Settings ▸ Interfață ▸ Aspect).
+//  Accent default = the LIVE macOS system accent (NSColor.controlAccentColor,
+//  dynamic — follows System Settings ▸ Appearance instantly); presets and a
+//  fully custom ColorPicker color override it. HIGHLIGHT (selection visuals:
+//  selected verses/chapters/cards/palette rows) follows the accent by
+//  default, or gets its own preset/custom color.
 //
 //  Usage rules:
-//  - View code uses the global `appAccent` — NEVER `appAccent`
-//    (that reads the asset catalog and ignores the in-app choice).
-//  - Reading `appAccent` inside `body` registers Observation on AccentStore,
-//    so a settings change re-renders every dependent view.
+//  - View code uses the globals `appAccent` / `appHighlight` — NEVER
+//    `Color.accentColor` (that reads the asset catalog and ignores the
+//    in-app choice). Selection visuals use `appHighlight`.
+//  - Reading them inside `body` registers Observation on AccentStore, so a
+//    settings change re-renders every dependent view.
 //  - Native controls (pickers, toggles, list selection) follow the `.tint`
 //    applied once at MainWindowRoot.
 //
@@ -21,12 +24,17 @@ import Observation
 
 enum AppAccentOption: String, CaseIterable, Identifiable {
     case system, blue, purple, pink, red, orange, yellow, green, mint, teal, indigo, brown
+    /// Fully custom color (the ColorPicker well) — resolved by AccentStore.
+    case custom
 
     var id: String { rawValue }
 
+    /// The preset swatch row (custom is the ColorPicker, not a swatch).
+    static var presets: [AppAccentOption] { allCases.filter { $0 != .custom } }
+
     var color: Color {
         switch self {
-        case .system: return Color(nsColor: .controlAccentColor)
+        case .system, .custom: return Color(nsColor: .controlAccentColor)
         case .blue: return .blue
         case .purple: return .purple
         case .pink: return .pink
@@ -55,6 +63,7 @@ enum AppAccentOption: String, CaseIterable, Identifiable {
         case .teal: return String(localized: "Turcoaz", comment: "Accent option")
         case .indigo: return String(localized: "Indigo", comment: "Accent option")
         case .brown: return String(localized: "Maro", comment: "Accent option")
+        case .custom: return String(localized: "Personalizat", comment: "Accent option")
         }
     }
 }
@@ -63,16 +72,65 @@ enum AppAccentOption: String, CaseIterable, Identifiable {
 @Observable
 final class AccentStore {
     static let shared = AccentStore()
-    private static let key = "appAccentColor"
+
+    // MARK: Accent
 
     var option: AppAccentOption {
-        didSet { UserDefaults.standard.set(option.rawValue, forKey: Self.key) }
+        didSet { UserDefaults.standard.set(option.rawValue, forKey: "appAccentColor") }
+    }
+    /// The ColorPicker color — used when `option == .custom`.
+    var customAccent: Color {
+        didSet { Self.store(customAccent, key: "appAccentCustom") }
+    }
+
+    // MARK: Highlight (selection visuals)
+
+    /// Default ON: selections tint with the accent, one knob for everything.
+    var highlightFollowsAccent: Bool {
+        didSet { UserDefaults.standard.set(highlightFollowsAccent, forKey: "appHighlightFollows") }
+    }
+    var highlightOption: AppAccentOption {
+        didSet { UserDefaults.standard.set(highlightOption.rawValue, forKey: "appHighlightOption") }
+    }
+    var customHighlight: Color {
+        didSet { Self.store(customHighlight, key: "appHighlightCustom") }
+    }
+
+    // MARK: Resolved colors
+
+    var accent: Color { option == .custom ? customAccent : option.color }
+
+    var highlight: Color {
+        if highlightFollowsAccent { return accent }
+        return highlightOption == .custom ? customHighlight : highlightOption.color
     }
 
     init() {
-        option = AppAccentOption(rawValue: UserDefaults.standard.string(forKey: Self.key) ?? "") ?? .system
+        option = AppAccentOption(rawValue: UserDefaults.standard.string(forKey: "appAccentColor") ?? "") ?? .system
+        customAccent = Self.load(key: "appAccentCustom") ?? Color(nsColor: .controlAccentColor)
+        highlightFollowsAccent = UserDefaults.standard.object(forKey: "appHighlightFollows") as? Bool ?? true
+        highlightOption = AppAccentOption(rawValue: UserDefaults.standard.string(forKey: "appHighlightOption") ?? "") ?? .system
+        customHighlight = Self.load(key: "appHighlightCustom") ?? Color(nsColor: .controlAccentColor)
+    }
+
+    // MARK: Color persistence (sRGB components)
+
+    private static func store(_ color: Color, key: String) {
+        guard let ns = NSColor(color).usingColorSpace(.sRGB) else { return }
+        UserDefaults.standard.set(
+            [ns.redComponent, ns.greenComponent, ns.blueComponent, ns.alphaComponent].map(Double.init),
+            forKey: key
+        )
+    }
+
+    private static func load(key: String) -> Color? {
+        guard let c = UserDefaults.standard.array(forKey: key) as? [Double], c.count == 4 else { return nil }
+        return Color(.sRGB, red: c[0], green: c[1], blue: c[2], opacity: c[3])
     }
 }
 
 /// THE accent — use this everywhere view code needs the accent as a Color.
-@MainActor var appAccent: Color { AccentStore.shared.option.color }
+@MainActor var appAccent: Color { AccentStore.shared.accent }
+
+/// THE selection-highlight color — selected verses/chapters/cards/rows.
+@MainActor var appHighlight: Color { AccentStore.shared.highlight }

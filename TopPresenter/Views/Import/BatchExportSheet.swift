@@ -128,7 +128,7 @@ struct BatchExportSheet: View {
         let isSelected = selectedModuleIDs.contains(module.id)
         return HStack(spacing: 10) {
             Image(systemName: isSelected ? "checkmark.square.fill" : "square")
-                .foregroundStyle(isSelected ? appAccent : .secondary)
+                .foregroundStyle(isSelected ? appHighlight : .secondary)
 
             VStack(alignment: .leading, spacing: 1) {
                 Text(module.abbreviation.isEmpty ? module.name : "\(module.abbreviation) — \(module.name)")
@@ -143,7 +143,7 @@ struct BatchExportSheet: View {
         }
         .padding(8)
         .background(
-            isSelected ? appAccent.opacity(0.08) : Color.clear,
+            isSelected ? appHighlight.opacity(0.08) : Color.clear,
             in: RoundedRectangle(cornerRadius: 6)
         )
         .contentShape(Rectangle())

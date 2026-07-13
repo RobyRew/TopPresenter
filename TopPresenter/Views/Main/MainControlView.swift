@@ -653,7 +653,7 @@ struct MainControlView: View {
                                 } label: {
                                     HStack(spacing: 8) {
                                         Image(systemName: libraryManager.selectedBibleModule?.id == module.id ? "checkmark.circle.fill" : "circle")
-                                            .foregroundStyle(libraryManager.selectedBibleModule?.id == module.id ? appAccent : Color.secondary.opacity(0.4))
+                                            .foregroundStyle(libraryManager.selectedBibleModule?.id == module.id ? appHighlight : Color.secondary.opacity(0.4))
                                             .font(.caption)
                                         VStack(alignment: .leading, spacing: 1) {
                                             Text(module.abbreviation.isEmpty ? module.name : module.abbreviation)
