@@ -32,6 +32,12 @@ struct BibleView: View {
     @AppStorage("defaultBibleModuleName") private var defaultBibleModuleName: String = ""
     @State private var didRestoreModule = false
 
+    // User-resizable books/chapters split, persisted per mode: LIST drags the
+    // chapters COLUMN width, GRID drags the books/chapters HEIGHT fraction.
+    @AppStorage("bibleListChaptersWidth") private var listChaptersWidth: Double = 132
+    @AppStorage("bibleGridBooksFraction") private var gridBooksFraction: Double = 0.55
+    @State private var dragBase: Double?
+
     var body: some View {
         VStack(spacing: 0) {
             if modules.isEmpty {
@@ -51,16 +57,26 @@ struct BibleView: View {
                             if viewMode == "grid" {
                                 VStack(spacing: 0) {
                                     BibleBooksGridPane()
-                                        .frame(height: geo.size.height * 0.55)
-                                    Divider()
+                                        .frame(height: geo.size.height * min(max(gridBooksFraction, 0.25), 0.8))
+                                    paneResizeDivider(.vertical) { base, delta in
+                                        gridBooksFraction = min(max(base + delta / max(geo.size.height, 1), 0.25), 0.8)
+                                    } currentValue: {
+                                        gridBooksFraction
+                                    }
                                     BibleChaptersPanel()
                                 }
                             } else {
                                 HStack(spacing: 0) {
                                     BibleNavigationPanel()
-                                    Divider()
-                                    BibleChaptersPanel()
-                                        .frame(width: min(max(paneWidth * 0.38, 108), 168))
+                                    paneResizeDivider(.horizontal) { base, delta in
+                                        // Chapters sit on the RIGHT: dragging the
+                                        // divider left (negative delta) widens them.
+                                        listChaptersWidth = min(max(base - delta, 84), Double(paneWidth) * 0.6)
+                                    } currentValue: {
+                                        listChaptersWidth
+                                    }
+                                    BibleChaptersPanel(fixedColumns: 2)
+                                        .frame(width: min(max(listChaptersWidth, 84), Double(paneWidth) * 0.6))
                                 }
                             }
                         }
@@ -116,6 +132,45 @@ struct BibleView: View {
                 defaultBibleModuleName = name
             }
         }
+    }
+
+    /// Draggable pane divider: a hairline with a fat invisible hit area. The
+    /// drag hands the caller (valueAtDragStart, translation along the drag
+    /// axis) — the caller owns clamping + AppStorage persistence. `dragAxis` =
+    /// the direction the user DRAGS (.horizontal resizes the list chapters
+    /// column, .vertical the grid books/chapters split).
+    private func paneResizeDivider(
+        _ dragAxis: Axis,
+        onDrag: @escaping (Double, Double) -> Void,
+        currentValue: @escaping () -> Double
+    ) -> some View {
+        Rectangle()
+            .fill(.clear)
+            .frame(width: dragAxis == .horizontal ? 7 : nil,
+                   height: dragAxis == .vertical ? 7 : nil)
+            .overlay(
+                Rectangle()
+                    .fill(Color(nsColor: .separatorColor))
+                    .frame(width: dragAxis == .horizontal ? 1 : nil,
+                           height: dragAxis == .vertical ? 1 : nil)
+            )
+            .contentShape(Rectangle())
+            .onHover { inside in
+                if inside {
+                    (dragAxis == .horizontal ? NSCursor.resizeLeftRight : NSCursor.resizeUpDown).push()
+                } else {
+                    NSCursor.pop()
+                }
+            }
+            .gesture(
+                DragGesture(minimumDistance: 1)
+                    .onChanged { v in
+                        let base = dragBase ?? currentValue()
+                        dragBase = base
+                        onDrag(base, dragAxis == .horizontal ? v.translation.width : v.translation.height)
+                    }
+                    .onEnded { _ in dragBase = nil }
+            )
     }
 
     private var emptyStateView: some View {
@@ -438,9 +493,13 @@ struct BibleNavigationPanel: View {
 
 }
 
-// MARK: - Bible Chapters Panel (left-bottom — shared by list & grid modes)
+// MARK: - Bible Chapters Panel (shared by list & grid modes)
 struct BibleChaptersPanel: View {
     @Environment(LibraryManager.self) private var libraryManager
+
+    /// nil = dense adaptive grid (grid mode's wide bottom pane); a number =
+    /// exactly that many columns (list mode's narrow right column uses 2).
+    var fixedColumns: Int? = nil
 
     var body: some View {
         VStack(spacing: 0) {
@@ -462,9 +521,13 @@ struct BibleChaptersPanel: View {
 
             if let book = libraryManager.selectedBook {
                 ScrollView {
-                    // Adaptive columns: Psalmii's 150 chapters stay a dense,
-                    // scannable grid instead of a 2-column scroll marathon.
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 34), spacing: 4)], spacing: 4) {
+                    // Wide pane (grid mode): adaptive dense grid so Psalmii's
+                    // 150 chapters stay scannable. Narrow column (list mode):
+                    // exactly `fixedColumns` (2) — buttons grow with the
+                    // user-dragged column width.
+                    LazyVGrid(columns: fixedColumns.map {
+                        Array(repeating: GridItem(.flexible(), spacing: 4), count: $0)
+                    } ?? [GridItem(.adaptive(minimum: 34), spacing: 4)], spacing: 4) {
                         ForEach(book.sortedChapters) { chapter in
                             let selected = libraryManager.selectedChapter?.id == chapter.id
                             Button {
