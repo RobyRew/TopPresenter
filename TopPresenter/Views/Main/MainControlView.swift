@@ -139,13 +139,16 @@ struct MainControlView: View {
                     }
                 }
 
-            // Quick Search overlay (⌘K)
+            // Quick Search overlay (⌘K + the toolbar search capsule). The
+            // scale anchors near the toolbar's search field so opening reads
+            // as the field expanding down into the palette.
             if showQuickSearch {
                 QuickSearchPalette(isPresented: $showQuickSearch)
-                    .transition(.opacity.combined(with: .scale(scale: 0.97)))
+                    .transition(.scale(scale: 0.92, anchor: UnitPoint(x: 0.85, y: 0))
+                        .combined(with: .opacity))
             }
         }
-        .animation(.easeInOut(duration: 0.15), value: showQuickSearch)
+        .animation(.spring(duration: 0.25, bounce: 0.15), value: showQuickSearch)
         // The module you're in decides which layout profile the right bar,
         // preview Edit Mode and Editor de Teme operate on.
         .onChange(of: appState.selectedSidebarItem, initial: true) {
@@ -225,13 +228,13 @@ struct MainControlView: View {
             }
         }
         .navigationTitle(autoTabTitle)
-        .toolbar {
-            bibleToolbarContent
-            songToolbarContent
-            mediaToolbarContent
-            scheduleToolbarContent
-            customSlidesToolbarContent
-            presentationToolbarContent
+        // CUSTOMIZABLE toolbar with a SEPARATE saved layout per module — the id
+        // keys the persisted customization, so Bible and Songs (etc.) each keep
+        // their own arrangement. Right-click → „Customize Toolbar…" to edit.
+        .toolbar(id: "tp-toolbar-\(appState.selectedSidebarItem.rawValue)") {
+            moduleToolbarItems
+            searchToolbarItem
+            presentationToolbarItems
         }
         .toolbarRole(.editor)
     }
@@ -355,30 +358,21 @@ struct MainControlView: View {
             }
     }
 
-    // MARK: - Bible Toolbar Helpers
+    // MARK: - Module Toolbar Items (customizable — each module has its own id'd set)
 
     @ToolbarContentBuilder
-    private var bibleToolbarContent: some ToolbarContent {
-        ToolbarItem(placement: .navigation) {
-            if appState.selectedSidebarItem == .bible {
+    private var moduleToolbarItems: some CustomizableToolbarContent {
+        if appState.selectedSidebarItem == .bible {
+            ToolbarItem(id: "bible.picker", placement: .navigation) {
                 bibleModulePicker
             }
-        }
+            .customizationBehavior(.disabled)
 
-        ToolbarItem(placement: .automatic) {
-            if appState.selectedSidebarItem == .bible {
-                bibleSearchField
-            }
-        }
-
-        ToolbarItem(placement: .automatic) {
-            if appState.selectedSidebarItem == .bible {
+            ToolbarItem(id: "bible.viewMode") {
                 bibleViewModeToggle
             }
-        }
 
-        ToolbarItem(placement: .automatic) {
-            if appState.selectedSidebarItem == .bible {
+            ToolbarItem(id: "bible.import") {
                 Button {
                     appState.triggerBibleImport = true
                 } label: {
@@ -386,38 +380,27 @@ struct MainControlView: View {
                 }
                 .help(String(localized: "Import Bible Module", comment: "Toolbar tooltip"))
             }
-        }
 
-        ToolbarItem(placement: .automatic) {
-            if appState.selectedSidebarItem == .bible && libraryManager.selectedBibleModule != nil {
-                Button {
-                    NotificationCenter.default.post(name: .deleteBibleModule, object: nil)
-                } label: {
-                    Label(String(localized: "Delete", comment: "Toolbar button"), systemImage: "trash")
+            ToolbarItem(id: "bible.delete") {
+                if libraryManager.selectedBibleModule != nil {
+                    Button {
+                        NotificationCenter.default.post(name: .deleteBibleModule, object: nil)
+                    } label: {
+                        Label(String(localized: "Delete", comment: "Toolbar button"), systemImage: "trash")
+                    }
+                    .help(String(localized: "Delete Selected Module", comment: "Toolbar tooltip"))
                 }
-                .help(String(localized: "Delete Selected Module", comment: "Toolbar tooltip"))
             }
+            .defaultCustomization(.hidden)
         }
-    }
 
-    // MARK: - Songs Toolbar Content
-
-    @ToolbarContentBuilder
-    private var songToolbarContent: some ToolbarContent {
-        ToolbarItem(placement: .navigation) {
-            if appState.selectedSidebarItem == .songs {
+        if appState.selectedSidebarItem == .songs {
+            ToolbarItem(id: "songs.picker", placement: .navigation) {
                 songCollectionPicker
             }
-        }
+            .customizationBehavior(.disabled)
 
-        ToolbarItem(placement: .automatic) {
-            if appState.selectedSidebarItem == .songs {
-                songSearchField
-            }
-        }
-
-        ToolbarItem(placement: .automatic) {
-            if appState.selectedSidebarItem == .songs {
+            ToolbarItem(id: "songs.import") {
                 Button {
                     appState.triggerSongImport = true
                 } label: {
@@ -425,28 +408,24 @@ struct MainControlView: View {
                 }
                 .help(String(localized: "Import Songs", comment: "Toolbar tooltip"))
             }
-        }
 
-        ToolbarItem(placement: .automatic) {
-            if appState.selectedSidebarItem == .songs && libraryManager.selectedSongCollection != nil {
-                Button {
-                    NotificationCenter.default.post(name: .deleteSongCollection, object: nil)
-                } label: {
-                    Label(String(localized: "Delete", comment: "Toolbar button"), systemImage: "trash")
+            ToolbarItem(id: "songs.delete") {
+                if libraryManager.selectedSongCollection != nil {
+                    Button {
+                        NotificationCenter.default.post(name: .deleteSongCollection, object: nil)
+                    } label: {
+                        Label(String(localized: "Delete", comment: "Toolbar button"), systemImage: "trash")
+                    }
+                    .help(String(localized: "Delete Selected Collection", comment: "Toolbar tooltip"))
                 }
-                .help(String(localized: "Delete Selected Collection", comment: "Toolbar tooltip"))
             }
+            .defaultCustomization(.hidden)
         }
-    }
 
-    // MARK: - Media Toolbar Content
-
-    // The kind filter + search + Add live in MediaView's own header now —
-    // one filter UI (same @AppStorage key), no toolbar duplicate.
-    @ToolbarContentBuilder
-    private var mediaToolbarContent: some ToolbarContent {
-        ToolbarItem(placement: .automatic) {
-            if appState.selectedSidebarItem == .media {
+        if appState.selectedSidebarItem == .media {
+            // The kind filter + search live in MediaView's own header —
+            // one filter UI (same @AppStorage key), no toolbar duplicate.
+            ToolbarItem(id: "media.add") {
                 Button {
                     NotificationCenter.default.post(name: .importMedia, object: nil)
                 } label: {
@@ -455,14 +434,9 @@ struct MainControlView: View {
                 .help(String(localized: "Import media files", comment: "Toolbar tooltip"))
             }
         }
-    }
 
-    // MARK: - Schedule Toolbar Content
-
-    @ToolbarContentBuilder
-    private var scheduleToolbarContent: some ToolbarContent {
-        ToolbarItem(placement: .navigation) {
-            if appState.selectedSidebarItem == .schedule {
+        if appState.selectedSidebarItem == .schedule {
+            ToolbarItem(id: "schedule.new", placement: .navigation) {
                 Button {
                     NotificationCenter.default.post(name: .newSchedule, object: nil)
                 } label: {
@@ -470,10 +444,8 @@ struct MainControlView: View {
                 }
                 .help(String(localized: "Create new schedule", comment: "Toolbar tooltip"))
             }
-        }
 
-        ToolbarItem(placement: .automatic) {
-            if appState.selectedSidebarItem == .schedule {
+            ToolbarItem(id: "schedule.add") {
                 Button {
                     NotificationCenter.default.post(name: .addScheduleItem, object: nil)
                 } label: {
@@ -482,14 +454,9 @@ struct MainControlView: View {
                 .help(String(localized: "Add item to schedule", comment: "Toolbar tooltip"))
             }
         }
-    }
 
-    // MARK: - Custom Slides Toolbar Content
-
-    @ToolbarContentBuilder
-    private var customSlidesToolbarContent: some ToolbarContent {
-        ToolbarItem(placement: .navigation) {
-            if appState.selectedSidebarItem == .customSlides {
+        if appState.selectedSidebarItem == .customSlides {
+            ToolbarItem(id: "slides.new", placement: .navigation) {
                 Button {
                     NotificationCenter.default.post(name: .addSlide, object: nil)
                 } label: {
@@ -500,15 +467,49 @@ struct MainControlView: View {
         }
     }
 
-    // MARK: - Presentation Toolbar Content
+    // MARK: - Search Toolbar Item (the ⌘K trigger — same palette, same logic)
 
     @ToolbarContentBuilder
-    private var presentationToolbarContent: some ToolbarContent {
-        ToolbarItem(placement: .primaryAction) {
+    private var searchToolbarItem: some CustomizableToolbarContent {
+        ToolbarItem(id: "search") {
+            Button {
+                showQuickSearch = true
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "magnifyingglass")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                    Text(String(localized: "Caută…", comment: "Toolbar search button"))
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                    Spacer(minLength: 4)
+                    Text(verbatim: "⌘K")
+                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 1)
+                        .background(.quaternary.opacity(0.7), in: RoundedRectangle(cornerRadius: 4))
+                        .foregroundStyle(.secondary)
+                }
+                .frame(width: 190)
+                .padding(.horizontal, 7)
+                .padding(.vertical, 4)
+                .background(.quaternary.opacity(0.55), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help(String(localized: "Căutare globală — cântece, versete, media, sesiuni (⌘K)", comment: "Toolbar tooltip"))
+        }
+    }
+
+    // MARK: - Presentation Toolbar Items (shared by every module toolbar)
+
+    @ToolbarContentBuilder
+    private var presentationToolbarItems: some CustomizableToolbarContent {
+        ToolbarItem(id: "output.screen", placement: .primaryAction) {
             screenSelectorMenu
         }
 
-        ToolbarItem(placement: .primaryAction) {
+        ToolbarItem(id: "output.black", placement: .primaryAction) {
             Button {
                 presentationManager.toggleBlack()
             } label: {
@@ -521,7 +522,7 @@ struct MainControlView: View {
             .help(String(localized: "Toggle Black Screen", comment: "Toolbar tooltip"))
         }
 
-        ToolbarItem(placement: .primaryAction) {
+        ToolbarItem(id: "output.freeze", placement: .primaryAction) {
             Button {
                 presentationManager.toggleFreeze()
             } label: {
@@ -535,7 +536,7 @@ struct MainControlView: View {
             .help(String(localized: "Îngheață ieșirea — modifici liber fără să se vadă pe ecran", comment: "Toolbar tooltip"))
         }
 
-        ToolbarItem(placement: .primaryAction) {
+        ToolbarItem(id: "output.clear", placement: .primaryAction) {
             Button {
                 presentationManager.clearOutput()
             } label: {
@@ -548,7 +549,7 @@ struct MainControlView: View {
             .help(String(localized: "Clear Output", comment: "Toolbar tooltip"))
         }
 
-        ToolbarItem(placement: .primaryAction) {
+        ToolbarItem(id: "output.editMode", placement: .primaryAction) {
             Button {
                 presentationManager.isEditMode.toggle()
             } label: {
@@ -563,7 +564,7 @@ struct MainControlView: View {
             .help(String(localized: "Toggle Edit Mode — shows layout bounds", comment: "Toolbar tooltip"))
         }
 
-        ToolbarItem(placement: .primaryAction) {
+        ToolbarItem(id: "output.themeEditor", placement: .primaryAction) {
             Button {
                 showLayoutEditor = true
             } label: {
@@ -680,38 +681,6 @@ struct MainControlView: View {
     }
 
     @ViewBuilder
-    private var bibleSearchField: some View {
-        let library = Bindable(libraryManager)
-        HStack(spacing: 4) {
-            Image(systemName: "magnifyingglass")
-                .foregroundStyle(.secondary)
-            TextField(
-                String(localized: "Search (e.g., John 3:16)", comment: "Search placeholder"),
-                text: library.bibleSearchQuery
-            )
-            .textFieldStyle(.plain)
-            .frame(minWidth: 140, maxWidth: 260)
-            .onSubmit {
-                libraryManager.searchBible(query: libraryManager.bibleSearchQuery, in: modules)
-            }
-
-            if !libraryManager.bibleSearchQuery.isEmpty {
-                Button {
-                    libraryManager.bibleSearchQuery = ""
-                    libraryManager.bibleSearchResults = []
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .foregroundStyle(.secondary)
-                }
-                .buttonStyle(.borderless)
-            }
-        }
-        .padding(.horizontal, 6)
-        .padding(.vertical, 4)
-        .background(.quaternary, in: RoundedRectangle(cornerRadius: 6))
-    }
-
-    @ViewBuilder
     private var bibleViewModeToggle: some View {
         Button {
             withAnimation(.easeInOut(duration: 0.2)) {
@@ -753,41 +722,6 @@ struct MainControlView: View {
             }
         }
         .frame(minWidth: 140, maxWidth: 280)
-    }
-
-    @ViewBuilder
-    private var songSearchField: some View {
-        let library = Bindable(libraryManager)
-        HStack(spacing: 4) {
-            Image(systemName: "magnifyingglass")
-                .foregroundStyle(.secondary)
-            TextField(
-                String(localized: "Search songs...", comment: "Search placeholder"),
-                text: library.songSearchQuery
-            )
-            .textFieldStyle(.plain)
-            .frame(minWidth: 140, maxWidth: 260)
-            .onSubmit {
-                libraryManager.searchSongs(
-                    query: libraryManager.songSearchQuery,
-                    in: songCollections
-                )
-            }
-
-            if !libraryManager.songSearchQuery.isEmpty {
-                Button {
-                    libraryManager.songSearchQuery = ""
-                    libraryManager.songSearchResults = []
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .foregroundStyle(.secondary)
-                }
-                .buttonStyle(.borderless)
-            }
-        }
-        .padding(.horizontal, 6)
-        .padding(.vertical, 4)
-        .background(.quaternary, in: RoundedRectangle(cornerRadius: 6))
     }
 
     // MARK: - Screen Selector

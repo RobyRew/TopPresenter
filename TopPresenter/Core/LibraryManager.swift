@@ -23,9 +23,6 @@ final class LibraryManager {
     /// O(1) row-selection lookups — a chapter's rows must never scan the
     /// selection array per render (Psalmi 119 = 176 rows × every click).
     private(set) var selectedVerseIDs: Set<UUID> = []
-    var bibleSearchQuery: String = ""
-    var bibleSearchResults: [BibleSearchResult] = []
-    var isBibleSearching: Bool = false
     /// When true, verse selection auto-updates when presentation settings change.
     var isAutoFillActive: Bool = false
 
@@ -41,11 +38,8 @@ final class LibraryManager {
     var selectedSong: Song?
     var selectedSongVersion: SongVersion?
     var selectedSongVerse: SongVerse?
-    var songSearchQuery: String = ""
-    var songSearchResults: [SongSearchResult] = []
-    var isSongSearching: Bool = false
-    /// The song-LIBRARY browser's live filter text (distinct from the Quick Search
-    /// overlay above). Shared so clickable chips in the detail can search by tag/source.
+    /// The song-LIBRARY browser's live filter text (global search lives in ⌘K).
+    /// Shared so clickable chips in the detail can search by tag/source.
     var songLibraryQuery: String = ""
 
     /// When set, the Songs view presents the visual song editor for this song.
@@ -566,165 +560,7 @@ final class LibraryManager {
         selectedSongVerse = verse
     }
 
-    // MARK: - Bible Search
-    func searchBible(query: String, in modules: [BibleModule]) {
-        guard query.count >= 3 else {
-            bibleSearchResults = []
-            return
-        }
-
-        isBibleSearching = true
-        bibleSearchResults = []
-
-        let lowerQuery = query.lowercased()
-
-        // Check if query is a reference (e.g., "John 3:16" or "Gen 1:1")
-        if let refResult = parseReference(query, in: modules) {
-            bibleSearchResults = refResult
-            isBibleSearching = false
-            return
-        }
-
-        // Full text search
-        var results: [BibleSearchResult] = []
-        for module in modules {
-            for book in module.books {
-                for chapter in book.chapters {
-                    for verse in chapter.verses {
-                        if verse.text.lowercased().contains(lowerQuery) {
-                            let result = BibleSearchResult(
-                                bookName: book.name,
-                                chapterNumber: chapter.chapterNumber,
-                                verseNumber: verse.verseNumber,
-                                text: verse.text,
-                                reference: "\(book.name) \(chapter.chapterNumber):\(verse.verseNumber)",
-                                verseID: verse.id
-                            )
-                            results.append(result)
-                            if results.count >= 200 { break }
-                        }
-                    }
-                    if results.count >= 200 { break }
-                }
-                if results.count >= 200 { break }
-            }
-        }
-
-        bibleSearchResults = results
-        isBibleSearching = false
-    }
-
-    // MARK: - Song Search
-    func searchSongs(query: String, in collections: [SongCollection]) {
-        guard query.count >= 2 else {
-            songSearchResults = []
-            return
-        }
-
-        isSongSearching = true
-        let lowerQuery = query.lowercased()
-        var results: [SongSearchResult] = []
-
-        for collection in collections {
-            for song in collection.songs {
-                // Match title
-                if song.title.lowercased().contains(lowerQuery) {
-                    results.append(SongSearchResult(
-                        songID: song.id,
-                        title: song.title,
-                        author: song.author,
-                        collectionName: collection.name,
-                        matchedVerse: nil
-                    ))
-                    continue
-                }
-
-                // Match lyrics
-                for verse in song.verses {
-                    if verse.text.lowercased().contains(lowerQuery) {
-                        results.append(SongSearchResult(
-                            songID: song.id,
-                            title: song.title,
-                            author: song.author,
-                            collectionName: collection.name,
-                            matchedVerse: verse.text
-                        ))
-                        break
-                    }
-                }
-            }
-        }
-
-        songSearchResults = results
-        isSongSearching = false
-    }
-
     // MARK: - Private Helpers
-
-    private func parseReference(_ query: String, in modules: [BibleModule]) -> [BibleSearchResult]? {
-        // Pattern: "BookName Chapter:Verse" or "BookName Chapter:Verse-Verse" or "BookName Chapter" (no verse)
-        let pattern = #"^(\d?\s?[A-Za-zÀ-ÿ\s]+?)\s+(\d+)(?::(\d+)(?:-(\d+))?)?$"#
-        guard let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive),
-              let match = regex.firstMatch(in: query, range: NSRange(query.startIndex..., in: query)) else {
-            return nil
-        }
-
-        guard let bookRange = Range(match.range(at: 1), in: query),
-              let chapterRange = Range(match.range(at: 2), in: query) else {
-            return nil
-        }
-
-        let bookName = String(query[bookRange]).trimmingCharacters(in: .whitespaces)
-        let chapterNum = Int(query[chapterRange]) ?? 0
-
-        var verseStart: Int? = nil
-        var verseEnd: Int? = nil
-
-        if let verseStartRange = Range(match.range(at: 3), in: query) {
-            verseStart = Int(query[verseStartRange])
-            if let verseEndRange = Range(match.range(at: 4), in: query) {
-                verseEnd = Int(query[verseEndRange])
-            } else {
-                verseEnd = verseStart
-            }
-        }
-
-        var results: [BibleSearchResult] = []
-        for module in modules {
-            for book in module.books {
-                if book.name.lowercased().hasPrefix(bookName.lowercased()) {
-                    for chapter in book.chapters where chapter.chapterNumber == chapterNum {
-                        if let vStart = verseStart, let vEnd = verseEnd {
-                            for verse in chapter.verses where verse.verseNumber >= vStart && verse.verseNumber <= vEnd {
-                                results.append(BibleSearchResult(
-                                    bookName: book.name,
-                                    chapterNumber: chapter.chapterNumber,
-                                    verseNumber: verse.verseNumber,
-                                    text: verse.text,
-                                    reference: "\(book.name) \(chapter.chapterNumber):\(verse.verseNumber)",
-                                    verseID: verse.id
-                                ))
-                            }
-                        } else {
-                            // No verse specified — return all verses in the chapter
-                            for verse in chapter.sortedVerses {
-                                results.append(BibleSearchResult(
-                                    bookName: book.name,
-                                    chapterNumber: chapter.chapterNumber,
-                                    verseNumber: verse.verseNumber,
-                                    text: verse.text,
-                                    reference: "\(book.name) \(chapter.chapterNumber):\(verse.verseNumber)",
-                                    verseID: verse.id
-                                ))
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        return results.isEmpty ? nil : results
-    }
 
     private func formatVerseRange(_ numbers: [Int]) -> String {
         guard !numbers.isEmpty else { return "" }

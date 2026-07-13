@@ -401,20 +401,3 @@ final class SongVerse {
     }
 }
 
-// MARK: - Song Search Result (non-persisted)
-struct SongSearchResult: Identifiable, Hashable {
-    let id = UUID()
-    let songID: UUID
-    let title: String
-    let author: String
-    let collectionName: String
-    let matchedVerse: String?
-
-    func hash(into hasher: inout Hasher) {
-        hasher.combine(id)
-    }
-
-    static func == (lhs: SongSearchResult, rhs: SongSearchResult) -> Bool {
-        lhs.id == rhs.id
-    }
-}

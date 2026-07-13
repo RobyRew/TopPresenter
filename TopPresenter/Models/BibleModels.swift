@@ -235,21 +235,3 @@ nonisolated enum BibleRichData {
     }
 }
 
-// MARK: - Bible Search Result (non-persisted)
-struct BibleSearchResult: Identifiable, Hashable {
-    let id = UUID()
-    let bookName: String
-    let chapterNumber: Int
-    let verseNumber: Int
-    let text: String
-    let reference: String
-    let verseID: UUID
-
-    func hash(into hasher: inout Hasher) {
-        hasher.combine(id)
-    }
-
-    static func == (lhs: BibleSearchResult, rhs: BibleSearchResult) -> Bool {
-        lhs.id == rhs.id
-    }
-}

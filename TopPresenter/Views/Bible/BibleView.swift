@@ -31,32 +31,37 @@ struct BibleView: View {
     @AppStorage("defaultBibleModuleName") private var defaultBibleModuleName: String = ""
     @State private var didRestoreModule = false
 
-    // Reading-pane content toggles (shared with BibleVerseRow via @AppStorage).
-    @AppStorage("bibleShowHeadings") private var showHeadings: Bool = true
-    @AppStorage("bibleShowFootnotes") private var showFootnotes: Bool = false
-    @AppStorage("bibleShowCrossRefs") private var showCrossRefs: Bool = false
-    @AppStorage("bibleShowStrong") private var showStrong: Bool = false
-
     var body: some View {
         VStack(spacing: 0) {
             if modules.isEmpty {
                 emptyStateView
             } else if libraryManager.selectedBibleModule == nil {
                 noModuleSelectedView
-            } else if viewMode == "grid" {
-                // Grid navigation: Books → Chapters → Verses as button grids
-                BibleGridNavigationView()
             } else {
-                // Three columns — Books │ Chapters │ Verses — under a toggle bar.
-                bibleToggleBar
-                Divider()
-                HSplitView {
-                    BibleNavigationPanel()
-                        .frame(minWidth: 150, idealWidth: 190, maxWidth: 240)
-                    BibleChaptersPanel()
-                        .frame(minWidth: 80, idealWidth: 110, maxWidth: 160)
-                    BibleContentPanel()
-                        .frame(minWidth: 340)
+                // ONE skeleton for BOTH modes: the left THIRD stacks books
+                // (list or compact colored grid) over chapters; the right
+                // two-thirds is always the full-text verses panel. No more
+                // drill-down levels — everything stays visible.
+                GeometryReader { geo in
+                    let paneWidth = min(max(geo.size.width / 3, 280), 480)
+                    HStack(spacing: 0) {
+                        VStack(spacing: 0) {
+                            Group {
+                                if viewMode == "grid" {
+                                    BibleBooksGridPane()
+                                } else {
+                                    BibleNavigationPanel()
+                                }
+                            }
+                            .frame(height: geo.size.height * 0.55)
+                            Divider()
+                            BibleChaptersPanel()
+                        }
+                        .frame(width: paneWidth)
+                        Divider()
+                        BibleContentPanel()
+                            .frame(maxWidth: .infinity)
+                    }
                 }
             }
         }
@@ -210,49 +215,6 @@ struct BibleView: View {
         .padding()
     }
 
-    /// Toolbar above the three columns — module label + reading-content toggles.
-    private var bibleToggleBar: some View {
-        HStack(spacing: 10) {
-            if let m = libraryManager.selectedBibleModule {
-                Label(m.abbreviation.isEmpty ? m.name : m.abbreviation, systemImage: "book.closed")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
-            Spacer(minLength: 8)
-            toggleChip(String(localized: "Titluri", comment: "Toggle"), "text.alignleft", isOn: $showHeadings)
-            toggleChip(String(localized: "Note", comment: "Toggle"), "note.text", isOn: $showFootnotes)
-            toggleChip(String(localized: "Referințe", comment: "Toggle"), "link", isOn: $showCrossRefs)
-            toggleChip(String(localized: "Strong", comment: "Toggle"), "number", isOn: $showStrong)
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-    }
-
-    private func toggleChip(_ title: String, _ icon: String, isOn: Binding<Bool>) -> some View {
-        Button {
-            isOn.wrappedValue.toggle()
-        } label: {
-            Label(title, systemImage: icon)
-                .font(.caption)
-                .padding(.horizontal, 9)
-                .padding(.vertical, 4)
-                .background(
-                    isOn.wrappedValue ? Color.accentColor.opacity(0.16) : Color.clear,
-                    in: Capsule()
-                )
-                .overlay(
-                    Capsule().stroke(
-                        isOn.wrappedValue ? Color.accentColor.opacity(0.5) : Color.secondary.opacity(0.3),
-                        lineWidth: 1
-                    )
-                )
-                .foregroundStyle(isOn.wrappedValue ? Color.accentColor : Color.secondary)
-        }
-        .buttonStyle(.plain)
-        .help(String(localized: "Afișează/ascunde în panoul de versete", comment: "Toggle tooltip"))
-    }
-
     private func deleteBibleModule(_ module: BibleModule) {
         if libraryManager.selectedBibleModule?.id == module.id {
             libraryManager.selectedBibleModule = nil
@@ -262,6 +224,120 @@ struct BibleView: View {
         }
         modelContext.delete(module)
         try? modelContext.save()
+    }
+}
+
+// MARK: - Shared book-tap behavior
+
+/// Book tap for BOTH panes: re-tapping the current book keeps the chapter;
+/// a NEW book opens instantly at chapter 1 — verses appear with one click.
+func selectBookOpeningFirstChapter(_ book: BibleBook, in libraryManager: LibraryManager) {
+    guard libraryManager.selectedBook?.id != book.id else { return }
+    libraryManager.selectBook(book)
+    if let first = book.sortedChapters.first {
+        libraryManager.selectChapter(first)
+    }
+}
+
+/// Projects ONE verse live with all its rich casete sources populated —
+/// shared by the row (double-click/context menu) and the panel's Enter key.
+func projectBibleVerse(_ verse: BibleVerse, libraryManager: LibraryManager,
+                       presentationManager: PresentationManager) {
+    let footnote = verse.footnotes
+        .map { $0.marker.isEmpty ? $0.text : "\($0.marker) \($0.text)" }
+        .joined(separator: "\n")
+    let crossRef = verse.crossReferences
+        .flatMap { ref in [ref.label].compactMap { $0 } + ref.targets }
+        .joined(separator: "; ")
+    let heading = (verse.chapter?.headings ?? [])
+        .filter { $0.beforeVerse == verse.verseNumber }
+        .map { $0.text }.joined(separator: "\n")
+    let strongs = verse.runs.compactMap { $0.strong }.joined(separator: " ")
+    presentationManager.showBibleVerse(
+        text: verse.text,
+        reference: verse.fullReference,
+        translationName: libraryManager.selectedBibleModule?.abbreviation ?? "",
+        runs: verse.runs,
+        footnote: footnote, crossReference: crossRef, heading: heading,
+        gloss: verse.gloss, strongs: strongs,
+        bookNumber: verse.chapter?.book?.bookNumber ?? 0,
+        bookName: verse.chapter?.book?.name ?? "",
+        chapter: verse.chapter?.chapterNumber ?? 0,
+        verseStart: verse.verseNumber, verseEnd: verse.verseNumber,
+        translation: libraryManager.selectedBibleModule?.abbreviation ?? ""
+    )
+}
+
+// MARK: - Books Grid Pane (left-top, grid mode)
+
+/// Compact colored books grid — ALL books visible in the upper-left pane
+/// (adaptive small cells), genre-tinted like the old grid but a third the size.
+struct BibleBooksGridPane: View {
+    @Environment(LibraryManager.self) private var libraryManager
+    @AppStorage("showBookCategoryColors") private var showBookCategoryColors: Bool = true
+
+    var body: some View {
+        ScrollView {
+            if let module = libraryManager.selectedBibleModule {
+                let otBooks = module.books.filter { $0.bookNumber <= 39 }.sorted { $0.bookNumber < $1.bookNumber }
+                let ntBooks = module.books.filter { $0.bookNumber >= 40 && $0.bookNumber <= 66 }.sorted { $0.bookNumber < $1.bookNumber }
+                let dcBooks = module.books.filter { $0.bookNumber > 66 }.sorted { $0.bookNumber < $1.bookNumber }
+
+                VStack(alignment: .leading, spacing: 10) {
+                    if !otBooks.isEmpty {
+                        gridSection(String(localized: "Old Testament", comment: "Section header"), otBooks)
+                    }
+                    if !ntBooks.isEmpty {
+                        gridSection(String(localized: "New Testament", comment: "Section header"), ntBooks)
+                    }
+                    if !dcBooks.isEmpty {
+                        gridSection(String(localized: "Deuterocanonical / Apocrypha", comment: "Section header"), dcBooks)
+                    }
+                }
+                .padding(8)
+            }
+        }
+    }
+
+    private func gridSection(_ title: String, _ books: [BibleBook]) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text(title)
+                .font(.system(size: 10, weight: .semibold))
+                .tracking(0.5)
+                .textCase(.uppercase)
+                .foregroundStyle(.tertiary)
+                .padding(.leading, 2)
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 86), spacing: 4)], spacing: 4) {
+                ForEach(books) { book in
+                    bookCell(book)
+                }
+            }
+        }
+    }
+
+    private func bookCell(_ book: BibleBook) -> some View {
+        let category = BibleBookCategory.from(bookNumber: book.bookNumber)
+        let isSelected = libraryManager.selectedBook?.id == book.id
+        return Button {
+            selectBookOpeningFirstChapter(book, in: libraryManager)
+        } label: {
+            Text(book.name)
+                .font(.system(size: 11, weight: .medium))
+                .lineLimit(1)
+                .minimumScaleFactor(0.65)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 6)
+                .padding(.horizontal, 4)
+                .background(
+                    isSelected
+                        ? Color.accentColor
+                        : showBookCategoryColors ? category.color.opacity(0.26) : Color.gray.opacity(0.12),
+                    in: RoundedRectangle(cornerRadius: 6, style: .continuous)
+                )
+                .foregroundStyle(isSelected ? .white : .primary)
+        }
+        .buttonStyle(.plain)
+        .help(book.name)
     }
 }
 
@@ -285,7 +361,7 @@ struct BibleNavigationPanel: View {
                     set: { newID in
                         if let id = newID,
                            let book = module.books.first(where: { $0.id == id }) {
-                            libraryManager.selectBook(book)
+                            selectBookOpeningFirstChapter(book, in: libraryManager)
                         }
                     }
                 )) {
@@ -354,18 +430,23 @@ struct BibleNavigationPanel: View {
 
 }
 
-// MARK: - Bible Chapters Panel (middle column)
+// MARK: - Bible Chapters Panel (left-bottom — shared by list & grid modes)
 struct BibleChaptersPanel: View {
     @Environment(LibraryManager.self) private var libraryManager
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack {
+            HStack(spacing: 6) {
                 Text(libraryManager.selectedBook?.name ?? String(localized: "Chapters", comment: "Section title"))
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                 Spacer()
+                if let book = libraryManager.selectedBook {
+                    Text(String(localized: "\(book.chapters.count) capitole", comment: "Chapter count"))
+                        .font(.system(size: 10))
+                        .foregroundStyle(.tertiary)
+                }
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
@@ -373,25 +454,27 @@ struct BibleChaptersPanel: View {
 
             if let book = libraryManager.selectedBook {
                 ScrollView {
-                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 2), spacing: 6) {
+                    // Adaptive columns: Psalmii's 150 chapters stay a dense,
+                    // scannable grid instead of a 2-column scroll marathon.
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 34), spacing: 4)], spacing: 4) {
                         ForEach(book.sortedChapters) { chapter in
                             let selected = libraryManager.selectedChapter?.id == chapter.id
                             Button {
                                 libraryManager.selectChapter(chapter)
                             } label: {
                                 Text("\(chapter.chapterNumber)")
-                                    .font(.system(.callout, design: .rounded).weight(.medium))
-                                    .frame(maxWidth: .infinity, minHeight: 30)
+                                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                                    .frame(maxWidth: .infinity, minHeight: 28)
                                     .background(
                                         selected ? Color.accentColor : Color.gray.opacity(0.12),
-                                        in: RoundedRectangle(cornerRadius: 6)
+                                        in: RoundedRectangle(cornerRadius: 6, style: .continuous)
                                     )
                                     .foregroundStyle(selected ? .white : .primary)
                             }
                             .buttonStyle(.plain)
                         }
                     }
-                    .padding(10)
+                    .padding(8)
                 }
             } else {
                 Spacer()
@@ -410,13 +493,18 @@ struct BibleContentPanel: View {
     @Environment(LibraryManager.self) private var libraryManager
     @Environment(PresentationManager.self) private var presentationManager
     @AppStorage("bibleShowHeadings") private var showHeadings: Bool = true
+    @AppStorage("bibleShowFootnotes") private var showFootnotes: Bool = false
+    @AppStorage("bibleShowCrossRefs") private var showCrossRefs: Bool = false
+    @AppStorage("bibleShowStrong") private var showStrong: Bool = false
+
+    /// Keyboard flow: rows set this on click so ↑↓/←→/Enter work immediately.
+    @FocusState private var versesFocused: Bool
+    /// Keyboard-driven scroll anchor (result id) — clicks/hover never scroll.
+    @State private var scrollTarget: UUID?
 
     var body: some View {
         VStack(spacing: 0) {
-            // Show search results or chapter verses
-            if !libraryManager.bibleSearchResults.isEmpty {
-                searchResultsView
-            } else if let chapter = libraryManager.selectedChapter {
+            if let chapter = libraryManager.selectedChapter {
                 chapterVersesView(chapter: chapter)
             } else {
                 VStack {
@@ -431,46 +519,78 @@ struct BibleContentPanel: View {
         }
     }
 
-    private var searchResultsView: some View {
-        VStack(spacing: 0) {
-            HStack {
-                Text(String(localized: "\(libraryManager.bibleSearchResults.count) results", comment: "Search results count"))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Button(String(localized: "Clear Search", comment: "Button")) {
-                    libraryManager.bibleSearchQuery = ""
-                    libraryManager.bibleSearchResults = []
-                }
-                .controlSize(.small)
-            }
-            .padding(.horizontal)
-            .padding(.vertical, 4)
+    // MARK: Chapter stepping (‹ › buttons + ←→ keys)
 
-            Divider()
+    private func neighborChapter(_ delta: Int) -> BibleChapter? {
+        guard let book = libraryManager.selectedBook,
+              let current = libraryManager.selectedChapter else { return nil }
+        let chapters = book.sortedChapters
+        guard let idx = chapters.firstIndex(where: { $0.id == current.id }) else { return nil }
+        let target = idx + delta
+        guard chapters.indices.contains(target) else { return nil }
+        return chapters[target]
+    }
 
-            List(libraryManager.bibleSearchResults) { result in
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(result.reference)
-                        .font(.caption.bold())
-                        .foregroundStyle(Color.accentColor)
-                    Text(result.text)
-                        .font(.body)
-                        .lineLimit(3)
-                }
-                .contentShape(Rectangle())
-                // Single tap only — the old stacked double+single pair made
-                // every click wait the double-click interval for nothing
-                // (both gestures did the same present).
-                .onTapGesture {
-                    presentationManager.showBibleVerse(
-                        text: result.text,
-                        reference: result.reference,
-                        translationName: libraryManager.selectedBibleModule?.abbreviation ?? ""
-                    )
-                }
-            }
+    private func stepChapter(_ delta: Int) {
+        guard let chapter = neighborChapter(delta) else { return }
+        libraryManager.selectChapter(chapter)
+    }
+
+    // MARK: Keyboard selection
+
+    private func moveVerseSelection(_ delta: Int) -> KeyPress.Result {
+        let verses = libraryManager.cachedSortedVerses
+        guard !verses.isEmpty else { return .ignored }
+        let anchorID = libraryManager.selectedVerses.last?.id
+        let idx = verses.firstIndex(where: { $0.id == anchorID }) ?? -1
+        let next = min(max(idx + delta, 0), verses.count - 1)
+        libraryManager.selectVerse(verses[next])
+        scrollTarget = verses[next].id
+        return .handled
+    }
+
+    /// Enter — present the current selection (single verse rich, range joined).
+    private func presentSelection() {
+        let selection = libraryManager.selectedVerses
+        guard !selection.isEmpty else { return }
+        if selection.count == 1, let verse = selection.first {
+            projectBibleVerse(verse, libraryManager: libraryManager,
+                              presentationManager: presentationManager)
+            return
         }
+        let mv = presentationManager.bibleMultiVerse
+        let numbers = selection.map(\.verseNumber).sorted()
+        presentationManager.showBibleVerse(
+            text: libraryManager.formattedSelectedVersesText(
+                layout: mv.layout, showPrefix: mv.showNumbers,
+                customEnabled: mv.customEnabled, customTemplate: mv.customText),
+            reference: libraryManager.selectedVersesReference,
+            translationName: libraryManager.selectedBibleModule?.abbreviation ?? "",
+            runs: libraryManager.selectedVersesRuns,
+            bookNumber: libraryManager.selectedBook?.bookNumber ?? 0,
+            bookName: libraryManager.selectedBook?.name ?? "",
+            chapter: libraryManager.selectedChapter?.chapterNumber ?? 0,
+            verseStart: numbers.first ?? 0, verseEnd: numbers.last ?? 0,
+            translation: libraryManager.selectedBibleModule?.abbreviation ?? "")
+    }
+
+    // MARK: Header pieces
+
+    private func contentToggle(_ icon: String, _ help: String, isOn: Binding<Bool>) -> some View {
+        Button {
+            isOn.wrappedValue.toggle()
+        } label: {
+            Image(systemName: icon)
+                .font(.system(size: 11))
+                .frame(width: 24, height: 20)
+                .background(
+                    isOn.wrappedValue ? Color.accentColor.opacity(0.16) : Color.clear,
+                    in: RoundedRectangle(cornerRadius: 5, style: .continuous)
+                )
+                .foregroundStyle(isOn.wrappedValue ? Color.accentColor : Color.secondary)
+        }
+        .buttonStyle(.plain)
+        .help(help)
     }
 
     @ViewBuilder
@@ -485,13 +605,31 @@ struct BibleContentPanel: View {
 
     private func chapterVersesView(chapter: BibleChapter) -> some View {
         VStack(spacing: 0) {
-            // Header
-            HStack {
+            // Header: ‹ › chapter stepper · title · content toggles · count.
+            HStack(spacing: 8) {
+                HStack(spacing: 2) {
+                    Button { stepChapter(-1) } label: { Image(systemName: "chevron.left") }
+                        .disabled(neighborChapter(-1) == nil)
+                        .help(String(localized: "Capitolul anterior (←)", comment: "Tooltip"))
+                    Button { stepChapter(+1) } label: { Image(systemName: "chevron.right") }
+                        .disabled(neighborChapter(+1) == nil)
+                        .help(String(localized: "Capitolul următor (→)", comment: "Tooltip"))
+                }
+                .buttonStyle(.borderless)
+                .controlSize(.small)
+
                 if let book = libraryManager.selectedBook {
                     Text("\(book.name) \(chapter.chapterNumber)")
                         .font(.headline)
+                        .lineLimit(1)
                 }
                 Spacer()
+                HStack(spacing: 2) {
+                    contentToggle("text.alignleft", String(localized: "Titluri de secțiune", comment: "Toggle tooltip"), isOn: $showHeadings)
+                    contentToggle("note.text", String(localized: "Note de subsol", comment: "Toggle tooltip"), isOn: $showFootnotes)
+                    contentToggle("link", String(localized: "Referințe încrucișate", comment: "Toggle tooltip"), isOn: $showCrossRefs)
+                    contentToggle("number", String(localized: "Numere Strong", comment: "Toggle tooltip"), isOn: $showStrong)
+                }
                 Text(String(localized: "\(chapter.verses.count) verses", comment: "Verse count"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -517,23 +655,40 @@ struct BibleContentPanel: View {
                 }
                 return map
             }()
-            List {
-                ForEach(verses, id: \.id) { verse in
-                    if let attached = headingsByVerse[verse.id] {
-                        ForEach(Array(attached.enumerated()), id: \.offset) { _, h in
+            ScrollViewReader { proxy in
+                List {
+                    ForEach(verses, id: \.id) { verse in
+                        if let attached = headingsByVerse[verse.id] {
+                            ForEach(Array(attached.enumerated()), id: \.offset) { _, h in
+                                headingRow(h)
+                            }
+                        }
+                        BibleVerseRow(verse: verse, onSelect: { versesFocused = true })
+                            .id(verse.id)
+                    }
+                    // Headings positioned past the last verse.
+                    if showHeadings, let last = verses.last {
+                        ForEach(Array(allHeadings.filter { $0.beforeVerse > last.verseNumber }.enumerated()), id: \.offset) { _, h in
                             headingRow(h)
                         }
                     }
-                    BibleVerseRow(verse: verse)
                 }
-                // Headings positioned past the last verse.
-                if showHeadings, let last = verses.last {
-                    ForEach(Array(allHeadings.filter { $0.beforeVerse > last.verseNumber }.enumerated()), id: \.offset) { _, h in
-                        headingRow(h)
-                    }
+                .listStyle(.plain)
+                .onChange(of: scrollTarget) { _, target in
+                    if let target { proxy.scrollTo(target, anchor: nil) }
                 }
             }
-            .listStyle(.plain)
+            // Keyboard flow (click a verse to arm it): ↑↓ move the selection,
+            // ←→ step chapters, Enter presents. The ⌘K overlay owns the keys
+            // while open (its TextField has focus), so no clash.
+            .focusable()
+            .focused($versesFocused)
+            .focusEffectDisabled()
+            .onKeyPress(.upArrow) { moveVerseSelection(-1) }
+            .onKeyPress(.downArrow) { moveVerseSelection(+1) }
+            .onKeyPress(.leftArrow) { stepChapter(-1); return .handled }
+            .onKeyPress(.rightArrow) { stepChapter(+1); return .handled }
+            .onKeyPress(.return) { presentSelection(); return .handled }
         }
     }
 }
@@ -561,6 +716,8 @@ final class VerseRunsCache {
 // MARK: - Bible Verse Row
 struct BibleVerseRow: View {
     let verse: BibleVerse
+    /// Fired on single click — the content panel uses it to arm keyboard flow.
+    var onSelect: () -> Void = {}
 
     @Environment(LibraryManager.self) private var libraryManager
     @Environment(PresentationManager.self) private var presentationManager
@@ -623,29 +780,8 @@ struct BibleVerseRow: View {
 
     /// Projects this verse live with all its rich casete sources populated.
     private func projectVerse() {
-        let footnote = verse.footnotes
-            .map { $0.marker.isEmpty ? $0.text : "\($0.marker) \($0.text)" }
-            .joined(separator: "\n")
-        let crossRef = verse.crossReferences
-            .flatMap { ref in [ref.label].compactMap { $0 } + ref.targets }
-            .joined(separator: "; ")
-        let heading = (verse.chapter?.headings ?? [])
-            .filter { $0.beforeVerse == verse.verseNumber }
-            .map { $0.text }.joined(separator: "\n")
-        let strongs = verse.runs.compactMap { $0.strong }.joined(separator: " ")
-        presentationManager.showBibleVerse(
-            text: verse.text,
-            reference: verse.fullReference,
-            translationName: libraryManager.selectedBibleModule?.abbreviation ?? "",
-            runs: verse.runs,
-            footnote: footnote, crossReference: crossRef, heading: heading,
-            gloss: verse.gloss, strongs: strongs,
-            bookNumber: verse.chapter?.book?.bookNumber ?? 0,
-            bookName: verse.chapter?.book?.name ?? "",
-            chapter: verse.chapter?.chapterNumber ?? 0,
-            verseStart: verse.verseNumber, verseEnd: verse.verseNumber,
-            translation: libraryManager.selectedBibleModule?.abbreviation ?? ""
-        )
+        projectBibleVerse(verse, libraryManager: libraryManager,
+                          presentationManager: presentationManager)
     }
 
     var body: some View {
@@ -714,6 +850,7 @@ struct BibleVerseRow: View {
             } else {
                 libraryManager.selectVerse(verse)
             }
+            onSelect()
         })
         .contextMenu {
             Button(String(localized: "Show on Screen", comment: "Context menu")) {
@@ -750,353 +887,6 @@ struct BibleVerseRow: View {
                       bookName: book.name, chapter: chapter.chapterNumber,
                       verseStart: first, verseEnd: last,
                       displayReference: reference, snapshotText: text)
-    }
-}
-
-// MARK: - Bible Grid Navigation View (BibleShow-style)
-/// A full-panel grid view: Books → Chapters → Verses shown as tappable button grids
-/// with breadcrumb navigation to go back.
-struct BibleGridNavigationView: View {
-    @Environment(LibraryManager.self) private var libraryManager
-    @Environment(PresentationManager.self) private var presentationManager
-    @AppStorage("showBookCategoryColors") private var showBookCategoryColors: Bool = true
-    @AppStorage("showBookCategoryLabels") private var showBookCategoryLabels: Bool = true
-
-    /// Grid navigation level
-    enum GridLevel {
-        case books
-        case chapters
-        case verses
-    }
-
-    @State private var level: GridLevel = .books
-
-    var body: some View {
-        VStack(spacing: 0) {
-            // Breadcrumb bar
-            breadcrumbBar
-            Divider()
-
-            // Grid content
-            switch level {
-            case .books:
-                booksGrid
-            case .chapters:
-                chaptersGrid
-            case .verses:
-                versesGrid
-            }
-        }
-        .onChange(of: libraryManager.selectedBibleModule) { _, _ in
-            level = .books
-        }
-    }
-
-    // MARK: - Breadcrumb Bar
-    private var breadcrumbBar: some View {
-        HStack(spacing: 4) {
-            // Module/Books level
-            Button {
-                withAnimation(.easeInOut(duration: 0.15)) {
-                    level = .books
-                    libraryManager.selectedBook = nil
-                    libraryManager.selectedChapter = nil
-                    libraryManager.selectedVerses = []
-                    libraryManager.isAutoFillActive = false
-                }
-            } label: {
-                HStack(spacing: 4) {
-                    Image(systemName: "book.fill")
-                        .font(.caption2)
-                    Text(libraryManager.selectedBibleModule?.abbreviation ?? String(localized: "Books", comment: "Breadcrumb"))
-                        .fontWeight(level == .books ? .bold : .regular)
-                }
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(level == .books ? Color.accentColor.opacity(0.15) : Color.clear, in: Capsule())
-            }
-            .buttonStyle(.plain)
-            .foregroundStyle(level == .books ? Color.accentColor : .primary)
-
-            if let book = libraryManager.selectedBook {
-                let bookCategory = BibleBookCategory.from(bookNumber: book.bookNumber)
-
-                Image(systemName: "chevron.right")
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-
-                // Chapter level
-                Button {
-                    withAnimation(.easeInOut(duration: 0.15)) {
-                        level = .chapters
-                        libraryManager.selectedChapter = nil
-                        libraryManager.selectedVerses = []
-                        libraryManager.isAutoFillActive = false
-                    }
-                } label: {
-                    HStack(spacing: 4) {
-                        if showBookCategoryColors {
-                            Circle().fill(bookCategory.color).frame(width: 8, height: 8)
-                        }
-                        Text(book.name)
-                            .fontWeight(level == .chapters ? .bold : .regular)
-                    }
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(
-                        level == .chapters
-                            ? (showBookCategoryColors ? bookCategory.color.opacity(0.15) : Color.accentColor.opacity(0.15))
-                            : Color.clear,
-                        in: Capsule()
-                    )
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(level == .chapters ? bookCategory.darkColor : .primary)
-
-                if let chapter = libraryManager.selectedChapter {
-                    Image(systemName: "chevron.right")
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
-
-                    // Verse level
-                    Text("\(String(localized: "Chapter", comment: "Breadcrumb")) \(chapter.chapterNumber)")
-                        .fontWeight(.bold)
-                        .foregroundStyle(Color.accentColor)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(Color.accentColor.opacity(0.15), in: Capsule())
-                }
-            }
-
-            Spacer()
-
-            // Verse count when viewing verses
-            if level == .verses, let chapter = libraryManager.selectedChapter {
-                Text(String(localized: "\(chapter.verses.count) verses", comment: "Verse count"))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .font(.subheadline)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
-    }
-
-    // MARK: - Books Grid
-    private var booksGrid: some View {
-        ScrollView {
-            if let module = libraryManager.selectedBibleModule {
-                let otBooks = module.books.filter { $0.testament == "OT" }.sorted { $0.bookNumber < $1.bookNumber }
-                let ntBooks = module.books.filter { $0.testament == "NT" }.sorted { $0.bookNumber < $1.bookNumber }
-
-                VStack(alignment: .leading, spacing: 16) {
-                    if !otBooks.isEmpty {
-                        bookSection(
-                            title: String(localized: "Old Testament", comment: "Section header"),
-                            books: otBooks
-                        )
-                    }
-                    if !ntBooks.isEmpty {
-                        bookSection(
-                            title: String(localized: "New Testament", comment: "Section header"),
-                            books: ntBooks
-                        )
-                    }
-                }
-                .padding(12)
-            }
-        }
-    }
-
-    private func bookSection(title: String, books: [BibleBook]) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(title)
-                .font(.caption.bold())
-                .foregroundStyle(.secondary)
-                .padding(.leading, 4)
-
-            // Category legend (conditional)
-            if showBookCategoryColors && showBookCategoryLabels {
-                let categories = Set(books.map { BibleBookCategory.from(bookNumber: $0.bookNumber) })
-                HStack(spacing: 8) {
-                    ForEach(Array(categories).sorted(by: { $0.localizedName < $1.localizedName }), id: \.self) { cat in
-                        HStack(spacing: 3) {
-                            Circle().fill(cat.color).frame(width: 8, height: 8)
-                            Text(cat.localizedName)
-                                .font(.system(size: 9))
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                }
-                .padding(.leading, 4)
-            }
-
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 5), spacing: 6) {
-                ForEach(books) { book in
-                    let category = BibleBookCategory.from(bookNumber: book.bookNumber)
-                    let isSelected = libraryManager.selectedBook?.id == book.id
-                    Button {
-                        withAnimation(.easeInOut(duration: 0.15)) {
-                            libraryManager.selectBook(book)
-                            level = .chapters
-                        }
-                    } label: {
-                        Text(book.name)
-                            .font(.system(.callout, weight: .medium))
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.7)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 10)
-                            .background(
-                                isSelected
-                                    ? Color.accentColor
-                                    : showBookCategoryColors ? category.color.opacity(0.3) : Color.gray.opacity(0.12),
-                                in: RoundedRectangle(cornerRadius: 8)
-                            )
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 8)
-                                    .stroke(
-                                        showBookCategoryColors ? category.color.opacity(0.6) : Color.gray.opacity(0.2),
-                                        lineWidth: 1
-                                    )
-                            )
-                            .foregroundStyle(isSelected ? .white : .primary)
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-        }
-    }
-
-    // MARK: - Chapters Grid
-    private var chaptersGrid: some View {
-        ScrollView {
-            if let book = libraryManager.selectedBook {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(String(localized: "Select a chapter from \(book.name)", comment: "Grid instruction"))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .padding(.leading, 4)
-
-                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 8), spacing: 6) {
-                        ForEach(book.sortedChapters) { chapter in
-                            Button {
-                                withAnimation(.easeInOut(duration: 0.15)) {
-                                    libraryManager.selectChapter(chapter)
-                                    level = .verses
-                                }
-                            } label: {
-                                Text("\(chapter.chapterNumber)")
-                                    .font(.system(.title3, design: .rounded, weight: .semibold))
-                                    .frame(maxWidth: .infinity)
-                                    .padding(.vertical, 14)
-                                    .background(
-                                        libraryManager.selectedChapter?.id == chapter.id
-                                            ? Color.accentColor
-                                            : Color.gray.opacity(0.12),
-                                        in: RoundedRectangle(cornerRadius: 8)
-                                    )
-                                    .foregroundStyle(
-                                        libraryManager.selectedChapter?.id == chapter.id ? .white : .primary
-                                    )
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-                }
-                .padding(12)
-            }
-        }
-    }
-
-    // MARK: - Verses Grid
-    private var versesGrid: some View {
-        VStack(spacing: 0) {
-            if let chapter = libraryManager.selectedChapter {
-                ScrollView {
-                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 10), spacing: 6) {
-                        ForEach(chapter.sortedVerses) { verse in
-                            let isSelected = libraryManager.selectedVerseIDs.contains(verse.id)
-
-                            Button {
-                                if NSEvent.modifierFlags.contains(.command) {
-                                    libraryManager.toggleVerseSelection(verse)
-                                } else {
-                                    libraryManager.selectVerse(verse)
-                                }
-                            } label: {
-                                Text("\(verse.verseNumber)")
-                                    .font(.system(.body, design: .rounded, weight: .semibold))
-                                    .frame(maxWidth: .infinity)
-                                    .padding(.vertical, 12)
-                                    .background(
-                                        isSelected
-                                            ? Color.accentColor
-                                            : Color.gray.opacity(0.12),
-                                        in: RoundedRectangle(cornerRadius: 8)
-                                    )
-                                    .foregroundStyle(isSelected ? .white : .primary)
-                            }
-                            .buttonStyle(.plain)
-                            .help(verse.text.prefix(120) + (verse.text.count > 120 ? "…" : ""))
-                            .contextMenu {
-                                Button(String(localized: "Show on Screen", comment: "Context menu")) {
-                                    presentationManager.showBibleVerse(
-                                        text: verse.text,
-                                        reference: verse.fullReference,
-                                        translationName: libraryManager.selectedBibleModule?.abbreviation ?? "",
-                                        runs: verse.runs,
-                                        bookNumber: verse.chapter?.book?.bookNumber ?? 0,
-                                        bookName: verse.chapter?.book?.name ?? "",
-                                        chapter: verse.chapter?.chapterNumber ?? 0,
-                                        verseStart: verse.verseNumber, verseEnd: verse.verseNumber,
-                                        translation: libraryManager.selectedBibleModule?.abbreviation ?? ""
-                                    )
-                                }
-                                Button(String(localized: "Copy Text", comment: "Context menu")) {
-                                    NSPasteboard.general.clearContents()
-                                    NSPasteboard.general.setString(verse.text, forType: .string)
-                                }
-                            }
-                        }
-                    }
-                    .padding(12)
-                }
-
-                // Selected verse preview at the bottom
-                if !libraryManager.selectedVerses.isEmpty {
-                    Divider()
-
-                    VStack(alignment: .leading, spacing: 6) {
-                        HStack {
-                            Text(libraryManager.selectedVersesReference)
-                                .font(.subheadline.bold())
-                                .foregroundStyle(Color.accentColor)
-                            Spacer()
-                            Text(String(localized: "\(libraryManager.selectedVerses.count) selected", comment: "Selection count"))
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-
-                        ScrollView {
-                            Text({
-                                let mv = presentationManager.bibleMultiVerse
-                                return libraryManager.formattedSelectedVersesText(
-                                    layout: mv.layout, showPrefix: mv.showNumbers,
-                                    customEnabled: mv.customEnabled, customTemplate: mv.customText
-                                )
-                            }())
-                            .font(.body)
-                            .textSelection(.enabled)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                        }
-                        .frame(maxHeight: 120)
-                    }
-                    .padding(12)
-                    .background(.quaternary.opacity(0.3))
-                }
-            }
-        }
     }
 }
 
