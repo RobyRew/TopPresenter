@@ -352,7 +352,7 @@ struct ScheduleItemRow: View {
             if isCurrent {
                 Image(systemName: "play.circle.fill")
                     .font(.caption)
-                    .foregroundStyle(Color.accentColor)
+                    .foregroundStyle(appAccent)
                     .help(String(localized: "Elementul curent al sesiunii", comment: "Current session item badge"))
             }
         }
@@ -360,8 +360,8 @@ struct ScheduleItemRow: View {
         .padding(.horizontal, 8)
         .opacity(isMissing ? 0.5 : 1)
         .background(
-            isCurrent ? Color.accentColor.opacity(0.22)
-                : isSelected ? Color.accentColor.opacity(0.12) : Color.clear,
+            isCurrent ? appAccent.opacity(0.22)
+                : isSelected ? appAccent.opacity(0.12) : Color.clear,
             in: RoundedRectangle(cornerRadius: 4)
         )
     }

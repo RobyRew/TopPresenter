@@ -115,11 +115,11 @@ struct SongVerseControlsBar: View {
                 HStack(spacing: 6) {
                     Image(systemName: "music.note")
                         .font(.caption)
-                        .foregroundStyle(Color.accentColor)
+                        .foregroundStyle(appAccent)
 
                     Text(song.title)
                         .font(.caption.bold())
-                        .foregroundStyle(Color.accentColor)
+                        .foregroundStyle(appAccent)
                         .lineLimit(1)
 
                     Spacer()
@@ -130,7 +130,7 @@ struct SongVerseControlsBar: View {
                             .foregroundStyle(.white)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
-                            .background(Color.accentColor, in: Capsule())
+                            .background(appAccent, in: Capsule())
                     }
                 }
             }
@@ -215,7 +215,7 @@ struct SongVerseControlsBar: View {
                                     .padding(.vertical, 4)
                                     .background(
                                         currentVerse?.id == verse.id
-                                            ? Color.accentColor
+                                            ? appAccent
                                             : Color.secondary.opacity(0.15),
                                         in: RoundedRectangle(cornerRadius: 5)
                                     )

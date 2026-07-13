@@ -144,15 +144,16 @@ struct MainControlView: View {
                 }
 
             // Quick Search overlay (⌘K + the toolbar search capsule). The
-            // scale anchors near the toolbar's search field so opening reads
-            // as the field expanding down into the palette.
+            // palette owns its own layered transitions (dim FADES, panel
+            // SCALES) and every toggle site wraps the flip in
+            // `withAnimation(QuickSearchPalette.showHideAnimation)`. NEVER
+            // re-add `.animation(value: showQuickSearch)` on this container —
+            // it animated every coincident layout change (e.g. the module
+            // switch when Enter opens a result) with the palette's spring.
             if showQuickSearch {
                 QuickSearchPalette(isPresented: $showQuickSearch)
-                    .transition(.scale(scale: 0.92, anchor: UnitPoint(x: 0.85, y: 0))
-                        .combined(with: .opacity))
             }
         }
-        .animation(.spring(duration: 0.25, bounce: 0.15), value: showQuickSearch)
         // The module you're in decides which layout profile the right bar,
         // preview Edit Mode and Editor de Teme operate on.
         .onChange(of: appState.selectedSidebarItem, initial: true) {
@@ -247,13 +248,13 @@ struct MainControlView: View {
 
     private var dragTargetOverlay: some View {
         ZStack {
-            Color.accentColor.opacity(0.08)
+            appAccent.opacity(0.08)
                 .ignoresSafeArea()
 
             VStack(spacing: 12) {
                 Image(systemName: "square.and.arrow.down.on.square.fill")
                     .font(.system(size: 48))
-                    .foregroundStyle(Color.accentColor)
+                    .foregroundStyle(appAccent)
                 Text(String(localized: "Drop files to import", comment: "Drag overlay"))
                     .font(.title3.weight(.semibold))
                     .foregroundStyle(.primary)
@@ -266,7 +267,7 @@ struct MainControlView: View {
         }
         .overlay(
             RoundedRectangle(cornerRadius: 0)
-                .strokeBorder(Color.accentColor, style: StrokeStyle(lineWidth: 3, dash: [8, 4]))
+                .strokeBorder(appAccent, style: StrokeStyle(lineWidth: 3, dash: [8, 4]))
                 .padding(4)
         )
         .allowsHitTesting(false)
@@ -477,7 +478,7 @@ struct MainControlView: View {
     private var searchToolbarItem: some CustomizableToolbarContent {
         ToolbarItem(id: "search") {
             Button {
-                showQuickSearch = true
+                withAnimation(QuickSearchPalette.showHideAnimation) { showQuickSearch = true }
             } label: {
                 HStack(spacing: 6) {
                     Image(systemName: "magnifyingglass")
@@ -652,7 +653,7 @@ struct MainControlView: View {
                                 } label: {
                                     HStack(spacing: 8) {
                                         Image(systemName: libraryManager.selectedBibleModule?.id == module.id ? "checkmark.circle.fill" : "circle")
-                                            .foregroundStyle(libraryManager.selectedBibleModule?.id == module.id ? Color.accentColor : Color.secondary.opacity(0.4))
+                                            .foregroundStyle(libraryManager.selectedBibleModule?.id == module.id ? appAccent : Color.secondary.opacity(0.4))
                                             .font(.caption)
                                         VStack(alignment: .leading, spacing: 1) {
                                             Text(module.abbreviation.isEmpty ? module.name : module.abbreviation)
@@ -834,7 +835,7 @@ private struct QuickSearchCommandHandler: ViewModifier {
     func body(content: Content) -> some View {
         content
             .onKeyWindowNotification(.quickSearch) { _ in
-                showQuickSearch = true
+                withAnimation(QuickSearchPalette.showHideAnimation) { showQuickSearch = true }
             }
     }
 }

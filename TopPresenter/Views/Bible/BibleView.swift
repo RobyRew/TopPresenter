@@ -156,6 +156,9 @@ struct BibleView: View {
             )
             .contentShape(Rectangle())
             .onHover { inside in
+                // While a drag runs, the pointer may leave the 7pt strip —
+                // don't let hover-exit pop the resize cursor mid-drag.
+                guard dragBase == nil else { return }
                 if inside {
                     (dragAxis == .horizontal ? NSCursor.resizeLeftRight : NSCursor.resizeUpDown).push()
                 } else {
@@ -163,7 +166,10 @@ struct BibleView: View {
                 }
             }
             .gesture(
-                DragGesture(minimumDistance: 1)
+                // GLOBAL coordinate space is load-bearing: the divider itself
+                // moves while resizing, so a local-space translation is
+                // measured against a moving origin — feedback loop, jitter.
+                DragGesture(minimumDistance: 1, coordinateSpace: .global)
                     .onChanged { v in
                         let base = dragBase ?? currentValue()
                         dragBase = base
@@ -393,7 +399,7 @@ struct BibleBooksGridPane: View {
                 .padding(.horizontal, 4)
                 .background(
                     isSelected
-                        ? Color.accentColor
+                        ? appAccent
                         : showBookCategoryColors ? category.color.opacity(0.26) : Color.gray.opacity(0.12),
                     in: RoundedRectangle(cornerRadius: 6, style: .continuous)
                 )
@@ -537,7 +543,7 @@ struct BibleChaptersPanel: View {
                                     .font(.system(size: 12, weight: .medium, design: .rounded))
                                     .frame(maxWidth: .infinity, minHeight: 28)
                                     .background(
-                                        selected ? Color.accentColor : Color.gray.opacity(0.12),
+                                        selected ? appAccent : Color.gray.opacity(0.12),
                                         in: RoundedRectangle(cornerRadius: 6, style: .continuous)
                                     )
                                     .foregroundStyle(selected ? .white : .primary)
@@ -655,10 +661,10 @@ struct BibleContentPanel: View {
                 .font(.system(size: 11))
                 .frame(width: 24, height: 20)
                 .background(
-                    isOn.wrappedValue ? Color.accentColor.opacity(0.16) : Color.clear,
+                    isOn.wrappedValue ? appAccent.opacity(0.16) : Color.clear,
                     in: RoundedRectangle(cornerRadius: 5, style: .continuous)
                 )
-                .foregroundStyle(isOn.wrappedValue ? Color.accentColor : Color.secondary)
+                .foregroundStyle(isOn.wrappedValue ? appAccent : Color.secondary)
         }
         .buttonStyle(.plain)
         .help(help)
@@ -859,7 +865,7 @@ struct BibleVerseRow: View {
         HStack(alignment: .top, spacing: 8) {
             Text("\(verse.verseNumber)")
                 .font(.caption.bold().monospacedDigit())
-                .foregroundStyle(Color.accentColor)
+                .foregroundStyle(appAccent)
                 .frame(width: 28, alignment: .trailing)
 
             VStack(alignment: .leading, spacing: 5) {
@@ -890,8 +896,8 @@ struct BibleVerseRow: View {
                                     Text(ref)
                                         .font(.caption2)
                                         .padding(.horizontal, 6).padding(.vertical, 2)
-                                        .background(Color.accentColor.opacity(0.12), in: Capsule())
-                                        .foregroundStyle(Color.accentColor)
+                                        .background(appAccent.opacity(0.12), in: Capsule())
+                                        .foregroundStyle(appAccent)
                                 }
                                 .buttonStyle(.plain)
                             }
@@ -904,7 +910,7 @@ struct BibleVerseRow: View {
         .padding(.vertical, 6)
         .padding(.horizontal, 8)
         .background(
-            isSelected ? Color.accentColor.opacity(0.15) : Color.clear,
+            isSelected ? appAccent.opacity(0.15) : Color.clear,
             in: RoundedRectangle(cornerRadius: 6)
         )
         .contentShape(Rectangle())
@@ -998,10 +1004,10 @@ struct BibleImportSheet: View {
                 VStack(spacing: 10) {
                     Image(systemName: isDropTargeted ? "tray.and.arrow.down.fill" : "square.and.arrow.down")
                         .font(.system(size: 36, weight: .light))
-                        .foregroundStyle(isDropTargeted ? Color.accentColor : .secondary)
+                        .foregroundStyle(isDropTargeted ? appAccent : .secondary)
                     if let url = selectedFileURL {
                         HStack(spacing: 6) {
-                            Image(systemName: fileIcon).foregroundStyle(Color.accentColor)
+                            Image(systemName: fileIcon).foregroundStyle(appAccent)
                             Text(url.lastPathComponent).lineLimit(1).truncationMode(.middle).fontWeight(.medium)
                         }
                         Text(String(localized: "Click Import below, or drop another to replace.", comment: "Drop hint"))
@@ -1015,9 +1021,9 @@ struct BibleImportSheet: View {
                 }
                 .frame(maxWidth: .infinity).frame(height: 156)
                 .background(RoundedRectangle(cornerRadius: 12)
-                    .fill(isDropTargeted ? Color.accentColor.opacity(0.08) : Color.secondary.opacity(0.06)))
+                    .fill(isDropTargeted ? appAccent.opacity(0.08) : Color.secondary.opacity(0.06)))
                 .overlay(RoundedRectangle(cornerRadius: 12)
-                    .strokeBorder(isDropTargeted ? Color.accentColor : Color.secondary.opacity(0.35),
+                    .strokeBorder(isDropTargeted ? appAccent : Color.secondary.opacity(0.35),
                                   style: StrokeStyle(lineWidth: 1.5, dash: [7, 5])))
             }
             .buttonStyle(.plain)
@@ -1037,7 +1043,7 @@ struct BibleImportSheet: View {
                             Text(String(localized: "Format:", comment: "Label"))
                                 .fontWeight(.medium)
                             Text(format.displayName)
-                                .foregroundStyle(Color.accentColor)
+                                .foregroundStyle(appAccent)
                                 .fontWeight(.semibold)
                             if autoDetected {
                                 Text(String(localized: "(auto-detected)", comment: "Label"))

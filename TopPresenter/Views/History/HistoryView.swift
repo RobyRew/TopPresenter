@@ -53,7 +53,7 @@ struct HistoryView: View {
 
     private var header: some View {
         HStack(spacing: 12) {
-            Image(systemName: "clock.arrow.circlepath").font(.title2).foregroundStyle(Color.accentColor)
+            Image(systemName: "clock.arrow.circlepath").font(.title2).foregroundStyle(appAccent)
             VStack(alignment: .leading, spacing: 1) {
                 Text(String(localized: "Presentation History", comment: "History window title")).font(.headline)
                 Text(String(localized: "\(store.totalEvents()) shows recorded", comment: "History subtitle"))
@@ -149,7 +149,7 @@ struct HistoryView: View {
                         HStack {
                             Text(t.label)
                             Spacer()
-                            Text("\(t.count)×").foregroundStyle(Color.accentColor)
+                            Text("\(t.count)×").foregroundStyle(appAccent)
                         }.font(.callout).padding(.vertical, 1)
                     }
                 }
@@ -224,7 +224,7 @@ struct HistoryView: View {
 
     private func stat(_ value: String, _ label: String) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text(value).font(.system(size: 30, weight: .bold, design: .rounded)).foregroundStyle(Color.accentColor)
+            Text(value).font(.system(size: 30, weight: .bold, design: .rounded)).foregroundStyle(appAccent)
             Text(label).font(.caption).foregroundStyle(.secondary)
         }
     }

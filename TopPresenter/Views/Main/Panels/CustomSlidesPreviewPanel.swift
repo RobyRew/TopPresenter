@@ -78,12 +78,12 @@ struct CustomSlidesPreviewPanel: View {
                 HStack(spacing: 6) {
                     Image(systemName: "rectangle.stack.fill")
                         .font(.caption)
-                        .foregroundStyle(Color.accentColor)
+                        .foregroundStyle(appAccent)
                     Text(slide.title.isEmpty
                          ? String(localized: "Untitled", comment: "Placeholder")
                          : slide.title)
                         .font(.caption.bold())
-                        .foregroundStyle(Color.accentColor)
+                        .foregroundStyle(appAccent)
                         .lineLimit(1)
                     Spacer()
                     Text("\(currentSlideIndex + 1)/\(slides.count)")

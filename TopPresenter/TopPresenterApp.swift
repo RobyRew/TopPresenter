@@ -130,6 +130,10 @@ struct MainWindowRoot: View {
         MainControlView()
             .environment(appState)
             .environment(libraryManager)
+            // App-wide accent: native controls (pickers, toggles, list
+            // selection) follow the chosen accent; custom views read the
+            // same value via the global `appAccent`.
+            .tint(appAccent)
             // System Spotlight result clicked → jump straight to the item.
             .onContinueUserActivity(CSSearchableItemActionType) { activity in
                 guard let raw = activity.userInfo?[CSSearchableItemActivityIdentifier] as? String,

@@ -169,6 +169,12 @@ private struct PaletteSection: Identifiable {
 // MARK: - Palette
 
 struct QuickSearchPalette: View {
+    /// THE show/hide spring — every `showQuickSearch`/`isPresented` flip must
+    /// go through `withAnimation(Self.showHideAnimation)`. Container-level
+    /// `.animation(value:)` is banned: it animated unrelated layout changes
+    /// that landed in the same tick (module switch on Enter).
+    static let showHideAnimation = Animation.spring(duration: 0.25, bounce: 0.15)
+
     @Environment(\.modelContext) private var modelContext
     @Environment(SearchIndex.self) private var index
     @Environment(LibraryManager.self) private var libraryManager
@@ -283,9 +289,13 @@ struct QuickSearchPalette: View {
 
     var body: some View {
         ZStack {
+            // Layered transitions: the dim always FADES (it covers the whole
+            // window — scaling it from the panel's corner read as a black
+            // sheet sliding in from the side), only the PANEL gets the scale.
             Color.black.opacity(0.4)
                 .ignoresSafeArea()
                 .onTapGesture { dismiss() }
+                .transition(.opacity)
 
             // The panel HUGS its content — never `.frame(maxHeight:)` here: a
             // max-height frame is greedy (min(proposed, max)), which rendered a
@@ -325,6 +335,10 @@ struct QuickSearchPalette: View {
             .shadow(color: .black.opacity(0.42), radius: 38, y: 16)
             .padding(.top, 100)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            // The scale anchors near the toolbar's search capsule so opening
+            // reads as the field expanding down into the palette.
+            .transition(.scale(scale: 0.92, anchor: UnitPoint(x: 0.85, y: 0))
+                .combined(with: .opacity))
         }
         .onAppear {
             fieldFocused = true
@@ -916,7 +930,7 @@ struct QuickSearchPalette: View {
                                  module: appState.selectedSidebarItem.rawValue)
         }
         didCommitSearch = false
-        isPresented = false
+        withAnimation(Self.showHideAnimation) { isPresented = false }
         query = ""
         hits = .none
         selectedIndex = 0
@@ -999,7 +1013,7 @@ private struct PaletteRow: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
-        .background(isSelected ? Color.accentColor.opacity(0.2) : .clear,
+        .background(isSelected ? appAccent.opacity(0.2) : .clear,
                     in: RoundedRectangle(cornerRadius: 8, style: .continuous))
         .padding(.horizontal, 8)
     }

@@ -35,7 +35,7 @@ struct BibleExportSheet: View {
             HStack {
                 Image(systemName: "square.and.arrow.up")
                     .font(.title2)
-                    .foregroundStyle(Color.accentColor)
+                    .foregroundStyle(appAccent)
                 Text(String(localized: "Export Bible Module", comment: "Sheet title"))
                     .font(.title2.bold())
             }
@@ -221,7 +221,7 @@ private struct ExportFormatRow: View {
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                .foregroundStyle(isSelected ? Color.accentColor : .secondary)
+                .foregroundStyle(isSelected ? appAccent : .secondary)
                 .font(.title3)
 
             VStack(alignment: .leading, spacing: 2) {
@@ -237,7 +237,7 @@ private struct ExportFormatRow: View {
                             .foregroundStyle(.white)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
-                            .background(Color.accentColor, in: Capsule())
+                            .background(appAccent, in: Capsule())
                     }
                 }
                 Text(format.formatDescription)
@@ -250,12 +250,12 @@ private struct ExportFormatRow: View {
         }
         .padding(10)
         .background(
-            isSelected ? Color.accentColor.opacity(0.1) : Color.clear,
+            isSelected ? appAccent.opacity(0.1) : Color.clear,
             in: RoundedRectangle(cornerRadius: 8)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 8)
-                .stroke(isSelected ? Color.accentColor.opacity(0.4) : Color.clear, lineWidth: 1)
+                .stroke(isSelected ? appAccent.opacity(0.4) : Color.clear, lineWidth: 1)
         )
     }
 }

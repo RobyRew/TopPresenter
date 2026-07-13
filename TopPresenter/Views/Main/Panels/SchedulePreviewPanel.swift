@@ -101,10 +101,10 @@ struct SchedulePreviewPanel: View {
                 HStack(spacing: 6) {
                     Image(systemName: iconForType(item.itemType))
                         .font(.caption)
-                        .foregroundStyle(Color.accentColor)
+                        .foregroundStyle(appAccent)
                     Text(item.title)
                         .font(.caption.bold())
-                        .foregroundStyle(Color.accentColor)
+                        .foregroundStyle(appAccent)
                         .lineLimit(1)
                     Spacer()
                     if runningThis, let item = currentItem {
@@ -286,7 +286,7 @@ struct SchedulePreviewPanel: View {
             .padding(.vertical, 4)
             .opacity(isMissing ? 0.55 : 1)
             .background(
-                isCurrent ? Color.accentColor : Color.clear,
+                isCurrent ? appAccent : Color.clear,
                 in: RoundedRectangle(cornerRadius: 4)
             )
         }

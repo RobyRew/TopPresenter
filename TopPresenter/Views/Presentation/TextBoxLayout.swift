@@ -1129,7 +1129,7 @@ private struct ThemeCard: View {
             .overlay(
                 RoundedRectangle(cornerRadius: 6)
                     .strokeBorder(
-                        isActive ? Color.accentColor : Color.gray.opacity(0.35),
+                        isActive ? appAccent : Color.gray.opacity(0.35),
                         lineWidth: isActive ? 2 : 1
                     )
             )
@@ -1143,7 +1143,7 @@ private struct ThemeCard: View {
                 Text(theme.name)
                     .font(.caption2)
                     .lineLimit(1)
-                    .foregroundStyle(isActive ? Color.accentColor : .secondary)
+                    .foregroundStyle(isActive ? appAccent : .secondary)
             }
             .frame(width: 108)
         }
@@ -1953,7 +1953,7 @@ struct LayoutEditorSheet: View {
         .padding(.horizontal, 8)
         .padding(.vertical, 5)
         .background(
-            isSelected ? Color.accentColor.opacity(0.15) : Color.clear,
+            isSelected ? appAccent.opacity(0.15) : Color.clear,
             in: RoundedRectangle(cornerRadius: 5)
         )
         .help(boxSourceDescription(for: identity, pm: pm))

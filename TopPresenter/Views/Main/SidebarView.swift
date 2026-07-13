@@ -7,6 +7,10 @@
 
 import SwiftUI
 
+/// ONE native sidebar List — content modules on top, the utility
+/// destinations (History · Settings · Account) as a second section of the
+/// SAME list, so selection highlight, spacing and typography are the
+/// system's (and follow the window `.tint`). No custom row chrome.
 struct SidebarView: View {
     @Environment(AppState.self) private var appState
 
@@ -20,31 +24,30 @@ struct SidebarView: View {
     var body: some View {
         @Bindable var state = appState
 
-        VStack(spacing: 0) {
-            // Content sections — the main navigation.
-            List(AppState.SidebarItem.contentItems, selection: $state.selectedSidebarItem) { item in
-                Label(item.localizedName, systemImage: item.systemImage)
-                    .tag(item)
+        List(selection: $state.selectedSidebarItem) {
+            Section(String(localized: "Bibliotecă", comment: "Sidebar section")) {
+                ForEach(AppState.SidebarItem.contentItems) { item in
+                    Label(item.localizedName, systemImage: item.systemImage)
+                        .tag(item)
+                }
             }
-            .listStyle(.sidebar)
 
-            Spacer(minLength: 0)
-
-            Divider()
-
-            // Pinned utility group at the bottom: History · Settings · Account —
-            // all in-app destinations (Settings included, no separate window).
-            VStack(spacing: 2) {
+            Section(String(localized: "Instrumente", comment: "Sidebar section")) {
                 ForEach(AppState.SidebarItem.utilityItems) { item in
-                    utilityRow(item.localizedName, systemImage: item.systemImage,
-                               isSelected: state.selectedSidebarItem == item) {
-                        if item == .settings { registerSettingsClick() }
-                        state.selectedSidebarItem = item
+                    if item == .settings {
+                        // simultaneousGesture: the tap COUNTS without stealing
+                        // the row's native selection handling.
+                        Label(item.localizedName, systemImage: item.systemImage)
+                            .tag(item)
+                            .simultaneousGesture(TapGesture().onEnded { registerSettingsClick() })
+                    } else {
+                        Label(item.localizedName, systemImage: item.systemImage)
+                            .tag(item)
                     }
                 }
             }
-            .padding(.horizontal, 8).padding(.vertical, 6)
         }
+        .listStyle(.sidebar)
         .navigationSplitViewColumnWidth(min: 160, ideal: 200, max: 250)
         .frame(minHeight: 300)
     }
@@ -58,18 +61,5 @@ struct SidebarView: View {
             settingsClickCount = 0
             advancedUnlocked = true
         }
-    }
-
-    private func utilityRow(_ title: String, systemImage: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Label(title, systemImage: systemImage)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 8).padding(.vertical, 5)
-                .background(isSelected ? AnyShapeStyle(Color.accentColor.opacity(0.18)) : AnyShapeStyle(.clear),
-                            in: RoundedRectangle(cornerRadius: 6))
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .foregroundStyle(isSelected ? Color.accentColor : Color.primary)
     }
 }

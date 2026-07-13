@@ -681,11 +681,11 @@ struct VerseSlideControlsBar: View {
                 HStack(spacing: 6) {
                     Image(systemName: "book.fill")
                         .font(.caption)
-                        .foregroundStyle(Color.accentColor)
+                        .foregroundStyle(appAccent)
 
                     Text(libraryManager.selectedVersesReference)
                         .font(.caption.bold())
-                        .foregroundStyle(Color.accentColor)
+                        .foregroundStyle(appAccent)
                         .lineLimit(1)
 
                     Spacer()
@@ -697,7 +697,7 @@ struct VerseSlideControlsBar: View {
                             .foregroundStyle(.white)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
-                            .background(Color.accentColor, in: Capsule())
+                            .background(appAccent, in: Capsule())
                     }
 
                     // Auto-fill active indicator
@@ -1185,7 +1185,7 @@ private struct ClearMenuItem: View {
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
-            .background(isHovering ? Color.accentColor.opacity(0.12) : Color.clear)
+            .background(isHovering ? appAccent.opacity(0.12) : Color.clear)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

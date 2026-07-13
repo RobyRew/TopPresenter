@@ -63,7 +63,7 @@ struct SettingsContentView: View {
 
     private var header: some View {
         HStack(spacing: 12) {
-            Image(systemName: "gearshape").font(.title2).foregroundStyle(Color.accentColor)
+            Image(systemName: "gearshape").font(.title2).foregroundStyle(appAccent)
             VStack(alignment: .leading, spacing: 1) {
                 Text(String(localized: "Setări", comment: "Settings title")).font(.headline)
                 Text(String(localized: "Preferințele aplicației", comment: "Settings subtitle"))
@@ -91,6 +91,23 @@ struct InterfaceSettingsTab: View {
 
     var body: some View {
         Form {
+            Section {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(String(localized: "Culoare accent", comment: "Setting label"))
+                    HStack(spacing: 9) {
+                        ForEach(AppAccentOption.allCases) { option in
+                            accentSwatch(option)
+                        }
+                    }
+                }
+                .padding(.vertical, 2)
+            } header: {
+                Text(String(localized: "Aspect", comment: "Settings section"))
+            } footer: {
+                Text(String(localized: "„Sistem” urmează culoarea de accent din Setările macOS.", comment: "Settings info"))
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+
             Section(String(localized: "General", comment: "Settings section")) {
                 Picker(String(localized: "Secțiunea de start:", comment: "Setting label"), selection: $startupSection) {
                     Text(String(localized: "Biblie", comment: "Option")).tag("bible")
@@ -122,6 +139,37 @@ struct InterfaceSettingsTab: View {
         }
         .formStyle(.grouped)
         .padding()
+    }
+
+    /// One accent swatch (macOS System Settings-style): filled circle,
+    /// selection ring, „Sistem” shows the LIVE system accent.
+    private func accentSwatch(_ option: AppAccentOption) -> some View {
+        let store = AccentStore.shared
+        let isSelected = store.option == option
+        return Button {
+            store.option = option
+        } label: {
+            ZStack {
+                Circle()
+                    .fill(option.color)
+                    .frame(width: 20, height: 20)
+                if option == .system {
+                    Image(systemName: "macwindow")
+                        .font(.system(size: 8, weight: .bold))
+                        .foregroundStyle(.white)
+                }
+                if isSelected {
+                    Circle()
+                        .strokeBorder(Color.primary.opacity(0.8), lineWidth: 2)
+                        .frame(width: 26, height: 26)
+                }
+            }
+            .frame(width: 26, height: 26)
+            .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .help(option.localizedName)
+        .accessibilityLabel(option.localizedName)
     }
 }
 

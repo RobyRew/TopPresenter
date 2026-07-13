@@ -28,7 +28,7 @@ struct BatchExportSheet: View {
             HStack {
                 Image(systemName: "square.and.arrow.up.on.square")
                     .font(.title2)
-                    .foregroundStyle(Color.accentColor)
+                    .foregroundStyle(appAccent)
                 VStack(alignment: .leading) {
                     Text(String(localized: "Batch Export", comment: "Sheet title"))
                         .font(.title2.bold())
@@ -128,7 +128,7 @@ struct BatchExportSheet: View {
         let isSelected = selectedModuleIDs.contains(module.id)
         return HStack(spacing: 10) {
             Image(systemName: isSelected ? "checkmark.square.fill" : "square")
-                .foregroundStyle(isSelected ? Color.accentColor : .secondary)
+                .foregroundStyle(isSelected ? appAccent : .secondary)
 
             VStack(alignment: .leading, spacing: 1) {
                 Text(module.abbreviation.isEmpty ? module.name : "\(module.abbreviation) — \(module.name)")
@@ -143,7 +143,7 @@ struct BatchExportSheet: View {
         }
         .padding(8)
         .background(
-            isSelected ? Color.accentColor.opacity(0.08) : Color.clear,
+            isSelected ? appAccent.opacity(0.08) : Color.clear,
             in: RoundedRectangle(cornerRadius: 6)
         )
         .contentShape(Rectangle())

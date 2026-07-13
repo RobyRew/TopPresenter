@@ -45,7 +45,7 @@ struct BatchImportSheet: View {
             HStack {
                 Image(systemName: "square.and.arrow.down.on.square")
                     .font(.title2)
-                    .foregroundStyle(Color.accentColor)
+                    .foregroundStyle(appAccent)
                 VStack(alignment: .leading) {
                     Text(String(localized: "Batch Import", comment: "Sheet title"))
                         .font(.title2.bold())

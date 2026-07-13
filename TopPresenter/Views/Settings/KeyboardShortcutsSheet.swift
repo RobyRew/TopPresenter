@@ -17,7 +17,7 @@ struct KeyboardShortcutsSheet: View {
             HStack {
                 Image(systemName: "keyboard")
                     .font(.title2)
-                    .foregroundStyle(Color.accentColor)
+                    .foregroundStyle(appAccent)
                 Text(String(localized: "Keyboard Shortcuts", comment: "Sheet title"))
                     .font(.title2.bold())
                 Spacer()
@@ -146,7 +146,7 @@ private struct ShortcutSection: View {
             // Section header
             HStack(spacing: 6) {
                 Image(systemName: icon)
-                    .foregroundStyle(Color.accentColor)
+                    .foregroundStyle(appAccent)
                     .frame(width: 20)
                 Text(title)
                     .font(.headline)

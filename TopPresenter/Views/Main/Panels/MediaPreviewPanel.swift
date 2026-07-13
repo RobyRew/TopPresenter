@@ -110,10 +110,10 @@ struct MediaControlsBar: View {
                 HStack(spacing: 6) {
                     Image(systemName: (MediaKind(rawValue: item.mediaType) ?? .image).systemImage)
                         .font(.caption)
-                        .foregroundStyle(Color.accentColor)
+                        .foregroundStyle(appAccent)
                     Text(item.name)
                         .font(.caption.bold())
-                        .foregroundStyle(Color.accentColor)
+                        .foregroundStyle(appAccent)
                         .lineLimit(1)
                         .truncationMode(.middle)
                     Spacer()

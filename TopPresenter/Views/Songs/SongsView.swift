@@ -284,8 +284,8 @@ struct SongListPanel: View {
                             Label(key.label, systemImage: key.systemImage)
                                 .labelStyle(.titleAndIcon).font(.caption2.weight(on ? .semibold : .regular))
                                 .padding(.horizontal, 8).padding(.vertical, 3)
-                                .background(on ? AnyShapeStyle(Color.accentColor.opacity(0.2)) : AnyShapeStyle(.quaternary), in: Capsule())
-                                .foregroundStyle(on ? Color.accentColor : .secondary)
+                                .background(on ? AnyShapeStyle(appAccent.opacity(0.2)) : AnyShapeStyle(.quaternary), in: Capsule())
+                                .foregroundStyle(on ? appAccent : .secondary)
                         }
                         .buttonStyle(.plain)
                     }
@@ -368,7 +368,7 @@ struct SongListPanel: View {
             HStack(spacing: 4) {
                 Image(systemName: "pin.fill")
                     .font(.caption2)
-                    .foregroundStyle(Color.accentColor)
+                    .foregroundStyle(appAccent)
                 Text(String(localized: "Fixate", comment: "Pinned songs group heading"))
                     .font(.caption2.weight(.semibold))
                     .foregroundStyle(.secondary)
@@ -461,13 +461,13 @@ struct SongListPanel: View {
             .frame(height: 132, alignment: .top)
             .background(
                 libraryManager.selectedSong?.id == entry.id
-                    ? Color.accentColor.opacity(0.18)
+                    ? appAccent.opacity(0.18)
                     : Color.secondary.opacity(0.08),
                 in: RoundedRectangle(cornerRadius: 10)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 10)
-                    .stroke(libraryManager.selectedSong?.id == entry.id ? Color.accentColor : Color.clear, lineWidth: 1.5)
+                    .stroke(libraryManager.selectedSong?.id == entry.id ? appAccent : Color.clear, lineWidth: 1.5)
             )
             .clipShape(RoundedRectangle(cornerRadius: 10))
         }
@@ -478,7 +478,7 @@ struct SongListPanel: View {
                 Button { pinStore.togglePin(entry.id) } label: {
                     Image(systemName: pinStore.isPinned(entry.id) ? "pin.fill" : "pin")
                         .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(pinStore.isPinned(entry.id) ? Color.accentColor : .secondary)
+                        .foregroundStyle(pinStore.isPinned(entry.id) ? appAccent : .secondary)
                         .padding(4)
                         .background(.thinMaterial, in: Circle())
                 }
@@ -587,7 +587,7 @@ struct SongListPanel: View {
         HStack(spacing: 4) {
             if pinStore.isPinned(entry.id) {
                 Image(systemName: "pin.fill")
-                    .font(.system(size: 10)).foregroundStyle(Color.accentColor)
+                    .font(.system(size: 10)).foregroundStyle(appAccent)
                     .help(String(localized: "Fixat pentru această sesiune", comment: "Pinned badge"))
             }
             if entry.verified {
@@ -672,7 +672,7 @@ struct SongDetailPanel: View {
                                 Text(Self.histFmt.string(from: h.lastPresented))
                             }
                             .font(.caption).padding(.horizontal, 8).padding(.vertical, 3)
-                            .background(Color.accentColor.opacity(0.14), in: Capsule())
+                            .background(appAccent.opacity(0.14), in: Capsule())
                             .lineLimit(1)
                         }
                         .buttonStyle(.plain)
@@ -763,7 +763,7 @@ struct SongDetailPanel: View {
                         Label(String(localized: "Pe web", comment: "Web link chip"), systemImage: "link")
                             .font(.caption).labelStyle(.titleAndIcon)
                             .padding(.horizontal, 8).padding(.vertical, 3)
-                            .background(Color.accentColor.opacity(0.14), in: Capsule())
+                            .background(appAccent.opacity(0.14), in: Capsule())
                     }
                     .help(url.absoluteString)
                 }
@@ -1110,12 +1110,12 @@ struct SongSlideThumbnail: View {
             .padding(.horizontal, 4).padding(.vertical, 3)
         }
         .background(
-            isSelected ? Color.accentColor.opacity(0.18) : Color.secondary.opacity(0.06),
+            isSelected ? appAccent.opacity(0.18) : Color.secondary.opacity(0.06),
             in: RoundedRectangle(cornerRadius: 8)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 8)
-                .stroke(isSelected ? Color.accentColor : .clear, lineWidth: 2)
+                .stroke(isSelected ? appAccent : .clear, lineWidth: 2)
         )
         .contentShape(Rectangle())
     }
@@ -1531,7 +1531,7 @@ struct SongEditorSheet: View {
                                 Text(title).font(.caption.weight(.medium)).lineLimit(1)
                             }
                             .padding(.horizontal, 12).padding(.vertical, 6)
-                            .background(selected ? Color.accentColor : Color.secondary.opacity(0.15), in: Capsule())
+                            .background(selected ? appAccent : Color.secondary.opacity(0.15), in: Capsule())
                             .foregroundStyle(selected ? .white : .primary)
                         }
                         .buttonStyle(.plain)
@@ -1558,7 +1558,7 @@ struct SongEditorSheet: View {
         HStack(spacing: 12) {
             Image(systemName: "music.note.list")
                 .font(.title2)
-                .foregroundStyle(Color.accentColor)
+                .foregroundStyle(appAccent)
             VStack(alignment: .leading, spacing: 1) {
                 Text(String(localized: "Editor cântec", comment: "Editor title")).font(.headline)
                 Text(song.title.isEmpty ? String(localized: "Fără titlu", comment: "Placeholder") : song.title)
@@ -1920,7 +1920,7 @@ struct SongEditorSheet: View {
             Label(String(localized: "Adaugă strofă", comment: "Button"), systemImage: "plus.rectangle.on.rectangle")
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 8)
-                .background(Color.accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
+                .background(appAccent.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
         }
         .menuStyle(.borderlessButton)
     }
@@ -2238,7 +2238,7 @@ struct SectionEditorCard: View {
 
                 Button { chordsOverride = !showChords } label: {
                     Image(systemName: "music.note")
-                        .foregroundStyle(showChords ? Color.accentColor : Color.secondary)
+                        .foregroundStyle(showChords ? appAccent : Color.secondary)
                 }
                 .buttonStyle(.borderless)
                 .help(String(localized: "Acorduri inline [G]", comment: "Tooltip"))

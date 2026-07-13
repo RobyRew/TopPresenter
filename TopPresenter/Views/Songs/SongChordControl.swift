@@ -80,7 +80,7 @@ struct SongChordControl: View {
                 Text(chipLabel).font(.caption)
             }
             .padding(.horizontal, 8).padding(.vertical, 3)
-            .background((semitones != 0 || capo > 0) ? AnyShapeStyle(Color.accentColor.opacity(0.18)) : AnyShapeStyle(.quaternary), in: Capsule())
+            .background((semitones != 0 || capo > 0) ? AnyShapeStyle(appAccent.opacity(0.18)) : AnyShapeStyle(.quaternary), in: Capsule())
             .lineLimit(1)
         }
         .buttonStyle(.plain)
@@ -130,7 +130,7 @@ struct SongChordControl: View {
                     Spacer()
                     VStack(spacing: 0) {
                         Text(soundingKey.isEmpty ? "—" : soundingKey)
-                            .font(.title3.bold()).foregroundStyle(Color.accentColor)
+                            .font(.title3.bold()).foregroundStyle(appAccent)
                         Text(String(format: "%+d", semitones) + " " + String(localized: "semitonuri", comment: "semitones"))
                             .font(.caption2).foregroundStyle(.secondary)
                     }
