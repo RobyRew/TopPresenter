@@ -50,41 +50,36 @@ struct BibleView: View {
                 // verses panel. Inside the third, GRID stacks books over
                 // chapters; LIST puts books left, chapters right. No more
                 // drill-down levels — everything stays visible.
-                GeometryReader { geo in
-                    let paneWidth = min(max(geo.size.width / 3, 280), 480)
-                    HStack(spacing: 0) {
-                        Group {
-                            if viewMode == "grid" {
-                                VStack(spacing: 0) {
-                                    BibleBooksGridPane()
-                                        .frame(height: geo.size.height * min(max(gridBooksFraction, 0.25), 0.8))
-                                    paneResizeDivider(.vertical) { base, delta in
-                                        gridBooksFraction = min(max(base + delta / max(geo.size.height, 1), 0.25), 0.8)
-                                    } currentValue: {
-                                        gridBooksFraction
-                                    }
-                                    BibleChaptersPanel()
+                ResizableSplit(storageKey: "split_bible", minLeading: 280, maxFraction: 0.55) {
+                    GeometryReader { geo in
+                        if viewMode == "grid" {
+                            VStack(spacing: 0) {
+                                BibleBooksGridPane()
+                                    .frame(height: geo.size.height * min(max(gridBooksFraction, 0.25), 0.8))
+                                paneResizeDivider(.vertical) { base, delta in
+                                    gridBooksFraction = min(max(base + delta / max(geo.size.height, 1), 0.25), 0.8)
+                                } currentValue: {
+                                    gridBooksFraction
                                 }
-                            } else {
-                                HStack(spacing: 0) {
-                                    BibleNavigationPanel()
-                                    paneResizeDivider(.horizontal) { base, delta in
-                                        // Chapters sit on the RIGHT: dragging the
-                                        // divider left (negative delta) widens them.
-                                        listChaptersWidth = min(max(base - delta, 84), Double(paneWidth) * 0.6)
-                                    } currentValue: {
-                                        listChaptersWidth
-                                    }
-                                    BibleChaptersPanel(fixedColumns: 2)
-                                        .frame(width: min(max(listChaptersWidth, 84), Double(paneWidth) * 0.6))
+                                BibleChaptersPanel()
+                            }
+                        } else {
+                            HStack(spacing: 0) {
+                                BibleNavigationPanel()
+                                paneResizeDivider(.horizontal) { base, delta in
+                                    // Chapters sit on the RIGHT: dragging the
+                                    // divider left (negative delta) widens them.
+                                    listChaptersWidth = min(max(base - delta, 84), Double(geo.size.width) * 0.6)
+                                } currentValue: {
+                                    listChaptersWidth
                                 }
+                                BibleChaptersPanel(fixedColumns: 2)
+                                    .frame(width: min(max(listChaptersWidth, 84), Double(geo.size.width) * 0.6))
                             }
                         }
-                        .frame(width: paneWidth)
-                        Divider()
-                        BibleContentPanel()
-                            .frame(maxWidth: .infinity)
                     }
+                } trailing: {
+                    BibleContentPanel()
                 }
             }
         }

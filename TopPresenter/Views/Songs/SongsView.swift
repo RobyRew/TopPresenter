@@ -28,12 +28,10 @@ struct SongsView: View {
             if collections.isEmpty {
                 emptyStateView
             } else {
-                HSplitView {
+                ResizableSplit(storageKey: "split_songs", minLeading: 260, maxFraction: 0.5) {
                     SongListPanel()
-                        .frame(minWidth: 260, maxWidth: 380)
-
+                } trailing: {
                     SongDetailPanel()
-                        .frame(minWidth: 420)
                 }
             }
         }

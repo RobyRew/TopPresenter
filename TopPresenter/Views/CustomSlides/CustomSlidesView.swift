@@ -21,7 +21,7 @@ struct CustomSlidesView: View {
     @State private var editingSubtitle = ""
 
     var body: some View {
-        HSplitView {
+        ResizableSplit(storageKey: "split_custom", minLeading: 220, maxFraction: 0.5) {
             // Slides list
             VStack(spacing: 0) {
                 HStack {
@@ -69,8 +69,7 @@ struct CustomSlidesView: View {
                 }
                 .listStyle(.plain)
             }
-            .frame(minWidth: 200, maxWidth: 300)
-
+        } trailing: {
             // Editor
             if selectedSlide != nil {
                 VStack(spacing: 12) {

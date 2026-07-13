@@ -42,14 +42,18 @@ struct MediaView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            header
-            Divider()
-            if filteredItems.isEmpty {
-                emptyState
-            } else {
-                grid
+        ResizableSplit(storageKey: "split_media", minLeading: 280, maxFraction: 0.55) {
+            VStack(spacing: 0) {
+                header
+                Divider()
+                if filteredItems.isEmpty {
+                    emptyState
+                } else {
+                    grid
+                }
             }
+        } trailing: {
+            MediaDetailPane()
         }
         .onKeyWindowNotification(.importMedia) { _ in importMedia() }
     }
@@ -327,5 +331,77 @@ extension NSImage {
         )
         newImage.unlockFocus()
         return newImage
+    }
+}
+
+// MARK: - Media Detail Pane (right two-thirds — big preview + actions)
+
+/// Large preview of the selected media item: thumbnail/artwork, metadata and
+/// the present action — the browsing grid stays in the left third.
+struct MediaDetailPane: View {
+    @Environment(LibraryManager.self) private var libraryManager
+    @Environment(PresentationManager.self) private var pm
+    @Environment(AudioPlayerManager.self) private var audioPlayerManager
+    @Environment(VideoPlayerService.self) private var videoPlayerService
+
+    var body: some View {
+        if let item = libraryManager.selectedMediaItem {
+            let kind = MediaKind(rawValue: item.mediaType) ?? .image
+            VStack(spacing: 14) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(.black.opacity(0.25))
+                    if let data = item.thumbnailData, let image = NSImage(data: data) {
+                        Image(nsImage: image)
+                            .resizable()
+                            .scaledToFit()
+                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    } else {
+                        Image(systemName: kind.systemImage)
+                            .font(.system(size: 56))
+                            .foregroundStyle(.secondary)
+                    }
+                    if kind == .video {
+                        Image(systemName: "play.circle.fill")
+                            .font(.system(size: 44))
+                            .foregroundStyle(.white.opacity(0.85))
+                            .shadow(radius: 6)
+                    }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+                VStack(spacing: 3) {
+                    Text(item.name)
+                        .font(.title3.weight(.semibold))
+                        .lineLimit(2)
+                        .multilineTextAlignment(.center)
+                    HStack(spacing: 6) {
+                        Label(kind.filterLabel, systemImage: kind.systemImage)
+                        if let badge = item.durationBadge {
+                            Text(verbatim: "· " + badge)
+                        }
+                    }
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                }
+
+                Button {
+                    MediaPresenter.present(item, pm: pm, video: videoPlayerService, audio: audioPlayerManager)
+                } label: {
+                    Label(String(localized: "Prezintă", comment: "Button"), systemImage: "play.fill")
+                        .frame(minWidth: 130)
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+            }
+            .padding(18)
+        } else {
+            ContentUnavailableView {
+                Label(String(localized: "Nimic selectat", comment: "Media detail empty"),
+                      systemImage: "photo.on.rectangle")
+            } description: {
+                Text(String(localized: "Alege un fișier din stânga pentru previzualizare.", comment: "Media detail empty message"))
+            }
+        }
     }
 }
