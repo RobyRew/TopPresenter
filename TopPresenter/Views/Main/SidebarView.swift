@@ -7,11 +7,12 @@
 
 import SwiftUI
 
-/// Native sidebar in two stacked Lists sharing ONE selection: content
-/// modules on top, the utility cluster (History · Settings · Account)
-/// PINNED TO THE BOTTOM (its List is scroll-disabled and hugs three rows).
-/// Rows are plain Labels — selection highlight, spacing and typography are
-/// the system's and follow the window `.tint`.
+/// Native sidebar list (content modules) + a SELF-SIZING utility cluster
+/// (History · Settings · Account) pinned flush to the bottom. The cluster is
+/// NOT a second List — a scroll-disabled List needs a guessed fixed height,
+/// which left dead space under the last row. Its rows are hand-styled to
+/// match the native ones: accent-tinted icon, quaternary rounded selection,
+/// sizes tracking the same row-size option.
 struct SidebarView: View {
     @Environment(AppState.self) private var appState
 
@@ -29,6 +30,17 @@ struct SidebarView: View {
 
     private var clampedCustomSize: Double { min(max(sidebarCustomSize, 11), 20) }
 
+    /// (text, icon, row) metrics per row-size option — the custom cluster
+    /// tracks the same setting the native list rows follow.
+    private var metrics: (text: Double, icon: Double, row: Double) {
+        switch sidebarRowSizeRaw {
+        case "small": return (11.5, 12, 24)
+        case "large": return (15, 16, 32)
+        case "custom": return (clampedCustomSize, clampedCustomSize + 1, clampedCustomSize + 14)
+        default: return (13, 14, 28)   // medium & system
+        }
+    }
+
     var body: some View {
         @Bindable var state = appState
 
@@ -41,66 +53,60 @@ struct SidebarView: View {
                     }
                 }
             }
+            .listStyle(.sidebar)
+            .transformEnvironment(\.sidebarRowSize) { size in
+                switch sidebarRowSizeRaw {
+                case "small": size = .small
+                case "medium": size = .medium
+                case "large", "custom": size = .large
+                default: break
+                }
+            }
+            .font(sidebarRowSizeRaw == "custom" ? .system(size: clampedCustomSize) : nil)
 
             Divider()
 
-            // Bottom-pinned utility cluster — same selection binding, so the
-            // native highlight moves between the two lists seamlessly.
-            List(selection: $state.selectedSidebarItem) {
+            // Bottom-pinned utility cluster — hugs its rows, zero dead space.
+            VStack(spacing: 2) {
                 ForEach(AppState.SidebarItem.utilityItems) { item in
-                    if item == .settings {
-                        // A Button row (NOT a gesture on a selectable row —
-                        // that fought the list's native click handling and
-                        // made the row feel dead). The button both selects
-                        // and counts; the .tag keeps the native highlight.
-                        Button {
-                            registerSettingsClick()
-                            state.selectedSidebarItem = .settings
-                        } label: {
-                            Label(item.localizedName, systemImage: item.systemImage)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                        .tag(item)
-                    } else {
-                        Label(item.localizedName, systemImage: item.systemImage)
-                            .tag(item)
-                    }
+                    utilityRow(item, isSelected: state.selectedSidebarItem == item)
                 }
             }
-            .scrollDisabled(true)
-            .frame(height: utilityListHeight)
+            .padding(.horizontal, 10)
+            .padding(.top, 6)
+            .padding(.bottom, 10)
         }
-        .listStyle(.sidebar)
-        // "system" inherits the macOS sidebar icon size; presets override the
-        // native row size; "custom" additionally drives the row font (icons
-        // scale with the Label font).
-        .transformEnvironment(\.sidebarRowSize) { size in
-            switch sidebarRowSizeRaw {
-            case "small": size = .small
-            case "medium": size = .medium
-            case "large", "custom": size = .large
-            default: break
-            }
-        }
-        .font(sidebarRowSizeRaw == "custom" ? .system(size: clampedCustomSize) : nil)
         .navigationSplitViewColumnWidth(min: 160, ideal: 200, max: 250)
         .frame(minHeight: 300)
     }
 
-    /// Three rows + list insets — generous enough for every row size so the
-    /// scroll-disabled bottom list never clips.
-    private var utilityListHeight: CGFloat {
-        let row: CGFloat
-        switch sidebarRowSizeRaw {
-        case "small": row = 28
-        case "medium": row = 32
-        case "large": row = 38
-        case "custom": row = max(28, clampedCustomSize + 18)
-        default: row = 36   // system: unknown macOS setting — size for large
+    /// Styled to read as a native sidebar row: accent icon, primary text,
+    /// quaternary rounded-rect selection.
+    private func utilityRow(_ item: AppState.SidebarItem, isSelected: Bool) -> some View {
+        Button {
+            if item == .settings { registerSettingsClick() }
+            appState.selectedSidebarItem = item
+        } label: {
+            HStack(spacing: 7) {
+                Image(systemName: item.systemImage)
+                    .font(.system(size: metrics.icon, weight: .medium))
+                    .foregroundStyle(appAccent)
+                    .frame(width: metrics.icon + 6)
+                Text(item.localizedName)
+                    .font(.system(size: metrics.text))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 7)
+            .frame(height: metrics.row)
+            .background(
+                isSelected ? AnyShapeStyle(.quaternary) : AnyShapeStyle(.clear),
+                in: RoundedRectangle(cornerRadius: 5, style: .continuous)
+            )
+            .contentShape(Rectangle())
         }
-        return row * CGFloat(AppState.SidebarItem.utilityItems.count) + 18
+        .buttonStyle(.plain)
     }
 
     private func registerSettingsClick() {
