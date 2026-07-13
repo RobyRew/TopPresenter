@@ -50,6 +50,12 @@ final class PaletteRecentsStore {
             UserDefaults.standard.set(data, forKey: Self.key)
         }
     }
+
+    /// Advanced settings ▸ „Golește recentele ⌘K".
+    func clear() {
+        items = []
+        UserDefaults.standard.removeObject(forKey: Self.key)
+    }
 }
 
 // MARK: - Results
@@ -170,6 +176,7 @@ struct QuickSearchPalette: View {
     @Environment(AudioPlayerManager.self) private var audioPlayerManager
     @Environment(VideoPlayerService.self) private var videoPlayerService
     @Environment(AppState.self) private var appState
+    @Environment(HistoryStore.self) private var history
 
     @Binding var isPresented: Bool
 
@@ -184,6 +191,9 @@ struct QuickSearchPalette: View {
     /// ignore hover "selection" until this passes (mouse regains control by
     /// actually moving after the window).
     @State private var suppressHoverUntil: Date = .distantPast
+    /// Set when a result was opened/presented this session — a dismiss with a
+    /// typed query and NO commit logs the search as "abandoned".
+    @State private var didCommitSearch = false
     @FocusState private var fieldFocused: Bool
 
     @AppStorage("song_maxLinesPerSlide") private var maxLines: Int = 6
@@ -222,22 +232,35 @@ struct QuickSearchPalette: View {
                 recents.items.map { .recent($0) })
             return out
         }
-        // PRIORITY ORDER: reference → song titles → verse text → songs matched
-        // only in lyrics → media → sessions.
-        if let ref = hits.reference {
-            add("ref", String(localized: "Referință biblică", comment: "Palette section"), [.reference(ref)])
+        // PRIORITY ORDER is CONTEXT-AWARE (paletteSectionOrder): the module
+        // this tab is in floats its own kind right under the pinned reference
+        // row — Bible tabs list verses above songs, Songs tabs the opposite.
+        // Display-only: ranking inside each section is untouched.
+        let specs: [(id: String, title: String, results: [PaletteResult], total: Int, collapsed: Int)] = [
+            ("ref", String(localized: "Referință biblică", comment: "Palette section"),
+             hits.reference.map { [PaletteResult.reference($0)] } ?? [], hits.reference == nil ? 0 : 1, .max),
+            ("songs", String(localized: "Cântece", comment: "Palette section"),
+             hits.songsByTitle.map { .song($0) }, hits.songsByTitleTotal, 8),
+            ("verses",
+             String(localized: "Versete (\(libraryManager.selectedBibleModule?.abbreviation ?? ""))", comment: "Palette section"),
+             hits.verses.map { .verse($0) }, hits.versesTotal, 6),
+            ("songContent", String(localized: "Cântece – potrivire în versuri", comment: "Palette section"),
+             hits.songsByContent.map { .song($0) }, hits.songsByContentTotal, 6),
+            ("media", String(localized: "Media", comment: "Palette section"),
+             hits.media.map { .media($0) }, hits.mediaTotal, 5),
+            ("sessions", String(localized: "Sesiuni", comment: "Palette section"),
+             hits.sessions.map { .session($0) }, hits.sessionsTotal, 5),
+        ]
+        let order = paletteSectionOrder(context: appState.selectedSidebarItem.rawValue)
+        // The boosted section (first after the pinned reference) gets a taller
+        // collapsed slice before needing „Arată mai multe".
+        let boostedID = order.dropFirst().first
+        for spec in specs.sorted(by: {
+            (order.firstIndex(of: $0.id) ?? order.count) < (order.firstIndex(of: $1.id) ?? order.count)
+        }) {
+            add(spec.id, spec.title, spec.results, total: spec.total,
+                collapsed: spec.id == boostedID ? max(spec.collapsed, 8) : spec.collapsed)
         }
-        add("songs", String(localized: "Cântece", comment: "Palette section"),
-            hits.songsByTitle.map { .song($0) }, total: hits.songsByTitleTotal, collapsed: 8)
-        add("verses",
-            String(localized: "Versete (\(libraryManager.selectedBibleModule?.abbreviation ?? ""))", comment: "Palette section"),
-            hits.verses.map { .verse($0) }, total: hits.versesTotal, collapsed: 6)
-        add("songContent", String(localized: "Cântece – potrivire în versuri", comment: "Palette section"),
-            hits.songsByContent.map { .song($0) }, total: hits.songsByContentTotal, collapsed: 6)
-        add("media", String(localized: "Media", comment: "Palette section"),
-            hits.media.map { .media($0) }, total: hits.mediaTotal, collapsed: 5)
-        add("sessions", String(localized: "Sesiuni", comment: "Palette section"),
-            hits.sessions.map { .session($0) }, total: hits.sessionsTotal, collapsed: 5)
         return out
     }
 
@@ -694,6 +717,7 @@ struct QuickSearchPalette: View {
             openRecent(r)
             return
         }
+        recordSearchCommit(result)
         recents.record(makeRecent(result))
         dismiss()
     }
@@ -722,6 +746,7 @@ struct QuickSearchPalette: View {
             presentRecent(r)
             return
         }
+        recordSearchCommit(result)
         recents.record(makeRecent(result))
         dismiss()
     }
@@ -862,7 +887,35 @@ struct QuickSearchPalette: View {
         if let model = (try? modelContext.fetch(d))?.first { action(model) }
     }
 
+    // MARK: ⌘K search log (History ▸ Căutări)
+
+    /// One row per COMMITTED result; never per keystroke.
+    private func recordSearchCommit(_ result: PaletteResult) {
+        let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !q.isEmpty else { return }
+        let kind: String
+        switch result {
+        case .reference: kind = "reference"
+        case .song: kind = "song"
+        case .verse: kind = "verse"
+        case .media: kind = "media"
+        case .session: kind = "session"
+        case .recent(let r): kind = r.kind
+        }
+        history.recordSearch(query: q, resultKind: kind, resultTitle: result.titleText,
+                             module: appState.selectedSidebarItem.rawValue)
+        didCommitSearch = true
+    }
+
     private func dismiss() {
+        // Dead-end searches matter too: closed with a typed query and nothing
+        // opened → log as "abandoned".
+        let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !q.isEmpty, !didCommitSearch {
+            history.recordSearch(query: q, resultKind: "abandoned", resultTitle: "",
+                                 module: appState.selectedSidebarItem.rawValue)
+        }
+        didCommitSearch = false
         isPresented = false
         query = ""
         hits = .none

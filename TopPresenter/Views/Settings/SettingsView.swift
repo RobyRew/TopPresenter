@@ -8,49 +8,78 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// Application settings window with tabbed sections.
-struct SettingsView: View {
-    @Environment(PresentationManager.self) private var presentationManager
+/// Application settings — lives IN the main window (sidebar ▸ Settings, ⌘,)
+/// like History does, not in a separate window. Header + segmented sections;
+/// the „Avansat" section only exists after the 10-click unlock on the sidebar
+/// Settings row (see SidebarView.registerSettingsClick).
+struct SettingsContentView: View {
+    @AppStorage("advancedSettingsUnlocked") private var advancedUnlocked = false
+    @State private var tab = "interface"
+
+    private struct SettingsTab: Identifiable {
+        let id: String
+        let label: String
+    }
+
+    private var tabs: [SettingsTab] {
+        var out: [SettingsTab] = [
+            .init(id: "interface", label: String(localized: "Interfață", comment: "Settings tab")),
+            .init(id: "bible", label: String(localized: "Biblie", comment: "Settings tab")),
+            .init(id: "importExport", label: String(localized: "Import / Export", comment: "Settings tab")),
+            .init(id: "projection", label: String(localized: "Proiecție", comment: "Settings tab")),
+            .init(id: "updates", label: String(localized: "Actualizări", comment: "Settings tab")),
+        ]
+        if advancedUnlocked {
+            out.append(.init(id: "advanced", label: String(localized: "Avansat", comment: "Settings tab")))
+        }
+        return out
+    }
 
     var body: some View {
-        TabView {
-            InterfaceSettingsTab()
-                .tabItem {
-                    Label(String(localized: "Interfață", comment: "Settings tab"), systemImage: "paintbrush")
-                    ProjectionSettingsTab()
-                .tabItem {
-                    Label(String(localized: "Proiecție", comment: "Settings tab"), systemImage: "display")
+        VStack(spacing: 0) {
+            header
+            Divider()
+            ScrollView {
+                Group {
+                    switch tab {
+                    case "bible": BibleSettingsTab()
+                    case "importExport": ImportExportSettingsTab()
+                    case "projection": ProjectionSettingsTab()
+                    case "updates": UpdatesSettingsTab()
+                    case "advanced" where advancedUnlocked: AdvancedSettingsTab()
+                    default: InterfaceSettingsTab()
+                    }
                 }
+                .frame(maxWidth: 680)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 8)
+            }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .onChange(of: advancedUnlocked) { _, unlocked in
+            if !unlocked && tab == "advanced" { tab = "interface" }
+        }
+    }
 
-            BibleSettingsTab()
-                .tabItem {
-                    Label(String(localized: "Biblie", comment: "Settings tab"), systemImage: "book.closed")
-                    ProjectionSettingsTab()
-                .tabItem {
-                    Label(String(localized: "Proiecție", comment: "Settings tab"), systemImage: "display")
-                }
-        }
+    private var header: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "gearshape").font(.title2).foregroundStyle(Color.accentColor)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(String(localized: "Setări", comment: "Settings title")).font(.headline)
+                Text(String(localized: "Preferințele aplicației", comment: "Settings subtitle"))
+                    .font(.caption).foregroundStyle(.secondary)
+            }
 
-            ImportExportSettingsTab()
-                .tabItem {
-                    Label(String(localized: "Import / Export", comment: "Settings tab"), systemImage: "arrow.up.arrow.down")
-                    ProjectionSettingsTab()
-                .tabItem {
-                    Label(String(localized: "Proiecție", comment: "Settings tab"), systemImage: "display")
+            Picker("", selection: $tab) {
+                ForEach(tabs) { t in
+                    Text(t.label).tag(t.id)
                 }
-        }
-            ProjectionSettingsTab()
-                .tabItem {
-                    Label(String(localized: "Proiecție", comment: "Settings tab"), systemImage: "display")
-                }
+            }
+            .pickerStyle(.segmented).labelsHidden().fixedSize()
 
-            UpdatesSettingsTab()
-                .tabItem {
-                    Label(String(localized: "Actualizări", comment: "Settings tab"), systemImage: "arrow.triangle.2.circlepath")
-                }
+            Spacer()
         }
-        .frame(width: 550, height: 480)
+        .padding(12)
     }
 }
 
@@ -281,7 +310,6 @@ struct ProjectionSettingsTab: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 520)
         .padding(.vertical, 8)
     }
 }

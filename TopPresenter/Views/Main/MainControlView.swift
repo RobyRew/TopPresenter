@@ -113,6 +113,10 @@ struct MainControlView: View {
                 .onKeyWindowNotification(.openLayoutEditor) { _ in
                     showLayoutEditor = true
                 }
+                // ⌘, — Settings lives in-app; only the key tab navigates.
+                .onKeyWindowNotification(.openSettings) { _ in
+                    appState.selectedSidebarItem = .settings
+                }
                 .modifier(MenuCommandHandler(
                     appState: appState,
                     presentationManager: presentationManager,

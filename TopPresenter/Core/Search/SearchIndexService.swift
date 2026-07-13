@@ -52,7 +52,7 @@ nonisolated struct SessionIndexEntry: Sendable, Identifiable {
     let folded: String
 }
 
-nonisolated struct BookIndexEntry: Sendable {
+nonisolated struct BookIndexEntry: Sendable, Codable {
     let moduleID: UUID
     let bookNumber: Int
     let name: String
@@ -64,7 +64,7 @@ nonisolated struct BookIndexEntry: Sendable {
     var verseCounts: [Int: Int] = [:]
 }
 
-nonisolated struct VerseIndexEntry: Sendable {
+nonisolated struct VerseIndexEntry: Sendable, Codable {
     let moduleID: UUID
     let bookNumber: Int
     let bookName: String
@@ -79,7 +79,7 @@ nonisolated struct VerseIndexEntry: Sendable {
 /// Sorted unique tokens + postings lists (indices into the entries array).
 /// Query tokens match by PREFIX (binary search over the sorted token table),
 /// posting lists are unioned per query token and intersected across tokens.
-nonisolated struct TokenIndex: Sendable {
+nonisolated struct TokenIndex: Sendable, Codable {
     let tokens: [String]
     let postings: [[Int32]]
 
@@ -263,6 +263,22 @@ nonisolated struct PaletteHits: Sendable {
     var isEmpty: Bool {
         reference == nil && songsByTitle.isEmpty && songsByContent.isEmpty
             && verses.isEmpty && media.isEmpty && sessions.isEmpty
+    }
+}
+
+/// Display order of the ⌘K sections for the module the palette was opened
+/// from (AppState.SidebarItem rawValue; AppState is per-window ⇒ per-tab
+/// behavior for free). In the Bible module verses outrank songs; Media and
+/// Schedule float their own kind. The reference row stays pinned FIRST
+/// everywhere — it only exists when the query parses as a reference, and then
+/// it's always the best answer. DISPLAY order only; ranking inside each
+/// section is untouched.
+nonisolated func paletteSectionOrder(context: String) -> [String] {
+    switch context {
+    case "Bible":    return ["ref", "verses", "songs", "songContent", "media", "sessions"]
+    case "Media":    return ["ref", "media", "songs", "verses", "songContent", "sessions"]
+    case "Schedule": return ["ref", "sessions", "songs", "verses", "songContent", "media"]
+    default:         return ["ref", "songs", "verses", "songContent", "media", "sessions"]
     }
 }
 
@@ -561,6 +577,10 @@ final class SearchIndex {
     /// Per-sort-key cached orderings of `songs` (indices) — computed lazily once
     /// per generation, so keystrokes never re-sort 60k rows.
     @ObservationIgnored private var sortCache: [SongSortKey: [Int32]] = [:]
+    /// In-memory LRU of built verse indexes (newest first) — switching back to
+    /// a recently used translation publishes instantly, no disk, no SwiftData.
+    @ObservationIgnored private var versePayloadLRU: [VerseIndexCache] = []
+    private static let versePayloadLRUCap = 3
 
     // MARK: Lifecycle
 
@@ -610,8 +630,10 @@ final class SearchIndex {
         isBuilding = false
         // System Spotlight mirrors the same projections (find songs outside the app).
         SpotlightIndexer.reindex(songs: songs, sessions: sessions)
-        // The verse index follows the active module across rebuilds.
-        if let moduleID = activeVerseModuleID { indexVerses(moduleID: moduleID, force: true) }
+        // NO verse re-index here: verses only change via bible import/delete
+        // (import re-selects its module, delete goes through moduleDeleted).
+        // Song edits fire .libraryDidChange constantly — re-walking 31k verse
+        // rows on each one contended the store with the main thread (beachball).
     }
 
     /// O(1) capture for the palette's detached query.
@@ -622,22 +644,84 @@ final class SearchIndex {
                         presentCounts: presentCounts)
     }
 
-    /// Build (or reuse) the full-text verse index for the active translation.
+    /// Point the verse index at a translation. Resolution order:
+    /// in-memory LRU (instant) → disk cache (fast decode off-main, zero
+    /// SwiftData) → ONE SwiftData build, then persisted to disk. The store is
+    /// only ever walked once per module — the old per-switch rebuild contended
+    /// with the main thread's display faults on the store coordinator, which
+    /// was the version-switch beachball.
     func indexVerses(moduleID: UUID, force: Bool = false) {
         guard force || moduleID != activeVerseModuleID else { return }
         activeVerseModuleID = moduleID
         verseTask?.cancel()
+
+        if force {
+            versePayloadLRU.removeAll { $0.moduleID == moduleID }
+            VerseIndexCache.delete(moduleID: moduleID)
+        }
+        if let hit = versePayloadLRU.first(where: { $0.moduleID == moduleID }) {
+            publishVerses(hit)
+            return
+        }
+
         isIndexingVerses = true
         verseTask = Task { [weak self] in
+            // 1. Disk cache — decoded detached: pure file IO, can't contend.
+            let cached = await Task.detached(priority: .userInitiated) {
+                VerseIndexCache.load(moduleID: moduleID)
+            }.value
+            guard !Task.isCancelled, self?.activeVerseModuleID == moduleID else { return }
+            if let cached {
+                self?.publishVerses(cached)
+                return
+            }
+            // 2. First time for this module: build from SwiftData, persist.
             guard let builder = self?.builder else { return }
             let payload = await builder.buildVerses(moduleID: moduleID)
             guard !Task.isCancelled, self?.activeVerseModuleID == moduleID else { return }
-            self?.books = payload.books
-            self?.verses = payload.verses
-            self?.verseTokens = payload.tokens
-            self?.isIndexingVerses = false
-            self?.generation += 1
+            let cache = VerseIndexCache(moduleID: moduleID, books: payload.books,
+                                        verses: payload.verses, tokens: payload.tokens)
+            self?.publishVerses(cache)
+            Task.detached(priority: .utility) { cache.save() }
         }
+    }
+
+    private func publishVerses(_ cache: VerseIndexCache) {
+        books = cache.books
+        verses = cache.verses
+        verseTokens = cache.tokens
+        isIndexingVerses = false
+        generation += 1
+        versePayloadLRU.removeAll { $0.moduleID == cache.moduleID }
+        versePayloadLRU.insert(cache, at: 0)
+        if versePayloadLRU.count > Self.versePayloadLRUCap {
+            versePayloadLRU.removeLast(versePayloadLRU.count - Self.versePayloadLRUCap)
+        }
+    }
+
+    /// A bible module was deleted: drop its caches; clear the published index
+    /// if it was the active one (a re-import gets a NEW module UUID).
+    func moduleDeleted(_ moduleID: UUID) {
+        versePayloadLRU.removeAll { $0.moduleID == moduleID }
+        VerseIndexCache.delete(moduleID: moduleID)
+        if activeVerseModuleID == moduleID {
+            verseTask?.cancel()
+            activeVerseModuleID = nil
+            books = []
+            verses = []
+            verseTokens = .empty
+            isIndexingVerses = false
+            generation += 1
+        }
+    }
+
+    /// Advanced settings ▸ „Reindexează tot": wipe every cache (memory + disk
+    /// + Spotlight via rebuild) and rebuild from the store.
+    func reindexEverything(activeModuleID: UUID?) async {
+        versePayloadLRU.removeAll()
+        VerseIndexCache.deleteAll()
+        await rebuildNow()
+        if let activeModuleID { indexVerses(moduleID: activeModuleID, force: true) }
     }
 
     // MARK: Queries (fast, MainActor, no SwiftData)

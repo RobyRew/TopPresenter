@@ -25,7 +25,7 @@ struct PreviewPanelView: View {
                 SchedulePreviewPanel()
             case .customSlides:
                 CustomSlidesPreviewPanel()
-            case .history, .account:
+            case .history, .settings, .account:
                 EmptyView()   // These fill the content area; no live preview here
             }
         }

@@ -59,6 +59,21 @@ struct FileCommands: Commands {
     }
 }
 
+// MARK: - Settings Command (⌘,)
+/// Settings lives IN the main window (sidebar ▸ Settings), so the standard
+/// app-settings menu item navigates the KEY tab there instead of opening a
+/// separate window.
+struct SettingsCommands: Commands {
+    var body: some Commands {
+        CommandGroup(replacing: .appSettings) {
+            Button(String(localized: "Setări…", comment: "Menu item")) {
+                NotificationCenter.default.post(name: .openSettings, object: nil)
+            }
+            .keyboardShortcut(",", modifiers: [.command])
+        }
+    }
+}
+
 // MARK: - Presentation Menu Commands
 struct PresentationCommands: Commands {
     var body: some Commands {
@@ -238,6 +253,7 @@ extension Notification.Name {
     static let navigateToSchedule = Notification.Name("TopPresenter.navigateToSchedule")
     static let navigateToCustomSlides = Notification.Name("TopPresenter.navigateToCustomSlides")
     static let navigateToHistory = Notification.Name("TopPresenter.navigateToHistory")
+    static let openSettings = Notification.Name("TopPresenter.openSettings")
     static let focusSearch = Notification.Name("TopPresenter.focusSearch")
     static let quickSearch = Notification.Name("TopPresenter.quickSearch")
 

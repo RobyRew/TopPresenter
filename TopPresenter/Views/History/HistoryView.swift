@@ -21,6 +21,7 @@ struct HistoryView: View {
     @State private var tab = "songs"
     @State private var songs: [SongHistorySummary] = []
     @State private var bible: [BibleHistorySummary] = []
+    @State private var searches: [SearchHistorySummary] = []
     @State private var selectedSong: String?
     @State private var query = ""
 
@@ -28,12 +29,14 @@ struct HistoryView: View {
         VStack(spacing: 0) {
             header
             Divider()
-            if songs.isEmpty && bible.isEmpty {
+            if songs.isEmpty && bible.isEmpty && searches.isEmpty {
                 emptyState
             } else if tab == "songs" {
                 songsPane
-            } else {
+            } else if tab == "bible" {
                 biblePane
+            } else {
+                searchesPane
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -43,6 +46,7 @@ struct HistoryView: View {
     private func reload() {
         songs = store.songSummaries()
         bible = store.bibleSummaries()
+        searches = store.searchSummaries()
     }
 
     // MARK: Header
@@ -58,8 +62,9 @@ struct HistoryView: View {
             Picker("", selection: $tab) {
                 Text(String(localized: "Songs", comment: "History tab")).tag("songs")
                 Text(String(localized: "Bible", comment: "History tab")).tag("bible")
+                Text(String(localized: "Căutări", comment: "History tab")).tag("searches")
             }
-            .pickerStyle(.segmented).frame(width: 200).labelsHidden()
+            .pickerStyle(.segmented).frame(width: 280).labelsHidden()
 
             Spacer()
 
@@ -171,6 +176,47 @@ struct HistoryView: View {
             TableColumn(String(localized: "Times", comment: "History column")) { Text("\($0.timesPresented)×") }.width(70)
             TableColumn(String(localized: "Shows", comment: "History column")) { Text("\($0.shows)") }.width(70)
             TableColumn(String(localized: "Last presented", comment: "History column")) { Text(fmt($0.lastPresented)) }
+        }
+    }
+
+    // MARK: ⌘K searches
+
+    private var filteredSearches: [SearchHistorySummary] {
+        query.isEmpty ? searches : searches.filter {
+            $0.query.localizedCaseInsensitiveContains(query)
+                || $0.lastResultTitle.localizedCaseInsensitiveContains(query)
+        }
+    }
+
+    private var searchesPane: some View {
+        Table(filteredSearches) {
+            TableColumn(String(localized: "Căutare", comment: "History column")) {
+                Text($0.query).fontWeight(.medium)
+            }
+            TableColumn(String(localized: "De câte ori", comment: "History column")) { Text("\($0.count)×") }.width(80)
+            TableColumn(String(localized: "Ultima dată", comment: "History column")) { Text(fmt($0.lastUsed)) }.width(160)
+            TableColumn(String(localized: "Deschis", comment: "History column")) { s in
+                if s.lastResultTitle.isEmpty {
+                    Text(verbatim: "—").foregroundStyle(.tertiary)
+                } else {
+                    HStack(spacing: 5) {
+                        Image(systemName: searchKindIcon(s.lastResultKind))
+                            .font(.caption).foregroundStyle(.secondary)
+                        Text(s.lastResultTitle).lineLimit(1)
+                    }
+                }
+            }
+        }
+    }
+
+    private func searchKindIcon(_ kind: String) -> String {
+        switch kind {
+        case "song": return "music.note"
+        case "verse": return "text.quote"
+        case "reference": return "book.fill"
+        case "media": return "photo.on.rectangle"
+        case "session": return "list.bullet.rectangle"
+        default: return "magnifyingglass"
         }
     }
 

@@ -3451,3 +3451,142 @@ struct BibleReferenceParserTests {
         #expect(noName.contains("6"))
     }
 }
+
+// MARK: - Verse index disk cache (version-switch beachball fix)
+
+struct VerseIndexCacheTests {
+    private func sample(moduleID: UUID) -> VerseIndexCache {
+        let verses = [
+            VerseIndexEntry(moduleID: moduleID, bookNumber: 43, bookName: "Ioan",
+                            chapter: 3, verse: 16, text: "Fiindcă atât de mult a iubit Dumnezeu lumea",
+                            folded: searchFold("Fiindcă atât de mult a iubit Dumnezeu lumea")),
+            VerseIndexEntry(moduleID: moduleID, bookNumber: 43, bookName: "Ioan",
+                            chapter: 3, verse: 17, text: "Dumnezeu nu a trimis pe Fiul Său",
+                            folded: searchFold("Dumnezeu nu a trimis pe Fiul Său")),
+        ]
+        let books = [BookIndexEntry(moduleID: moduleID, bookNumber: 43, name: "Ioan",
+                                    folded: "ioan", abbreviationFolded: "in",
+                                    chapterCount: 21, verseCounts: [3: 36])]
+        return VerseIndexCache(moduleID: moduleID, books: books, verses: verses,
+                               tokens: TokenIndex.build(blobs: verses.map(\.folded)))
+    }
+
+    @Test func roundTripsThroughDisk() throws {
+        let moduleID = UUID()
+        defer { VerseIndexCache.delete(moduleID: moduleID) }
+        let cache = sample(moduleID: moduleID)
+        cache.save()
+
+        let loaded = try #require(VerseIndexCache.load(moduleID: moduleID))
+        #expect(loaded.moduleID == moduleID)
+        #expect(loaded.verses.count == 2)
+        #expect(loaded.verses[0].text == cache.verses[0].text)
+        #expect(loaded.books[0].verseCounts[3] == 36)
+        // The token index survives byte-for-byte: same query → same postings.
+        #expect(loaded.tokens.candidates(prefix: "dumnezeu") == cache.tokens.candidates(prefix: "dumnezeu"))
+        #expect(loaded.tokens.candidates(prefix: "dumnezeu") == Set([0, 1]))
+    }
+
+    @Test func rejectsStaleFormatAndForeignModule() throws {
+        let moduleID = UUID()
+        defer { VerseIndexCache.delete(moduleID: moduleID) }
+        var stale = sample(moduleID: moduleID)
+        stale.format = VerseIndexCache.currentFormat + 1
+        stale.save()
+        // Wrong format version → treated as missing (rebuild, never migrate).
+        #expect(VerseIndexCache.load(moduleID: moduleID) == nil)
+        // And a module with no file at all → nil.
+        #expect(VerseIndexCache.load(moduleID: UUID()) == nil)
+    }
+
+    @Test func deleteRemovesTheFile() {
+        let moduleID = UUID()
+        sample(moduleID: moduleID).save()
+        VerseIndexCache.delete(moduleID: moduleID)
+        #expect(VerseIndexCache.load(moduleID: moduleID) == nil)
+    }
+}
+
+// MARK: - ⌘K context-aware section order
+
+struct PaletteSectionOrderTests {
+    @Test func bibleContextFloatsVersesAboveSongs() {
+        let order = paletteSectionOrder(context: "Bible")
+        #expect(order.firstIndex(of: "verses")! < order.firstIndex(of: "songs")!)
+        #expect(order.first == "ref")
+    }
+
+    @Test func defaultContextKeepsSongsFirst() {
+        for context in ["Songs", "Custom Slides", "History", "Settings", "Account", "whatever"] {
+            let order = paletteSectionOrder(context: context)
+            #expect(order.firstIndex(of: "songs")! < order.firstIndex(of: "verses")!, "\(context)")
+            #expect(order.first == "ref", "\(context)")
+        }
+    }
+
+    @Test func mediaAndScheduleFloatTheirOwnKind() {
+        #expect(paletteSectionOrder(context: "Media").dropFirst().first == "media")
+        #expect(paletteSectionOrder(context: "Schedule").dropFirst().first == "sessions")
+    }
+
+    @Test func everyContextListsAllSixSections() {
+        let all = Set(["ref", "songs", "verses", "songContent", "media", "sessions"])
+        for context in ["Bible", "Songs", "Media", "Schedule", "Custom Slides", "x"] {
+            #expect(Set(paletteSectionOrder(context: context)) == all, "\(context)")
+        }
+    }
+}
+
+// MARK: - ⌘K search history (HistoryStore.SearchEvent)
+
+@MainActor struct SearchHistoryTests {
+    private func makeStore() -> HistoryStore { HistoryStore(inMemory: true) }
+
+    @Test func groupsByFoldedQueryNewestFirst() throws {
+        let s = makeStore()
+        // Same query in three spellings (case + diacritics) + one other query.
+        s.recordSearch(query: "marire", resultKind: "abandoned", resultTitle: "", module: "Songs")
+        s.recordSearch(query: "Mărire", resultKind: "song", resultTitle: "Mărire Ție", module: "Songs")
+        s.recordSearch(query: "MARIRE", resultKind: "song", resultTitle: "Mărire, mărire", module: "Bible")
+        s.recordSearch(query: "ioan 3 16", resultKind: "reference", resultTitle: "Ioan 3:16", module: "Bible")
+
+        let sums = s.searchSummaries()
+        #expect(sums.count == 2)
+        let marire = try #require(sums.first { $0.key == "marire" })
+        #expect(marire.count == 3)
+        // Last COMMITTED result wins (newest first), abandoned rows don't.
+        #expect(marire.lastResultTitle == "Mărire, mărire")
+        #expect(marire.lastResultKind == "song")
+        #expect(s.totalSearches() == 4)
+    }
+
+    @Test func abandonedOnlyGroupHasEmptyResult() throws {
+        let s = makeStore()
+        s.recordSearch(query: "nimic găsit", resultKind: "abandoned", resultTitle: "", module: "Songs")
+        let sum = try #require(s.searchSummaries().first)
+        #expect(sum.count == 1)
+        #expect(sum.lastResultKind.isEmpty)
+        #expect(sum.lastResultTitle.isEmpty)
+    }
+
+    @Test func emptyQueriesAreNeverRecorded() {
+        let s = makeStore()
+        s.recordSearch(query: "   ", resultKind: "song", resultTitle: "X", module: "Songs")
+        #expect(s.totalSearches() == 0)
+    }
+
+    @Test func clearSearchHistoryLeavesPresentations() {
+        let s = makeStore()
+        s.record(PresentationEvent(timestamp: .now, sessionID: UUID(), dwellSeconds: 5,
+                                   contentType: "song", songKey: "ccli:1", songTitle: "A", verseLabel: "v1"))
+        s.recordSearch(query: "test", resultKind: "song", resultTitle: "A", module: "Songs")
+        s.clearSearchHistory()
+        #expect(s.totalSearches() == 0)
+        #expect(s.totalEvents() == 1)
+
+        s.recordSearch(query: "test", resultKind: "song", resultTitle: "A", module: "Songs")
+        s.clearAll()
+        #expect(s.totalSearches() == 0)
+        #expect(s.totalEvents() == 0)
+    }
+}

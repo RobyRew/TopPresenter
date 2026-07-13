@@ -4,7 +4,7 @@
 //
 //  Advanced presentation history — a record of everything shown to the audience
 //  (song verses/slides + Bible verses), aggregatable to songs and to bible
-//  verse/chapter/book/translation.
+//  verse/chapter/book/translation. Also keeps the ⌘K search log (SearchEvent).
 //
 //  Stored in its OWN SwiftData container (a separate `History.store` file), kept
 //  completely apart from the song/bible library: it is never part of the
@@ -74,6 +74,32 @@ final class PresentationEvent {
     }
 }
 
+/// One ⌘K palette search — recorded when the operator COMMITS a result
+/// (Enter/⌘Enter/click) or abandons a non-empty query on dismiss. Never
+/// per-keystroke.
+@Model
+final class SearchEvent {
+    @Attribute(.unique) var id: UUID
+    var timestamp: Date
+    var query: String
+    /// What the search led to: "song" | "verse" | "reference" | "media" |
+    /// "session" | "abandoned" (closed without opening anything).
+    var resultKind: String
+    var resultTitle: String
+    /// Sidebar module the palette was opened from (AppState.SidebarItem rawValue).
+    var module: String
+
+    init(timestamp: Date = .now, query: String, resultKind: String,
+         resultTitle: String, module: String) {
+        self.id = UUID()
+        self.timestamp = timestamp
+        self.query = query
+        self.resultKind = resultKind
+        self.resultTitle = resultTitle
+        self.module = module
+    }
+}
+
 // MARK: - Non-persisted aggregates (for the History viewer + export)
 
 struct SongHistorySummary: Identifiable, Hashable {
@@ -110,6 +136,19 @@ struct BibleHistorySummary: Identifiable, Hashable {
     let lastPresented: Date
 }
 
+/// One ⌘K query's aggregate (grouped by folded text) — the History ▸ Căutări tab.
+struct SearchHistorySummary: Identifiable, Hashable {
+    var id: String { key }
+    /// Folded (lowercased, diacritic-insensitive) grouping key.
+    let key: String
+    /// Most recent raw spelling of the query.
+    let query: String
+    let count: Int
+    let lastUsed: Date
+    let lastResultKind: String
+    let lastResultTitle: String
+}
+
 // MARK: - The store
 
 @Observable
@@ -120,7 +159,7 @@ final class HistoryStore {
     let context: ModelContext
 
     init(inMemory: Bool = false) {
-        let schema = Schema([PresentationEvent.self])
+        let schema = Schema([PresentationEvent.self, SearchEvent.self])
         let config = ModelConfiguration("History", schema: schema, isStoredInMemoryOnly: inMemory)
         do {
             container = try ModelContainer(for: schema, configurations: [config])
@@ -231,5 +270,57 @@ final class HistoryStore {
 
     func totalEvents() -> Int {
         (try? context.fetchCount(FetchDescriptor<PresentationEvent>())) ?? 0
+    }
+
+    // MARK: ⌘K search history
+
+    func recordSearch(query: String, resultKind: String, resultTitle: String, module: String) {
+        let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !q.isEmpty else { return }
+        context.insert(SearchEvent(query: q, resultKind: resultKind,
+                                   resultTitle: resultTitle, module: module))
+        try? context.save()
+    }
+
+    private func allSearchEvents() -> [SearchEvent] {
+        (try? context.fetch(FetchDescriptor<SearchEvent>(
+            sortBy: [SortDescriptor(\.timestamp, order: .reverse)]))) ?? []
+    }
+
+    /// ⌘K searches grouped by folded query, newest first. The "last result"
+    /// is the most recent COMMITTED event of the group (abandoned-only groups
+    /// show empty kind/title).
+    func searchSummaries() -> [SearchHistorySummary] {
+        let groups = Dictionary(grouping: allSearchEvents()) {
+            $0.query.lowercased().folding(options: .diacriticInsensitive, locale: nil)
+        }
+        return groups.map { key, evs in
+            // Groups keep the fetch's newest-first order.
+            let committed = evs.first { $0.resultKind != "abandoned" }
+            return SearchHistorySummary(
+                key: key,
+                query: evs[0].query,
+                count: evs.count,
+                lastUsed: evs[0].timestamp,
+                lastResultKind: committed?.resultKind ?? "",
+                lastResultTitle: committed?.resultTitle ?? ""
+            )
+        }.sorted { $0.lastUsed > $1.lastUsed }
+    }
+
+    func totalSearches() -> Int {
+        (try? context.fetchCount(FetchDescriptor<SearchEvent>())) ?? 0
+    }
+
+    func clearSearchHistory() {
+        try? context.delete(model: SearchEvent.self)
+        try? context.save()
+    }
+
+    /// Advanced settings: wipe EVERYTHING — presentations AND searches.
+    func clearAll() {
+        try? context.delete(model: PresentationEvent.self)
+        try? context.delete(model: SearchEvent.self)
+        try? context.save()
     }
 }

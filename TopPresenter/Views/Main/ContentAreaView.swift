@@ -26,6 +26,8 @@ struct ContentAreaView: View {
                 CustomSlidesView()
             case .history:
                 HistoryView()
+            case .settings:
+                SettingsContentView()
             case .account:
                 ProfileView()
             }

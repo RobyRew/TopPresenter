@@ -92,6 +92,7 @@ struct TopPresenterApp: App {
         .commands {
             FileCommands()
             ViewCommands()
+            SettingsCommands()
             PresentationCommands()
             UpdaterCommands(updater: updateController)
             HelpCommands()
@@ -111,17 +112,9 @@ struct TopPresenterApp: App {
         // re-opens it itself, and a restored duplicate caused overlapping outputs.
         .restorationBehavior(.disabled)
 
-        // Presentation history now lives IN the main window (sidebar ▸ History),
-        // not as a separate window — see ContentAreaView + AppState.SidebarItem.history.
-
-        // Settings window
-        Settings {
-            SettingsView()
-                .environment(AppState())
-                .environment(presentationManager)
-                .environmentObject(updateController)
-        }
-        .modelContainer(sharedModelContainer)
+        // Presentation history AND Settings live IN the main window (sidebar ▸
+        // History / Settings) — no separate windows. ⌘, is a replaced
+        // .appSettings command (SettingsCommands) that navigates the KEY tab.
     }
 }
 

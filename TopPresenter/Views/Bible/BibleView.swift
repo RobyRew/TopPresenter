@@ -16,6 +16,7 @@ struct BibleView: View {
     @Environment(LibraryManager.self) private var libraryManager
     @Environment(PresentationManager.self) private var presentationManager
     @Environment(AppState.self) private var appState
+    @Environment(SearchIndex.self) private var searchIndex
 
     @Query(sort: \BibleModule.name) private var modules: [BibleModule]
 
@@ -38,24 +39,30 @@ struct BibleView: View {
             } else if libraryManager.selectedBibleModule == nil {
                 noModuleSelectedView
             } else {
-                // ONE skeleton for BOTH modes: the left THIRD stacks books
-                // (list or compact colored grid) over chapters; the right
-                // two-thirds is always the full-text verses panel. No more
+                // ONE skeleton for BOTH modes: the left THIRD holds books +
+                // chapters, the right two-thirds is always the full-text
+                // verses panel. Inside the third, GRID stacks books over
+                // chapters; LIST puts books left, chapters right. No more
                 // drill-down levels — everything stays visible.
                 GeometryReader { geo in
                     let paneWidth = min(max(geo.size.width / 3, 280), 480)
                     HStack(spacing: 0) {
-                        VStack(spacing: 0) {
-                            Group {
-                                if viewMode == "grid" {
+                        Group {
+                            if viewMode == "grid" {
+                                VStack(spacing: 0) {
                                     BibleBooksGridPane()
-                                } else {
+                                        .frame(height: geo.size.height * 0.55)
+                                    Divider()
+                                    BibleChaptersPanel()
+                                }
+                            } else {
+                                HStack(spacing: 0) {
                                     BibleNavigationPanel()
+                                    Divider()
+                                    BibleChaptersPanel()
+                                        .frame(width: min(max(paneWidth * 0.38, 108), 168))
                                 }
                             }
-                            .frame(height: geo.size.height * 0.55)
-                            Divider()
-                            BibleChaptersPanel()
                         }
                         .frame(width: paneWidth)
                         Divider()
@@ -222,6 +229,7 @@ struct BibleView: View {
             libraryManager.selectedChapter = nil
             libraryManager.selectedVerses = []
         }
+        searchIndex.moduleDeleted(module.id)
         modelContext.delete(module)
         try? modelContext.save()
     }
