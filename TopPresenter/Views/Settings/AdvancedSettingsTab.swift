@@ -16,8 +16,7 @@ struct AdvancedSettingsTab: View {
     @Environment(SearchIndex.self) private var index
     @Environment(LibraryManager.self) private var libraryManager
     @Environment(HistoryStore.self) private var history
-
-    @AppStorage("advancedSettingsUnlocked") private var advancedUnlocked = false
+    @Environment(AppState.self) private var appState
 
     @State private var pendingAction: DestructiveAction?
     @State private var isWorking = false
@@ -112,13 +111,13 @@ struct AdvancedSettingsTab: View {
 
             Section {
                 Button {
-                    advancedUnlocked = false
+                    appState.advancedSettingsUnlocked = false
                 } label: {
                     Label(String(localized: "Ascunde meniul avansat", comment: "Advanced button"),
                           systemImage: "eye.slash")
                 }
             } footer: {
-                Text(String(localized: "Meniul reapare cu 10 click-uri rapide pe butonul Setări din bara laterală.", comment: "Advanced footer"))
+                Text(String(localized: "Meniul se ascunde automat când părăsești Setările și reapare cu 10 click-uri rapide pe butonul Setări din bara laterală.", comment: "Advanced footer"))
                     .font(.caption).foregroundStyle(.secondary)
             }
         }

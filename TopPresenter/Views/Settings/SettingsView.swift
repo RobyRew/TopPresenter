@@ -11,10 +11,13 @@ import UniformTypeIdentifiers
 /// Application settings — lives IN the main window (sidebar ▸ Settings, ⌘,)
 /// like History does, not in a separate window. Header + segmented sections;
 /// the „Avansat" section only exists after the 10-click unlock on the sidebar
-/// Settings row (see SidebarView.registerSettingsClick).
+/// Settings row (SidebarView.registerSettingsClick) and re-locks when the
+/// user leaves Settings (AppState.selectedSidebarItem didSet).
 struct SettingsContentView: View {
-    @AppStorage("advancedSettingsUnlocked") private var advancedUnlocked = false
+    @Environment(AppState.self) private var appState
     @State private var tab = "interface"
+
+    private var advancedUnlocked: Bool { appState.advancedSettingsUnlocked }
 
     private struct SettingsTab: Identifiable {
         let id: String
@@ -59,6 +62,16 @@ struct SettingsContentView: View {
         .onChange(of: advancedUnlocked) { _, unlocked in
             if !unlocked && tab == "advanced" { tab = "interface" }
         }
+        // The 10-click unlock (or any future deep link) lands directly on
+        // the requested tab.
+        .onAppear(perform: consumeTabRequest)
+        .onChange(of: appState.settingsTabRequest) { _, _ in consumeTabRequest() }
+    }
+
+    private func consumeTabRequest() {
+        guard let requested = appState.settingsTabRequest else { return }
+        if requested != "advanced" || advancedUnlocked { tab = requested }
+        appState.settingsTabRequest = nil
     }
 
     private var header: some View {
@@ -88,6 +101,7 @@ struct InterfaceSettingsTab: View {
     @AppStorage("startupSection") private var startupSection: String = "bible"
     @AppStorage("confirmBeforeDelete") private var confirmBeforeDelete: Bool = true
     @AppStorage("forceTouchClearAction") private var forceTouchAction: String = "clearAll"
+    @AppStorage("sidebarRowSizeOption") private var sidebarRowSizeRaw = "system"
 
     var body: some View {
         Form {
@@ -101,10 +115,17 @@ struct InterfaceSettingsTab: View {
                     }
                 }
                 .padding(.vertical, 2)
+
+                Picker(String(localized: "Iconițe bară laterală:", comment: "Setting label"), selection: $sidebarRowSizeRaw) {
+                    Text(String(localized: "Sistem", comment: "Sidebar icon size option")).tag("system")
+                    Text(String(localized: "Mic", comment: "Sidebar icon size option")).tag("small")
+                    Text(String(localized: "Mediu", comment: "Sidebar icon size option")).tag("medium")
+                    Text(String(localized: "Mare", comment: "Sidebar icon size option")).tag("large")
+                }
             } header: {
                 Text(String(localized: "Aspect", comment: "Settings section"))
             } footer: {
-                Text(String(localized: "„Sistem” urmează culoarea de accent din Setările macOS.", comment: "Settings info"))
+                Text(String(localized: "„Sistem” urmează culoarea de accent și mărimea iconițelor din Setările macOS.", comment: "Settings info"))
                     .font(.caption).foregroundStyle(.secondary)
             }
 

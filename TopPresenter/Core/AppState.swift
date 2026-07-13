@@ -11,7 +11,21 @@ import Observation
 @Observable
 final class AppState {
     // MARK: - Navigation
-    var selectedSidebarItem: SidebarItem = .bible
+    var selectedSidebarItem: SidebarItem = .bible {
+        didSet {
+            // The advanced settings unlock is PER-VISIT: leaving the Settings
+            // section locks it again (10 clicks re-open it).
+            if oldValue == .settings && selectedSidebarItem != .settings {
+                advancedSettingsUnlocked = false
+            }
+        }
+    }
+    /// Session-scoped easter-egg unlock for Settings ▸ Avansat (10 quick
+    /// clicks on the sidebar Settings row). NOT persisted on purpose.
+    var advancedSettingsUnlocked: Bool = false
+    /// One-shot request: SettingsContentView switches to this tab id and
+    /// clears it (the 10-click unlock auto-opens „Avansat").
+    var settingsTabRequest: String?
     var isImporting: Bool = false
     var importProgress: Double = 0.0
     var importStatus: String = ""
