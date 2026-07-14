@@ -15,6 +15,10 @@ import SwiftUI
 /// sizes tracking the same row-size option.
 struct SidebarView: View {
     @Environment(AppState.self) private var appState
+    /// The RESOLVED system row size — on "system" this is what macOS
+    /// Appearance actually uses, so the bottom cluster matches the native
+    /// rows instead of guessing.
+    @Environment(\.sidebarRowSize) private var systemRowSize
 
     /// Sidebar icon/row size: "system" follows macOS Settings ▸ Appearance ▸
     /// Sidebar icon size; small/medium/large use the native row sizes;
@@ -30,14 +34,22 @@ struct SidebarView: View {
 
     private var clampedCustomSize: Double { min(max(sidebarCustomSize, 11), 20) }
 
-    /// (text, icon, row) metrics per row-size option — the custom cluster
-    /// tracks the same setting the native list rows follow.
+    /// (text, icon, row) metrics per row-size option — keyed off the RESOLVED
+    /// sidebarRowSize so the custom cluster renders the SAME sizes as the
+    /// native rows above it ("system" included).
     private var metrics: (text: Double, icon: Double, row: Double) {
+        let resolved: SidebarRowSize
         switch sidebarRowSizeRaw {
-        case "small": return (11.5, 12, 24)
-        case "large": return (15, 16, 32)
-        case "custom": return (clampedCustomSize, clampedCustomSize + 1, clampedCustomSize + 14)
-        default: return (13, 14, 28)   // medium & system
+        case "small": resolved = .small
+        case "medium": resolved = .medium
+        case "large": resolved = .large
+        case "custom": return (clampedCustomSize, clampedCustomSize, clampedCustomSize + 14)
+        default: resolved = systemRowSize
+        }
+        switch resolved {
+        case .small: return (11, 11, 24)
+        case .large: return (15, 15, 34)
+        default: return (13, 13, 28)
         }
     }
 
@@ -89,9 +101,9 @@ struct SidebarView: View {
         } label: {
             HStack(spacing: 7) {
                 Image(systemName: item.systemImage)
-                    .font(.system(size: metrics.icon, weight: .medium))
+                    .font(.system(size: metrics.icon))
                     .foregroundStyle(appAccent)
-                    .frame(width: metrics.icon + 6)
+                    .frame(width: metrics.icon + 8)
                 Text(item.localizedName)
                     .font(.system(size: metrics.text))
                     .foregroundStyle(.primary)
