@@ -128,7 +128,7 @@ struct CustomSlidesPreviewPanel: View {
                     .frame(height: 36)
                 }
                 .buttonStyle(.borderedProminent)
-                .tint(isLive ? .orange : .accentColor)
+                .tint(isLive ? .orange : appAccent)
                 .keyboardShortcut(.return, modifiers: [])
                 .disabled(currentSlide == nil)
 

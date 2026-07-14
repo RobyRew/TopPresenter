@@ -159,7 +159,7 @@ struct SongVerseControlsBar: View {
                         .frame(height: 36)
                 }
                 .buttonStyle(.borderedProminent)
-                .tint(.accentColor)
+                .tint(appAccent)
                 .keyboardShortcut(.return, modifiers: [])
                 .disabled(currentVerse == nil && libraryManager.songSlideText.isEmpty)
 

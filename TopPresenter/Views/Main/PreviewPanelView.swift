@@ -762,7 +762,7 @@ struct VerseSlideControlsBar: View {
                     .frame(height: 36)
                 }
                 .buttonStyle(.borderedProminent)
-                .tint(.accentColor)
+                .tint(appAccent)
                 .keyboardShortcut(.return, modifiers: [])
                 .disabled(libraryManager.selectedVerses.isEmpty)
 

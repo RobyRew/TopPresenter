@@ -949,7 +949,7 @@ func paletteHighlight(_ text: String, tokens: [String], highlightFont: Font) -> 
               let r = text.range(of: tok, options: [.caseInsensitive, .diacriticInsensitive],
                                  range: start..<text.endIndex) {
             if let ar = Range(r, in: attr) {
-                attr[ar].foregroundColor = .accentColor
+                attr[ar].foregroundColor = appAccent
                 attr[ar].font = highlightFont
             }
             start = r.upperBound
