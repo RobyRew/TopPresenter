@@ -61,7 +61,37 @@ struct MediaView: View {
     // MARK: - Header (type tabs + search + add)
 
     private var header: some View {
-        HStack(spacing: 10) {
+        // Two rows — at a third of the window the old single row truncated
+        // the segmented filter into "…e Foto Video Audio".
+        VStack(spacing: 8) {
+            HStack(spacing: 8) {
+                HStack(spacing: 4) {
+                    Image(systemName: "magnifyingglass")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    TextField(String(localized: "Caută media…", comment: "Media search placeholder"),
+                              text: queryBinding)
+                        .textFieldStyle(.plain)
+                    if !libraryManager.mediaLibraryQuery.isEmpty {
+                        Button { libraryManager.mediaLibraryQuery = "" } label: {
+                            Image(systemName: "xmark.circle.fill").font(.caption)
+                        }
+                        .buttonStyle(.borderless)
+                        .foregroundStyle(.tertiary)
+                    }
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(.quaternary.opacity(0.5), in: Capsule())
+
+                Button { importMedia() } label: {
+                    Label(String(localized: "Adaugă", comment: "Add media button"), systemImage: "plus")
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+                .help(String(localized: "Importă imagini, audio sau video", comment: "Tooltip"))
+            }
+
             Picker("", selection: $kindFilterRaw) {
                 Text(String(localized: "Toate", comment: "Media kind filter — all")).tag("all")
                 ForEach(MediaKind.allCases) { kind in
@@ -70,35 +100,6 @@ struct MediaView: View {
             }
             .pickerStyle(.segmented)
             .labelsHidden()
-            .frame(maxWidth: 320)
-
-            Spacer()
-
-            HStack(spacing: 4) {
-                Image(systemName: "magnifyingglass")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                TextField(String(localized: "Caută media…", comment: "Media search placeholder"),
-                          text: queryBinding)
-                    .textFieldStyle(.plain)
-                    .frame(width: 170)
-                if !libraryManager.mediaLibraryQuery.isEmpty {
-                    Button { libraryManager.mediaLibraryQuery = "" } label: {
-                        Image(systemName: "xmark.circle.fill").font(.caption)
-                    }
-                    .buttonStyle(.borderless)
-                    .foregroundStyle(.tertiary)
-                }
-            }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(.quaternary.opacity(0.5), in: Capsule())
-
-            Button { importMedia() } label: {
-                Label(String(localized: "Adaugă", comment: "Add media button"), systemImage: "plus")
-            }
-            .controlSize(.small)
-            .help(String(localized: "Importă imagini, audio sau video", comment: "Tooltip"))
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
@@ -125,7 +126,7 @@ struct MediaView: View {
 
     private var grid: some View {
         ScrollView {
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 150, maximum: 210), spacing: 12)], spacing: 12) {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 132, maximum: 200), spacing: 10)], spacing: 10) {
                 ForEach(filteredItems) { item in
                     MediaCard(
                         item: item,
@@ -223,17 +224,21 @@ struct MediaCard: View {
     var body: some View {
         VStack(spacing: 0) {
             ZStack {
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(.quaternary)
-
                 if let data = item.thumbnailData, let image = NSImage(data: data) {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(.black.opacity(0.3))
                     Image(nsImage: image)
                         .resizable()
                         .aspectRatio(contentMode: .fill)
                 } else {
+                    // No thumbnail: a soft per-kind gradient with a BIG glyph —
+                    // not the flat grey square with a tiny icon.
+                    LinearGradient(colors: [kind.placeholderTint.opacity(0.34),
+                                            kind.placeholderTint.opacity(0.14)],
+                                   startPoint: .topLeading, endPoint: .bottomTrailing)
                     Image(systemName: kind.systemImage)
-                        .font(.title)
-                        .foregroundStyle(.secondary)
+                        .font(.system(size: 30, weight: .medium))
+                        .foregroundStyle(kind.placeholderTint.opacity(0.9))
                 }
 
                 // Video gets a subtle play affordance over the thumbnail.
@@ -245,7 +250,7 @@ struct MediaCard: View {
                 }
             }
             .aspectRatio(16.0 / 10.0, contentMode: .fit)
-            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             .overlay(alignment: .bottomTrailing) {
                 if let badge = item.durationBadge {
                     Text(badge)
@@ -257,34 +262,53 @@ struct MediaCard: View {
                 }
             }
             .overlay(alignment: .topLeading) {
-                Image(systemName: kind.systemImage)
-                    .font(.system(size: 9, weight: .semibold))
-                    .padding(4)
-                    .background(.black.opacity(0.55), in: Circle())
-                    .foregroundStyle(.white)
-                    .padding(5)
+                // The kind chip only earns its place over a REAL thumbnail —
+                // the placeholder already IS the kind glyph.
+                if item.thumbnailData != nil {
+                    Image(systemName: kind.systemImage)
+                        .font(.system(size: 9, weight: .semibold))
+                        .padding(4)
+                        .background(.black.opacity(0.55), in: Circle())
+                        .foregroundStyle(.white)
+                        .padding(5)
+                }
             }
+            .padding(4)
 
-            HStack(spacing: 4) {
-                Text(item.name)
-                    .font(.caption)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                Spacer(minLength: 0)
-            }
-            .padding(.horizontal, 6)
-            .padding(.vertical, 5)
+            Text(item.name)
+                .font(.caption)
+                .lineLimit(2)
+                .multilineTextAlignment(.center)
+                .truncationMode(.middle)
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, 6)
+                .padding(.bottom, 6)
+                .padding(.top, 2)
         }
         .background(
-            isSelected ? appHighlight.opacity(0.18) : Color.secondary.opacity(0.08),
-            in: RoundedRectangle(cornerRadius: 10)
+            isSelected ? AnyShapeStyle(appHighlight.opacity(0.16))
+                : isHovered ? AnyShapeStyle(.quaternary.opacity(0.6))
+                : AnyShapeStyle(Color.secondary.opacity(0.07)),
+            in: RoundedRectangle(cornerRadius: 14, style: .continuous)
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 10)
-                .stroke(isSelected ? appHighlight : Color.clear, lineWidth: 1.5)
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .strokeBorder(isSelected ? appHighlight : Color.clear, lineWidth: 2)
         )
-        .clipShape(RoundedRectangle(cornerRadius: 10))
-        .contentShape(RoundedRectangle(cornerRadius: 10))
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .shadow(color: .black.opacity(isHovered ? 0.18 : 0), radius: 6, y: 3)
+    }
+}
+
+private extension MediaKind {
+    /// Soft placeholder tint per kind (cards without a thumbnail).
+    var placeholderTint: Color {
+        switch self {
+        case .image: return .teal
+        case .video: return .indigo
+        case .audio: return .pink
+        }
     }
 }
 

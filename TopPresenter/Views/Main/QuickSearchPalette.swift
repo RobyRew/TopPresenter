@@ -200,6 +200,10 @@ struct QuickSearchPalette: View {
     /// Set when a result was opened/presented this session — a dismiss with a
     /// typed query and NO commit logs the search as "abandoned".
     @State private var didCommitSearch = false
+    /// Transient „added to session” confirmation in the footer (⌥↩ keeps the
+    /// palette open so several items can be stacked in one go).
+    @State private var sessionNote = ""
+    @State private var sessionNoteTask: Task<Void, Never>?
     @FocusState private var fieldFocused: Bool
 
     @AppStorage("song_maxLinesPerSlide") private var maxLines: Int = 6
@@ -374,7 +378,9 @@ struct QuickSearchPalette: View {
         .onKeyPress(.upArrow) { moveSelection(-1); return .handled }
         .onKeyPress(keys: [.return], phases: .down) { press in
             guard let result = selectedResult else { return .ignored }
-            if press.modifiers.contains(.command) {
+            if press.modifiers.contains(.option) {
+                addToSession(result, schedule: nil)
+            } else if press.modifiers.contains(.command) {
                 present(result)
             } else {
                 open(result)
@@ -455,6 +461,7 @@ struct QuickSearchPalette: View {
                                         selectedIndex = row.flatIndex
                                     }
                                 }
+                                .contextMenu { rowContextMenu(row.result) }
                         }
                         if section.truncated {
                             Text(String(localized: "afișate \(section.rows.count) din \(section.total) — rafinează căutarea",
@@ -662,11 +669,19 @@ struct QuickSearchPalette: View {
     }
 
     private var footerBar: some View {
-        HStack(spacing: 16) {
+        HStack(spacing: 14) {
             keyHint("↩", String(localized: "Deschide", comment: "Palette key hint"))
             keyHint("⌘↩", String(localized: "Proiectează", comment: "Palette key hint"))
+            keyHint("⌥↩", String(localized: "La sesiune", comment: "Palette key hint"))
             keyHint("↑↓", String(localized: "Navighează", comment: "Palette key hint"))
             Spacer()
+            if !sessionNote.isEmpty {
+                Text(sessionNote)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .transition(.opacity)
+            }
             keyHint("esc", String(localized: "Închide", comment: "Palette key hint"))
         }
         .padding(.horizontal, 16)
@@ -899,6 +914,124 @@ struct QuickSearchPalette: View {
         var d = FetchDescriptor<T>(predicate: T.predicate(forID: id))
         d.fetchLimit = 1
         if let model = (try? modelContext.fetch(d))?.first { action(model) }
+    }
+
+    private func fetchByID<T: PersistentModel>(_ type: T.Type, id: UUID) -> T?
+        where T: IdentifiableByUUID {
+        var d = FetchDescriptor<T>(predicate: T.predicate(forID: id))
+        d.fetchLimit = 1
+        return (try? modelContext.fetch(d))?.first
+    }
+
+    // MARK: „Adaugă la sesiune” (right-click / ⌥↩)
+
+    @ViewBuilder
+    fileprivate func rowContextMenu(_ result: PaletteResult) -> some View {
+        if canAddToSession(result) {
+            let schedules = recentSchedules()
+            Menu {
+                ForEach(schedules) { schedule in
+                    Button {
+                        addToSession(result, schedule: schedule)
+                    } label: {
+                        Text(verbatim: "\(schedule.name) – \(schedule.date.formatted(date: .abbreviated, time: .omitted))")
+                    }
+                }
+                if !schedules.isEmpty { Divider() }
+                Button {
+                    addToSession(result, schedule: SessionService.createSession(name: "", context: modelContext))
+                } label: {
+                    Label(String(localized: "Sesiune nouă…", comment: "Menu — create session and add"),
+                          systemImage: "plus")
+                }
+            } label: {
+                Label(String(localized: "Adaugă la sesiune", comment: "Context menu"),
+                      systemImage: "text.badge.plus")
+            }
+        }
+    }
+
+    private func canAddToSession(_ result: PaletteResult) -> Bool {
+        switch result {
+        case .song, .media, .verse: return true
+        case .reference(let r): return !referenceVerses(r).isEmpty
+        case .recent(let r): return ["song", "media", "verse", "reference"].contains(r.kind)
+        case .session: return false
+        }
+    }
+
+    /// Library-linked draft for a palette result (same payloads the Schedule
+    /// composer stamps) — nil when the kind can't land in a session.
+    private func sessionDraft(for result: PaletteResult) -> SessionItemDraft? {
+        switch result {
+        case .song(let e):
+            return fetchByID(Song.self, id: e.id).map { .song($0, version: nil) }
+        case .media(let m):
+            return fetchByID(MediaItem.self, id: m.id).map { .media($0) }
+        case .verse(let v):
+            return bibleDraft(verses: [v])
+        case .reference(let r):
+            return bibleDraft(verses: referenceVerses(r))
+        case .recent(let r):
+            switch r.kind {
+            case "song":
+                guard let id = r.uuid else { return nil }
+                return fetchByID(Song.self, id: id).map { .song($0, version: nil) }
+            case "media":
+                guard let id = r.uuid else { return nil }
+                return fetchByID(MediaItem.self, id: id).map { .media($0) }
+            case "verse", "reference":
+                let verses = index.verses.filter {
+                    $0.bookNumber == r.bookNumber && $0.chapter == r.chapter
+                        && (r.verseStart == 0 || ($0.verse >= r.verseStart && $0.verse <= max(r.verseEnd, r.verseStart)))
+                }
+                return bibleDraft(verses: verses)
+            default:
+                return nil
+            }
+        case .session:
+            return nil
+        }
+    }
+
+    private func bibleDraft(verses: [VerseIndexEntry]) -> SessionItemDraft? {
+        guard let first = verses.first, let last = verses.last else { return nil }
+        let reference = first.verse == last.verse
+            ? "\(first.bookName) \(first.chapter):\(first.verse)"
+            : "\(first.bookName) \(first.chapter):\(first.verse)-\(last.verse)"
+        let snapshot = verses.map { "(\($0.verse)) \($0.text)" }.joined(separator: " ")
+        return .bible(translation: libraryManager.selectedBibleModule?.abbreviation ?? "",
+                      bookNumber: first.bookNumber, bookName: first.bookName,
+                      chapter: first.chapter, verseStart: first.verse, verseEnd: last.verse,
+                      displayReference: reference, snapshotText: snapshot)
+    }
+
+    private func recentSchedules(limit: Int = 8) -> [ServiceSchedule] {
+        var d = FetchDescriptor<ServiceSchedule>(sortBy: [SortDescriptor(\.date, order: .reverse)])
+        d.fetchLimit = limit
+        return (try? modelContext.fetch(d)) ?? []
+    }
+
+    /// ⌥↩ / context menu — the palette STAYS OPEN so several items can be
+    /// stacked into a session in one go; the footer flashes a confirmation.
+    private func addToSession(_ result: PaletteResult, schedule: ServiceSchedule?) {
+        guard let draft = sessionDraft(for: result) else { return }
+        let target = schedule
+            ?? libraryManager.selectedSchedule
+            ?? recentSchedules(limit: 1).first
+            ?? SessionService.createSession(name: "", context: modelContext)
+        SessionService.append(draft, to: target, context: modelContext)
+        recordSearchCommit(result)
+        recents.record(makeRecent(result))
+        withAnimation(.easeOut(duration: 0.15)) {
+            sessionNote = String(localized: "„\(result.titleText)” → \(target.name) ✓", comment: "Palette session note")
+        }
+        sessionNoteTask?.cancel()
+        sessionNoteTask = Task {
+            try? await Task.sleep(for: .seconds(2.5))
+            guard !Task.isCancelled else { return }
+            withAnimation(.easeOut(duration: 0.3)) { sessionNote = "" }
+        }
     }
 
     // MARK: ⌘K search log (History ▸ Căutări)

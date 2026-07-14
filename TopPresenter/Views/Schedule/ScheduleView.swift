@@ -611,7 +611,7 @@ struct ScheduleContentPicker: View {
 
     private var songRows: [PickerEntry] {
         index.searchSongs(query, limit: 30).map { entry in
-            PickerEntry(id: "song:\(entry.id)", icon: "music.note", tint: .purple,
+            PickerEntry(id: "song:\(entry.id)", icon: "music.note", tint: appAccent,
                         title: entry.title,
                         subtitle: entry.author.isEmpty ? entry.collectionName : entry.author) {
                 addSong(entry.id, title: entry.title)
@@ -626,7 +626,7 @@ struct ScheduleContentPicker: View {
         return entries.map { entry in
             PickerEntry(id: "media:\(entry.id)",
                         icon: (MediaKind(rawValue: entry.mediaType) ?? .image).systemImage,
-                        tint: .orange, title: entry.name, subtitle: entry.mediaType.capitalized) {
+                        tint: appAccent, title: entry.name, subtitle: entry.mediaType.capitalized) {
                 addMedia(entry.id, name: entry.name)
             }
         }

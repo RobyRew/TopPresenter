@@ -100,6 +100,13 @@ final class AccentStore {
 
     var accent: Color { option == .custom ? customAccent : option.color }
 
+    /// What the window `.tint` gets: `nil` on „Sistem” so native controls
+    /// INHERIT the macOS accent — NSSwitch/NSPopUpButton ignore a tint built
+    /// from the dynamic `NSColor.controlAccentColor`, so passing it painted
+    /// them with the old asset accent instead of the system one. Concrete
+    /// override colors are respected everywhere.
+    var tintOverride: Color? { option == .system ? nil : accent }
+
     var highlight: Color {
         if highlightFollowsAccent { return accent }
         return highlightOption == .custom ? customHighlight : highlightOption.color

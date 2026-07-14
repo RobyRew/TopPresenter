@@ -132,8 +132,9 @@ struct MainWindowRoot: View {
             .environment(libraryManager)
             // App-wide accent: native controls (pickers, toggles, list
             // selection) follow the chosen accent; custom views read the
-            // same value via the global `appAccent`.
-            .tint(appAccent)
+            // same value via the global `appAccent`. On „Sistem” the tint is
+            // NIL — inheriting the real macOS accent (see AccentStore.tintOverride).
+            .tint(AccentStore.shared.tintOverride)
             // System Spotlight result clicked → jump straight to the item.
             .onContinueUserActivity(CSSearchableItemActionType) { activity in
                 guard let raw = activity.userInfo?[CSSearchableItemActivityIdentifier] as? String,
