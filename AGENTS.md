@@ -298,6 +298,9 @@ Same pattern — conform to `SongImporter`, add to `SupportedSongFormat`, regist
 
 ## Release & Versioning
 
+### DMG installer UI (v10.13)
+The CI DMG is the classic drag-to-Applications window: committed background `Packaging/dmg-background.tiff` (hi-dpi; regenerate via `swift Packaging/generate-dmg-background.swift` + the `tiffutil -cathidpicheck` line in its header) + `create-dmg` with window 660×420, icon size 128, app at (165,190), `--app-drop-link` at (495,190), volume icon from the app bundle. Geometry in the workflow and the generator MUST stay in sync. create-dmg is AppleScript/Finder-driven → the workflow retries 3× and falls back to a plain `hdiutil` DMG (release never dies over cosmetics); a mount-verify step asserts app + Applications link + `.background`.
+
 ### Pre-releases (alpha)
 - Every push to `main` triggers the `pre-release` job in `.github/workflows/build-and-release.yml`
 - Tag format: `v{MARKETING_VERSION}-alpha.{GITHUB_RUN_NUMBER}` (e.g. `v0.0.1-alpha.7`)

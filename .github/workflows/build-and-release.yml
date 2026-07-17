@@ -139,11 +139,61 @@ jobs:
           ditto -c -k --keepParent "$PRODUCT_NAME.app" "$PRODUCT_NAME-$VERSION.zip"
           mv "$PRODUCT_NAME-$VERSION.zip" "$GITHUB_WORKSPACE/"
 
-          # Create DMG
-          hdiutil create -volname "$PRODUCT_NAME" \
-            -srcfolder "$PRODUCT_NAME.app" \
-            -ov -format UDZO \
-            "$GITHUB_WORKSPACE/$PRODUCT_NAME-$VERSION.dmg"
+          # Create DMG — full drag-to-Applications installer UI: committed
+          # background (Packaging/dmg-background.tiff, hi-dpi), positioned app
+          # icon + /Applications link, volume icon from the app bundle.
+          # create-dmg drives Finder via AppleScript and can be flaky on CI
+          # runners → 3 attempts, then a plain hdiutil fallback so a release
+          # never dies over cosmetics. Geometry stays in sync with
+          # Packaging/generate-dmg-background.swift.
+          brew install create-dmg
+          DMG="$GITHUB_WORKSPACE/$PRODUCT_NAME-$VERSION.dmg"
+          STAGE=$(mktemp -d)
+          cp -R "$PRODUCT_NAME.app" "$STAGE/"
+          VOLICON=$(ls "$PRODUCT_NAME.app/Contents/Resources/"*.icns 2>/dev/null | head -1 || true)
+          VOLICON_ARGS=()
+          [ -n "$VOLICON" ] && VOLICON_ARGS=(--volicon "$VOLICON")
+          FANCY_OK=""
+          for attempt in 1 2 3; do
+            rm -f "$DMG"
+            if create-dmg \
+                --volname "$PRODUCT_NAME" \
+                "${VOLICON_ARGS[@]}" \
+                --background "$GITHUB_WORKSPACE/Packaging/dmg-background.tiff" \
+                --window-pos 200 120 \
+                --window-size 660 420 \
+                --icon-size 128 \
+                --text-size 13 \
+                --icon "$PRODUCT_NAME.app" 165 190 \
+                --hide-extension "$PRODUCT_NAME.app" \
+                --app-drop-link 495 190 \
+                --no-internet-enable \
+                "$DMG" "$STAGE"; then
+              FANCY_OK=1
+              break
+            fi
+            echo "create-dmg attempt $attempt failed — retrying…"
+            sleep 5
+          done
+          if [ -z "$FANCY_OK" ]; then
+            echo "⚠️ create-dmg failed 3× — falling back to plain hdiutil DMG"
+            rm -f "$DMG"
+            hdiutil create -volname "$PRODUCT_NAME" \
+              -srcfolder "$PRODUCT_NAME.app" \
+              -ov -format UDZO "$DMG"
+          fi
+
+          # Verify the DMG mounts and carries the installer layout.
+          MOUNT=$(mktemp -d)
+          hdiutil attach "$DMG" -nobrowse -readonly -mountpoint "$MOUNT"
+          ls -la "$MOUNT"
+          test -d "$MOUNT/$PRODUCT_NAME.app" || { echo "❌ app missing from DMG"; hdiutil detach "$MOUNT"; exit 1; }
+          if [ -n "$FANCY_OK" ]; then
+            test -e "$MOUNT/Applications" || { echo "❌ Applications link missing"; hdiutil detach "$MOUNT"; exit 1; }
+            test -d "$MOUNT/.background" || { echo "❌ background folder missing"; hdiutil detach "$MOUNT"; exit 1; }
+            echo "✓ installer UI verified (app + Applications link + background)"
+          fi
+          hdiutil detach "$MOUNT"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v7
