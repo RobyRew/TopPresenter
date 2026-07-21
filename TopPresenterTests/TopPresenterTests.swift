@@ -3596,12 +3596,13 @@ struct PaletteSectionOrderTests {
 struct SlideTemplateTests {
     @Test func parsesLiteralsAndTokens() {
         let segs = SlideTemplate.parse("Azi: {{date}} — {{bible:Ioan 3:16#ref|VDC}}!")
-        #expect(segs.count == 4)
+        #expect(segs.count == 5)
         #expect(segs[0] == .literal("Azi: "))
         #expect(segs[1] == .token(SlideToken(scheme: "date", argument: "", field: "", option: "")))
         #expect(segs[2] == .literal(" — "))
         #expect(segs[3] == .token(SlideToken(scheme: "bible", argument: "Ioan 3:16",
                                              field: "ref", option: "VDC")))
+        #expect(segs[4] == .literal("!"))
     }
 
     @Test func optionOnArgumentAndOnField() {
