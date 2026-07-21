@@ -3590,3 +3590,137 @@ struct PaletteSectionOrderTests {
         #expect(s.totalEvents() == 0)
     }
 }
+
+// MARK: - Custom Slides v2 — token grammar
+
+struct SlideTemplateTests {
+    @Test func parsesLiteralsAndTokens() {
+        let segs = SlideTemplate.parse("Azi: {{date}} — {{bible:Ioan 3:16#ref|VDC}}!")
+        #expect(segs.count == 4)
+        #expect(segs[0] == .literal("Azi: "))
+        #expect(segs[1] == .token(SlideToken(scheme: "date", argument: "", field: "", option: "")))
+        #expect(segs[2] == .literal(" — "))
+        #expect(segs[3] == .token(SlideToken(scheme: "bible", argument: "Ioan 3:16",
+                                             field: "ref", option: "VDC")))
+    }
+
+    @Test func optionOnArgumentAndOnField() {
+        // |option directly on the argument…
+        let a = SlideTemplate.parse("{{bible:Psalmi 23|KJV}}")
+        #expect(a == [.token(SlideToken(scheme: "bible", argument: "Psalmi 23", field: "", option: "KJV"))])
+        // …and after the field — both accepted.
+        let b = SlideTemplate.parse("{{bible:Psalmi 23#full|KJV}}")
+        #expect(b == [.token(SlideToken(scheme: "bible", argument: "Psalmi 23", field: "full", option: "KJV"))])
+    }
+
+    @Test func escapesAndMalformedStayLiteral() {
+        #expect(SlideTemplate.parse("a {{{{ b") == [.literal("a {{ b")])
+        #expect(SlideTemplate.parse("open {{bible:Ioan") == [.literal("open {{bible:Ioan")])
+        #expect(SlideTemplate.parse("{{}}") == [.literal("{{}}")])
+        #expect(SlideTemplate.parse("{{123:x}}") == [.literal("{{123:x}}")])
+    }
+
+    @Test func countsTokens() {
+        #expect(SlideTemplate.tokenCount("{{date}} și {{time}}") == 2)
+        #expect(SlideTemplate.containsTokens("text simplu") == false)
+        #expect(SlideTemplate.containsTokens("{{song:Nume}}") == true)
+    }
+}
+
+// MARK: - Custom Slides v2 — providers (pure paths)
+
+struct SlideProviderTests {
+    private func verse(_ chapter: Int, _ v: Int, _ text: String) -> VerseIndexEntry {
+        VerseIndexEntry(moduleID: UUID(), bookNumber: 43, bookName: "Ioan",
+                        chapter: chapter, verse: v, text: text, folded: searchFold(text))
+    }
+    private var books: [BookIndexEntry] {
+        [BookIndexEntry(moduleID: UUID(), bookNumber: 43, name: "Ioan", folded: "ioan",
+                        abbreviationFolded: "in", chapterCount: 21, verseCounts: [3: 36])]
+    }
+
+    @Test func bibleTokenResolvesTextRefAndFull() {
+        let verses = [verse(3, 16, "Fiindcă atât de mult a iubit Dumnezeu lumea"),
+                      verse(3, 17, "Dumnezeu nu a trimis pe Fiul Său să judece")]
+        #expect(BibleTokenProvider.resolve(reference: "Ioan 3:16", field: "",
+                                           books: books, verses: verses)
+                == "Fiindcă atât de mult a iubit Dumnezeu lumea")
+        #expect(BibleTokenProvider.resolve(reference: "Ioan 3:16-17", field: "ref",
+                                           books: books, verses: verses)
+                == "Ioan 3:16-17")
+        let full = BibleTokenProvider.resolve(reference: "Ioan 3:16-17", field: "full",
+                                              books: books, verses: verses)
+        #expect(full?.contains("(16)") == true)
+        #expect(full?.hasSuffix("— Ioan 3:16-17") == true)
+        #expect(BibleTokenProvider.resolve(reference: "Nimicul 9:9", field: "",
+                                           books: books, verses: verses) == nil)
+    }
+
+    @Test func songProjectionFields() {
+        let entry = SongIndexEntry(id: UUID(), title: "Ce mare ești Tu", author: "Stuart Hine",
+                                   language: "ro", songNumber: "27", songbookName: "Cântările Evangheliei",
+                                   collectionID: nil, collectionName: "", versionCount: 1,
+                                   hasMedia: false, verified: true, modifiedDate: .now,
+                                   firstLine: "O, Doamne mare, când privesc eu lumea",
+                                   blob: "", songKey: "x")
+        #expect(SongTokenProvider.projectionField("", entry: entry) == "O, Doamne mare, când privesc eu lumea")
+        #expect(SongTokenProvider.projectionField("title", entry: entry) == "Ce mare ești Tu")
+        #expect(SongTokenProvider.projectionField("author", entry: entry) == "Stuart Hine")
+        #expect(SongTokenProvider.projectionField("book", entry: entry) == "Cântările Evangheliei")
+        #expect(SongTokenProvider.projectionField("number", entry: entry) == "27")
+        #expect(SongTokenProvider.projectionField("ccli", entry: entry) == nil)   // model fetch
+    }
+
+    @Test func dateFormatsDeterministically() {
+        var comps = DateComponents(); comps.year = 2026; comps.month = 7; comps.day = 19; comps.hour = 10; comps.minute = 30
+        let date = Calendar(identifier: .gregorian).date(from: comps)!
+        let ro = Locale(identifier: "ro_RO")
+        #expect(DateTokenProvider.format(date, pattern: "dd.MM.yyyy", locale: ro) == "19.07.2026")
+        #expect(DateTokenProvider.format(date, pattern: "EEEE", locale: ro).lowercased() == "duminică")
+        #expect(DateTokenProvider.format(date, pattern: "", locale: ro).contains("2026"))
+        #expect(TimeTokenProvider.format(date, pattern: "HH:mm", locale: ro) == "10:30")
+    }
+}
+
+// MARK: - Custom Slides v2 — remote extraction (pure)
+
+struct RemoteExtractionTests {
+    @Test func jsonKeypathWalksDictsAndArrays() {
+        let json = #"{"items":[{"title":"Primul","views":12},{"title":"Al doilea"}],"ok":true}"#.data(using: .utf8)!
+        #expect(RemoteContentService.extractJSON(json, keypath: "items.0.title") == "Primul")
+        #expect(RemoteContentService.extractJSON(json, keypath: "items.1.title") == "Al doilea")
+        #expect(RemoteContentService.extractJSON(json, keypath: "items.0.views") == "12")
+        #expect(RemoteContentService.extractJSON(json, keypath: "items.9.title") == nil)
+        #expect(RemoteContentService.extractJSON(json, keypath: "missing") == nil)
+        // Container leaves are not slide text; scalar fragments are.
+        #expect(RemoteContentService.extractJSON(json, keypath: "items") == nil)
+        #expect(RemoteContentService.extractJSON(#""doar text""#.data(using: .utf8)!, keypath: "") == "doar text")
+    }
+
+    @Test func rssAndAtomItemsParse() {
+        let rss = """
+        <?xml version="1.0"?><rss version="2.0"><channel><title>Canal</title>
+        <item><title>Știrea unu</title><description><![CDATA[Detalii unu]]></description>\
+        <pubDate>Sun, 19 Jul 2026 08:00:00 +0000</pubDate></item>
+        <item><title>Știrea doi</title><description>Detalii doi</description></item>
+        </channel></rss>
+        """.data(using: .utf8)!
+        let items = RemoteContentService.parseFeedItems(rss)
+        #expect(items.count == 2)
+        #expect(RemoteContentService.rssField(items: items, field: "") == "Știrea unu")
+        #expect(RemoteContentService.rssField(items: items, field: "0.description") == "Detalii unu")
+        #expect(RemoteContentService.rssField(items: items, field: "1.title") == "Știrea doi")
+        #expect(RemoteContentService.rssField(items: items, field: "0.date")?.contains("2026") == true)
+        #expect(RemoteContentService.rssField(items: items, field: "5.title") == nil)
+
+        let atom = """
+        <?xml version="1.0"?><feed xmlns="http://www.w3.org/2005/Atom">
+        <title>Feed</title><entry><title>Intrare Atom</title><summary>Rezumat</summary>\
+        <updated>2026-07-19T08:00:00Z</updated></entry></feed>
+        """.data(using: .utf8)!
+        let entries = RemoteContentService.parseFeedItems(atom)
+        #expect(entries.count == 1)
+        #expect(RemoteContentService.rssField(items: entries, field: "0.title") == "Intrare Atom")
+        #expect(RemoteContentService.rssField(items: entries, field: "0.description") == "Rezumat")
+    }
+}

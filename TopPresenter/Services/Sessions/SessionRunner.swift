@@ -27,6 +27,8 @@ final class SessionRunner {
     @ObservationIgnored weak var pm: PresentationManager?
     @ObservationIgnored weak var video: VideoPlayerService?
     @ObservationIgnored weak var audio: AudioPlayerManager?
+    /// For resolving `{{…}}` tokens in session TEXT items (dynamic slides).
+    @ObservationIgnored weak var searchIndex: SearchIndex?
 
     // MARK: Lifecycle
 
@@ -170,7 +172,20 @@ final class SessionRunner {
             MediaPresenter.present(mediaItem, pm: pm, video: video, audio: audio)
 
         case let .text(title, content):
-            pm.showCustomText(text: content, title: title)
+            // Session text items are dynamic slides too: templates resolve at
+            // PRESENT time through the same token pipeline as Custom Slides.
+            // No tokens → straight to screen (zero extra latency).
+            if let searchIndex,
+               SlideTemplate.containsTokens(title) || SlideTemplate.containsTokens(content) {
+                let ctx = SlideTokenContext(index: searchIndex, modelContext: context)
+                Task { [weak pm] in
+                    let resolved = await SlideTokenResolver.resolveSlide(
+                        title: title, subtitle: "", content: content, context: ctx)
+                    pm?.showCustomText(text: resolved.content, title: resolved.title)
+                }
+            } else {
+                pm.showCustomText(text: content, title: title)
+            }
 
         case .blank:
             pm.goBlack()

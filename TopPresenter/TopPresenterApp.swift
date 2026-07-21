@@ -85,7 +85,11 @@ struct TopPresenterApp: App {
                 .environment(searchIndex)
                 .environmentObject(updateController)
                 .frame(minWidth: 1100, minHeight: 700)
-                .task { searchIndex.configure(container: sharedModelContainer, history: historyStore) }
+                .task {
+                    searchIndex.configure(container: sharedModelContainer, history: historyStore)
+                    // Session TEXT items resolve {{…}} tokens through the index.
+                    sessionRunner.searchIndex = searchIndex
+                }
         }
         .modelContainer(sharedModelContainer)
         .defaultSize(width: 1400, height: 900)
