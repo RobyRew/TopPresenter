@@ -16,6 +16,7 @@ import SwiftUI
 import SwiftData
 import UniformTypeIdentifiers
 import AVFoundation
+import AVKit
 
 struct MediaView: View {
     @Environment(\.modelContext) private var modelContext
@@ -358,41 +359,36 @@ extension NSImage {
     }
 }
 
-// MARK: - Media Detail Pane (right two-thirds — big preview + actions)
+// MARK: - Media Detail Pane (right two-thirds — LIVE preview + framing)
 
-/// Large preview of the selected media item: thumbnail/artwork, metadata and
-/// the present action — the browsing grid stays in the left third.
+/// The selected item, previewed for REAL: video and audio play here through
+/// their OWN AVPlayer (never the live `VideoPlayerService` — auditioning a
+/// clip must not touch what the congregation sees), images render at full
+/// resolution. Underneath, the FRAMING controls drive the live output:
+/// fit/fill, a zoom slider and drag-to-pan, all applied to whatever media is
+/// currently on screen.
 struct MediaDetailPane: View {
     @Environment(LibraryManager.self) private var libraryManager
     @Environment(PresentationManager.self) private var pm
     @Environment(AudioPlayerManager.self) private var audioPlayerManager
     @Environment(VideoPlayerService.self) private var videoPlayerService
 
+    /// Preview-only player (video + audio). Separate from the live services.
+    @State private var previewPlayer: AVPlayer?
+    @State private var isPreviewPlaying = false
+    @State private var fullImage: NSImage?
+    /// Security scope held while the preview player reads the file.
+    @State private var scopedURL: URL?
+    @State private var panBase: CGSize?
+
     var body: some View {
         if let item = libraryManager.selectedMediaItem {
             let kind = MediaKind(rawValue: item.mediaType) ?? .image
-            VStack(spacing: 14) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(.black.opacity(0.25))
-                    if let data = item.thumbnailData, let image = NSImage(data: data) {
-                        Image(nsImage: image)
-                            .resizable()
-                            .scaledToFit()
-                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    } else {
-                        Image(systemName: kind.systemImage)
-                            .font(.system(size: 56))
-                            .foregroundStyle(.secondary)
-                    }
-                    if kind == .video {
-                        Image(systemName: "play.circle.fill")
-                            .font(.system(size: 44))
-                            .foregroundStyle(.white.opacity(0.85))
-                            .shadow(radius: 6)
-                    }
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            VStack(spacing: 12) {
+                preview(item: item, kind: kind)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+                if kind == .audio { audioTransport }
 
                 VStack(spacing: 3) {
                     Text(item.name)
@@ -409,7 +405,11 @@ struct MediaDetailPane: View {
                     .foregroundStyle(.secondary)
                 }
 
+                if kind != .audio { framingControls }
+
                 Button {
+                    // A fresh present starts from a clean frame.
+                    pm.resetMediaFraming()
                     MediaPresenter.present(item, pm: pm, video: videoPlayerService, audio: audioPlayerManager)
                 } label: {
                     Label(String(localized: "Prezintă", comment: "Button"), systemImage: "play.fill")
@@ -419,6 +419,9 @@ struct MediaDetailPane: View {
                 .controlSize(.large)
             }
             .padding(18)
+            // Rebuild the preview whenever the selection changes.
+            .task(id: item.id) { await loadPreview(item: item, kind: kind) }
+            .onDisappear(perform: teardownPreview)
         } else {
             ContentUnavailableView {
                 Label(String(localized: "Nimic selectat", comment: "Media detail empty"),
@@ -426,6 +429,188 @@ struct MediaDetailPane: View {
             } description: {
                 Text(String(localized: "Alege un fișier din stânga pentru previzualizare.", comment: "Media detail empty message"))
             }
+            .onDisappear(perform: teardownPreview)
+        }
+    }
+
+    // MARK: Preview surfaces
+
+    @ViewBuilder
+    private func preview(item: MediaItem, kind: MediaKind) -> some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(.black.opacity(0.35))
+
+            switch kind {
+            case .video:
+                if let previewPlayer {
+                    VideoPlayer(player: previewPlayer)
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                } else {
+                    thumbnailFallback(item: item, kind: kind)
+                }
+            case .audio:
+                VStack(spacing: 10) {
+                    if let data = item.thumbnailData, let artwork = NSImage(data: data) {
+                        Image(nsImage: artwork)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(maxHeight: 200)
+                            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    } else {
+                        Image(systemName: "waveform")
+                            .font(.system(size: 54))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            case .image:
+                if let fullImage {
+                    Image(nsImage: fullImage)
+                        .resizable()
+                        .scaledToFit()
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                } else {
+                    thumbnailFallback(item: item, kind: kind)
+                }
+            }
+        }
+        // Drag anywhere on the preview to PAN the live output (only useful
+        // once zoomed in — at 100% the frame already fills the screen).
+        .gesture(
+            DragGesture(minimumDistance: 2, coordinateSpace: .local)
+                .onChanged { value in
+                    guard pm.mediaZoom > 1.01 else { return }
+                    let base = panBase ?? CGSize(width: pm.mediaPanX, height: pm.mediaPanY)
+                    panBase = base
+                    // Preview drag → output fraction (preview is ~1/3 the size).
+                    let limit = (pm.mediaZoom - 1) / 2
+                    pm.mediaPanX = min(max(base.width + value.translation.width / 400, -limit), limit)
+                    pm.mediaPanY = min(max(base.height + value.translation.height / 300, -limit), limit)
+                }
+                .onEnded { _ in panBase = nil }
+        )
+    }
+
+    private func thumbnailFallback(item: MediaItem, kind: MediaKind) -> some View {
+        Group {
+            if let data = item.thumbnailData, let image = NSImage(data: data) {
+                Image(nsImage: image)
+                    .resizable()
+                    .scaledToFit()
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            } else {
+                Image(systemName: kind.systemImage)
+                    .font(.system(size: 56))
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private var audioTransport: some View {
+        HStack(spacing: 10) {
+            Button {
+                togglePreviewPlayback()
+            } label: {
+                Image(systemName: isPreviewPlaying ? "pause.circle.fill" : "play.circle.fill")
+                    .font(.system(size: 30))
+                    .foregroundStyle(appAccent)
+            }
+            .buttonStyle(.plain)
+            .help(String(localized: "Ascultă local (nu iese pe ecran)", comment: "Tooltip"))
+
+            Text(String(localized: "Previzualizare locală", comment: "Audio preview label"))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Spacer()
+        }
+    }
+
+    // MARK: Framing (drives the LIVE output)
+
+    private var framingControls: some View {
+        @Bindable var pmBinding = pm
+        return VStack(spacing: 8) {
+            Picker("", selection: $pmBinding.fullscreenVideoFillRaw) {
+                Text(String(localized: "Încadrează", comment: "Media fit")).tag("fit")
+                Text(String(localized: "Umple", comment: "Media fill")).tag("fill")
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+
+            HStack(spacing: 8) {
+                Image(systemName: "minus.magnifyingglass")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Slider(value: $pmBinding.mediaZoom, in: 1...3, step: 0.05)
+                Image(systemName: "plus.magnifyingglass")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Text(verbatim: "\(Int(pm.mediaZoom * 100))%")
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+                    .frame(width: 42, alignment: .trailing)
+                Button {
+                    pm.resetMediaFraming()
+                } label: {
+                    Image(systemName: "arrow.counterclockwise")
+                }
+                .controlSize(.small)
+                .help(String(localized: "Resetează încadrarea", comment: "Tooltip"))
+                .disabled(pm.mediaZoom == 1 && pm.mediaPanX == 0 && pm.mediaPanY == 0)
+            }
+
+            Text(pm.mediaZoom > 1.01
+                 ? String(localized: "Trage în previzualizare pentru a repoziționa imaginea pe ecran.", comment: "Framing hint")
+                 : String(localized: "Încadrarea se aplică live pe ecranul de proiecție.", comment: "Framing hint"))
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    // MARK: Preview lifecycle
+
+    private func loadPreview(item: MediaItem, kind: MediaKind) async {
+        teardownPreview()
+        guard let url = item.resolvedURL else { return }
+        // Hold the security scope for as long as the preview reads the file.
+        if url.startAccessingSecurityScopedResource() { scopedURL = url }
+
+        switch kind {
+        case .image:
+            // Read bytes off-main (Data is Sendable — NSImage is NOT, so it
+            // is decoded here on the main actor).
+            let data = await Task.detached(priority: .userInitiated) {
+                try? Data(contentsOf: url)
+            }.value
+            fullImage = data.flatMap { NSImage(data: $0) }
+        case .video:
+            let player = AVPlayer(url: url)
+            player.isMuted = true          // auditioning must stay silent by default
+            previewPlayer = player
+        case .audio:
+            previewPlayer = AVPlayer(url: url)
+        }
+    }
+
+    private func togglePreviewPlayback() {
+        guard let previewPlayer else { return }
+        if isPreviewPlaying {
+            previewPlayer.pause()
+        } else {
+            previewPlayer.play()
+        }
+        isPreviewPlaying.toggle()
+    }
+
+    private func teardownPreview() {
+        previewPlayer?.pause()
+        previewPlayer = nil
+        isPreviewPlaying = false
+        fullImage = nil
+        if let scopedURL {
+            scopedURL.stopAccessingSecurityScopedResource()
+            self.scopedURL = nil
         }
     }
 }

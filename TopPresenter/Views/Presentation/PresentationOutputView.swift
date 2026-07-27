@@ -47,9 +47,16 @@ struct PresentationOutputView: View {
                pm.liveContent.contentType == .media,
                pm.liveContent.mediaKind != "image",
                let player = videoService.player {
-                OutputVideoView(player: player, fills: pm.fullscreenVideoFillRaw == "fill")
-                    .ignoresSafeArea()
-                    .transition(.opacity)
+                GeometryReader { geo in
+                    OutputVideoView(player: player, fills: pm.fullscreenVideoFillRaw == "fill")
+                        .scaleEffect(pm.mediaZoom)
+                        .offset(x: pm.mediaPanX * geo.size.width,
+                                y: pm.mediaPanY * geo.size.height)
+                        .frame(width: geo.size.width, height: geo.size.height)
+                        .clipped()
+                }
+                .ignoresSafeArea()
+                .transition(.opacity)
             }
 
             // Full-screen image layer (Media module → Proiectează on a photo).
@@ -59,14 +66,21 @@ struct PresentationOutputView: View {
                pm.liveContent.contentType == .media,
                pm.liveContent.mediaKind == "image",
                let image = pm.liveContent.mediaImage {
-                Image(nsImage: image)
-                    .resizable()
-                    .aspectRatio(contentMode: pm.fullscreenVideoFillRaw == "fill" ? .fill : .fit)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(Color.black)
-                    .clipped()
-                    .ignoresSafeArea()
-                    .transition(.opacity)
+                GeometryReader { geo in
+                    Image(nsImage: image)
+                        .resizable()
+                        .aspectRatio(contentMode: pm.fullscreenVideoFillRaw == "fill" ? .fill : .fit)
+                        .frame(width: geo.size.width, height: geo.size.height)
+                        // Live framing from the Media panel (zoom + pan).
+                        .scaleEffect(pm.mediaZoom)
+                        .offset(x: pm.mediaPanX * geo.size.width,
+                                y: pm.mediaPanY * geo.size.height)
+                        .frame(width: geo.size.width, height: geo.size.height)
+                        .background(Color.black)
+                        .clipped()
+                }
+                .ignoresSafeArea()
+                .transition(.opacity)
             }
 
             // Black screen mode — full opaque black overlay on top

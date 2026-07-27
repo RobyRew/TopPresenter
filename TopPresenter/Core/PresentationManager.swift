@@ -451,6 +451,26 @@ final class PresentationManager {
     var fullscreenVideoFillRaw: String {
         didSet { UserDefaults.standard.set(fullscreenVideoFillRaw, forKey: "pm_fullscreenVideoFillRaw") }
     }
+    /// LIVE framing of full-screen media (image AND video), driven from the
+    /// Media panel while something is on screen: zoom 1.0…3.0 plus a pan
+    /// offset in FRACTIONS of the output size (resolution-independent, so the
+    /// same framing looks identical on any projector).
+    var mediaZoom: Double {
+        didSet { UserDefaults.standard.set(mediaZoom, forKey: "pm_mediaZoom") }
+    }
+    var mediaPanX: Double {
+        didSet { UserDefaults.standard.set(mediaPanX, forKey: "pm_mediaPanX") }
+    }
+    var mediaPanY: Double {
+        didSet { UserDefaults.standard.set(mediaPanY, forKey: "pm_mediaPanY") }
+    }
+
+    /// Back to 100%, centered (the „Resetează" button + every new present).
+    func resetMediaFraming() {
+        mediaZoom = 1
+        mediaPanX = 0
+        mediaPanY = 0
+    }
 
     /// Per-box transition override: OFF = the box follows the profile's
     /// transitions; ON = its own effects, delay (stagger) and duration.
@@ -2581,6 +2601,9 @@ final class PresentationManager {
         self.autoFitVerseFont = d.bool(forKey: "pm_autoFitVerseFont")
         self.videoLoopsByDefault = d.object(forKey: "pm_videoLoopsByDefault") as? Bool ?? true
         self.fullscreenVideoFillRaw = d.string(forKey: "pm_fullscreenVideoFillRaw") ?? "fit"
+        self.mediaZoom = d.object(forKey: "pm_mediaZoom") as? Double ?? 1
+        self.mediaPanX = d.object(forKey: "pm_mediaPanX") as? Double ?? 0
+        self.mediaPanY = d.object(forKey: "pm_mediaPanY") as? Double ?? 0
         // Themes
         if let data = d.data(forKey: "pm_themes"),
            let decoded = try? JSONDecoder().decode([Theme].self, from: data) {
