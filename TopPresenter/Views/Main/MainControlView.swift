@@ -186,33 +186,64 @@ struct MainControlView: View {
             // Start monitoring screen connect/disconnect
             presentationManager.startScreenMonitoring()
         }
-        // Screen disconnection alert
+        // Screen change prompt — the output is already parked (hidden) when this
+        // shows for a disconnect, so nothing is projected until the operator picks.
         .alert(
-            String(localized: "Ecran Deconectat", comment: "Alert title"),
+            presentationManager.pendingScreenChange == .connected
+                ? String(localized: "Ecran Nou Detectat", comment: "Alert title")
+                : String(localized: "Ecran Deconectat", comment: "Alert title"),
             isPresented: Binding(
                 get: { presentationManager.showScreenDisconnectedAlert },
                 set: { presentationManager.showScreenDisconnectedAlert = $0 }
             )
         ) {
-            Button(String(localized: "Mută pe alt ecran", comment: "Alert button")) {
-                presentationManager.moveToNextAvailableScreen()
-            }
-            .keyboardShortcut(.defaultAction)
-
-            Button(String(localized: "Ecran Negru", comment: "Alert button")) {
-                presentationManager.isBlackScreen = true
-            }
-
-            Button(String(localized: "Nu face nimic", comment: "Alert button"), role: .cancel) {
-                // Do nothing
-            }
-
-            Button(String(localized: "Oprește prezentarea", comment: "Alert button"), role: .destructive) {
-                presentationManager.clearOutput()
-                presentationManager.isPresentationWindowOpen = false
+            if presentationManager.pendingScreenChange == .connected {
+                screenConnectedButtons
+            } else {
+                screenDisconnectedButtons
             }
         } message: {
-            Text(String(localized: "Ecranul de prezentare a fost deconectat. Ce dorești să faci?", comment: "Alert message"))
+            Text(
+                presentationManager.pendingScreenChange == .connected
+                    ? String(localized: "S-a conectat un ecran nou. Muți prezentarea pe el?", comment: "Alert message")
+                    : String(localized: "Ecranul de prezentare a fost deconectat. Ieșirea este ascunsă până alegi. Ce dorești să faci?", comment: "Alert message")
+            )
+        }
+    }
+
+    @ViewBuilder
+    private var screenConnectedButtons: some View {
+        Button(String(localized: "Mută prezentarea acolo", comment: "Alert button")) {
+            presentationManager.movePresentationToPendingScreen()
+        }
+        .keyboardShortcut(.defaultAction)
+
+        Button(String(localized: "Lasă cum e", comment: "Alert button"), role: .cancel) {
+            presentationManager.pendingConnectedScreenIndex = nil
+        }
+    }
+
+    @ViewBuilder
+    private var screenDisconnectedButtons: some View {
+        Button(String(localized: "Mută pe alt ecran", comment: "Alert button")) {
+            presentationManager.moveToNextAvailableScreen()
+            presentationManager.showPresentationWindow()
+        }
+        .keyboardShortcut(.defaultAction)
+
+        Button(String(localized: "Ecran Negru", comment: "Alert button")) {
+            presentationManager.isBlackScreen = true
+            presentationManager.moveToNextAvailableScreen()
+            presentationManager.showPresentationWindow()
+        }
+
+        Button(String(localized: "Lasă ascuns", comment: "Alert button"), role: .cancel) {
+            // Output stays parked — the operator keeps their screen.
+        }
+
+        Button(String(localized: "Oprește prezentarea", comment: "Alert button"), role: .destructive) {
+            presentationManager.clearOutput()
+            presentationManager.isPresentationWindowOpen = false
         }
     }
 

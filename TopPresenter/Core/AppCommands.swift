@@ -100,6 +100,11 @@ struct PresentationCommands: Commands {
             }
             .keyboardShortcut(.escape, modifiers: [])
 
+            Button(String(localized: "Ascunde Ieșirea", comment: "Menu item")) {
+                NotificationCenter.default.post(name: .hideOutput, object: nil)
+            }
+            .keyboardShortcut(.escape, modifiers: [.command])
+
             Divider()
 
             Button(String(localized: "Editor de Teme…", comment: "Menu item")) {
@@ -242,6 +247,7 @@ extension Notification.Name {
     static let toggleBlackScreen = Notification.Name("TopPresenter.toggleBlackScreen")
     static let toggleFreeze = Notification.Name("TopPresenter.toggleFreeze")
     static let clearOutput = Notification.Name("TopPresenter.clearOutput")
+    static let hideOutput = Notification.Name("TopPresenter.hideOutput")
     static let increaseFontSize = Notification.Name("TopPresenter.increaseFontSize")
     static let decreaseFontSize = Notification.Name("TopPresenter.decreaseFontSize")
     static let resetFontSize = Notification.Name("TopPresenter.resetFontSize")

@@ -76,6 +76,7 @@ struct KeyboardShortcutsSheet: View {
                             ShortcutItem(keys: "⌘ B", description: String(localized: "Toggle Black Screen", comment: "Shortcut")),
                             ShortcutItem(keys: "⌘ F", description: String(localized: "Toggle Freeze", comment: "Shortcut")),
                             ShortcutItem(keys: "Esc", description: String(localized: "Clear Output", comment: "Shortcut")),
+                            ShortcutItem(keys: "⌘ Esc", description: String(localized: "Ascunde ieșirea imediat (îți dă ecranul înapoi)", comment: "Shortcut")),
                         ]
                     )
 

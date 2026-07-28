@@ -137,7 +137,8 @@ TopPresenter/
 
 ### Escape / Clear Behavior
 - Escape → posts `.clearOutput` notification → `clearOutput()` on `PresentationManager`
-- `clearOutput()` calls `hidePresentationWindow()` when `isSingleScreenMode == true` (single display)
+- `clearOutput()` calls `hidePresentationWindow()` when **`isOutputOnOperatorScreen == true`** — NOT `isSingleScreenMode`. With a second display connected but the output aimed at the display the app window is on, the operator is just as blind while `screens.count == 2`
+- ⌘⎋ → posts `.hideOutput` → `hideOutputNow()`: the panic hatch. Orders the window out immediately — no exit transition, no conditions — and stops video, but leaves `liveContent` live so the next Show resumes. Escape can be swallowed (focused text field, a presented sheet/alert); ⌘⎋ is the guaranteed way to get the screen back
 - `hidePresentationWindow()` uses `window.orderOut(nil)` — **not** `dismissWindow`
 - `showPresentationWindow()` uses `window.orderFront(nil)` and is called at the start of `showBibleVerse`, `showSongVerse`, `showCustomText`, and when `toggleBlack()` turns black on
 
@@ -145,7 +146,12 @@ TopPresenter/
 - Built-in screen = `NSScreen.screens.first`
 - External (target) screen = `NSScreen.screens.last` when more than one screen is available
 - `isSingleScreenMode = NSScreen.screens.count <= 1`
+- `operatorScreen` = the screen of the window whose identifier starts with `WindowIdentifiers.main` (falls back to `NSScreen.main`)
+- `isOutputOnOperatorScreen` = single display, OR output and app UI resolve to the same `CGDirectDisplayID`. Compare display **IDs**, never `NSScreen` identity — the instances are recreated on every configuration change
 - On screen disconnect: configurable action (`doNothing` / `moveToAvailable` / `goBlack` / `ask`)
+- **`ask` must ask BEFORE it acts** — it calls `hidePresentationWindow()` and prompts, and does not touch `presentationScreenIndex`. Moving the output onto the remaining display first buries the app *and the prompt itself* under a full-screen always-on-top overlay (`windowLevel` defaults to `alwaysOnTop` = `.statusBar`), leaving the operator with a projection they cannot see past and a question they cannot read
+- A display **appearing** while the output is open also prompts (`pendingScreenChange == .connected`, `pendingConnectedScreenIndex`) — accepted via `movePresentationToPendingScreen()`. Never retarget a running output silently
+- The prompt is one `.alert` in `MainControlView` with two button sets, switched on `pendingScreenChange`
 - Monitoring started in `MainControlView.onAppear` via `presentationManager.startScreenMonitoring()`
 
 ### Video Output
@@ -297,6 +303,7 @@ Same pattern — conform to `SongImporter`, add to `SupportedSongFormat`, regist
 - Run unit tests with `-only-testing:TopPresenterTests` — the UI test target launches the real app and needs Accessibility permissions (it fails/hangs headless)
 - Test targets MUST carry `DEVELOPMENT_TEAM = FJHAUWNNBH` like the app target; without it the xctest bundle is ad-hoc signed and dlopen rejects it ("different Team IDs")
 - If results look stale (old failures at shifted line numbers, missing new tests), `touch` the test file and rebuild — Xcode occasionally reuses a stale test bundle
+- **The output NSWindow belongs to the test host and is shared by every test.** A test that leaves it ordered out (`hidePresentationWindow`, `hideOutputNow`, an `ask` disconnect) makes the *next* `presentContent` take its staged "was hidden" path, which sets `contentChangeKind` 60 ms later — so unrelated tests asserting right after a show (`contentChangeKindTracksAppearChangeClear`, `liveContentCarriesVerseRuns`) fail. Always end such a test with `pm.showPresentationWindow()`. These pass in isolation and only fail in a full run, so `-only-testing` will not reproduce it
 
 ## Release & Versioning
 

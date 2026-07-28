@@ -902,6 +902,39 @@ final class PresentationManager {
         NSScreen.screens.first
     }
 
+    // MARK: - Operator Screen
+
+    /// The `CGDirectDisplayID` behind a screen — NSScreen instances are recreated on
+    /// every configuration change, so identity (`===`) is not safe to compare across one.
+    private static func displayID(of screen: NSScreen?) -> CGDirectDisplayID? {
+        screen?.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID
+    }
+
+    /// The window hosting the app's own UI.
+    private var mainAppWindow: NSWindow? {
+        NSApplication.shared.windows.first {
+            $0.identifier?.rawValue.hasPrefix(WindowIdentifiers.main) == true
+        }
+    }
+
+    /// The display the operator is actually looking at the app on.
+    var operatorScreen: NSScreen? {
+        mainAppWindow?.screen ?? NSScreen.main
+    }
+
+    /// True when the output covers the operator's own UI — either there is a single
+    /// display, or the output is aimed at the very display the app window sits on.
+    ///
+    /// Everything that hides the output on "single screen" must key off THIS, not
+    /// `isSingleScreenMode`: with a second display connected but the output aimed at
+    /// the built-in one, the operator is just as blind, yet `screens.count == 2`.
+    var isOutputOnOperatorScreen: Bool {
+        if isSingleScreenMode { return true }
+        guard let outID = Self.displayID(of: targetScreen),
+              let uiID = Self.displayID(of: operatorScreen) else { return false }
+        return outID == uiID
+    }
+
     /// Human-readable aspect ratio label.
     private static func aspectRatioLabel(for ratio: CGFloat) -> String {
         let known: [(String, CGFloat)] = [
@@ -934,8 +967,21 @@ final class PresentationManager {
         }
     }
 
-    /// Whether the "screen disconnected" alert should be shown.
+    /// Which display change the pending prompt is about.
+    enum ScreenChangeKind: String {
+        case disconnected
+        case connected
+    }
+
+    /// Whether the screen-change prompt should be shown.
     var showScreenDisconnectedAlert: Bool = false
+
+    /// What the pending prompt is asking about.
+    var pendingScreenChange: ScreenChangeKind = .disconnected
+
+    /// Index into `NSScreen.screens` of a display that just appeared, for the
+    /// "move the presentation there?" prompt.
+    var pendingConnectedScreenIndex: Int?
 
     /// Monitors screen configuration changes.
     private var screenObserver: (any NSObjectProtocol)?
@@ -978,34 +1024,69 @@ final class PresentationManager {
         } else {
             wasTargetLost = oldScreens.count > availableScreens.count
         }
+        let screenAdded = availableScreens.count > oldScreens.count
 
-        guard wasTargetLost && isPresentationWindowOpen else {
-            // Screen added or target still valid — just reposition
+        guard isPresentationWindowOpen else {
+            // Nothing is being output — just keep the (hidden) window on its screen.
             if let idx = presentationScreenIndex, idx < availableScreens.count {
                 movePresentationWindow(to: availableScreens[idx])
             }
             return
         }
 
-        // Target screen was disconnected — take action
-        switch screenDisconnectAction {
-        case .doNothing:
-            break
-        case .moveToAvailable:
-            moveToNextAvailableScreen()
-        case .goBlack:
-            isBlackScreen = true
-            if let builtIn = builtInScreen {
-                presentationScreenIndex = 0
-                movePresentationWindow(to: builtIn)
+        if wasTargetLost {
+            // Target screen was disconnected — take action
+            switch screenDisconnectAction {
+            case .doNothing:
+                break
+            case .moveToAvailable:
+                moveToNextAvailableScreen()
+            case .goBlack:
+                isBlackScreen = true
+                if let builtIn = builtInScreen {
+                    presentationScreenIndex = 0
+                    movePresentationWindow(to: builtIn)
+                }
+            case .ask:
+                // Ask FIRST, act second. Nothing is being projected anywhere at this
+                // point, so the safe state is to show nothing until the operator
+                // decides. Relocating the output onto the remaining display before
+                // asking buries the app — and this very alert — under a full-screen
+                // always-on-top overlay, leaving the operator with a projection they
+                // cannot see past and a prompt they cannot read.
+                hidePresentationWindow()
+                pendingConnectedScreenIndex = nil
+                pendingScreenChange = .disconnected
+                showScreenDisconnectedAlert = true
             }
-        case .ask:
-            if let builtIn = builtInScreen {
-                presentationScreenIndex = 0
-                movePresentationWindow(to: builtIn)
-            }
-            showScreenDisconnectedAlert = true
+            return
         }
+
+        if screenAdded, screenDisconnectAction == .ask,
+           let newIndex = availableScreens.indices.last,
+           newIndex != presentationScreenIndex {
+            // A display appeared mid-service. Don't hijack a running output — ask,
+            // and leave everything exactly where it is until told otherwise.
+            pendingConnectedScreenIndex = newIndex
+            pendingScreenChange = .connected
+            showScreenDisconnectedAlert = true
+            return
+        }
+
+        // Same displays, different geometry (resolution / arrangement) — just refit.
+        if let idx = presentationScreenIndex, idx < availableScreens.count {
+            movePresentationWindow(to: availableScreens[idx])
+        }
+    }
+
+    /// Accepts the "a new screen appeared" prompt: retargets the output at it.
+    func movePresentationToPendingScreen() {
+        let screens = NSScreen.screens
+        guard let idx = pendingConnectedScreenIndex, idx < screens.count else { return }
+        presentationScreenIndex = idx
+        movePresentationWindow(to: screens[idx])
+        showPresentationWindow()
+        pendingConnectedScreenIndex = nil
     }
 
     /// Moves the presentation to the next available external screen, or built-in screen as fallback.
@@ -2767,7 +2848,7 @@ final class PresentationManager {
             isFrozen = false
         }
         videoService?.stop()
-        if isSingleScreenMode {
+        if isOutputOnOperatorScreen {
             // Let the Ieșire transition play to transparency first — hiding the
             // window immediately would cut the animation (and leave the old
             // boxes uncommitted, so the next Show looked like an Intermediar).
@@ -3094,6 +3175,15 @@ final class PresentationManager {
     /// Hides the presentation window (used when clearing output on the built-in screen).
     func hidePresentationWindow() {
         presentationWindow?.orderOut(nil)
+    }
+
+    /// Panic hatch (⌘⎋): drops the output off the screen NOW — no exit transition,
+    /// no conditions, whatever is live stays live. On a single display an
+    /// always-on-top output covers the app itself, so the operator needs one key
+    /// that is guaranteed to give the screen back even mid-animation or mid-video.
+    func hideOutputNow() {
+        videoService?.stop()
+        hidePresentationWindow()
     }
 
     /// Shows the presentation window if it is not visible.

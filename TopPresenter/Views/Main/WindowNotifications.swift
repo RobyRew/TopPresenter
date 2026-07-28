@@ -108,6 +108,7 @@ final class PresentationCommandRouter {
         on(.toggleBlackScreen) { pm.toggleBlack() }
         on(.toggleFreeze) { pm.toggleFreeze() }
         on(.clearOutput) { pm.clearOutput() }
+        on(.hideOutput) { pm.hideOutputNow() }
         on(.increaseFontSize) { pm.fontSize = min(pm.fontSize + 2, PresentationDefaults.maxFontSize) }
         on(.decreaseFontSize) { pm.fontSize = max(pm.fontSize - 2, PresentationDefaults.minFontSize) }
         on(.resetFontSize) { pm.fontSize = PresentationDefaults.fontSize }

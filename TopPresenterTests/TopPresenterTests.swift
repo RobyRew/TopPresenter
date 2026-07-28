@@ -1035,6 +1035,91 @@ struct PresentationManagerTests {
         #expect(pm.liveContent.mainText == "")
     }
 
+    // MARK: - Screen changes must never lock the operator out
+
+    @Test func askOnDisconnectParksOutputWithoutRetargeting() {
+        let pm = PresentationManager()
+        pm.screenDisconnectAction = .ask
+        pm.isPresentationWindowOpen = true
+        pm.presentationScreenIndex = 99  // target display no longer exists
+
+        pm.handleScreenConfigurationChange()
+
+        #expect(pm.showScreenDisconnectedAlert == true)
+        #expect(pm.pendingScreenChange == .disconnected)
+        #expect(pm.pendingConnectedScreenIndex == nil)
+        // Regression: the output used to be moved onto the operator's remaining
+        // display BEFORE asking, burying the app — and this very prompt — under a
+        // full-screen always-on-top overlay.
+        #expect(pm.presentationScreenIndex == 99)
+
+        // The output NSWindow belongs to the test host and is shared by the whole
+        // suite: leaving it ordered out makes the next `presentContent` take its
+        // "was hidden" staged path, so tests that read `contentChangeKind` right
+        // after a show would see a stale value.
+        pm.showPresentationWindow()
+    }
+
+    @Test func goBlackOnDisconnectActsWithoutPrompting() {
+        let pm = PresentationManager()
+        pm.screenDisconnectAction = .goBlack
+        pm.isPresentationWindowOpen = true
+        pm.presentationScreenIndex = 99
+
+        pm.handleScreenConfigurationChange()
+
+        #expect(pm.isBlackScreen == true)
+        #expect(pm.showScreenDisconnectedAlert == false)
+
+        pm.screenDisconnectAction = .ask  // restore the persisted default
+    }
+
+    @Test func screenChangeIsSilentWhenOutputWindowClosed() {
+        let pm = PresentationManager()
+        pm.screenDisconnectAction = .ask
+        pm.isPresentationWindowOpen = false
+        pm.presentationScreenIndex = 99
+
+        pm.handleScreenConfigurationChange()
+
+        #expect(pm.showScreenDisconnectedAlert == false)
+    }
+
+    @Test func pendingScreenMoveIgnoresMissingTarget() {
+        let pm = PresentationManager()
+        pm.presentationScreenIndex = 0
+
+        pm.pendingConnectedScreenIndex = nil
+        pm.movePresentationToPendingScreen()
+        #expect(pm.presentationScreenIndex == 0)
+
+        pm.pendingConnectedScreenIndex = 999  // out of range
+        pm.movePresentationToPendingScreen()
+        #expect(pm.presentationScreenIndex == 0)
+    }
+
+    /// A single display always means the output is sitting on the operator's own
+    /// screen — that is what makes Escape/⌘⎋ hide it instead of leaving it up.
+    @Test func singleDisplayImpliesOutputCoversOperator() {
+        let pm = PresentationManager()
+        #expect(!pm.isSingleScreenMode || pm.isOutputOnOperatorScreen)
+    }
+
+    @Test func hideOutputNowKeepsLiveContentIntact() {
+        let pm = PresentationManager()
+        pm.liveContent.setBibleVerse(text: "Test", reference: "Gen 1:1")
+        pm.liveContent.isLive = true
+
+        pm.hideOutputNow()
+
+        // The panic hatch gives the screen back; it does not end the presentation,
+        // so the next Show resumes exactly where the operator left off.
+        #expect(pm.liveContent.isLive == true)
+        #expect(pm.liveContent.mainText == "Test")
+
+        pm.showPresentationWindow()  // restore the shared host window (see above)
+    }
+
     @Test func showBibleVerseBlockedWhenFrozen() {
         let pm = PresentationManager()
         pm.liveContent.setBibleVerse(text: "First verse", reference: "Gen 1:1")
