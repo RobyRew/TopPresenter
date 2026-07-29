@@ -1885,7 +1885,7 @@ struct LayoutEditorSheet: View {
 
     @ViewBuilder
     private var layoutTab: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        LazyVStack(alignment: .leading, spacing: 10) {
             if let selection {
                 selectedBoxDetail(for: selection)
             } else {
@@ -2903,7 +2903,7 @@ struct LayoutEditorSheet: View {
     private var textTab: some View {
         let pmBinding = Bindable(pm)
 
-        VStack(alignment: .leading, spacing: 10) {
+        LazyVStack(alignment: .leading, spacing: 10) {
             GroupBox {
                 VStack(alignment: .leading, spacing: 8) {
                     labeledRow(String(localized: "Font:", comment: "Setting label")) {
@@ -3219,7 +3219,7 @@ struct LayoutEditorSheet: View {
     private var backgroundTab: some View {
         let pmBinding = Bindable(pm)
 
-        VStack(alignment: .leading, spacing: 10) {
+        LazyVStack(alignment: .leading, spacing: 10) {
             GroupBox {
                 VStack(alignment: .leading, spacing: 8) {
                     Toggle(isOn: pmBinding.backgroundStaysOnHide) {
@@ -3424,7 +3424,7 @@ struct LayoutEditorSheet: View {
 
     @ViewBuilder
     private var presenterTab: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        LazyVStack(alignment: .leading, spacing: 10) {
             GroupBox {
                 VStack(alignment: .leading, spacing: 8) {
                     // Intrare = transparență → conținut (prima afișare)
