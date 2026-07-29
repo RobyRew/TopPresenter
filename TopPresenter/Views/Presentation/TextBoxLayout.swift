@@ -2060,7 +2060,7 @@ struct LayoutEditorSheet: View {
     private func selectedBoxDetail(for identity: BoxIdentity) -> some View {
         // Group 1: Position & size — identical for every box kind
         GroupBox {
-            VStack(alignment: .leading, spacing: 8) {
+            LazyVStack(alignment: .leading, spacing: 8) {
                 BoxFrameFields(identity: identity)
 
                 Divider()
@@ -2213,7 +2213,7 @@ struct LayoutEditorSheet: View {
     @ViewBuilder
     private func sectionContentGroup(_ section: TextBoxSection) -> some View {
         GroupBox {
-            VStack(alignment: .leading, spacing: 8) {
+            LazyVStack(alignment: .leading, spacing: 8) {
                 labeledRow(String(localized: "Sursă:", comment: "Setting label")) {
                     Picker("", selection: Binding(
                         get: { pm.sourceRaw(for: section) },
@@ -2289,7 +2289,7 @@ struct LayoutEditorSheet: View {
         )
 
         GroupBox {
-            VStack(alignment: .leading, spacing: 8) {
+            LazyVStack(alignment: .leading, spacing: 8) {
                 labeledRow(String(localized: "Nume:", comment: "Setting label")) {
                     TextField(
                         String(localized: "Numele casetei", comment: "Box name placeholder"),
@@ -2424,7 +2424,7 @@ struct LayoutEditorSheet: View {
         onEnable: @escaping () -> Void
     ) -> some View {
         GroupBox {
-            VStack(alignment: .leading, spacing: 8) {
+            LazyVStack(alignment: .leading, spacing: 8) {
                 Toggle(isOn: Binding(
                     get: { style.wrappedValue.isCustomized },
                     set: { enabled in
@@ -2700,7 +2700,7 @@ struct LayoutEditorSheet: View {
         )
 
         GroupBox {
-            VStack(alignment: .leading, spacing: 8) {
+            LazyVStack(alignment: .leading, spacing: 8) {
                 labeledRow(String(localized: "Nume:", comment: "Setting label")) {
                     TextField(
                         String(localized: "Numele elementului", comment: "Box name placeholder"),
@@ -2743,7 +2743,7 @@ struct LayoutEditorSheet: View {
         )
 
         GroupBox {
-            VStack(alignment: .leading, spacing: 8) {
+            LazyVStack(alignment: .leading, spacing: 8) {
                 labeledRow(String(localized: "Mod:", comment: "Setting label")) {
                     Picker("", selection: Binding(
                         get: { binding.wrappedValue.contentModeRaw },
@@ -2816,7 +2816,7 @@ struct LayoutEditorSheet: View {
         )
 
         GroupBox {
-            VStack(alignment: .leading, spacing: 8) {
+            LazyVStack(alignment: .leading, spacing: 8) {
                 labeledRow(String(localized: "Vizibil:", comment: "Setting label")) {
                     Picker("", selection: Binding(
                         get: { binding.wrappedValue.showOnRaw },
@@ -2895,7 +2895,7 @@ struct LayoutEditorSheet: View {
 
         LazyVStack(alignment: .leading, spacing: 10) {
             GroupBox {
-                VStack(alignment: .leading, spacing: 8) {
+                LazyVStack(alignment: .leading, spacing: 8) {
                     labeledRow(String(localized: "Font:", comment: "Setting label")) {
                         FontFamilyPicker(
                             fonts: availableFonts,
@@ -3056,7 +3056,7 @@ struct LayoutEditorSheet: View {
             // reference box was selected implied they applied to that box.
             if pm.activeProfileKey == "bible", selection == BoxIdentity.section(.verseContent) {
                 GroupBox {
-                    VStack(alignment: .leading, spacing: 8) {
+                    LazyVStack(alignment: .leading, spacing: 8) {
                         Toggle(isOn: pmBinding.wocStyleEnabled) {
                             Text(String(localized: "Evidențiază cuvintele lui Isus", comment: "Setting label"))
                                 .font(.caption)
@@ -3093,7 +3093,7 @@ struct LayoutEditorSheet: View {
 
                 // Interlinear — stacked word columns (original + gloss + Strong's + morph).
                 GroupBox {
-                    VStack(alignment: .leading, spacing: 8) {
+                    LazyVStack(alignment: .leading, spacing: 8) {
                         labeledRow(String(localized: "Mod:", comment: "Setting label")) {
                             Picker("", selection: ilBinding(\.interlinearModeRaw)) {
                                 Text(String(localized: "Dezactivat", comment: "Interlinear mode")).tag("off")
@@ -3150,7 +3150,7 @@ struct LayoutEditorSheet: View {
                 // Stored in the theme (exports/imports with it).
                 do {
                     GroupBox {
-                        VStack(alignment: .leading, spacing: 8) {
+                        LazyVStack(alignment: .leading, spacing: 8) {
                             labeledRow(String(localized: "Aranjare:", comment: "Setting label")) {
                                 Picker("", selection: ilBinding(\.multiVerseLayoutRaw)) {
                                     Text(String(localized: "În linie", comment: "Multi-verse layout")).tag("inline")
@@ -3210,7 +3210,7 @@ struct LayoutEditorSheet: View {
 
         LazyVStack(alignment: .leading, spacing: 10) {
             GroupBox {
-                VStack(alignment: .leading, spacing: 8) {
+                LazyVStack(alignment: .leading, spacing: 8) {
                     Toggle(isOn: pmBinding.backgroundStaysOnHide) {
                         Text(String(localized: "Fundalul rămâne la Ascundere", comment: "Setting label — background stays on hide"))
                             .font(.caption)
@@ -3301,7 +3301,7 @@ struct LayoutEditorSheet: View {
         let config = pm.backgroundConfig(for: key)
 
         GroupBox {
-            VStack(alignment: .leading, spacing: 8) {
+            LazyVStack(alignment: .leading, spacing: 8) {
                 Toggle(isOn: Binding(
                     get: { config.enabled },
                     set: { enabled in
@@ -3415,7 +3415,7 @@ struct LayoutEditorSheet: View {
     private var presenterTab: some View {
         LazyVStack(alignment: .leading, spacing: 10) {
             GroupBox {
-                VStack(alignment: .leading, spacing: 8) {
+                LazyVStack(alignment: .leading, spacing: 8) {
                     // Intrare = transparență → conținut (prima afișare)
                     transitionRow(
                         label: String(localized: "Intrare:", comment: "Setting label"),
@@ -3499,7 +3499,7 @@ struct LayoutEditorSheet: View {
         )
 
         GroupBox {
-            VStack(alignment: .leading, spacing: 8) {
+            LazyVStack(alignment: .leading, spacing: 8) {
                 Toggle(isOn: Binding(
                     get: { override.wrappedValue.isCustomized },
                     set: { override.wrappedValue.isCustomized = $0 }
