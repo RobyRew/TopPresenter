@@ -167,8 +167,10 @@ struct InterfaceSettingsTab: View {
                 }
                 .onChange(of: languageOverride) { _, newValue in
                     let lang = AppLanguage(rawValue: newValue) ?? .system
-                    languageNeedsRestart = AppLanguage.apply(lang)
+                    AppLanguage.apply(lang)
+                    languageNeedsRestart = AppLanguage.restartPending(for: lang)
                 }
+                .onAppear { AppLanguage.captureLaunchState() }
 
                 if languageNeedsRestart {
                     Label(

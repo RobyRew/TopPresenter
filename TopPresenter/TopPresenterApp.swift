@@ -46,6 +46,9 @@ struct TopPresenterApp: App {
         _presentationManager = State(initialValue: pm)
         _sessionRunner = State(initialValue: runner)
         commandRouter = PresentationCommandRouter(pm: pm)
+        // Before anything can change it: the language this process actually
+        // launched under is what decides whether a restart is still owed.
+        AppLanguage.captureLaunchState()
     }
 
     var sharedModelContainer: ModelContainer = {

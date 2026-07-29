@@ -48,17 +48,58 @@ nonisolated enum AppLanguage: String, CaseIterable, Identifiable {
         AppLanguage(rawValue: UserDefaults.standard.string(forKey: settingKey) ?? "system") ?? .system
     }
 
-    /// Applies the choice. Returns true when a restart is needed to see it.
-    @discardableResult
-    static func apply(_ language: AppLanguage) -> Bool {
+    /// The localization the bundle ACTUALLY resolved at launch — not what we
+    /// stored. Asking the bundle is the only honest answer: the stored preference
+    /// can disagree with reality (it did, in the build that shipped the bug).
+    @MainActor private static var effectiveAtLaunch: String?
+
+    /// Call once, as early as possible — `AppleLanguages` is consumed at startup.
+    @MainActor static func captureLaunchState() {
+        if effectiveAtLaunch == nil {
+            effectiveAtLaunch = Bundle.main.preferredLocalizations.first ?? "en"
+        }
+        reconcile()
+    }
+
+    /// Whether the app must restart before `language` becomes visible.
+    @MainActor static func restartPending(for language: AppLanguage) -> Bool {
+        guard let running = effectiveAtLaunch else { return false }
+        if language == .system {
+            // Following macOS again: a restart is owed only if we were overriding.
+            return UserDefaults.standard.array(forKey: overrideKey) != nil
+        }
+        return !running.hasPrefix(language.rawValue)
+    }
+
+    /// Re-asserts a stored choice that never reached macOS.
+    ///
+    /// The shipped bug left people with a saved preference and no `AppleLanguages`
+    /// entry. Re-picking the same language in the picker fires no change event, so
+    /// without this they would be stuck: the only way out would be selecting a
+    /// different language and coming back. This heals it on the next launch.
+    @MainActor private static func reconcile() {
+        let stored = current
+        guard stored != .system else { return }
+        let preferred = UserDefaults.standard.array(forKey: overrideKey) as? [String]
+        if preferred?.first?.hasPrefix(stored.rawValue) != true {
+            apply(stored)
+        }
+    }
+
+    /// Writes the choice through to macOS.
+    ///
+    /// This ALWAYS writes, deliberately. The Settings picker is bound to
+    /// `settingKey` via `@AppStorage`, which updates it before `.onChange` runs —
+    /// so a `guard language != current` here silently matched every time and the
+    /// `AppleLanguages` write never happened. The setting appeared to change and
+    /// nothing did, restart or not.
+    static func apply(_ language: AppLanguage) {
         let defaults = UserDefaults.standard
-        guard language != current else { return false }
         defaults.set(language.rawValue, forKey: settingKey)
         if language == .system {
             defaults.removeObject(forKey: overrideKey)
         } else {
             defaults.set([language.rawValue], forKey: overrideKey)
         }
-        return true
     }
 }

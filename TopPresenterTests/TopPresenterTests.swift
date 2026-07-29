@@ -1049,7 +1049,7 @@ struct PresentationManagerTests {
         }
 
         AppLanguage.apply(.system)
-        #expect(AppLanguage.apply(.fr))                 // changed → restart needed
+        AppLanguage.apply(.fr)
         #expect(AppLanguage.current == .fr)
         // AppleLanguages is a GLOBAL key: reading it back returns the resolved
         // preferred-language list, not the array verbatim. What matters is that
@@ -1057,10 +1057,61 @@ struct PresentationManagerTests {
         let preferred = d.array(forKey: AppLanguage.overrideKey) as? [String] ?? []
         #expect(preferred.first?.hasPrefix("fr") == true)
 
-        #expect(AppLanguage.apply(.fr) == false)        // no spurious restart prompt
-
-        #expect(AppLanguage.apply(.system))             // back to following macOS
+        AppLanguage.apply(.system)                      // back to following macOS
         #expect(AppLanguage.current == .system)
+        #expect(d.object(forKey: AppLanguage.overrideKey) == nil ||
+                (d.array(forKey: AppLanguage.overrideKey) as? [String])?.first?.hasPrefix("fr") == false)
+    }
+
+    /// The regression that shipped: the Settings picker is bound to `settingKey`
+    /// through `@AppStorage`, which writes it BEFORE `.onChange` runs. `apply`
+    /// used to bail when the requested language already matched the stored one,
+    /// so in the real UI it matched every single time and macOS was never told
+    /// anything. The setting looked applied and nothing changed, restart or not.
+    @Test func applyWritesEvenWhenTheStoredSettingIsAlreadyUpToDate() {
+        let d = UserDefaults.standard
+        let savedSetting = d.string(forKey: AppLanguage.settingKey)
+        let savedApple = d.array(forKey: AppLanguage.overrideKey)
+        defer {
+            if let s = savedSetting { d.set(s, forKey: AppLanguage.settingKey) }
+            else { d.removeObject(forKey: AppLanguage.settingKey) }
+            if let a = savedApple { d.set(a, forKey: AppLanguage.overrideKey) }
+            else { d.removeObject(forKey: AppLanguage.overrideKey) }
+        }
+
+        d.removeObject(forKey: AppLanguage.overrideKey)
+        // Exactly what @AppStorage does the instant the picker changes:
+        d.set(AppLanguage.de.rawValue, forKey: AppLanguage.settingKey)
+        #expect(AppLanguage.current == .de)   // stored setting already agrees
+
+        AppLanguage.apply(.de)                // …and apply must STILL write through
+
+        let preferred = d.array(forKey: AppLanguage.overrideKey) as? [String] ?? []
+        #expect(preferred.first?.hasPrefix("de") == true)
+    }
+
+    /// Anyone who used the broken build has a stored language and no
+    /// AppleLanguages entry. Re-picking the same value in the picker fires no
+    /// change event, so launching must repair it or they stay stuck forever.
+    @Test func launchRepairsAChoiceThatNeverReachedMacOS() {
+        let d = UserDefaults.standard
+        let savedSetting = d.string(forKey: AppLanguage.settingKey)
+        let savedApple = d.array(forKey: AppLanguage.overrideKey)
+        defer {
+            if let s = savedSetting { d.set(s, forKey: AppLanguage.settingKey) }
+            else { d.removeObject(forKey: AppLanguage.settingKey) }
+            if let a = savedApple { d.set(a, forKey: AppLanguage.overrideKey) }
+            else { d.removeObject(forKey: AppLanguage.overrideKey) }
+        }
+
+        // Exactly the state found on the reporter's machine.
+        d.set(AppLanguage.de.rawValue, forKey: AppLanguage.settingKey)
+        d.removeObject(forKey: AppLanguage.overrideKey)
+
+        AppLanguage.captureLaunchState()
+
+        let preferred = d.array(forKey: AppLanguage.overrideKey) as? [String] ?? []
+        #expect(preferred.first?.hasPrefix("de") == true)
     }
 
     /// Proves the catalog actually SHIPS usable resources: an unmatched or empty
