@@ -1838,66 +1838,18 @@ struct LayoutEditorSheet: View {
         return true
     }
 
-    @ViewBuilder
     private func boxListRow(identity: BoxIdentity) -> some View {
-        let isSelected = selection == identity
-        let isVisible = pm.isBoxVisible(identity)
-
-        // The LEADING area selects + drags; the eye/trash buttons live outside
-        // the drag/tap surface so their clicks are never swallowed.
-        let leading = HStack(spacing: 6) {
-            Image(systemName: "line.3.horizontal")
-                .font(.system(size: 8))
-                .foregroundStyle(.tertiary)
-                .help(String(localized: "Trage pentru a reordona (primul = deasupra pe ecran)", comment: "Tooltip"))
-            BoxColorSwatch(identity: identity)
-            Text(boxLabel(for: identity, pm: pm))
-                .font(.caption)
-                .lineLimit(1)
-            Spacer(minLength: 4)
-        }
-        .contentShape(Rectangle())
-        .onTapGesture { selection = identity }
-        .draggable(boxToken(for: identity))
-
-        HStack(spacing: 6) {
-            leading
-
-            Button {
-                pm.toggleBoxVisibility(identity)
-            } label: {
-                Image(systemName: isVisible ? "eye" : "eye.slash")
-                    .font(.caption2)
-                    .frame(width: 18, height: 18)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.borderless)
-            .help(String(localized: "Afișează / ascunde caseta", comment: "Tooltip"))
-
-            Button(role: .destructive) {
-                removeOrHide(identity)
-            } label: {
-                Image(systemName: "trash")
-                    .font(.caption2)
-                    .frame(width: 18, height: 18)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.borderless)
-            .help({
-                if case .section = identity {
-                    return String(localized: "Elimină caseta (o poți reactiva cu ochiul)", comment: "Tooltip")
-                }
-                return String(localized: "Șterge caseta", comment: "Tooltip")
-            }())
-        }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 5)
-        .background(
-            isSelected ? appHighlight.opacity(0.15) : Color.clear,
-            in: RoundedRectangle(cornerRadius: 5)
+        // The per-box reads (label, visibility, tooltip) live in the row's own
+        // view. Inline here they were part of the sheet's body, which subscribed
+        // this whole editor to EVERY box: nudging one invalidated all of it.
+        // The context menu and the reorder drop target stay put — their closures
+        // are actions, not reads, so they cost nothing per render.
+        EditorBoxListRow(
+            identity: identity,
+            isSelected: selection == identity,
+            onSelect: { selection = identity },
+            onRemove: { removeOrHide(identity) }
         )
-        .help(boxSourceDescription(for: identity, pm: pm))
-        .opacity(isVisible ? 1.0 : 0.55)
         .contextMenu { listRowMenu(identity: identity) }
         .dropDestination(for: String.self) { items, _ in
             guard let dropped = items.first else { return false }
