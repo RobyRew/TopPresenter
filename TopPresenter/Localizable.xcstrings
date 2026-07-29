@@ -12024,6 +12024,1898 @@
           }
         }
       }
+    },
+    "API (JSON)": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "API (JSON)"
+          }
+        }
+      }
+    },
+    "API/RSS": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "API/RSS"
+          }
+        }
+      }
+    },
+    "Clear Output (Force Touch: %@)": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Curăță ieșirea (Force Touch: %@)"
+          }
+        }
+      }
+    },
+    "Delete Bible Module": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Șterge modulul biblic"
+          }
+        }
+      }
+    },
+    "Delete Collection": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Șterge colecția"
+          }
+        }
+      }
+    },
+    "Deselect All": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deselectează tot"
+          }
+        }
+      }
+    },
+    "Deuterocanonical / Apocrypha": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deuterocanonice / Apocrife"
+          }
+        }
+      }
+    },
+    "Done": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gata"
+          }
+        }
+      }
+    },
+    "Drop Bible files or folders here": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Trage aici fișiere sau foldere cu Biblii"
+          }
+        }
+      }
+    },
+    "Drop files onto the window to batch import": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Trage fișiere pe fereastră pentru import în masă"
+          }
+        }
+      }
+    },
+    "Drop files or folders, or click to browse. Folders (and subfolders) are scanned — every Bible and song inside is imported.": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Trage fișiere sau foldere, ori dă click pentru a răsfoi. Folderele (și subfolderele) sunt scanate — fiecare Biblie și cântec dinăuntru se importă."
+          }
+        }
+      }
+    },
+    "Export": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Export"
+          }
+        }
+      }
+    },
+    "Export (%lld)": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Export (%lld)"
+          }
+        }
+      }
+    },
+    "Export Bible Module": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Exportă modulul biblic"
+          }
+        }
+      }
+    },
+    "Export CSV…": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Exportă CSV…"
+          }
+        }
+      }
+    },
+    "Export Failed": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Exportul a eșuat"
+          }
+        }
+      }
+    },
+    "Export Here": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Exportă aici"
+          }
+        }
+      }
+    },
+    "Export JSON…": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Exportă JSON…"
+          }
+        }
+      }
+    },
+    "Export Successful": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Export reușit"
+          }
+        }
+      }
+    },
+    "Export format:": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Format export:"
+          }
+        }
+      }
+    },
+    "Export multiple modules at once": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Exportă mai multe module deodată"
+          }
+        }
+      }
+    },
+    "Exporting %@...": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Se exportă %@…"
+          }
+        }
+      }
+    },
+    "Exporting %lld of %lld...": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Se exportă %lld din %lld…"
+          }
+        }
+      }
+    },
+    "Failed to encode data.": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Datele nu au putut fi codificate."
+          }
+        }
+      }
+    },
+    "Failed to write file: %@": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fișierul nu a putut fi scris: %@"
+          }
+        }
+      }
+    },
+    "File": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fișier"
+          }
+        }
+      }
+    },
+    "File not found.": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fișierul nu a fost găsit."
+          }
+        }
+      }
+    },
+    "Filter": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Filtru"
+          }
+        }
+      }
+    },
+    "Final": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Final"
+          }
+        }
+      }
+    },
+    "First: %@   ·   Last: %@": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Primul: %@   ·   Ultimul: %@"
+          }
+        }
+      }
+    },
+    "Floating": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Plutitor"
+          }
+        }
+      }
+    },
+    "Focus Search Field": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mergi la câmpul de căutare"
+          }
+        }
+      }
+    },
+    "Format": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Format"
+          }
+        }
+      }
+    },
+    "Help": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ajutor"
+          }
+        }
+      }
+    },
+    "Hide": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ascunde"
+          }
+        }
+      }
+    },
+    "History": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Istoric"
+          }
+        }
+      }
+    },
+    "Imagine": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Imagine"
+          }
+        }
+      }
+    },
+    "Import / Export": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Import / Export"
+          }
+        }
+      }
+    },
+    "Import All (%lld)": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Importă tot (%lld)"
+          }
+        }
+      }
+    },
+    "Import Bible": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Importă Biblie"
+          }
+        }
+      }
+    },
+    "Import Failed": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Importul a eșuat"
+          }
+        }
+      }
+    },
+    "Import Successful": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Import reușit"
+          }
+        }
+      }
+    },
+    "Import a Bible module to get started.\nSupported formats: TopPresenter JSON, OSIS XML, Zefania XML, MySword, USFM, Unbound Bible": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Importă un modul biblic ca să începi.\nFormate acceptate: TopPresenter JSON, OSIS XML, Zefania XML, MySword, USFM, Unbound Bible"
+          }
+        }
+      }
+    },
+    "Import another module": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Importă alt modul"
+          }
+        }
+      }
+    },
+    "Import songs to get started.\nSupported: TopPresenter JSON, OpenSong, OpenLyrics, ChordPro, PowerPoint, plain text.": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Importă cântece ca să începi.\nAcceptate: TopPresenter JSON, OpenSong, OpenLyrics, ChordPro, PowerPoint, text simplu."
+          }
+        }
+      }
+    },
+    "Importing %@...": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Se importă %@…"
+          }
+        }
+      }
+    },
+    "Importing %lld of %lld...": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Se importă %lld din %lld…"
+          }
+        }
+      }
+    },
+    "Importing books...": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Se importă cărțile…"
+          }
+        }
+      }
+    },
+    "Invalid file format: %@": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Format de fișier invalid: %@"
+          }
+        }
+      }
+    },
+    "Last presented": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ultima prezentare"
+          }
+        }
+      }
+    },
+    "Layout": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aspect"
+          }
+        }
+      }
+    },
+    "Merging...": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Se combină…"
+          }
+        }
+      }
+    },
+    "Module": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Module"
+          }
+        }
+      }
+    },
+    "MySword SQLite database (.bbl.mybible)": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bază de date MySword SQLite (.bbl.mybible)"
+          }
+        }
+      }
+    },
+    "Name": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nume"
+          }
+        }
+      }
+    },
+    "Native JSON with all metadata, cross-references, footnotes, and section headings": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "JSON nativ cu toate metadatele, referințe încrucișate, note de subsol și titluri de secțiuni"
+          }
+        }
+      }
+    },
+    "Navigation": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Navigare"
+          }
+        }
+      }
+    },
+    "New Testament": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Noul Testament"
+          }
+        }
+      }
+    },
+    "Next Chapter": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Capitolul următor"
+          }
+        }
+      }
+    },
+    "Next Verse": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Versetul următor"
+          }
+        }
+      }
+    },
+    "Next Verse / Song Section": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Versetul / strofa următoare"
+          }
+        }
+      }
+    },
+    "Next:": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Următorul:"
+          }
+        }
+      }
+    },
+    "No Bible Modules": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Niciun modul biblic"
+          }
+        }
+      }
+    },
+    "No Bible module selected for export.": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Niciun modul biblic selectat pentru export."
+          }
+        }
+      }
+    },
+    "No Bible modules available. Import a module first.": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Niciun modul biblic disponibil. Importă întâi un modul."
+          }
+        }
+      }
+    },
+    "No Song Collections": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nicio colecție de cântece"
+          }
+        }
+      }
+    },
+    "No presentation history yet": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Niciun istoric de prezentări încă"
+          }
+        }
+      }
+    },
+    "No recognizable Bible files were found in the selection.": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nu s-a găsit niciun fișier biblic recunoscut în selecție."
+          }
+        }
+      }
+    },
+    "No recognizable Bible or song files were found in the selection.": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nu s-a găsit niciun fișier biblic sau de cântece recunoscut în selecție."
+          }
+        }
+      }
+    },
+    "No schedule selected": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nicio sesiune selectată"
+          }
+        }
+      }
+    },
+    "No songs were found in the selected location.": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nu s-a găsit niciun cântec în locația selectată."
+          }
+        }
+      }
+    },
+    "None of the dropped files were recognized. Supported: Bible modules (.json, .xml, .mybible, .usfm), Songs (.xml, .pptx, .ppt), Media (images, audio, video).": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Niciunul dintre fișierele trase nu a fost recunoscut. Acceptate: module biblice (.json, .xml, .mybible, .usfm), cântece (.xml, .pptx, .ppt), media (imagini, audio, video)."
+          }
+        }
+      }
+    },
+    "Normal": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Normal"
+          }
+        }
+      }
+    },
+    "Notes": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Note"
+          }
+        }
+      }
+    },
+    "Nothing to import": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nimic de importat"
+          }
+        }
+      }
+    },
+    "Old Testament": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vechiul Testament"
+          }
+        }
+      }
+    },
+    "Only %lld verse(s) fit on screen at current size": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Doar %lld verset(e) încap pe ecran la mărimea curentă"
+          }
+        }
+      }
+    },
+    "Only supported file types are read.": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Se citesc doar tipurile de fișier acceptate."
+          }
+        }
+      }
+    },
+    "Open": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deschide"
+          }
+        }
+      }
+    },
+    "Open Scripture Information Standard XML format": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Format XML Open Scripture Information Standard"
+          }
+        }
+      }
+    },
+    "Override format manually": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Suprascrie formatul manual"
+          }
+        }
+      }
+    },
+    "Parsing failed: %@": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Analiza a eșuat: %@"
+          }
+        }
+      }
+    },
+    "Pause": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pauză"
+          }
+        }
+      }
+    },
+    "Per-verse": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Per verset"
+          }
+        }
+      }
+    },
+    "Pick a translation to browse its books, chapters and verses — then send any passage to the screen. You can switch translations anytime from the toolbar above.": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alege o traducere ca să-i răsfoiești cărțile, capitolele și versetele — apoi trimite orice pasaj pe ecran. Poți schimba traducerea oricând din bara de sus."
+          }
+        }
+      }
+    },
+    "Play": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Redă"
+          }
+        }
+      }
+    },
+    "Preparing export...": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Se pregătește exportul…"
+          }
+        }
+      }
+    },
+    "Previous Chapter": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Capitolul anterior"
+          }
+        }
+      }
+    },
+    "Previous Verse": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Versetul anterior"
+          }
+        }
+      }
+    },
+    "Previous Verse / Song Section": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Versetul / strofa anterioară"
+          }
+        }
+      }
+    },
+    "Quick Search (everything)": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Căutare rapidă (tot)"
+          }
+        }
+      }
+    },
+    "RSS / Atom": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "RSS / Atom"
+          }
+        }
+      }
+    },
+    "Reading file...": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Se citește fișierul…"
+          }
+        }
+      }
+    },
+    "Recent": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recent"
+          }
+        }
+      }
+    },
+    "Recommended": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recomandat"
+          }
+        }
+      }
+    },
+    "Reference": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Referință"
+          }
+        }
+      }
+    },
+    "Refresh": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reîmprospătează"
+          }
+        }
+      }
+    },
+    "Regular": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Obișnuit"
+          }
+        }
+      }
+    },
+    "Revert to single verse": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Revino la un singur verset"
+          }
+        }
+      }
+    },
+    "Running Order": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ordinea slujbei"
+          }
+        }
+      }
+    },
+    "Save": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Salvează"
+          }
+        }
+      }
+    },
+    "Saving...": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Se salvează…"
+          }
+        }
+      }
+    },
+    "Scanning directory...": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Se scanează directorul…"
+          }
+        }
+      }
+    },
+    "Scanning for Bible & song files…": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Se caută fișiere de Biblie și cântece…"
+          }
+        }
+      }
+    },
+    "Schedules": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sesiuni"
+          }
+        }
+      }
+    },
+    "Select": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Selectează"
+          }
+        }
+      }
+    },
+    "Select All": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Selectează tot"
+          }
+        }
+      }
+    },
+    "Select Bible file(s) to import": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alege fișiere de Biblie pentru import"
+          }
+        }
+      }
+    },
+    "Select Bible files and/or folders — subfolders are scanned automatically": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alege fișiere și/sau foldere de Biblie — subfolderele sunt scanate automat"
+          }
+        }
+      }
+    },
+    "Select Folder": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alege folderul"
+          }
+        }
+      }
+    },
+    "Select Multiple Verses": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Selectează mai multe versete"
+          }
+        }
+      }
+    },
+    "Select a Bible Module": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alege un modul biblic"
+          }
+        }
+      }
+    },
+    "Select a book": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alege o carte"
+          }
+        }
+      }
+    },
+    "Select a book and chapter to view verses": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alege o carte și un capitol pentru a vedea versetele"
+          }
+        }
+      }
+    },
+    "Select a folder containing USFM Bible files": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alege un folder cu fișiere USFM"
+          }
+        }
+      }
+    },
+    "Select a module": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alege un modul"
+          }
+        }
+      }
+    },
+    "Select a song to see its history": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alege un cântec ca să-i vezi istoricul"
+          }
+        }
+      }
+    },
+    "Select module to export:": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modulul de exportat:"
+          }
+        }
+      }
+    },
+    "Select modules:": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Module:"
+          }
+        }
+      }
+    },
+    "Sessions": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sesiuni"
+          }
+        }
+      }
+    },
+    "Settings": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Setări"
+          }
+        }
+      }
+    },
+    "Show": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Afișează"
+          }
+        }
+      }
+    },
+    "Show Keyboard Shortcuts": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Arată scurtăturile de tastatură"
+          }
+        }
+      }
+    },
+    "Show Selected on Screen": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Arată selecția pe ecran"
+          }
+        }
+      }
+    },
+    "Show Verse on Screen": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Arată versetul pe ecran"
+          }
+        }
+      }
+    },
+    "Show on Screen": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Arată pe ecran"
+          }
+        }
+      }
+    },
+    "Shows": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Prezentări"
+          }
+        }
+      }
+    },
+    "Simple text file with book, chapter, and verse numbers": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fișier text simplu cu numere de carte, capitol și verset"
+          }
+        }
+      }
+    },
+    "Slides": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Slide-uri"
+          }
+        }
+      }
+    },
+    "Songs and Bible verses you present on screen will be tracked here.": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cântecele și versetele pe care le prezinți vor apărea aici."
+          }
+        }
+      }
+    },
+    "Speed:": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Viteză:"
+          }
+        }
+      }
+    },
+    "Start / Show Presentation": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pornește / arată prezentarea"
+          }
+        }
+      }
+    },
+    "Starting export...": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Începe exportul…"
+          }
+        }
+      }
+    },
+    "Starting import...": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Începe importul…"
+          }
+        }
+      }
+    },
+    "Subtitle": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Subtitlu"
+          }
+        }
+      }
+    },
+    "Successfully exported \"%@\" as %@.": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "„%@” a fost exportat ca %@."
+          }
+        }
+      }
+    },
+    "Successfully exported %lld module(s) to %@/": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld modul(e) exportate în %@/"
+          }
+        }
+      }
+    },
+    "Successfully imported \"%@\" with %lld books.": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "„%@” importat cu %lld cărți."
+          }
+        }
+      }
+    },
+    "Successfully imported %lld file(s).": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld fișier(e) importate."
+          }
+        }
+      }
+    },
+    "Supported formats": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Formate acceptate"
+          }
+        }
+      }
+    },
+    "System": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sistem"
+          }
+        }
+      }
+    },
+    "Tab-delimited text format from Unbound Bible project": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Format text cu tabulatori, din proiectul Unbound Bible"
+          }
+        }
+      }
+    },
+    "Tag": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Etichetă"
+          }
+        }
+      }
+    },
+    "Text & Display": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Text și afișare"
+          }
+        }
+      }
+    },
+    "The file is empty.": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fișierul este gol."
+          }
+        }
+      }
+    },
+    "Times": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ori"
+          }
+        }
+      }
+    },
+    "Tip: Most shortcuts are also available from the menu bar.": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sfat: majoritatea scurtăturilor sunt și în bara de meniu."
+          }
+        }
+      }
+    },
+    "Title": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Titlu"
+          }
+        }
+      }
+    },
+    "Toggle Freeze": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Comută înghețarea"
+          }
+        }
+      }
+    },
+    "TopPresenter native JSON format with cross-references, footnotes, and headings": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Format JSON nativ TopPresenter, cu referințe încrucișate, note de subsol și titluri"
+          }
+        }
+      }
+    },
+    "Translation": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Traducere"
+          }
+        }
+      }
+    },
+    "USFM": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "USFM"
+          }
+        }
+      }
+    },
+    "Unbound Bible": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unbound Bible"
+          }
+        }
+      }
+    },
+    "Unified Standard Format Markers (folder of .usfm files)": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unified Standard Format Markers (folder cu fișiere .usfm)"
+          }
+        }
+      }
+    },
+    "Unsupported format: %@": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Format nesuportat: %@"
+          }
+        }
+      }
+    },
+    "Untitled": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fără titlu"
+          }
+        }
+      }
+    },
+    "Untitled Schedule": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sesiune fără nume"
+          }
+        }
+      }
+    },
+    "Verse & Slide Navigation": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Navigare versete și slide-uri"
+          }
+        }
+      }
+    },
+    "Writing file...": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Se scrie fișierul…"
+          }
+        }
+      }
+    },
+    "Zefania XML": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zefania XML"
+          }
+        }
+      }
+    },
+    "Zefania XML Bible format": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Format biblic Zefania XML"
+          }
+        }
+      }
+    },
+    "or click to browse": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "sau dă click pentru a răsfoi"
+          }
+        }
+      }
+    },
+    "times presented": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "prezentări"
+          }
+        }
+      }
+    },
+    "verse shows": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "afișări de versete"
+          }
+        }
+      }
+    },
+    "⚠️ Only 1 verse fits at current font size": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "⚠️ Doar 1 verset încape la mărimea curentă a fontului"
+          }
+        }
+      }
+    },
+    "LIVE": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "LIVE"
+          }
+        }
+      }
+    },
+    "Loop video": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Video în buclă"
+          }
+        }
+      }
+    },
+    "Mute": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fără sunet"
+          }
+        }
+      }
+    },
+    "NT": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "NT"
+          }
+        }
+      }
+    },
+    "OT": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "VT"
+          }
+        }
+      }
+    },
+    "Semibold": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Semi-aldin"
+          }
+        }
+      }
+    },
+    "Stop and clear output": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Oprește și curăță ieșirea"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

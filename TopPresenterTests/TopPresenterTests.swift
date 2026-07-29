@@ -1073,6 +1073,12 @@ struct PresentationManagerTests {
             ("ru", "Delete", "Удалить"),
             ("ro", "Freeze", "Îngheață"),
             ("en", "Editor de Teme…", "Theme Editor…"),   // Romanian key, English override
+            // The regression this guards against: adding an English override to a
+            // Romanian-authored key must NOT make Romanian fall through to it. With
+            // no `ro` entry the lookup has to return the key itself — the Romanian
+            // source — not the English translation.
+            ("ro", "Editor de Teme…", "Editor de Teme…"),
+            ("ro", "%lld capitole", "%lld capitole"),
         ] {
             let path = try #require(Bundle.main.path(forResource: code, ofType: "lproj"),
                                     "missing \(code).lproj")
