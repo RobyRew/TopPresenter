@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# Keeps the README translation table in step with the String Catalog.
+#
+# Only runs when the catalog is actually part of this commit, so ordinary
+# commits stay fast. If the table changes, it is staged with the rest of the
+# commit rather than left as a dirty file for someone to notice later.
+set -euo pipefail
+
+if ! git diff --cached --name-only | grep -q 'TopPresenter/Localizable.xcstrings'; then
+    exit 0
+fi
+
+python3 scripts/i18n_coverage.py
+if ! git diff --quiet -- README.md; then
+    git add README.md
+    echo "pre-commit: README translation table refreshed and staged."
+fi

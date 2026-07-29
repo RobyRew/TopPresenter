@@ -44,6 +44,12 @@ jobs:
           }
           xcodebuild -version
 
+      - name: Check README translation table is current
+        # The pre-commit hook regenerates it, but hooks are opt-in per clone —
+        # this makes a forgotten refresh visible instead of letting the published
+        # percentages drift away from the catalog.
+        run: python3 scripts/i18n_coverage.py --check
+
       - name: Resolve dependencies
         run: xcodebuild -resolvePackageDependencies -scheme "$SCHEME" -project "$PRODUCT_NAME.xcodeproj"
 
