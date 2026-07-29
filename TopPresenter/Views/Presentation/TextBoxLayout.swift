@@ -3037,8 +3037,11 @@ struct LayoutEditorSheet: View {
                     .font(.caption.bold())
             }
 
-            // Red-letter — words of Jesus Christ (Bible presenter only).
-            if pm.activeProfileKey == "bible" {
+            // Red-letter, interlinear and multi-verse all style the VERSE text and
+            // nothing else, so they belong to the verse cassette — same rule the
+            // multi-verse group already followed. Showing them while a title or
+            // reference box was selected implied they applied to that box.
+            if pm.activeProfileKey == "bible", selection == BoxIdentity.section(.verseContent) {
                 GroupBox {
                     VStack(alignment: .leading, spacing: 8) {
                         Toggle(isOn: pmBinding.wocStyleEnabled) {
@@ -3130,9 +3133,9 @@ struct LayoutEditorSheet: View {
                         .font(.caption.bold())
                 }
 
-                // Multi-verse — how several selected verses render together. Only on
-                // the verse cassette; stored in the theme (exports/imports with it).
-                if selection == BoxIdentity.section(.verseContent) {
+                // Multi-verse — how several selected verses render together.
+                // Stored in the theme (exports/imports with it).
+                do {
                     GroupBox {
                         VStack(alignment: .leading, spacing: 8) {
                             labeledRow(String(localized: "Aranjare:", comment: "Setting label")) {
