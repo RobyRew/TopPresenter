@@ -1855,6 +1855,31 @@ struct LayoutEditorSheet: View {
 
     @ViewBuilder
     private func tabContent(_ tab: EditorTab) -> some View {
+        #if DEBUG
+        // Temporary. Splits the ~850 ms first build of the Text tab into the two
+        // things it could be: BUILD = evaluating this project's view bodies and
+        // the computed properties they read; the remainder (total switch minus
+        // BUILD) = AppKit instantiating and laying out the controls.
+        timedTabBody(tab)
+        #else
+        rawTabContent(tab)
+        #endif
+    }
+
+    #if DEBUG
+    @ViewBuilder
+    private func timedTabBody(_ tab: EditorTab) -> some View {
+        let started = Date.now
+        let content = rawTabContent(tab)
+        let ms = Date.now.timeIntervalSince(started) * 1000
+        // Only the interesting ones — this runs for every mounted tab per render.
+        let _ = ms > 40 ? print("[TopPresenter]   \(tab.rawValue) BUILD: \(Int(ms)) ms") : ()
+        content
+    }
+    #endif
+
+    @ViewBuilder
+    private func rawTabContent(_ tab: EditorTab) -> some View {
         switch tab {
         case .layout: layoutTab
         case .text: textTab
