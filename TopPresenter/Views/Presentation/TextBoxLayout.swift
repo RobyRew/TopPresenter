@@ -1370,6 +1370,12 @@ struct LayoutEditorSheet: View {
 
     @State private var selection: BoxIdentity? = .section(.verseContent)
     @State private var activeTab: EditorTab = .layout
+    #if DEBUG
+    /// Temporary, for the timing line below: which tabs already had their views
+    /// built before the current switch.
+    @State private var mountedBefore: Set<EditorTab> = []
+    #endif
+
     /// Tabs the operator has opened at least once. They stay mounted so coming
     /// back to one is a visibility change instead of a rebuild — see `inspector`.
     @State private var visitedTabs: Set<EditorTab> = []
@@ -1832,12 +1838,16 @@ struct LayoutEditorSheet: View {
         // Temporary: report what a real switch actually costs, because synthetic
         // control clusters kept under-predicting it. The async hop lands after
         // SwiftUI's update + layout for this runloop turn.
-        .onChange(of: activeTab) { _, new in
+        .onChange(of: activeTab) { old, new in
             let started = Date.now
-            let firstVisit = !visitedTabs.contains(new)
+            // `visitedTabs` is already updated by the onChange above, so ask the
+            // question that actually distinguishes the slow case: was this tab
+            // mounted before this switch? The label used to always say "revisit".
+            let wasMounted = visitedTabs.contains(new) && old != new && mountedBefore.contains(new)
+            mountedBefore.insert(new)
             DispatchQueue.main.async {
                 let ms = Int(Date.now.timeIntervalSince(started) * 1000)
-                print("[TopPresenter] tab -> \(new.rawValue) \(firstVisit ? "(first visit)" : "(revisit)"): \(ms) ms")
+                print("[TopPresenter] tab -> \(new.rawValue) \(wasMounted ? "(mounted)" : "(FIRST BUILD)"): \(ms) ms")
             }
         }
         #endif
