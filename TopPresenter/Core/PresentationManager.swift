@@ -278,6 +278,7 @@ final class PresentationManager {
         switch type {
         case .bible: return "bible"
         case .song: return "song"
+        case .media: return "media"
         default: return "text"
         }
     }
@@ -286,6 +287,7 @@ final class PresentationManager {
         switch key {
         case "bible": return String(localized: "Biblie", comment: "Content type")
         case "song": return String(localized: "Cântece", comment: "Content type")
+        case "media": return String(localized: "Media", comment: "Content type")
         default: return String(localized: "Slide-uri proprii", comment: "Content type — the Custom Slides profile")
         }
     }
@@ -638,6 +640,17 @@ final class PresentationManager {
                     TextBoxSection.translationName.rawValue: false,
                     TextBoxSection.subtitle.rawValue: false,
                 ]
+            case "media":
+                // Full-screen media IS the content: every built-in text box ships
+                // hidden so a photo or video is never covered by default. The
+                // profile exists for overlays — a logo, a clock, a watermark —
+                // which the operator adds as custom or media boxes.
+                p.visibility = [
+                    TextBoxSection.verseContent.rawValue: false,
+                    TextBoxSection.reference.rawValue: false,
+                    TextBoxSection.translationName.rawValue: false,
+                    TextBoxSection.subtitle.rawValue: false,
+                ]
             default: // bible
                 p.visibility = [
                     TextBoxSection.verseContent.rawValue: true,
@@ -656,11 +669,12 @@ final class PresentationManager {
         switch key {
         case "song": return [.verseContent, .reference, .subtitle, .chords]
         case "text": return [.verseContent, .reference]
+        case "media": return [.reference]      // an optional caption over the media
         default: return TextBoxSection.allCases.filter { $0 != .chords }
         }
     }
 
-    static let profileKeys = ["bible", "song", "text"]
+    static let profileKeys = ["bible", "song", "text", "media"]
 
     var profiles: [String: LayoutProfile] {
         didSet { scheduleProfilesPersist() }
@@ -2043,6 +2057,7 @@ final class PresentationManager {
             case "bible": return String(localized: "Biblie", comment: "Theme format")
             case "song": return String(localized: "Cântece", comment: "Theme format")
             case "text": return String(localized: "Slide-uri proprii", comment: "Theme format — the Custom Slides profile")
+            case "media": return String(localized: "Media", comment: "Theme format")
             default: return String(localized: "Toate", comment: "Theme format")
             }
         }
@@ -3243,6 +3258,7 @@ final class PresentationManager {
         let image: NSImage? = (kind == "image") ? url.flatMap { NSImage(contentsOf: $0) } : nil
         presentContent { [self] in
             liveContent.setMedia(kind: kind, url: url, image: image)
+            lastLiveProfileKey = "media"
             liveContent.isLive = true
             isBlackScreen = false
         }

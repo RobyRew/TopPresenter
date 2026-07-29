@@ -4052,3 +4052,34 @@ struct RemoteExtractionTests {
     }
 }
 
+
+// MARK: - Media Profile Tests
+
+@MainActor struct MediaProfileTests {
+    @Test func mediaIsAFourthProfileWithEverythingHiddenByDefault() {
+        #expect(PresentationManager.profileKeys == ["bible", "song", "text", "media"])
+
+        let profile = PresentationManager.LayoutProfile.defaultProfile(for: "media")
+        // Full-screen media IS the content — no built-in text box may cover it
+        // until the operator turns one on.
+        #expect(profile.visibility.values.allSatisfy { $0 == false })
+
+        // Only a caption is offered; verse/translation boxes make no sense here.
+        #expect(PresentationManager.relevantSections(for: "media") == [.reference])
+    }
+
+    @Test func showingMediaSwitchesTheOutputProfile() {
+        let pm = PresentationManager()
+        pm.showPresentationWindow()
+
+        pm.showBibleVerse(text: "Test", reference: "Gen 1:1")
+        #expect(pm.outputProfileKey == "bible")
+
+        pm.showMedia(kind: "video", url: nil)
+        // Before this, media left the previous presenter's profile live, so a
+        // song's boxes stayed on screen over a full-screen video.
+        #expect(pm.outputProfileKey == "media")
+
+        pm.clearOutput()
+    }
+}

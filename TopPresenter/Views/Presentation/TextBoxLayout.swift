@@ -40,6 +40,7 @@ enum TextBoxSection: String, CaseIterable, Identifiable {
         case (.verseContent, _): return String(localized: "Conținut Verset", comment: "Text box name")
         case (.reference, "song"): return String(localized: "Titlu Cântec", comment: "Text box name — song title")
         case (.reference, "text"): return String(localized: "Titlu Slide", comment: "Text box name — slide title")
+        case (.reference, "media"): return String(localized: "Titlu Media", comment: "Text box name — media caption")
         case (.reference, _): return String(localized: "Referință", comment: "Text box name — Bible reference")
         case (.translationName, _): return String(localized: "Traducere", comment: "Text box name — Bible translation name")
         case (.subtitle, "song"): return String(localized: "Etichetă Strofă", comment: "Text box name — Strofa 1 / Refren / Cor")
