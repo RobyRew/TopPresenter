@@ -1369,6 +1369,9 @@ struct LayoutEditorSheet: View {
 
     @State private var selection: BoxIdentity? = .section(.verseContent)
     @State private var activeTab: EditorTab = .layout
+    /// Tabs the operator has opened at least once. They stay mounted so coming
+    /// back to one is a visibility change instead of a rebuild — see `inspector`.
+    @State private var visitedTabs: Set<EditorTab> = []
     /// Mirrors the output's interlinear master switch so the canvas preview matches.
     @AppStorage("interlinearLiveEnabled") private var interlinearLiveEnabled = true
     /// Quick-align toggle memory: pressing the same action again restores the
@@ -1801,18 +1804,41 @@ struct LayoutEditorSheet: View {
 
             Divider()
 
-            ScrollView {
-                switch activeTab {
-                case .layout:
-                    layoutTab
-                case .text:
-                    textTab
-                case .background:
-                    backgroundTab
-                case .presenter:
-                    presenterTab
+            // A `switch` here destroyed the outgoing tab and rebuilt the incoming
+            // one from scratch — measured at ~165 ms of main-thread CPU per
+            // switch, and the same again every time you came BACK to a tab you
+            // had already opened. The cost is AppKit control instantiation: a
+            // SwiftUI Picker runs ~7 ms, a Slider ~4.5 ms, and a tab holds
+            // dozens of them.
+            //
+            // So a visited tab stays mounted and only its visibility changes:
+            // ~41 ms per switch instead of ~165. Each tab keeps its own scroll
+            // position as a side effect. Hidden tabs are opacity 0 AND disabled,
+            // so keyboard navigation can't land on a control nobody can see.
+            ZStack {
+                ForEach(EditorTab.allCases) { tab in
+                    if tab == activeTab || visitedTabs.contains(tab) {
+                        ScrollView { tabContent(tab) }
+                            .opacity(tab == activeTab ? 1 : 0)
+                            .allowsHitTesting(tab == activeTab)
+                            .accessibilityHidden(tab != activeTab)
+                            .disabled(tab != activeTab)
+                    }
                 }
             }
+        }
+        // `initial` records the tab the editor opens on; without it the first
+        // switch away would drop it and pay a rebuild on the way back.
+        .onChange(of: activeTab, initial: true) { visitedTabs.insert(activeTab) }
+    }
+
+    @ViewBuilder
+    private func tabContent(_ tab: EditorTab) -> some View {
+        switch tab {
+        case .layout: layoutTab
+        case .text: textTab
+        case .background: backgroundTab
+        case .presenter: presenterTab
         }
     }
 
