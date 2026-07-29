@@ -1123,6 +1123,21 @@ struct PresentationManagerTests {
         #expect(pm.showScreenDisconnectedAlert == false)
     }
 
+    /// It used to be a computed property over UserDefaults — the only one of the
+    /// 34 persisted settings that was, which also kept it outside Observation.
+    @Test func screenDisconnectActionPersistsLikeItsSiblings() {
+        let pm = PresentationManager()
+        let original = pm.screenDisconnectAction
+        defer { pm.screenDisconnectAction = original }
+
+        pm.screenDisconnectAction = .goBlack
+        // A fresh instance restores it in init(), like every other didSet setting.
+        #expect(PresentationManager().screenDisconnectAction == .goBlack)
+
+        pm.screenDisconnectAction = .moveToAvailable
+        #expect(PresentationManager().screenDisconnectAction == .moveToAvailable)
+    }
+
     @Test func pendingScreenMoveIgnoresMissingTarget() {
         let pm = PresentationManager()
         pm.presentationScreenIndex = 0

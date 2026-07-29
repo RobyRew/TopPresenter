@@ -176,7 +176,16 @@ struct AdvancedSettingsTab: View {
             for book in (try? modelContext.fetch(FetchDescriptor<Songbook>())) ?? [] {
                 modelContext.delete(book)
             }
-            try? modelContext.save()
+            do {
+                try modelContext.save()
+            } catch {
+                // The objects are already gone from the in-memory graph, so a failed
+                // save means the deletion may not survive relaunch. Saying "done"
+                // here would be a lie the user only discovers after restarting.
+                lastActionNote = String(localized: "Ștergerea nu a putut fi salvată: \(error.localizedDescription)",
+                                        comment: "Advanced error")
+                return
+            }
             libraryManager.selectedSongCollection = nil
             libraryManager.selectedSong = nil
             libraryManager.selectedSongVersion = nil
@@ -194,7 +203,13 @@ struct AdvancedSettingsTab: View {
                 modelContext.delete(module)
             }
             VerseIndexCache.deleteAll()
-            try? modelContext.save()
+            do {
+                try modelContext.save()
+            } catch {
+                lastActionNote = String(localized: "Ștergerea nu a putut fi salvată: \(error.localizedDescription)",
+                                        comment: "Advanced error")
+                return
+            }
             NotificationCenter.default.post(name: .libraryDidChange, object: nil)
             lastActionNote = String(localized: "Toate Bibliile au fost șterse.", comment: "Advanced note")
 

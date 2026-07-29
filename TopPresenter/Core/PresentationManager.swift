@@ -146,9 +146,27 @@ final class PresentationManager {
         return try? url.bookmarkData()
     }
 
+    /// Where the global background's security-scoped bookmark lives. Spelled out
+    /// in seven places across two files before this; a typo in any of them fails
+    /// silently, because UserDefaults just returns nil for a key nobody wrote.
+    static let backgroundBookmarkKey = "pm_backgroundImageBookmark"
+
+    /// A resolved bookmark plus, when the stored one had gone stale, a rebuilt
+    /// bookmark for whoever owns the storage to write back.
+    struct BookmarkResolution {
+        let url: URL
+        /// Non-nil ⇒ the stored bookmark was stale and MUST be replaced with this.
+        let refreshed: Data?
+    }
+
     /// Resolves a bookmark, trying security-scoped first, then plain.
     /// Opens scoped access when applicable (kept open — media renders continuously).
-    static func resolveBookmark(_ data: Data) -> URL? {
+    ///
+    /// A stale bookmark still resolves *today* but is living on borrowed time: once
+    /// it stops resolving, the background or media box silently renders nothing and
+    /// the user is told nothing. So rebuild it here, while access is open, and hand
+    /// it back — the caller knows where the bookmark lives, this function doesn't.
+    static func resolveBookmarkRefreshing(_ data: Data) -> BookmarkResolution? {
         var isStale = false
         if let url = try? URL(
             resolvingBookmarkData: data,
@@ -157,7 +175,7 @@ final class PresentationManager {
             bookmarkDataIsStale: &isStale
         ) {
             _ = url.startAccessingSecurityScopedResource()
-            return url
+            return BookmarkResolution(url: url, refreshed: isStale ? makeBookmark(for: url) : nil)
         }
         if let url = try? URL(
             resolvingBookmarkData: data,
@@ -165,9 +183,35 @@ final class PresentationManager {
             relativeTo: nil,
             bookmarkDataIsStale: &isStale
         ) {
-            return url
+            return BookmarkResolution(url: url, refreshed: isStale ? makeBookmark(for: url) : nil)
         }
         return nil
+    }
+
+    /// Resolution for callers that don't own the bookmark's storage.
+    static func resolveBookmark(_ data: Data) -> URL? {
+        resolveBookmarkRefreshing(data)?.url
+    }
+
+    /// Resolves for ONE synchronous use and releases the scope afterwards.
+    /// Use this for copies/exports — the long-lived `resolveBookmark` deliberately
+    /// keeps its scope open for continuously rendering media, which would otherwise
+    /// leak one open scope per exported asset.
+    static func withScopedBookmark<T>(_ data: Data, _ body: (URL) throws -> T) rethrows -> T? {
+        var isStale = false
+        guard let url = try? URL(
+            resolvingBookmarkData: data,
+            options: .withSecurityScope,
+            relativeTo: nil,
+            bookmarkDataIsStale: &isStale
+        ) else {
+            guard let plain = try? URL(resolvingBookmarkData: data, options: [],
+                                       relativeTo: nil, bookmarkDataIsStale: &isStale) else { return nil }
+            return try body(plain)
+        }
+        let opened = url.startAccessingSecurityScopedResource()
+        defer { if opened { url.stopAccessingSecurityScopedResource() } }
+        return try body(url)
     }
 
     /// "image" | "gif" | "video" from a file extension.
@@ -281,7 +325,13 @@ final class PresentationManager {
         for key in Self.profileKeys {
             let config = profile(key).background
             guard let bookmark = config.imageBookmark,
-                  let url = Self.resolveBookmark(bookmark) else { continue }
+                  let resolved = Self.resolveBookmarkRefreshing(bookmark) else { continue }
+            if let fresh = resolved.refreshed {
+                var updated = config
+                updated.imageBookmark = fresh
+                setBackgroundConfig(updated, for: key)
+            }
+            let url = resolved.url
             contentBackgroundURLs[key] = url
             contentBackgroundImages[key] = config.mediaTypeRaw == "image" ? NSImage(contentsOf: url) : nil
         }
@@ -958,13 +1008,12 @@ final class PresentationManager {
     }
 
     /// What to do when the target screen is disconnected. Persisted.
+    ///
+    /// Stored + `didSet` like the other 33 persisted settings, deliberately: as a
+    /// computed property over UserDefaults it was invisible to Observation, so a
+    /// view reading it would not re-render when it changed elsewhere.
     var screenDisconnectAction: ScreenDisconnectAction {
-        get {
-            ScreenDisconnectAction(rawValue: UserDefaults.standard.string(forKey: "pm_screenDisconnectAction") ?? "ask") ?? .ask
-        }
-        set {
-            UserDefaults.standard.set(newValue.rawValue, forKey: "pm_screenDisconnectAction")
-        }
+        didSet { UserDefaults.standard.set(screenDisconnectAction.rawValue, forKey: "pm_screenDisconnectAction") }
     }
 
     /// Which display change the pending prompt is about.
@@ -2083,7 +2132,7 @@ final class PresentationManager {
         p.backgroundColorHex = backgroundColorHex
         p.backgroundOpacity = backgroundOpacity
         p.useBackgroundImage = useBackgroundImage
-        p.backgroundImageBookmark = UserDefaults.standard.data(forKey: "pm_backgroundImageBookmark")
+        p.backgroundImageBookmark = UserDefaults.standard.data(forKey: Self.backgroundBookmarkKey)
         p.backgroundMediaTypeRaw = backgroundMediaTypeRaw
         p.backgroundStaysOnHide = backgroundStaysOnHide
         p.profiles = profiles
@@ -2237,24 +2286,30 @@ final class PresentationManager {
         var usedNames = Set<String>()
 
         func copyAsset(bookmark: Data?, slot: String, mediaType: String, preferredName: String) -> Bool {
-            guard let bookmark, let url = Self.resolveBookmark(bookmark) else { return false }
-            var name = preferredName.isEmpty ? url.lastPathComponent : preferredName
-            // Avoid duplicate file names inside the package
-            var candidate = name
-            var counter = 2
-            while usedNames.contains(candidate) {
-                candidate = "\(counter)-\(name)"
-                counter += 1
+            guard let bookmark else { return false }
+            // One-shot copy: release the scope afterwards. The long-lived
+            // resolveBookmark keeps its scope open for continuously rendering
+            // media, which here would leak one open scope per exported asset.
+            let copied = Self.withScopedBookmark(bookmark) { url -> Bool in
+                var name = preferredName.isEmpty ? url.lastPathComponent : preferredName
+                // Avoid duplicate file names inside the package
+                var candidate = name
+                var counter = 2
+                while usedNames.contains(candidate) {
+                    candidate = "\(counter)-\(name)"
+                    counter += 1
+                }
+                name = candidate
+                usedNames.insert(name)
+                do {
+                    try fm.copyItem(at: url, to: mediaDir.appendingPathComponent(name))
+                } catch {
+                    return false
+                }
+                assets.append(ThemeAssetRef(slot: slot, file: name, mediaType: mediaType))
+                return true
             }
-            name = candidate
-            usedNames.insert(name)
-            do {
-                try fm.copyItem(at: url, to: mediaDir.appendingPathComponent(name))
-            } catch {
-                return false
-            }
-            assets.append(ThemeAssetRef(slot: slot, file: name, mediaType: mediaType))
-            return true
+            return copied ?? false
         }
 
         // Global background
@@ -2299,10 +2354,15 @@ final class PresentationManager {
         try data.write(to: packageURL.appendingPathComponent("theme.json"))
     }
 
+    /// Assets the LAST `importTheme` could not copy — the caller reports them.
+    /// Reset at the start of each import.
+    var lastThemeImportSkippedAssets: [String] = []
+
     /// Imports a .tptheme package: media files are copied into the app
     /// container and re-bookmarked, then the theme is added to the library.
     @discardableResult
     func importTheme(from packageURL: URL) throws -> Theme {
+        lastThemeImportSkippedAssets = []
         let accessing = packageURL.startAccessingSecurityScopedResource()
         defer { if accessing { packageURL.stopAccessingSecurityScopedResource() } }
 
@@ -2324,7 +2384,13 @@ final class PresentationManager {
             let source = packageMedia.appendingPathComponent(asset.file)
             let destination = containerDir.appendingPathComponent(asset.file)
             guard (try? fm.copyItem(at: source, to: destination)) != nil,
-                  let bookmark = Self.makeBookmark(for: destination) else { continue }
+                  let bookmark = Self.makeBookmark(for: destination) else {
+                // A missing/corrupt asset used to be skipped in silence: the theme
+                // imported "successfully" and the operator found a blank background
+                // only when they went live with it.
+                lastThemeImportSkippedAssets.append(asset.file)
+                continue
+            }
 
             if asset.slot == "background" {
                 payload.backgroundImageBookmark = bookmark
@@ -2393,13 +2459,13 @@ final class PresentationManager {
         backgroundMediaTypeRaw = p.backgroundMediaTypeRaw
         backgroundStaysOnHide = p.backgroundStaysOnHide
         if let bookmark = p.backgroundImageBookmark {
-            UserDefaults.standard.set(bookmark, forKey: "pm_backgroundImageBookmark")
+            UserDefaults.standard.set(bookmark, forKey: Self.backgroundBookmarkKey)
             restoreBackgroundImage(from: bookmark)
         } else {
             backgroundImage = nil
             backgroundMediaURL = nil
             backgroundImagePath = nil
-            UserDefaults.standard.removeObject(forKey: "pm_backgroundImageBookmark")
+            UserDefaults.standard.removeObject(forKey: Self.backgroundBookmarkKey)
         }
         if !p.profiles.isEmpty {
             profiles = p.profiles
@@ -2679,6 +2745,8 @@ final class PresentationManager {
         self.backgroundEnabled = d.bool(forKey: "pm_backgroundEnabled") // defaults to false = transparent
         self.backgroundStaysOnHide = d.object(forKey: "pm_backgroundStaysOnHide") as? Bool ?? true
         self.windowLevel = d.string(forKey: "pm_windowLevel") ?? "alwaysOnTop"
+        self.screenDisconnectAction = ScreenDisconnectAction(
+            rawValue: d.string(forKey: "pm_screenDisconnectAction") ?? "ask") ?? .ask
         self.autoFitVerseFont = d.bool(forKey: "pm_autoFitVerseFont")
         self.videoLoopsByDefault = d.object(forKey: "pm_videoLoopsByDefault") as? Bool ?? true
         self.fullscreenVideoFillRaw = d.string(forKey: "pm_fullscreenVideoFillRaw") ?? "fit"
@@ -2752,7 +2820,7 @@ final class PresentationManager {
         }
         // Restore background image — security-scoped bookmark first (required in the
         // sandbox after relaunch), raw path as fallback for pre-bookmark installs.
-        if let bookmark = d.data(forKey: "pm_backgroundImageBookmark") {
+        if let bookmark = d.data(forKey: Self.backgroundBookmarkKey) {
             restoreBackgroundImage(from: bookmark)
         } else if let path = d.string(forKey: "pm_backgroundImagePath"),
                   let image = NSImage(contentsOfFile: path) {
@@ -2766,7 +2834,11 @@ final class PresentationManager {
     }
 
     private func restoreBackgroundImage(from bookmark: Data) {
-        guard let url = Self.resolveBookmark(bookmark) else { return }
+        guard let resolved = Self.resolveBookmarkRefreshing(bookmark) else { return }
+        if let fresh = resolved.refreshed {
+            UserDefaults.standard.set(fresh, forKey: Self.backgroundBookmarkKey)
+        }
+        let url = resolved.url
         backgroundMediaURL = url
         backgroundMediaTypeRaw = Self.mediaType(forExtension: url.pathExtension)
         backgroundImagePath = url.path
@@ -3137,7 +3209,7 @@ final class PresentationManager {
         backgroundImagePath = url.path
         useBackgroundImage = true
         if let bookmark = Self.makeBookmark(for: url) {
-            UserDefaults.standard.set(bookmark, forKey: "pm_backgroundImageBookmark")
+            UserDefaults.standard.set(bookmark, forKey: Self.backgroundBookmarkKey)
         }
     }
 
@@ -3153,7 +3225,7 @@ final class PresentationManager {
         backgroundMediaTypeRaw = "image"
         backgroundImagePath = nil
         useBackgroundImage = false
-        UserDefaults.standard.removeObject(forKey: "pm_backgroundImageBookmark")
+        UserDefaults.standard.removeObject(forKey: Self.backgroundBookmarkKey)
     }
 
     func applyStyle(_ style: PresentationStyle) {

@@ -85,8 +85,22 @@ final class UpdateController: ObservableObject {
 // MARK: - Sparkle delegate (channels + targeted-version install)
 
 private final class UpdaterDelegate: NSObject, SPUUpdaterDelegate {
-    var useBetaChannel = false
-    var targetVersion: String?
+    // Written from the main actor (UpdateController), read from whatever queue
+    // Sparkle runs its update cycle on. ObjC delegate protocols slip past Swift 6's
+    // isolation checking, so guard the state explicitly — otherwise a check can
+    // read a half-written channel/target and pick the wrong appcast item.
+    private let lock = NSLock()
+    private var _useBetaChannel = false
+    private var _targetVersion: String?
+
+    var useBetaChannel: Bool {
+        get { lock.withLock { _useBetaChannel } }
+        set { lock.withLock { _useBetaChannel = newValue } }
+    }
+    var targetVersion: String? {
+        get { lock.withLock { _targetVersion } }
+        set { lock.withLock { _targetVersion = newValue } }
+    }
 
     func allowedChannels(for updater: SPUUpdater) -> Set<String> {
         useBetaChannel ? ["beta"] : []

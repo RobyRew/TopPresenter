@@ -1037,13 +1037,33 @@ struct ThemeGalleryView: View {
             }
         }
 
+        // A bare count hides which package failed and why — the operator is left
+        // guessing which of a dozen dropped themes did not make it.
         var imported = 0
+        var failures: [String] = []
+        var skippedAssets: [String] = []
         for url in packages {
-            if (try? pm.importTheme(from: url)) != nil { imported += 1 }
+            do {
+                _ = try pm.importTheme(from: url)
+                imported += 1
+                skippedAssets.append(contentsOf: pm.lastThemeImportSkippedAssets)
+            } catch {
+                failures.append("\(url.lastPathComponent) — \(error.localizedDescription)")
+            }
         }
-        importResultMessage = imported > 0
+
+        var message = imported > 0
             ? String(localized: "S-au importat \(imported) teme.", comment: "Import result")
             : String(localized: "Niciun pachet .tptheme valid în selecție.", comment: "Import result")
+        if !failures.isEmpty {
+            message += "\n" + String(localized: "Eșuate: \(failures.joined(separator: "; "))",
+                                     comment: "Import result — failures")
+        }
+        if !skippedAssets.isEmpty {
+            message += "\n" + String(localized: "Fișiere media lipsă din pachet: \(skippedAssets.joined(separator: ", ")). Fundalurile respective vor fi goale.",
+                                     comment: "Import result — skipped assets")
+        }
+        importResultMessage = message
     }
 }
 
@@ -3269,7 +3289,7 @@ struct LayoutEditorSheet: View {
 
                     if pm.useBackgroundImage {
                         BackgroundMediaThumb(
-                            bookmark: UserDefaults.standard.data(forKey: "pm_backgroundImageBookmark"),
+                            bookmark: UserDefaults.standard.data(forKey: PresentationManager.backgroundBookmarkKey),
                             mediaType: pm.backgroundMediaTypeRaw,
                             opacity: pm.backgroundOpacity
                         )

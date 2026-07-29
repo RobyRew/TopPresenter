@@ -268,15 +268,24 @@ struct ScheduleView: View {
 
         var imported = 0
         var unresolved: [String] = []
+        var failures: [String] = []
         for file in files {
-            guard let data = try? Data(contentsOf: file) else { continue }
-            if let result = try? SessionArchiveService.importSession(data, context: modelContext) {
+            do {
+                let data = try Data(contentsOf: file)
+                let result = try SessionArchiveService.importSession(data, context: modelContext)
                 imported += 1
                 unresolved.append(contentsOf: result.unresolvedMedia)
+            } catch {
+                // Per-file reasons used to be discarded, leaving only a count.
+                failures.append("\(file.lastPathComponent) — \(error.localizedDescription)")
             }
         }
 
         var message = String(localized: "\(imported) sesiuni importate.", comment: "Import result")
+        if !failures.isEmpty {
+            message += "\n" + String(localized: "Eșuate: \(failures.joined(separator: "; "))",
+                                     comment: "Import result — failures")
+        }
         if !unresolved.isEmpty {
             message += "\n" + String(localized: "Media lipsă din bibliotecă: \(unresolved.joined(separator: ", ")). Importă fișierele în modulul Media pentru rezolvare automată.", comment: "Import result — missing media")
         }

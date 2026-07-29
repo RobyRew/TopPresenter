@@ -146,8 +146,18 @@ struct ZipArchiveReader {
 
     // MARK: - Inflate (raw DEFLATE via Compression framework)
 
+    /// Hard ceiling on how far one entry may expand. `uncompressedSize` comes
+    /// straight out of the archive's central directory — attacker/corruption
+    /// controlled — and the Bible/Song import pickers are intentionally
+    /// unrestricted, so a malformed .pptx claiming gigabytes against a few KB of
+    /// payload would otherwise be allocated verbatim.
+    private static let maxInflateRatio = 1000
+    private static let maxInflateBytes = 512 * 1024 * 1024
+
     private static func inflate(_ input: Data, uncompressedSize: Int) -> Data? {
         guard uncompressedSize > 0 else { return Data() }
+        let ceiling = min(maxInflateBytes, max(input.count, 1) * maxInflateRatio)
+        guard uncompressedSize <= ceiling else { return nil }
         var output = Data(count: uncompressedSize)
         let written = output.withUnsafeMutableBytes { dst -> Int in
             input.withUnsafeBytes { src -> Int in

@@ -141,6 +141,14 @@ TopPresenter/
 - `clearOutput()` MUST bump the generation and cancel: Show-while-hidden followed immediately by Escape otherwise re-mounts the content 60 ms after the clear.
 - `SessionRunner` has the same hazard with a longer fuse: a `{{url:…}}`/`{{rss:…}}` TEXT item resolves asynchronously (up to `RemoteContentService`'s 6 s timeout) while nothing is on screen, so the operator very plausibly hits `next()` first. `present(item:slide:)` bumps its own `presentGeneration`, cancels `dynamicSlideTask`, and the resolution checks the generation before touching `pm`. `stop()` strands in-flight work the same way. `isResolvingSlide` drives the "resolving" affordance.
 
+### Bookmarks & security scopes
+- `resolveBookmarkRefreshing(_:)` returns the URL **plus a rebuilt bookmark when the stored one was stale** — the caller re-persists it, because only the caller knows where that bookmark lives (`Self.backgroundBookmarkKey`, a `BackgroundConfig`, a `MediaBox`). `isStale` used to be read into a local and thrown away, so bookmarks were never refreshed and eventually stopped resolving — a blank background with no error anywhere.
+- `resolveBookmark(_:)` keeps its scope open on purpose: the media it points at renders continuously. For **one-shot** use (copy/export) use `withScopedBookmark(_:_:)`, which closes the scope — the export path otherwise leaked one open scope per asset.
+- The global background bookmark key is `PresentationManager.backgroundBookmarkKey`, never a literal.
+
+### SwiftData migration — deliberately NOT wired
+`TopPresenterMigrationPlan` exists but is **not** passed to `ModelContainer`, and that is correct, not an oversight: V1→V2 is purely additive and staged `.lightweight`/`.custom` stages cannot express adding new `@Model` entities + relationships — they throw at stage construction. Both `DataMigration.swift` and `TopPresenterApp.swift` say so. If a future change needs a real stage, wiring `migrationPlan:` is part of that work; adding stages alone silently does nothing.
+
 ### Destructive actions
 - Every irreversible library deletion goes through `.confirmDestructive(_:item:name:perform:)` (`Views/Main/DestructiveConfirmation.swift`) — bind the doomed item, the alert names it, the deletion runs only on confirm. Used by Song / ServiceSchedule / PresentationSlide / MediaItem.
 - **Nothing in the app undoes a delete** — the undo stack only covers layout boxes. A context-menu mis-click mid-service must never destroy a song or a prepared service outright. Bible modules and song collections keep their own older inline alerts; new destructive actions use the shared modifier.
