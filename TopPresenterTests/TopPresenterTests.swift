@@ -1035,6 +1035,52 @@ struct PresentationManagerTests {
         #expect(pm.liveContent.mainText == "")
     }
 
+    // MARK: - Language
+
+    @Test func languageOverrideWritesApplePreferredLanguages() {
+        let d = UserDefaults.standard
+        let savedSetting = d.string(forKey: AppLanguage.settingKey)
+        let savedApple = d.array(forKey: AppLanguage.overrideKey)
+        defer {
+            if let s = savedSetting { d.set(s, forKey: AppLanguage.settingKey) }
+            else { d.removeObject(forKey: AppLanguage.settingKey) }
+            if let a = savedApple { d.set(a, forKey: AppLanguage.overrideKey) }
+            else { d.removeObject(forKey: AppLanguage.overrideKey) }
+        }
+
+        AppLanguage.apply(.system)
+        #expect(AppLanguage.apply(.fr))                 // changed → restart needed
+        #expect(AppLanguage.current == .fr)
+        // AppleLanguages is a GLOBAL key: reading it back returns the resolved
+        // preferred-language list, not the array verbatim. What matters is that
+        // our override sits at the front of it.
+        let preferred = d.array(forKey: AppLanguage.overrideKey) as? [String] ?? []
+        #expect(preferred.first?.hasPrefix("fr") == true)
+
+        #expect(AppLanguage.apply(.fr) == false)        // no spurious restart prompt
+
+        #expect(AppLanguage.apply(.system))             // back to following macOS
+        #expect(AppLanguage.current == .system)
+    }
+
+    /// Proves the catalog actually SHIPS usable resources: an unmatched or empty
+    /// catalog emits no .lproj at all and every build stays green regardless.
+    @Test func translatedResourcesResolveAtRuntime() throws {
+        for (code, key, expected) in [
+            ("es", "Clear Output", "Limpiar salida"),
+            ("fr", "Clear Output", "Effacer la sortie"),
+            ("de", "Black Screen", "Schwarzbild"),
+            ("ru", "Delete", "Удалить"),
+            ("ro", "Freeze", "Îngheață"),
+            ("en", "Editor de Teme…", "Theme Editor…"),   // Romanian key, English override
+        ] {
+            let path = try #require(Bundle.main.path(forResource: code, ofType: "lproj"),
+                                    "missing \(code).lproj")
+            let bundle = try #require(Bundle(path: path))
+            #expect(bundle.localizedString(forKey: key, value: nil, table: nil) == expected)
+        }
+    }
+
     // MARK: - A staged show must never overwrite a newer one
 
     /// `orderFront` makes the window visible synchronously, so a second Show right

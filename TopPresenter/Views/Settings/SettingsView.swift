@@ -103,6 +103,9 @@ struct InterfaceSettingsTab: View {
     @AppStorage("forceTouchClearAction") private var forceTouchAction: String = "clearAll"
     @AppStorage("sidebarRowSizeOption") private var sidebarRowSizeRaw = "system"
     @AppStorage("sidebarCustomIconSize") private var sidebarCustomSize = 14.0
+    @AppStorage(AppLanguage.settingKey) private var languageOverride = AppLanguage.system.rawValue
+    /// Set once the picker changes — `AppleLanguages` is read at launch only.
+    @State private var languageNeedsRestart = false
 
     var body: some View {
         @Bindable var store = AccentStore.shared
@@ -153,6 +156,32 @@ struct InterfaceSettingsTab: View {
                 Text(String(localized: "Aspect", comment: "Settings section"))
             } footer: {
                 Text(String(localized: "„Sistem” urmează culoarea de accent și mărimea iconițelor din Setările macOS. Evidențierea colorează selecțiile (versete, capitole, rezultate).", comment: "Settings info"))
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+
+            Section(String(localized: "Limbă", comment: "Settings section")) {
+                Picker(String(localized: "Limba interfeței:", comment: "Setting label"), selection: $languageOverride) {
+                    ForEach(AppLanguage.allCases) { lang in
+                        Text(lang.displayName).tag(lang.rawValue)
+                    }
+                }
+                .onChange(of: languageOverride) { _, newValue in
+                    let lang = AppLanguage(rawValue: newValue) ?? .system
+                    languageNeedsRestart = AppLanguage.apply(lang)
+                }
+
+                if languageNeedsRestart {
+                    Label(
+                        String(localized: "Repornește TopPresenter ca schimbarea să aibă efect.",
+                               comment: "Settings info — language restart"),
+                        systemImage: "arrow.clockwise"
+                    )
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+                }
+
+                Text(String(localized: "„Sistem” urmează limba din Setările macOS. Traducerile sunt încă parțiale — textul netradus apare în limba în care a fost scris.",
+                            comment: "Settings info — language"))
                     .font(.caption).foregroundStyle(.secondary)
             }
 
