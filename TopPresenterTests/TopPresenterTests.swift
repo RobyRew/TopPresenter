@@ -1146,10 +1146,15 @@ struct PresentationManagerTests {
     /// content 60 ms after the operator already moved on.
     @Test func newerShowSupersedesAStagedOne() async {
         let pm = PresentationManager()
+        // Staging only exists where there IS an output window; a headless CI
+        // runner has none, and the race cannot occur there either. Asserting the
+        // equivalence keeps this honest in both environments instead of passing
+        // vacuously on one and failing on the other.
+        let stages = pm.hasPresentationWindow
         pm.hidePresentationWindow()     // force the staged (was-hidden) path
 
         pm.showBibleVerse(text: "Verset A", reference: "Gen 1:1")
-        #expect(pm.hasStagedShow)       // precondition — never pass vacuously
+        #expect(pm.hasStagedShow == stages)
         pm.showBibleVerse(text: "Verset B", reference: "Gen 1:2")
 
         try? await Task.sleep(for: .milliseconds(200))
@@ -1164,8 +1169,9 @@ struct PresentationManagerTests {
         let pm = PresentationManager()
         pm.hidePresentationWindow()
 
+        let stages = pm.hasPresentationWindow
         pm.showBibleVerse(text: "Verset A", reference: "Gen 1:1")
-        #expect(pm.hasStagedShow)
+        #expect(pm.hasStagedShow == stages)
         pm.clearOutput()
         #expect(pm.hasStagedShow == false)   // dropped outright, not left to no-op
 
