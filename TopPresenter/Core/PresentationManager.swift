@@ -265,7 +265,7 @@ final class PresentationManager {
     var contentBackgrounds: [String: BackgroundConfig] {
         var result: [String: BackgroundConfig] = [:]
         for key in Self.profileKeys {
-            result[key] = profile(key).background
+            result[key] = readChrome(in: key) { $0.background }
         }
         return result
     }
@@ -293,11 +293,11 @@ final class PresentationManager {
     }
 
     func backgroundConfig(for key: String) -> BackgroundConfig {
-        profile(key).background
+        readChrome(in: key) { $0.background }
     }
 
     func setBackgroundConfig(_ config: BackgroundConfig, for key: String) {
-        mutateProfile(key) { $0.background = config }
+        mutateChrome(key) { $0.background = config }
     }
 
     func setContentBackgroundMedia(url: URL, for key: String) {
@@ -325,7 +325,7 @@ final class PresentationManager {
 
     private func loadContentBackgroundImages() {
         for key in Self.profileKeys {
-            let config = profile(key).background
+            let config = readChrome(in: key) { $0.background }
             guard let bookmark = config.imageBookmark,
                   let resolved = Self.resolveBookmarkRefreshing(bookmark) else { continue }
             if let fresh = resolved.refreshed {
@@ -356,7 +356,7 @@ final class PresentationManager {
     }
 
     func activeBackground(forKey key: String, frozen: Bool) -> ActiveBackground {
-        let config = profile(key).background
+        let config = readChrome(in: key) { $0.background }
         if config.enabled {
             return ActiveBackground(
                 showColor: config.showColor,
@@ -458,23 +458,23 @@ final class PresentationManager {
         get {
             var result: [String: ContentOptions] = [:]
             for key in Self.profileKeys {
-                result[key] = profile(key).options
+                result[key] = readChrome(in: key) { $0.options }
             }
             return result
         }
         set {
             for (key, options) in newValue where Self.profileKeys.contains(key) {
-                mutateProfile(key) { $0.options = options }
+                mutateChrome(key) { $0.options = options }
             }
         }
     }
 
     func contentOptions(for key: String) -> ContentOptions {
-        profile(key).options
+        readChrome(in: key) { $0.options }
     }
 
     func setContentOptions(_ options: ContentOptions, for key: String) {
-        mutateProfile(key) { $0.options = options }
+        mutateChrome(key) { $0.options = options }
     }
 
     /// Multi-verse rendering settings for the active Bible theme — the single
@@ -676,8 +676,96 @@ final class PresentationManager {
 
     static let profileKeys = ["bible", "song", "text", "media"]
 
-    var profiles: [String: LayoutProfile] {
+    /// The layouts themselves. Deliberately NOT observed: `@Observable` has no
+    /// per-key granularity, so one stored property holding every box of every
+    /// presenter meant a single drag delta invalidated the entire editor.
+    /// Observation is published explicitly instead — see the tiers below.
+    ///
+    /// Never read this directly from anything a view can reach: a raw read
+    /// subscribes to nothing, and the view goes stale. Go through `profile(_:)`
+    /// (coarse, always correct) or `readBox` / `readStructure` / `readChrome`.
+    @ObservationIgnored var profiles: [String: LayoutProfile] {
         didSet { scheduleProfilesPersist() }
+    }
+
+    // MARK: - Granular Layout Observation
+    //
+    // Three tiers, coarse to fine. EVERY mutation bumps `profileTick`, so a
+    // reader that goes through plain `profile(_:)` keeps exactly the behaviour
+    // it had when `profiles` was observed directly. That is the safe default:
+    // an accessor is coarse — correct but noisy — unless it deliberately opts
+    // into a narrower tier, and a wrong opt-in shows up as a stale view rather
+    // than as lost data.
+
+    /// Bumped by every mutation of a profile. The fallback dependency.
+    private var profileTick: [String: UInt32] = [:]
+    /// Bumped when a profile's box SET or stacking order changes.
+    private var structureTick: [String: UInt32] = [:]
+    /// Bumped when a profile's background, content options or transitions change.
+    private var chromeTick: [String: UInt32] = [:]
+    /// Per-box tokens, keyed `"<profile>|<box token>"`. Ignored on purpose:
+    /// handing out a token is bookkeeping, not a change worth re-rendering for.
+    /// Entries for deleted boxes are left behind — each is a few bytes, and
+    /// pruning them would mean invalidating during a read.
+    @ObservationIgnored private var boxTokens: [String: BoxObservationToken] = [:]
+
+    private func boxObservationToken(_ key: String, _ token: String) -> BoxObservationToken {
+        let id = key + "|" + token
+        if let existing = boxTokens[id] { return existing }
+        let made = BoxObservationToken()
+        boxTokens[id] = made
+        return made
+    }
+
+    /// Reads a slice of a profile scoped to ONE box. The caller subscribes to
+    /// that box alone — a sibling's drag will not invalidate it.
+    func readBox<T>(_ token: String, in key: String? = nil, _ body: (LayoutProfile) -> T) -> T {
+        let k = resolvedKey(key)
+        _ = boxObservationToken(k, token).tick
+        return body(profiles[k] ?? .defaultProfile(for: k))
+    }
+
+    /// Reads the box set / stacking order. Unaffected by edits *within* a box.
+    func readStructure<T>(in key: String? = nil, _ body: (LayoutProfile) -> T) -> T {
+        let k = resolvedKey(key)
+        _ = structureTick[k]
+        return body(profiles[k] ?? .defaultProfile(for: k))
+    }
+
+    /// Reads background / options / transitions. Unaffected by box edits.
+    func readChrome<T>(in key: String? = nil, _ body: (LayoutProfile) -> T) -> T {
+        let k = resolvedKey(key)
+        _ = chromeTick[k]
+        return body(profiles[k] ?? .defaultProfile(for: k))
+    }
+
+    /// Invalidates everything in one profile — correct whatever changed.
+    private func invalidateProfile(_ key: String) {
+        profileTick[key, default: 0] &+= 1
+        structureTick[key, default: 0] &+= 1
+        chromeTick[key, default: 0] &+= 1
+        let prefix = key + "|"
+        for (id, token) in boxTokens where id.hasPrefix(prefix) { token.tick &+= 1 }
+    }
+
+    /// Invalidates every profile. For wholesale replacement: undo/redo, applying
+    /// a theme, importing a `.tptheme`.
+    func invalidateAllProfiles() {
+        for key in Set(Self.profileKeys).union(profiles.keys) {
+            profileTick[key, default: 0] &+= 1
+            structureTick[key, default: 0] &+= 1
+            chromeTick[key, default: 0] &+= 1
+        }
+        for (_, token) in boxTokens { token.tick &+= 1 }
+    }
+
+    // Test hooks for the invalidation contract. Reading a tick from a view would
+    // subscribe to it, which is why these are not used outside tests.
+    func observationTick(profile key: String) -> UInt32 { profileTick[key] ?? 0 }
+    func observationTick(structureIn key: String) -> UInt32 { structureTick[key] ?? 0 }
+    func observationTick(chromeIn key: String) -> UInt32 { chromeTick[key] ?? 0 }
+    func observationTick(box token: String, in key: String) -> UInt32 {
+        boxObservationToken(key, token).tick
     }
 
     @ObservationIgnored private var profilesPersistWork: DispatchWorkItem?
@@ -782,18 +870,52 @@ final class PresentationManager {
         return Self.profileKeys.contains(k) ? k : "bible"
     }
 
+    /// The whole profile, with a COARSE dependency: the caller is invalidated by
+    /// any change to it. Always correct; use a narrower `read…` on hot paths.
     func profile(_ key: String? = nil) -> LayoutProfile {
         let k = resolvedKey(key)
+        _ = profileTick[k]
         return profiles[k] ?? .defaultProfile(for: k)
     }
 
     /// All profile mutations route through here: registers undo + persists.
+    /// Assumes the worst and invalidates the whole profile.
     func mutateProfile(_ key: String? = nil, _ body: (inout LayoutProfile) -> Void) {
         registerLayoutUndo()
         let k = resolvedKey(key)
         var p = profiles[k] ?? .defaultProfile(for: k)
         body(&p)
         profiles[k] = p
+        invalidateProfile(k)
+    }
+
+    /// A mutation confined to ONE box. Bumps that box and the coarse tick, and
+    /// leaves its siblings, the stacking order and the chrome alone — this is
+    /// what keeps a drag at one invalidated view instead of all of them.
+    ///
+    /// Only for bodies that cannot change the box set, the order, the
+    /// background, the options or the transitions. When in doubt use
+    /// `mutateProfile`: it is slower, never wrong.
+    func mutateBox(_ token: String, in key: String? = nil, _ body: (inout LayoutProfile) -> Void) {
+        registerLayoutUndo()
+        let k = resolvedKey(key)
+        var p = profiles[k] ?? .defaultProfile(for: k)
+        body(&p)
+        profiles[k] = p
+        boxObservationToken(k, token).tick &+= 1
+        profileTick[k, default: 0] &+= 1
+    }
+
+    /// A mutation confined to the profile chrome — background, content options,
+    /// transitions. Leaves every box alone.
+    func mutateChrome(_ key: String? = nil, _ body: (inout LayoutProfile) -> Void) {
+        registerLayoutUndo()
+        let k = resolvedKey(key)
+        var p = profiles[k] ?? .defaultProfile(for: k)
+        body(&p)
+        profiles[k] = p
+        chromeTick[k, default: 0] &+= 1
+        profileTick[k, default: 0] &+= 1
     }
 
     /// Copies one presenter's entire layout onto another (undo-able).
@@ -1408,11 +1530,11 @@ final class PresentationManager {
     }
 
     func boxStyle(for section: TextBoxSection, in key: String? = nil) -> BoxTextStyle {
-        profile(key).styles[section.rawValue] ?? BoxTextStyle()
+        readBox(Self.sectionToken(section), in: key) { $0.styles[section.rawValue] } ?? BoxTextStyle()
     }
 
     func setBoxStyle(_ style: BoxTextStyle, for section: TextBoxSection, in key: String? = nil) {
-        mutateProfile(key) { $0.styles[section.rawValue] = style }
+        mutateBox(Self.sectionToken(section), in: key) { $0.styles[section.rawValue] = style }
     }
 
     /// Resolves a BoxTextStyle against the globals + the given defaults.
@@ -1468,7 +1590,7 @@ final class PresentationManager {
     /// The transform a box inherits when it has none of its own: the profile's
     /// global transform, plus the legacy "reference in caps" option.
     private func defaultTransform(for section: TextBoxSection?, in key: String?) -> String {
-        let options = profile(key).options
+        let options = readChrome(in: key) { $0.options }
         if section == .reference && options.referenceUppercase { return "upper" }
         return options.textTransformRaw
     }
@@ -1512,10 +1634,10 @@ final class PresentationManager {
     static let chordRowStyleKey = "chordRow"
 
     func chordRowStyle(in key: String? = nil) -> BoxTextStyle {
-        profile(key).styles[Self.chordRowStyleKey] ?? BoxTextStyle()
+        readBox(Self.sectionToken(.chords), in: key) { $0.styles[Self.chordRowStyleKey] } ?? BoxTextStyle()
     }
     func setChordRowStyle(_ style: BoxTextStyle, in key: String? = nil) {
-        mutateProfile(key) { $0.styles[Self.chordRowStyleKey] = style }
+        mutateBox(Self.sectionToken(.chords), in: key) { $0.styles[Self.chordRowStyleKey] = style }
     }
     /// Chords default to ~0.55× the lyric size and semibold, until customized.
     func resolvedChordRowStyle(in key: String? = nil) -> ResolvedBoxStyle {
@@ -1633,11 +1755,11 @@ final class PresentationManager {
     }
 
     func customTextBox(id: UUID, in key: String? = nil) -> CustomTextBox? {
-        profile(key).customTextBoxes.first { $0.id == id }
+        readBox(Self.customToken(id), in: key) { $0.customTextBoxes.first { $0.id == id } }
     }
 
     func updateCustomTextBox(_ box: CustomTextBox, in key: String? = nil) {
-        mutateProfile(key) { p in
+        mutateBox(Self.customToken(box.id), in: key) { p in
             guard let idx = p.customTextBoxes.firstIndex(where: { $0.id == box.id }) else { return }
             var clamped = box
             clamped.frame = box.frame.clamped()
@@ -1750,11 +1872,11 @@ final class PresentationManager {
     }
 
     func mediaBox(id: UUID, in key: String? = nil) -> MediaBox? {
-        profile(key).mediaBoxes.first { $0.id == id }
+        readBox(Self.mediaToken(id), in: key) { $0.mediaBoxes.first { $0.id == id } }
     }
 
     func updateMediaBox(_ box: MediaBox, in key: String? = nil) {
-        mutateProfile(key) { p in
+        mutateBox(Self.mediaToken(box.id), in: key) { p in
             guard let idx = p.mediaBoxes.firstIndex(where: { $0.id == box.id }) else { return }
             var clamped = box
             clamped.frame = box.frame.clamped()
@@ -1967,21 +2089,28 @@ final class PresentationManager {
         set { mutateProfile { $0.boxOrder = newValue } }
     }
 
+    // The z-order token for each kind of box. Also the observation key a box's
+    // narrow reads and writes are filed under, so the two can never drift apart.
+    static func sectionToken(_ section: TextBoxSection) -> String { "section:" + section.rawValue }
+    static func customToken(_ id: UUID) -> String { "custom:" + id.uuidString }
+    static func mediaToken(_ id: UUID) -> String { "media:" + id.uuidString }
+
     /// All valid tokens for a profile's boxes, in canonical default order
     /// (media at the back, then the RELEVANT sections, then custom boxes).
     private func canonicalTokens(in key: String?) -> [String] {
         let k = resolvedKey(key)
-        let p = profile(k)
-        return p.mediaBoxes.map { "media:" + $0.id.uuidString }
-            + Self.relevantSections(for: k).map { "section:" + $0.rawValue }
-            + p.customTextBoxes.map { "custom:" + $0.id.uuidString }
+        return readStructure(in: k) { p in
+            p.mediaBoxes.map { Self.mediaToken($0.id) }
+                + Self.relevantSections(for: k).map { Self.sectionToken($0) }
+                + p.customTextBoxes.map { Self.customToken($0.id) }
+        }
     }
 
     /// The reconciled render order: stored order minus stale tokens, plus any
     /// new boxes appended on top. Pure — never mutates state (safe in view body).
     func orderedBoxTokens(in key: String? = nil) -> [String] {
         let valid = Set(canonicalTokens(in: key))
-        var result = profile(key).boxOrder.filter { valid.contains($0) }
+        var result = readStructure(in: key) { $0.boxOrder }.filter { valid.contains($0) }
         let present = Set(result)
         for token in canonicalTokens(in: key) where !present.contains(token) {
             result.append(token)
@@ -2530,6 +2659,9 @@ final class PresentationManager {
         }
         if !p.profiles.isEmpty {
             profiles = p.profiles
+            // Wholesale replacement — undo/redo, applying a theme, importing a
+            // .tptheme. Every box in every profile may have moved.
+            invalidateAllProfiles()
         }
         loadContentBackgroundImages()
     }
@@ -2632,12 +2764,12 @@ final class PresentationManager {
 
     // MARK: - Transitions (per-profile text enter/exit)
 
-    func transitionInRaw(in key: String? = nil) -> String { profile(key).transitionInRaw }
-    func transitionChangeRaw(in key: String? = nil) -> String { profile(key).transitionChangeRaw }
-    func transitionOutRaw(in key: String? = nil) -> String { profile(key).transitionOutRaw }
-    func setTransitionIn(_ raw: String, in key: String? = nil) { mutateProfile(key) { $0.transitionInRaw = raw } }
-    func setTransitionChange(_ raw: String, in key: String? = nil) { mutateProfile(key) { $0.transitionChangeRaw = raw } }
-    func setTransitionOut(_ raw: String, in key: String? = nil) { mutateProfile(key) { $0.transitionOutRaw = raw } }
+    func transitionInRaw(in key: String? = nil) -> String { readChrome(in: key) { $0.transitionInRaw } }
+    func transitionChangeRaw(in key: String? = nil) -> String { readChrome(in: key) { $0.transitionChangeRaw } }
+    func transitionOutRaw(in key: String? = nil) -> String { readChrome(in: key) { $0.transitionOutRaw } }
+    func setTransitionIn(_ raw: String, in key: String? = nil) { mutateChrome(key) { $0.transitionInRaw = raw } }
+    func setTransitionChange(_ raw: String, in key: String? = nil) { mutateChrome(key) { $0.transitionChangeRaw = raw } }
+    func setTransitionOut(_ raw: String, in key: String? = nil) { mutateChrome(key) { $0.transitionOutRaw = raw } }
 
     /// How the last content change happened — picks which transition plays:
     /// "appear" (nothing → live), "change" (slide → slide), "clear" (live → nothing).
@@ -2645,7 +2777,7 @@ final class PresentationManager {
 
     /// Per-PHASE duration: stored raw (-1 = inherit profile/general).
     func phaseDurationOverride(_ phase: String, in key: String? = nil) -> Double {
-        let p = profile(key)
+        let p = readChrome(in: key) { $0 }
         switch phase {
         case "change": return p.transitionChangeDuration
         case "clear": return p.transitionOutDuration
@@ -2654,7 +2786,7 @@ final class PresentationManager {
     }
 
     func setPhaseDurationOverride(_ value: Double, _ phase: String, in key: String? = nil) {
-        mutateProfile(key) {
+        mutateChrome(key) {
             switch phase {
             case "change": $0.transitionChangeDuration = value
             case "clear": $0.transitionOutDuration = value
@@ -2671,29 +2803,29 @@ final class PresentationManager {
     }
 
     func boxColorHex(forToken token: String, in key: String? = nil) -> String? {
-        profile(key).boxColors[token]
+        readBox(token, in: key) { $0.boxColors[token] }
     }
 
     func setBoxColorHex(_ hex: String?, forToken token: String, in key: String? = nil) {
-        mutateProfile(key) { $0.boxColors[token] = (hex?.isEmpty == false) ? hex : nil }
+        mutateBox(token, in: key) { $0.boxColors[token] = (hex?.isEmpty == false) ? hex : nil }
     }
 
     func boxTransitionOverride(forToken token: String, in key: String? = nil) -> BoxTransition {
-        profile(key).boxTransitionOverrides[token] ?? BoxTransition()
+        readBox(token, in: key) { $0.boxTransitionOverrides[token] } ?? BoxTransition()
     }
 
     func setBoxTransitionOverride(_ override: BoxTransition, forToken token: String, in key: String? = nil) {
-        mutateProfile(key) {
+        mutateBox(token, in: key) {
             // A pristine override is noise — drop the entry entirely.
             $0.boxTransitionOverrides[token] = (override == BoxTransition()) ? nil : override
         }
     }
     func transitionDuration(in key: String? = nil) -> Double {
-        let override = profile(key).transitionDurationOverride
+        let override = readChrome(in: key) { $0.transitionDurationOverride }
         return override >= 0 ? override : transitionDuration
     }
     func setTransitionDurationOverride(_ value: Double, in key: String? = nil) {
-        mutateProfile(key) { $0.transitionDurationOverride = value }
+        mutateChrome(key) { $0.transitionDurationOverride = value }
     }
 
     static let transitionOptions: [(raw: String, label: String)] = [
@@ -3495,36 +3627,40 @@ final class PresentationManager {
         }
     }
 
+    // Built-in sections. All box-scoped: a drag or a keystroke here invalidates
+    // that one box, not its siblings and not the stacking order.
+
     func boxFrame(for section: TextBoxSection, in key: String? = nil) -> TextBoxFrame {
-        profile(key).frames[section.rawValue] ?? Self.defaultFrame(for: section)
+        readBox(Self.sectionToken(section), in: key) { $0.frames[section.rawValue] }
+            ?? Self.defaultFrame(for: section)
     }
 
     func setBoxFrame(_ frame: TextBoxFrame, for section: TextBoxSection, in key: String? = nil) {
-        mutateProfile(key) { $0.frames[section.rawValue] = frame.clamped() }
+        mutateBox(Self.sectionToken(section), in: key) { $0.frames[section.rawValue] = frame.clamped() }
     }
 
     func sourceRaw(for section: TextBoxSection, in key: String? = nil) -> String {
-        profile(key).sources[section.rawValue] ?? "auto"
+        readBox(Self.sectionToken(section), in: key) { $0.sources[section.rawValue] } ?? "auto"
     }
 
     func setSourceRaw(_ raw: String, for section: TextBoxSection, in key: String? = nil) {
-        mutateProfile(key) { $0.sources[section.rawValue] = raw }
+        mutateBox(Self.sectionToken(section), in: key) { $0.sources[section.rawValue] = raw }
     }
 
     func sourceFormat(for section: TextBoxSection, in key: String? = nil) -> String {
-        profile(key).sourceFormats[section.rawValue] ?? ""
+        readBox(Self.sectionToken(section), in: key) { $0.sourceFormats[section.rawValue] } ?? ""
     }
 
     func setSourceFormat(_ format: String, for section: TextBoxSection, in key: String? = nil) {
-        mutateProfile(key) { $0.sourceFormats[section.rawValue] = format }
+        mutateBox(Self.sectionToken(section), in: key) { $0.sourceFormats[section.rawValue] = format }
     }
 
     func staticText(for section: TextBoxSection, in key: String? = nil) -> String {
-        profile(key).staticTexts[section.rawValue] ?? ""
+        readBox(Self.sectionToken(section), in: key) { $0.staticTexts[section.rawValue] } ?? ""
     }
 
     func setStaticText(_ text: String, for section: TextBoxSection, in key: String? = nil) {
-        mutateProfile(key) { $0.staticTexts[section.rawValue] = text }
+        mutateBox(Self.sectionToken(section), in: key) { $0.staticTexts[section.rawValue] = text }
     }
 
     /// Resolved text for a built-in section, honoring its source override.
@@ -3559,13 +3695,13 @@ final class PresentationManager {
 
     func isSectionVisible(_ section: TextBoxSection, in key: String? = nil) -> Bool {
         let k = resolvedKey(key)
-        return profile(k).visibility[section.rawValue]
+        return readBox(Self.sectionToken(section), in: k) { $0.visibility[section.rawValue] }
             ?? LayoutProfile.defaultProfile(for: k).visibility[section.rawValue]
             ?? true
     }
 
     func setSectionVisible(_ visible: Bool, for section: TextBoxSection, in key: String? = nil) {
-        mutateProfile(key) { $0.visibility[section.rawValue] = visible }
+        mutateBox(Self.sectionToken(section), in: key) { $0.visibility[section.rawValue] = visible }
     }
 
     // MARK: - Slide Display Scope ("Amin." only on the last slide, title on the first)
@@ -3586,11 +3722,11 @@ final class PresentationManager {
     }
 
     func displayScope(for section: TextBoxSection, in key: String? = nil) -> String {
-        profile(key).displayOn[section.rawValue] ?? "all"
+        readBox(Self.sectionToken(section), in: key) { $0.displayOn[section.rawValue] } ?? "all"
     }
 
     func setDisplayScope(_ raw: String, for section: TextBoxSection, in key: String? = nil) {
-        mutateProfile(key) { $0.displayOn[section.rawValue] = raw }
+        mutateBox(Self.sectionToken(section), in: key) { $0.displayOn[section.rawValue] = raw }
     }
 
     /// Whether a scope is satisfied by the CURRENT live slide position.
@@ -3605,7 +3741,7 @@ final class PresentationManager {
     }
 
     func resetBoxFrame(for section: TextBoxSection, in key: String? = nil) {
-        mutateProfile(key) { $0.frames[section.rawValue] = Self.defaultFrame(for: section) }
+        mutateBox(Self.sectionToken(section), in: key) { $0.frames[section.rawValue] = Self.defaultFrame(for: section) }
     }
 
     func resetAllBoxFrames(in key: String? = nil) {

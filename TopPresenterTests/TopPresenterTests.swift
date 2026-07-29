@@ -4089,3 +4089,250 @@ struct RemoteExtractionTests {
         pm.clearOutput()
     }
 }
+
+// MARK: - Granular Layout Observation
+//
+// `PresentationManager.profiles` is @ObservationIgnored; every read path
+// declares which tier it depends on and every write path declares which tier it
+// dirties. That classification is by hand, so it gets tested by hand: a wrong
+// tier means a view that never refreshes, which no behavioural test would catch.
+@MainActor struct LayoutObservationTests {
+
+    private func ticks(_ pm: PresentationManager, _ key: String) -> (UInt32, UInt32, UInt32) {
+        (pm.observationTick(profile: key),
+         pm.observationTick(structureIn: key),
+         pm.observationTick(chromeIn: key))
+    }
+
+    @Test func movingOneBoxLeavesItsSiblingsAlone() {
+        let pm = PresentationManager()
+        let verse = PresentationManager.sectionToken(.verseContent)
+        let reference = PresentationManager.sectionToken(.reference)
+
+        let siblingBefore = pm.observationTick(box: reference, in: "bible")
+        let selfBefore = pm.observationTick(box: verse, in: "bible")
+        let (profileBefore, structureBefore, chromeBefore) = ticks(pm, "bible")
+
+        pm.setBoxFrame(PresentationManager.TextBoxFrame(x: 0.2, y: 0.2, width: 0.3, height: 0.3),
+                       for: .verseContent, in: "bible")
+
+        // The whole point: the dragged box invalidates, the one next to it does not.
+        #expect(pm.observationTick(box: verse, in: "bible") != selfBefore)
+        #expect(pm.observationTick(box: reference, in: "bible") == siblingBefore)
+        // Nor does the stacking order or the background change underneath.
+        #expect(pm.observationTick(structureIn: "bible") == structureBefore)
+        #expect(pm.observationTick(chromeIn: "bible") == chromeBefore)
+        // The coarse tier still fires, so anything reading profile() stays correct.
+        #expect(pm.observationTick(profile: "bible") != profileBefore)
+    }
+
+    @Test func editingOneProfileLeavesTheOthersAlone() {
+        let pm = PresentationManager()
+        let before = ticks(pm, "song")
+
+        pm.setStaticText("hello", for: .reference, in: "bible")
+
+        #expect(ticks(pm, "song") == before)
+    }
+
+    @Test func backgroundEditsDoNotInvalidateBoxes() {
+        let pm = PresentationManager()
+        let verse = PresentationManager.sectionToken(.verseContent)
+        let boxBefore = pm.observationTick(box: verse, in: "bible")
+        let structureBefore = pm.observationTick(structureIn: "bible")
+
+        var config = pm.backgroundConfig(for: "bible")
+        config.colorHex = "#123456"
+        pm.setBackgroundConfig(config, for: "bible")
+
+        #expect(pm.backgroundConfig(for: "bible").colorHex == "#123456")
+        #expect(pm.observationTick(box: verse, in: "bible") == boxBefore)
+        #expect(pm.observationTick(structureIn: "bible") == structureBefore)
+    }
+
+    @Test func addingABoxIsAStructuralChange() {
+        let pm = PresentationManager()
+        let before = pm.observationTick(structureIn: "bible")
+
+        let box = pm.addCustomTextBox(in: "bible")
+
+        // The container reading orderedBoxTokens has to hear about this one.
+        #expect(pm.observationTick(structureIn: "bible") != before)
+        #expect(pm.orderedBoxTokens(in: "bible").contains(PresentationManager.customToken(box.id)))
+
+        // Editing that box afterwards is box-scoped again, not structural.
+        let structureAfterAdd = pm.observationTick(structureIn: "bible")
+        var edited = box
+        edited.text = "changed"
+        pm.updateCustomTextBox(edited, in: "bible")
+        #expect(pm.customTextBox(id: box.id, in: "bible")?.text == "changed")
+        #expect(pm.observationTick(structureIn: "bible") == structureAfterAdd)
+
+        // ...and removing it is structural, and wakes the box's own readers so a
+        // view still holding that token stops rendering a box that is gone.
+        let boxTick = pm.observationTick(box: PresentationManager.customToken(box.id), in: "bible")
+        pm.removeCustomTextBox(id: box.id, in: "bible")
+        #expect(pm.observationTick(structureIn: "bible") != structureAfterAdd)
+        #expect(pm.observationTick(box: PresentationManager.customToken(box.id), in: "bible") != boxTick)
+    }
+
+    @Test func reorderingIsAStructuralChange() {
+        let pm = PresentationManager()
+        let before = pm.observationTick(structureIn: "bible")
+        let token = pm.orderedBoxTokens(in: "bible").first ?? ""
+
+        pm.moveBoxTokenToEdge(token, front: true, in: "bible")
+
+        #expect(pm.observationTick(structureIn: "bible") != before)
+        #expect(pm.orderedBoxTokens(in: "bible").last == token)
+    }
+
+    @Test func undoInvalidatesEverything() {
+        let pm = PresentationManager()
+        let verse = PresentationManager.sectionToken(.verseContent)
+        let original = pm.boxFrame(for: .verseContent, in: "bible")
+
+        // registerLayoutUndo coalesces bursts, but a fresh manager has never
+        // registered, so this first mutation always captures a snapshot.
+        pm.setBoxFrame(PresentationManager.TextBoxFrame(x: 0.5, y: 0.5, width: 0.2, height: 0.2),
+                       for: .verseContent, in: "bible")
+        #expect(pm.canUndoLayout)
+
+        let boxBefore = pm.observationTick(box: verse, in: "bible")
+        let structureBefore = pm.observationTick(structureIn: "bible")
+        let chromeBefore = pm.observationTick(chromeIn: "bible")
+
+        pm.undoLayout()
+
+        // A snapshot restore can move anything, so every tier has to fire.
+        #expect(pm.observationTick(box: verse, in: "bible") != boxBefore)
+        #expect(pm.observationTick(structureIn: "bible") != structureBefore)
+        #expect(pm.observationTick(chromeIn: "bible") != chromeBefore)
+        #expect(pm.boxFrame(for: .verseContent, in: "bible") == original)
+    }
+
+    @Test func narrowReadsStillSeeWholesaleReplacement() {
+        let pm = PresentationManager()
+        let source = "bible"
+        let target = "song"
+        // Unique per run: PresentationManager() reads the real UserDefaults, so
+        // a fixed marker would still be there from the previous run.
+        let marker = "copied-" + UUID().uuidString
+        pm.setStaticText(marker, for: .reference, in: source)
+
+        pm.copyProfile(from: source, to: target)
+
+        // The box-scoped getter must not serve a stale value after the profile
+        // was replaced out from under it.
+        #expect(pm.staticText(for: .reference, in: target) == marker)
+    }
+}
+
+// MARK: - Observation Dependencies (the real contract)
+//
+// The tick tests above check the bookkeeping. These check what actually matters:
+// given a read, does a given edit invalidate it? `withObservationTracking` sees
+// exactly what SwiftUI sees, so a getter filed under the wrong tier fails here
+// even if every tick is bumped correctly.
+@MainActor struct LayoutObservationDependencyTests {
+
+    /// `onChange` is a non-isolated @Sendable closure, so the flag needs a box.
+    /// It fires synchronously on whichever thread mutates — here always the main
+    /// actor — so a bare Bool behind @unchecked is honest.
+    private final class Flag: @unchecked Sendable { var fired = false }
+
+    /// Runs `read`, then `edit`, and reports whether the read was invalidated.
+    private func invalidates(read: () -> Void, edit: () -> Void) -> Bool {
+        let flag = Flag()
+        withObservationTracking { read() } onChange: { flag.fired = true }
+        edit()
+        return flag.fired
+    }
+
+    @Test func movingABoxDoesNotInvalidateItsSiblingsStyle() {
+        let pm = PresentationManager()
+        let fired = invalidates {
+            _ = pm.resolvedStyle(for: .reference, in: "bible")
+        } edit: {
+            pm.setBoxFrame(PresentationManager.TextBoxFrame(x: 0.3, y: 0.3, width: 0.2, height: 0.2),
+                           for: .verseContent, in: "bible")
+        }
+        // resolvedStyle inherits the profile's transform. While that inheritance
+        // read the whole profile, every box's style re-resolved on every drag
+        // delta — the entire canvas, tens of times a second.
+        #expect(fired == false)
+    }
+
+    @Test func movingABoxDoesNotInvalidateTheStackingOrder() {
+        let pm = PresentationManager()
+        let fired = invalidates {
+            _ = pm.orderedBoxTokens(in: "bible")
+        } edit: {
+            pm.setBoxFrame(PresentationManager.TextBoxFrame(x: 0.4, y: 0.4, width: 0.2, height: 0.2),
+                           for: .verseContent, in: "bible")
+        }
+        // The overlay that draws every handle reads this. If it invalidates, the
+        // whole box list rebuilds mid-drag and per-box granularity buys nothing.
+        #expect(fired == false)
+    }
+
+    @Test func movingABoxDoesNotInvalidateTheBackground() {
+        let pm = PresentationManager()
+        let fired = invalidates {
+            _ = pm.backgroundConfig(for: "bible")
+        } edit: {
+            pm.setBoxFrame(PresentationManager.TextBoxFrame(x: 0.1, y: 0.1, width: 0.2, height: 0.2),
+                           for: .verseContent, in: "bible")
+        }
+        #expect(fired == false)
+    }
+
+    @Test func aBoxStillHearsAboutItsOwnEdits() {
+        let pm = PresentationManager()
+
+        // Without this, every expectation above would pass by simply never
+        // observing anything.
+        let ownFrame = invalidates {
+            _ = pm.boxFrame(for: .verseContent, in: "bible")
+        } edit: {
+            pm.setBoxFrame(PresentationManager.TextBoxFrame(x: 0.6, y: 0.6, width: 0.2, height: 0.2),
+                           for: .verseContent, in: "bible")
+        }
+        #expect(ownFrame)
+
+        let ownStyle = invalidates {
+            _ = pm.resolvedStyle(for: .verseContent, in: "bible")
+        } edit: {
+            var style = pm.boxStyle(for: .verseContent, in: "bible")
+            style.fontSize = style.fontSize + 3
+            pm.setBoxStyle(style, for: .verseContent, in: "bible")
+        }
+        #expect(ownStyle)
+    }
+
+    @Test func chromeEditsStillReachTheBoxesThatInheritThem() {
+        let pm = PresentationManager()
+
+        // Boxes inherit the profile transform, so a chrome change MUST reach a
+        // box's resolved style — the mirror image of the first test, and the
+        // half that a too-narrow classification would break.
+        let fired = invalidates {
+            _ = pm.resolvedStyle(for: .reference, in: "bible")
+        } edit: {
+            var options = pm.contentOptions(for: "bible")
+            options.referenceUppercase = !options.referenceUppercase
+            pm.setContentOptions(options, for: "bible")
+        }
+        #expect(fired)
+    }
+
+    @Test func addingABoxInvalidatesTheStackingOrder() {
+        let pm = PresentationManager()
+        let fired = invalidates {
+            _ = pm.orderedBoxTokens(in: "bible")
+        } edit: {
+            _ = pm.addCustomTextBox(in: "bible")
+        }
+        #expect(fired)
+    }
+}
