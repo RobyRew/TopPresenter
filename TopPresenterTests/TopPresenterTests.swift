@@ -4391,3 +4391,70 @@ struct RemoteExtractionTests {
         #expect(b.staticText(for: .reference, in: "bible") != "only-in-a")
     }
 }
+
+// MARK: - Font picker laziness
+//
+// There are ~200 installed font families and the Text tab holds two pickers over
+// them. A SwiftUI Picker builds every item the moment it appears, which is what
+// made switching to that tab lag. These lock the deferral in: if someone swaps
+// the control back for an eager Picker, or stops collapsing after close, the
+// item counts here change.
+@MainActor struct FontFamilyPickerTests {
+
+    private final class Box: @unchecked Sendable { var value: String; init(_ v: String) { value = v } }
+
+    private func makePicker(_ box: Box) -> FontFamilyPicker {
+        FontFamilyPicker(
+            fonts: ["Arial", "Courier", "Helvetica"],
+            leading: [("", "Global"), ("System", "System")],
+            selection: Binding(get: { box.value }, set: { box.value = $0 })
+        )
+    }
+
+    private func attached(_ picker: FontFamilyPicker) -> (FontFamilyPicker.Coordinator, NSPopUpButton, NSMenu) {
+        let coordinator = picker.makeCoordinator()
+        let button = NSPopUpButton(frame: .zero, pullsDown: false)
+        let menu = NSMenu()
+        menu.delegate = coordinator
+        button.menu = menu
+        coordinator.attach(button)
+        return (coordinator, button, menu)
+    }
+
+    @Test func theMenuHoldsOnlyTheVisibleItemUntilItIsOpened() {
+        let box = Box("Helvetica")
+        let (coordinator, button, menu) = attached(makePicker(box))
+
+        // Closed: exactly the one item the control shows.
+        #expect(menu.numberOfItems == 1)
+        #expect(menu.item(at: 0)?.title == "Helvetica")
+
+        // Opening builds the lot: 2 leading + 3 families.
+        coordinator.menuWillOpen(menu)
+        coordinator.menuNeedsUpdate(menu)
+        #expect(menu.numberOfItems == 5)
+        #expect(button.indexOfSelectedItem == 4)
+    }
+
+    @Test func pickingAFamilyWritesThroughTheBinding() {
+        let box = Box("Helvetica")
+        let (coordinator, button, menu) = attached(makePicker(box))
+
+        coordinator.menuWillOpen(menu)
+        coordinator.menuNeedsUpdate(menu)
+        button.selectItem(at: 2)          // Arial
+        coordinator.selectionChanged(button)
+
+        #expect(box.value == "Arial")
+    }
+
+    @Test func anInheritedSelectionShowsItsLeadingTitle() {
+        // "" is the inherit sentinel — the closed control must read "Global",
+        // not an empty button.
+        let box = Box("")
+        let (_, _, menu) = attached(makePicker(box))
+
+        #expect(menu.numberOfItems == 1)
+        #expect(menu.item(at: 0)?.title == "Global")
+    }
+}

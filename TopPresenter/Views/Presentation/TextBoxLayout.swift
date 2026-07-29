@@ -379,25 +379,116 @@ struct BackgroundMediaThumb: View {
 /// re-evaluates — which, in the Theme Editor, is on every keystroke and every
 /// slider tick. `Equatable` on the selection alone lets SwiftUI skip the whole
 /// subtree when only unrelated state moved.
-struct FontFamilyPicker: View, Equatable {
+/// The font family picker.
+///
+/// A SwiftUI `Picker` over the ~200 installed font families builds ~200 `Text`
+/// views and ~200 `NSMenuItem`s the moment it appears — and the Text tab holds
+/// two of them. THAT was the lag when switching to that tab. Making the view
+/// `Equatable` did nothing for it: the cost is the first build, not the
+/// re-evaluations that `Equatable` skips.
+///
+/// So the list is built when the user opens the menu, and collapsed back to the
+/// single item the closed control displays. `NSPopUpButton` is what SwiftUI's
+/// menu-style `Picker` wraps anyway, so the control itself looks the same.
+struct FontFamilyPicker: NSViewRepresentable {
     let fonts: [String]
     /// Shown before the families — "Global" inherit, "System", etc.
     let leading: [(tag: String, title: String)]
     @Binding var selection: String
 
-    static func == (lhs: Self, rhs: Self) -> Bool { lhs.selection == rhs.selection }
+    func makeCoordinator() -> Coordinator { Coordinator(self) }
 
-    var body: some View {
-        Picker("", selection: $selection) {
-            ForEach(leading, id: \.tag) { item in
-                Text(item.title).tag(item.tag)
-            }
-            ForEach(fonts, id: \.self) { font in
-                Text(font).tag(font)
-            }
+    func makeNSView(context: Context) -> NSPopUpButton {
+        let button = NSPopUpButton(frame: .zero, pullsDown: false)
+        button.controlSize = .small
+        button.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
+        button.target = context.coordinator
+        button.action = #selector(Coordinator.selectionChanged(_:))
+        // With one item in the menu the intrinsic width is the current font's
+        // name; let the row decide instead, as the Picker's did.
+        button.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        let menu = NSMenu()
+        menu.delegate = context.coordinator
+        button.menu = menu
+        context.coordinator.attach(button)
+        return button
+    }
+
+    func updateNSView(_ button: NSPopUpButton, context: Context) {
+        // The coordinator holds a COPY of this struct. Refresh it or writes land
+        // in a stale binding's setter.
+        context.coordinator.owner = self
+        context.coordinator.showClosedSelection()
+    }
+
+    func sizeThatFits(_ proposal: ProposedViewSize, nsView: NSPopUpButton, context: Context) -> CGSize? {
+        let intrinsic = nsView.intrinsicContentSize
+        return CGSize(width: proposal.width ?? intrinsic.width, height: intrinsic.height)
+    }
+
+    final class Coordinator: NSObject, NSMenuDelegate {
+        var owner: FontFamilyPicker
+        private weak var button: NSPopUpButton?
+        private var isOpen = false
+
+        init(_ owner: FontFamilyPicker) {
+            self.owner = owner
+            super.init()
         }
-        .labelsHidden()
-        .controlSize(.small)
+
+        func attach(_ button: NSPopUpButton) {
+            self.button = button
+            showClosedSelection()
+        }
+
+        private var entries: [(tag: String, title: String)] {
+            owner.leading + owner.fonts.map { (tag: $0, title: $0) }
+        }
+
+        /// A leading option shows its own title; a family shows its name.
+        private func title(for tag: String) -> String {
+            owner.leading.first { $0.tag == tag }?.title ?? tag
+        }
+
+        /// The closed control only ever needs the ONE item it displays.
+        func showClosedSelection() {
+            guard !isOpen, let button, let menu = button.menu else { return }
+            let tag = owner.selection
+            if menu.numberOfItems == 1, menu.item(at: 0)?.representedObject as? String == tag {
+                return
+            }
+            menu.removeAllItems()
+            let item = NSMenuItem(title: title(for: tag), action: nil, keyEquivalent: "")
+            item.representedObject = tag
+            menu.addItem(item)
+            button.selectItem(at: 0)
+        }
+
+        /// Every entry is built HERE — on open, not on appear.
+        func menuNeedsUpdate(_ menu: NSMenu) {
+            let all = entries
+            menu.removeAllItems()
+            for entry in all {
+                let item = NSMenuItem(title: entry.title, action: nil, keyEquivalent: "")
+                item.representedObject = entry.tag
+                menu.addItem(item)
+            }
+            button?.selectItem(at: all.firstIndex { $0.tag == owner.selection } ?? 0)
+        }
+
+        func menuWillOpen(_ menu: NSMenu) { isOpen = true }
+
+        func menuDidClose(_ menu: NSMenu) {
+            isOpen = false
+            // Async so the selection action fires against the FULL menu first —
+            // collapsing synchronously would drop the item that was just picked.
+            DispatchQueue.main.async { [weak self] in self?.showClosedSelection() }
+        }
+
+        @objc func selectionChanged(_ sender: NSPopUpButton) {
+            guard let tag = sender.selectedItem?.representedObject as? String else { return }
+            owner.selection = tag
+        }
     }
 }
 
@@ -2342,7 +2433,6 @@ struct LayoutEditorSheet: View {
                                 set: { style.wrappedValue.fontName = $0 }
                             )
                         )
-                        .equatable()
                     }
 
                     labeledRow(String(localized: "Mărime:", comment: "Setting label")) {
@@ -2786,7 +2876,6 @@ struct LayoutEditorSheet: View {
                             leading: [("System", String(localized: "System", comment: "Font option"))],
                             selection: pmBinding.fontName
                         )
-                        .equatable()
                     }
                     .help(String(localized: "Fontul de bază pentru tot textul", comment: "Tooltip"))
 
