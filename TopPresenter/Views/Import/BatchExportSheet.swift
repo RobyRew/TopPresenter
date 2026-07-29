@@ -134,7 +134,8 @@ struct BatchExportSheet: View {
                 Text(module.abbreviation.isEmpty ? module.name : "\(module.abbreviation) — \(module.name)")
                     .font(.body)
                     .lineLimit(1)
-                Text("\(module.books.count) books • \(module.language)")
+                Text(String(localized: "\(module.books.count) books • \(module.language)",
+                            comment: "Bible module subtitle: book count and language"))
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
             }

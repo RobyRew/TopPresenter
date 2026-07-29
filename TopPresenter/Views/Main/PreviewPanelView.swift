@@ -477,7 +477,7 @@ struct PresentationPreviewCard: View {
                             .background(.orange.opacity(0.8), in: Capsule())
                     }
                     if isPreviewOnly {
-                        Text("PREVIEW")
+                        Text(String(localized: "PREVIEW", comment: "Preview card badge"))
                             .font(.system(size: 8, weight: .bold))
                             .foregroundStyle(.white)
                             .padding(.horizontal, 5)
@@ -692,7 +692,8 @@ struct VerseSlideControlsBar: View {
 
                     // Verse count badge + fitting indicator
                     if libraryManager.selectedVerses.count > 1 {
-                        Text("\(libraryManager.selectedVerses.count) verses")
+                        Text(String(localized: "\(libraryManager.selectedVerses.count) verses",
+                                    comment: "Selected verse count"))
                             .font(.caption2)
                             .foregroundStyle(.white)
                             .padding(.horizontal, 6)
