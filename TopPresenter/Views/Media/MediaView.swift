@@ -31,6 +31,8 @@ struct MediaView: View {
     @AppStorage("mediaTypeFilter") private var kindFilterRaw: String = "all"
     /// Grid cell under the pointer (hover chrome).
     @State private var hoveredItemID: UUID?
+    /// Set by the context menu; raises the delete confirmation.
+    @State private var mediaToDelete: MediaItem?
 
     private var queryBinding: Binding<String> {
         Binding(get: { libraryManager.mediaLibraryQuery },
@@ -57,6 +59,12 @@ struct MediaView: View {
             MediaDetailPane()
         }
         .onKeyWindowNotification(.importMedia) { _ in importMedia() }
+        .confirmDestructive(
+            String(localized: "Delete Media", comment: "Alert title"),
+            item: $mediaToDelete,
+            name: { $0.name },
+            perform: { deleteMedia($0) }
+        )
     }
 
     // MARK: - Header (type tabs + search + add)
@@ -166,7 +174,7 @@ struct MediaView: View {
         }
         AddToSessionMenu(draft: { .media(item) })
         Divider()
-        Button(role: .destructive) { deleteMedia(item) } label: {
+        Button(role: .destructive) { mediaToDelete = item } label: {
             Label(String(localized: "Șterge", comment: "Menu"), systemImage: "trash")
         }
     }

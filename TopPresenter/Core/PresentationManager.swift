@@ -2836,6 +2836,10 @@ final class PresentationManager {
     }
 
     func clearOutput() {
+        // Invalidate any staged show: without this, Show-while-hidden followed
+        // immediately by Escape re-mounts the content 60 ms AFTER the clear.
+        presentGeneration &+= 1
+        cancelStagedShow()
         flushHistory()              // record the last-shown item (if it dwelled)
         currentSessionKey = ""      // a clear ends the presentation session
         contentChangeKind = "clear"
@@ -2859,6 +2863,18 @@ final class PresentationManager {
         }
     }
 
+    /// Bumped by every show and every clear. A staged (60 ms) apply captures the
+    /// value it was scheduled with and bails if it is no longer current.
+    @ObservationIgnored private var presentGeneration = 0
+
+    /// The pending staged show, when the output window had to commit a transparent
+    /// frame first. Held so a newer show or a clear can cancel it outright.
+    @ObservationIgnored private var stagedShow: DispatchWorkItem?
+
+    /// True while a show is waiting on the staging frame — i.e. the output window
+    /// was hidden when it was requested.
+    var hasStagedShow: Bool { stagedShow != nil }
+
     /// Marks whether this show is a fresh appearance or a slide-to-slide change.
     private func registerContentChange() {
         contentChangeKind = (liveContent.isLive && !isBlackScreen) ? "change" : "appear"
@@ -2873,8 +2889,18 @@ final class PresentationManager {
         let wasHidden = !(window?.isVisible ?? true) // nil window (tests) = immediate
         showPresentationWindow()
 
+        // Every show/clear takes the next generation. A staged apply belongs to the
+        // generation it was scheduled in and is dropped if anything newer happened
+        // meanwhile: orderFront() makes the window visible SYNCHRONOUSLY, so a second
+        // Show 10 ms later takes the immediate path and lands first — without this,
+        // the first (deferred) one would then overwrite the projector with stale
+        // content 60 ms after the operator already moved on.
+        presentGeneration &+= 1
+        let generation = presentGeneration
+        cancelStagedShow()
+
         let animated = { [weak self] in
-            guard let self else { return }
+            guard let self, generation == presentGeneration else { return }
             registerContentChange()
             let duration = resolvedTransitionDuration(phase: contentChangeKind, in: outputProfileKey)
             withAnimation(.easeInOut(duration: duration)) {
@@ -2882,10 +2908,22 @@ final class PresentationManager {
             }
         }
         if wasHidden {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.06) { animated() }
+            let work = DispatchWorkItem { [weak self] in
+                self?.stagedShow = nil
+                animated()
+            }
+            stagedShow = work
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.06, execute: work)
         } else {
             animated()
         }
+    }
+
+    /// Drops a pending staged show, if any. Cancelling beats letting it run and
+    /// no-op on the generation check — the work never happens at all.
+    private func cancelStagedShow() {
+        stagedShow?.cancel()
+        stagedShow = nil
     }
 
     // MARK: - Live Bible Anchor (the PRESENTED flow, independent of browsing)

@@ -1035,6 +1035,44 @@ struct PresentationManagerTests {
         #expect(pm.liveContent.mainText == "")
     }
 
+    // MARK: - A staged show must never overwrite a newer one
+
+    /// `orderFront` makes the window visible synchronously, so a second Show right
+    /// after a staged one takes the immediate path and lands FIRST. Without a
+    /// generation token the staged apply then overwrites the projector with stale
+    /// content 60 ms after the operator already moved on.
+    @Test func newerShowSupersedesAStagedOne() async {
+        let pm = PresentationManager()
+        pm.hidePresentationWindow()     // force the staged (was-hidden) path
+
+        pm.showBibleVerse(text: "Verset A", reference: "Gen 1:1")
+        #expect(pm.hasStagedShow)       // precondition — never pass vacuously
+        pm.showBibleVerse(text: "Verset B", reference: "Gen 1:2")
+
+        try? await Task.sleep(for: .milliseconds(200))
+        #expect(pm.liveContent.mainText == "Verset B")   // A must not come back
+
+        pm.clearOutput()
+        pm.showPresentationWindow()     // restore the shared host window
+    }
+
+    /// Same hazard in the other direction: Show while hidden, then Escape.
+    @Test func clearCancelsAStagedShow() async {
+        let pm = PresentationManager()
+        pm.hidePresentationWindow()
+
+        pm.showBibleVerse(text: "Verset A", reference: "Gen 1:1")
+        #expect(pm.hasStagedShow)
+        pm.clearOutput()
+        #expect(pm.hasStagedShow == false)   // dropped outright, not left to no-op
+
+        try? await Task.sleep(for: .milliseconds(200))
+        #expect(pm.liveContent.isLive == false)
+        #expect(pm.liveContent.mainText == "")
+
+        pm.showPresentationWindow()
+    }
+
     // MARK: - Screen changes must never lock the operator out
 
     @Test func askOnDisconnectParksOutputWithoutRetargeting() {
@@ -3036,6 +3074,33 @@ struct SessionTests {
         runner.stop()
         #expect(!runner.isRunning)
     }
+
+    /// The runner's actual job — dispatching to the live output — had no coverage:
+    /// the test above deliberately leaves `pm` unwired and only checks index math.
+    @Test func runnerWiredToPresentationManagerPutsTextOnTheOutput() throws {
+        let context = try makeInMemoryContext()
+        let schedule = SessionService.createSession(name: "Flux", context: context)
+        SessionService.append(.text(title: "Bun venit", content: "Salut"), to: schedule, context: context)
+        SessionService.append(.text(title: "Încheiere", content: "Amin"), to: schedule, context: context)
+        try context.save()
+
+        let pm = PresentationManager()
+        pm.showPresentationWindow()     // visible → presentContent takes the immediate path
+        let runner = SessionRunner()
+        runner.pm = pm
+
+        runner.start(schedule, context: context)
+        #expect(pm.liveContent.mainText == "Salut")
+        #expect(pm.liveContent.isLive)
+        // Plain text carries no tokens, so nothing is resolved asynchronously.
+        #expect(runner.isResolvingSlide == false)
+
+        runner.next(context: context)
+        #expect(pm.liveContent.mainText == "Amin")
+
+        runner.stop()
+        #expect(runner.isResolvingSlide == false)
+    }
 }
 
 // MARK: - Session Archive Tests (.tpschedule round-trip)
@@ -3810,3 +3875,4 @@ struct RemoteExtractionTests {
         #expect(RemoteContentService.rssField(items: entries, field: "0.description") == "Rezumat")
     }
 }
+

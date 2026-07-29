@@ -135,6 +135,16 @@ TopPresenter/
 - **The window must never be made opaque** — background transparency is intentional for projector overlays
 - Window auto-opens on app launch (0.3 s delay in `MainControlView.onAppear`)
 
+### Staged shows must never outlive their request (v10.14)
+- `presentContent` defers the content mount by 60 ms when the output window was hidden. `orderFront` flips `isVisible` **synchronously**, so a second Show milliseconds later takes the immediate path and lands FIRST — the deferred one would then overwrite the projector with stale content after the operator already moved on.
+- Two guards, both required: `presentGeneration` is bumped by every show **and every clear**, and a staged apply bails unless its captured generation is still current; the staged work is also held as a `DispatchWorkItem` in `stagedShow` and cancelled outright by the next show or clear. `hasStagedShow` exposes that state — tests assert it as a precondition so they can never pass vacuously.
+- `clearOutput()` MUST bump the generation and cancel: Show-while-hidden followed immediately by Escape otherwise re-mounts the content 60 ms after the clear.
+- `SessionRunner` has the same hazard with a longer fuse: a `{{url:…}}`/`{{rss:…}}` TEXT item resolves asynchronously (up to `RemoteContentService`'s 6 s timeout) while nothing is on screen, so the operator very plausibly hits `next()` first. `present(item:slide:)` bumps its own `presentGeneration`, cancels `dynamicSlideTask`, and the resolution checks the generation before touching `pm`. `stop()` strands in-flight work the same way. `isResolvingSlide` drives the "resolving" affordance.
+
+### Destructive actions
+- Every irreversible library deletion goes through `.confirmDestructive(_:item:name:perform:)` (`Views/Main/DestructiveConfirmation.swift`) — bind the doomed item, the alert names it, the deletion runs only on confirm. Used by Song / ServiceSchedule / PresentationSlide / MediaItem.
+- **Nothing in the app undoes a delete** — the undo stack only covers layout boxes. A context-menu mis-click mid-service must never destroy a song or a prepared service outright. Bible modules and song collections keep their own older inline alerts; new destructive actions use the shared modifier.
+
 ### Escape / Clear Behavior
 - Escape → posts `.clearOutput` notification → `clearOutput()` on `PresentationManager`
 - `clearOutput()` calls `hidePresentationWindow()` when **`isOutputOnOperatorScreen == true`** — NOT `isSingleScreenMode`. With a second display connected but the output aimed at the display the app window is on, the operator is just as blind while `screens.count == 2`
@@ -303,6 +313,7 @@ Same pattern — conform to `SongImporter`, add to `SupportedSongFormat`, regist
 - Run unit tests with `-only-testing:TopPresenterTests` — the UI test target launches the real app and needs Accessibility permissions (it fails/hangs headless)
 - Test targets MUST carry `DEVELOPMENT_TEAM = FJHAUWNNBH` like the app target; without it the xctest bundle is ad-hoc signed and dlopen rejects it ("different Team IDs")
 - If results look stale (old failures at shifted line numbers, missing new tests), `touch` the test file and rebuild — Xcode occasionally reuses a stale test bundle
+- **`-only-testing` at the individual Swift Testing function level silently matches NOTHING and still reports `** TEST SUCCEEDED **`.** Filter at the SUITE level (`-only-testing:TopPresenterTests/PresentationManagerTests`) and confirm the run actually printed `Test case …` lines before believing a green result
 - **The output NSWindow belongs to the test host and is shared by every test.** A test that leaves it ordered out (`hidePresentationWindow`, `hideOutputNow`, an `ask` disconnect) makes the *next* `presentContent` take its staged "was hidden" path, which sets `contentChangeKind` 60 ms later — so unrelated tests asserting right after a show (`contentChangeKindTracksAppearChangeClear`, `liveContentCarriesVerseRuns`) fail. Always end such a test with `pm.showPresentationWindow()`. These pass in isolation and only fail in a full run, so `-only-testing` will not reproduce it
 
 ## Release & Versioning

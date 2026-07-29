@@ -29,6 +29,8 @@ struct CustomSlidesView: View {
     @State private var previewTitle = ""
     @State private var previewContent = ""
     @State private var isPresenting = false
+    /// Set by the context menu; raises the delete confirmation.
+    @State private var slideToDelete: PresentationSlide?
 
     var body: some View {
         ResizableSplit(storageKey: "split_custom", minLeading: 220, maxFraction: 0.5) {
@@ -56,6 +58,12 @@ struct CustomSlidesView: View {
                 searchIndex.indexVerses(moduleID: id)
             }
         }
+        .confirmDestructive(
+            String(localized: "Delete Slide", comment: "Alert title"),
+            item: $slideToDelete,
+            name: { $0.title },
+            perform: { deleteSlide($0) }
+        )
     }
 
     // MARK: - Left: slides list
@@ -117,7 +125,7 @@ struct CustomSlidesView: View {
                     }
                     Divider()
                     Button(String(localized: "Delete", comment: "Context menu"), role: .destructive) {
-                        deleteSlide(slide)
+                        slideToDelete = slide
                     }
                 }
             }

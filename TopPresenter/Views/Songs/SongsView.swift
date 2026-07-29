@@ -160,6 +160,8 @@ struct SongListPanel: View {
     @State private var onlyVerified = false
     /// Grid cell under the pointer — reveals its pin toggle on hover.
     @State private var hoveredSongID: UUID?
+    /// Set by the context menu; raises the delete confirmation.
+    @State private var songToDelete: Song?
 
     private var availableLanguages: [String] { index.availableLanguages }
 
@@ -216,6 +218,12 @@ struct SongListPanel: View {
                 listView
             }
         }
+        .confirmDestructive(
+            String(localized: "Delete Song", comment: "Alert title"),
+            item: $songToDelete,
+            name: { $0.title },
+            perform: { deleteSong($0) }
+        )
     }
 
     /// Fetch the real @Model for an entry ON DEMAND (selection, menu actions).
@@ -537,7 +545,7 @@ struct SongListPanel: View {
             Label(String(localized: "Exportă JSON…", comment: "Menu"), systemImage: "square.and.arrow.up")
         }
         Divider()
-        Button(role: .destructive) { withSong(entry.id) { deleteSong($0) } } label: {
+        Button(role: .destructive) { withSong(entry.id) { songToDelete = $0 } } label: {
             Label(String(localized: "Șterge cântecul", comment: "Menu"), systemImage: "trash")
         }
     }

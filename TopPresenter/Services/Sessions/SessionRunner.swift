@@ -30,6 +30,15 @@ final class SessionRunner {
     /// For resolving `{{…}}` tokens in session TEXT items (dynamic slides).
     @ObservationIgnored weak var searchIndex: SearchIndex?
 
+    /// True while a dynamic TEXT slide is fetching remote content — the transport
+    /// shows a spinner so the operator knows why nothing is on screen yet.
+    private(set) var isResolvingSlide = false
+
+    /// Bumped by every present; a token resolution that finishes against an older
+    /// generation is discarded instead of hijacking the live output.
+    @ObservationIgnored private var presentGeneration = 0
+    @ObservationIgnored private var dynamicSlideTask: Task<Void, Never>?
+
     // MARK: Lifecycle
 
     func start(_ schedule: ServiceSchedule, context: ModelContext) {
@@ -44,6 +53,10 @@ final class SessionRunner {
     }
 
     func stop() {
+        presentGeneration &+= 1     // strand any in-flight token resolution
+        dynamicSlideTask?.cancel()
+        dynamicSlideTask = nil
+        isResolvingSlide = false
         activeScheduleID = nil
         itemIndex = 0
         slideIndex = 0
@@ -152,6 +165,17 @@ final class SessionRunner {
 
     private func present(item: ScheduleItem, slide: Int, context: ModelContext) {
         guard let pm else { return }
+        // Every present supersedes the one before it. A remote token can take up to
+        // RemoteContentService's 6 s timeout to resolve, and nothing is visible on
+        // screen while it does — so the operator very plausibly hits next() first.
+        // Without this, that stale resolution would land seconds later and replace
+        // whatever the congregation is looking at by then.
+        presentGeneration &+= 1
+        let generation = presentGeneration
+        dynamicSlideTask?.cancel()
+        dynamicSlideTask = nil
+        isResolvingSlide = false
+
         switch SessionService.resolve(item, context: context) {
         case let .bible(text, reference, translationName):
             pm.showBibleVerse(text: text, reference: reference, translationName: translationName)
@@ -178,9 +202,12 @@ final class SessionRunner {
             if let searchIndex,
                SlideTemplate.containsTokens(title) || SlideTemplate.containsTokens(content) {
                 let ctx = SlideTokenContext(index: searchIndex, modelContext: context)
-                Task { [weak pm] in
+                isResolvingSlide = true
+                dynamicSlideTask = Task { [weak self, weak pm] in
                     let resolved = await SlideTokenResolver.resolveSlide(
                         title: title, subtitle: "", content: content, context: ctx)
+                    guard let self, generation == presentGeneration else { return }
+                    isResolvingSlide = false
                     pm?.showCustomText(text: resolved.content, title: resolved.title)
                 }
             } else {

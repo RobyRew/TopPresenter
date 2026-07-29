@@ -24,6 +24,8 @@ struct ScheduleView: View {
     @State private var missingItemIDs: Set<UUID> = []
     /// Import/export outcome shown to the user (count + any unresolved media).
     @State private var archiveResultMessage: String?
+    /// Set by the context menu; raises the delete confirmation.
+    @State private var scheduleToDelete: ServiceSchedule?
 
     var body: some View {
         ResizableSplit(storageKey: "split_schedule", minLeading: 240, maxFraction: 0.45) {
@@ -86,7 +88,7 @@ struct ScheduleView: View {
                         }
                         Divider()
                         Button(String(localized: "Delete", comment: "Context menu"), role: .destructive) {
-                            deleteSchedule(schedule)
+                            scheduleToDelete = schedule
                         }
                     }
                 }
@@ -222,6 +224,12 @@ struct ScheduleView: View {
         ) {
             Button(String(localized: "OK", comment: "Alert button")) { archiveResultMessage = nil }
         }
+        .confirmDestructive(
+            String(localized: "Delete Session", comment: "Alert title"),
+            item: $scheduleToDelete,
+            name: { $0.name },
+            perform: { deleteSchedule($0) }
+        )
     }
 
     // MARK: - Import / Export (.tpschedule)
