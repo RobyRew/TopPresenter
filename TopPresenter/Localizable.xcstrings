@@ -3325,6 +3325,5737 @@
           }
         }
       }
+    },
+    "Acest cântec nu are versuri.": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This song has no lyrics."
+          }
+        }
+      }
+    },
+    "Acorduri și transpunere": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chords and transposition"
+          }
+        }
+      }
+    },
+    "Acordurile cântecului peste versuri (transpozabile)": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Song chords above the lyrics (transposable)"
+          }
+        }
+      }
+    },
+    "Actualizează din aspectul curent": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Update from current layout"
+          }
+        }
+      }
+    },
+    "Actualizează tema curentă": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Update current theme"
+          }
+        }
+      }
+    },
+    "Actualizări": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Updates"
+          }
+        }
+      }
+    },
+    "Actualizări automate": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Automatic updates"
+          }
+        }
+      }
+    },
+    "Actualizări neconfigurate": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Updates not configured"
+          }
+        }
+      }
+    },
+    "Acțiuni Trackpad": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Trackpad Actions"
+          }
+        }
+      }
+    },
+    "Adaptare Automată": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auto-Fit"
+          }
+        }
+      }
+    },
+    "Adaugă": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add"
+          }
+        }
+      }
+    },
+    "Adaugă conținut": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add content"
+          }
+        }
+      }
+    },
+    "Adaugă ecran negru": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add black screen"
+          }
+        }
+      }
+    },
+    "Adaugă imagine, GIF sau video": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add an image, GIF or video"
+          }
+        }
+      }
+    },
+    "Adaugă la sesiune": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add to session"
+          }
+        }
+      }
+    },
+    "Adaugă media": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add media"
+          }
+        }
+      }
+    },
+    "Adaugă o casetă de text nouă": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add a new text box"
+          }
+        }
+      }
+    },
+    "Adaugă o versiune (copie a originalului)": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add a version (copy of the original)"
+          }
+        }
+      }
+    },
+    "Adaugă strofă": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add verse"
+          }
+        }
+      }
+    },
+    "Adu în față": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bring to front"
+          }
+        }
+      }
+    },
+    "Adăugat la sesiune": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Added to session"
+          }
+        }
+      }
+    },
+    "Afișare:": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show on:"
+          }
+        }
+      }
+    },
+    "Afișează": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show"
+          }
+        }
+      }
+    },
+    "Afișează / ascunde caseta": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show / hide the box"
+          }
+        }
+      }
+    },
+    "Afișează cu altă culoare cuvintele rostite de Isus (red-letter). Funcționează cu Biblii care marchează aceste cuvinte — ex. OSIS / USFM.": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shows the words spoken by Jesus in a different colour (red-letter). Works with Bibles that mark them — e.g. OSIS / USFM."
+          }
+        }
+      }
+    },
+    "Afișează eticheta categoriei": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show the category label"
+          }
+        }
+      }
+    },
+    "Afișează interliniar (grilă)": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show interlinear (grid)"
+          }
+        }
+      }
+    },
+    "Afișează note de subsol": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show footnotes"
+          }
+        }
+      }
+    },
+    "Afișează numărul fiecărui verset": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show each verse number"
+          }
+        }
+      }
+    },
+    "Afișează pe ecran": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show on screen"
+          }
+        }
+      }
+    },
+    "Ajustează căutarea sau filtrele.": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Adjust your search or the filters."
+          }
+        }
+      }
+    },
+    "Alege alt fișier pentru această casetă": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose another file for this box"
+          }
+        }
+      }
+    },
+    "Alege cântece (fișiere sau directoare)": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose songs (files or folders)"
+          }
+        }
+      }
+    },
+    "Alege fișiere și/sau directoare (subdirectoarele sunt incluse) — formatul fiecărui fișier este detectat automat.": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose files and/or folders (subfolders included) — each file's format is detected automatically."
+          }
+        }
+      }
+    },
+    "Alege pachete .tptheme — sau un folder care le conține": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose .tptheme packages — or a folder containing them"
+          }
+        }
+      }
+    },
+    "Alege un fișier din stânga pentru previzualizare.": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose a file on the left to preview it."
+          }
+        }
+      }
+    },
+    "Alege un slide din stânga sau creează unul nou. Slide-urile pot trage date live: versete, cântece, dată, API-uri, RSS.": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose a slide on the left or create a new one. Slides can pull live data: verses, songs, dates, APIs, RSS."
+          }
+        }
+      }
+    },
+    "Alinierea verticală implicită în interiorul casetelor": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Default vertical alignment inside boxes"
+          }
+        }
+      }
+    },
+    "Alinierea verticală în casetă — Global = setarea generală": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vertical alignment in the box — Global = the general setting"
+          }
+        }
+      }
+    },
+    "Am căutat și cu toleranță la greșeli de scriere": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Also searched with tolerance for typos"
+          }
+        }
+      }
+    },
+    "Anulează": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cancel"
+          }
+        }
+      }
+    },
+    "Anulează fixarea": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unpin"
+          }
+        }
+      }
+    },
+    "Anulează ultima modificare a casetelor": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Undo the last box change"
+          }
+        }
+      }
+    },
+    "Anunțuri": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Announcements"
+          }
+        }
+      }
+    },
+    "Apare aici după prima lansare cu actualizări.": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Appears here after the first launch with updates."
+          }
+        }
+      }
+    },
+    "Apasă tare (Force Touch) pe butonul Clear pentru a executa acțiunea selectată.": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Force Touch the Clear button to run the selected action."
+          }
+        }
+      }
+    },
+    "Aplică tema": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apply theme"
+          }
+        }
+      }
+    },
+    "Arată acordurile pe ecran": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show chords on screen"
+          }
+        }
+      }
+    },
+    "Arată mai multe": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show more"
+          }
+        }
+      }
+    },
+    "Arată pe ecran": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show on screen"
+          }
+        }
+      }
+    },
+    "Ascultă local (nu iese pe ecran)": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Listen locally (does not go to the screen)"
+          }
+        }
+      }
+    },
+    "Ascunde Ieșirea": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hide Output"
+          }
+        }
+      }
+    },
+    "Ascunde ieșirea imediat (îți dă ecranul înapoi)": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hide the output immediately (gives you the screen back)"
+          }
+        }
+      }
+    },
+    "Biblia curentă nu are date interliniare — încarcă un modul cu Strong/interliniar (ex. ENINT, ASTL). Bibliile simple (EDC100) rămân normale.": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The current Bible has no interlinear data — load a module with Strong's/interlinear (e.g. ENINT, ASTL). Plain Bibles (EDC100) stay as they are."
+          }
+        }
+      }
+    },
+    "Biblie: referința (ex. Ioan 3:16) • Cântece/Slide: titlul": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bible: the reference (e.g. John 3:16) • Songs/Slides: the title"
+          }
+        }
+      }
+    },
+    "Biblie: textul versetelor • Cântece: strofa • Slide: conținutul": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bible: the verse text • Songs: the verse • Slides: the content"
+          }
+        }
+      }
+    },
+    "Bibliotecă": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Library"
+          }
+        }
+      }
+    },
+    "Biserică": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Church"
+          }
+        }
+      }
+    },
+    "Cale în JSON: items.0.title": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "JSON path: items.0.title"
+          }
+        }
+      }
+    },
+    "Capitolul următor (→)": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Next chapter (→)"
+          }
+        }
+      }
+    },
+    "Carte de cântări": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Songbook"
+          }
+        }
+      }
+    },
+    "Carte de cântări (live)": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Songbook (live)"
+          }
+        }
+      }
+    },
+    "Carte nouă…": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "New book…"
+          }
+        }
+      }
+    },
+    "Cartea de cântări": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The songbook"
+          }
+        }
+      }
+    },
+    "Casetele media nu au setări de text.": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Media boxes have no text settings."
+          }
+        }
+      }
+    },
+    "Casetă Media": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Media Box"
+          }
+        }
+      }
+    },
+    "Casetă Text": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Text Box"
+          }
+        }
+      }
+    },
+    "Casetă text": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Text box"
+          }
+        }
+      }
+    },
+    "Categorii Cărți": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Book Categories"
+          }
+        }
+      }
+    },
+    "Caută actualizări automat": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Check for updates automatically"
+          }
+        }
+      }
+    },
+    "Caută actualizări…": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Check for updates…"
+          }
+        }
+      }
+    },
+    "Caută acum": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Check now"
+          }
+        }
+      }
+    },
+    "Caută cântece…": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search songs…"
+          }
+        }
+      }
+    },
+    "Caută cântecul…": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search for the song…"
+          }
+        }
+      }
+    },
+    "Caută media…": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search media…"
+          }
+        }
+      }
+    },
+    "Caută în bibliotecă…": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search the library…"
+          }
+        }
+      }
+    },
+    "Caută în toată biblioteca": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search the whole library"
+          }
+        }
+      }
+    },
+    "Ce mare ești Tu": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "How Great Thou Art"
+          }
+        }
+      }
+    },
+    "Ce se întâmplă când ecranul de proiecție se deconectează": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "What happens when the projection screen is disconnected"
+          }
+        }
+      }
+    },
+    "Centrează orizontal": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Centre horizontally"
+          }
+        }
+      }
+    },
+    "Centrează orizontal (apasă din nou pentru a reveni)": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Centre horizontally (press again to revert)"
+          }
+        }
+      }
+    },
+    "Centrează pe ecran (apasă din nou pentru a reveni)": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Centre on screen (press again to revert)"
+          }
+        }
+      }
+    },
+    "Centrează vertical": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Centre vertically"
+          }
+        }
+      }
+    },
+    "Centrează vertical (apasă din nou pentru a reveni)": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Centre vertically (press again to revert)"
+          }
+        }
+      }
+    },
+    "Cheia de semnare Sparkle nu e configurată încă. Vezi UPDATES.md pentru pașii unici de configurare.": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The Sparkle signing key is not configured yet. See UPDATES.md for the one-time setup steps."
+          }
+        }
+      }
+    },
+    "Coborâre fină": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fine descent"
+          }
+        }
+      }
+    },
+    "Colorează cărțile pe categorii": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Colour books by category"
+          }
+        }
+      }
+    },
+    "Colțuri:": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Corners:"
+          }
+        }
+      }
+    },
+    "Combină (completează ce lipsește)": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Merge (fill in what is missing)"
+          }
+        }
+      }
+    },
+    "Comutator live pentru grila interliniară (stilul rămâne în temă).": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Live toggle for the interlinear grid (the styling stays in the theme)."
+          }
+        }
+      }
+    },
+    "Confirmă înainte de ștergere": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Confirm before deleting"
+          }
+        }
+      }
+    },
+    "Conținut": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Content"
+          }
+        }
+      }
+    },
+    "Conținut Slide": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Slide Content"
+          }
+        }
+      }
+    },
+    "Conținut Verset": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verse Content"
+          }
+        }
+      }
+    },
+    "Conținut slide (live)": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Slide content (live)"
+          }
+        }
+      }
+    },
+    "Conținut…": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Content…"
+          }
+        }
+      }
+    },
+    "Copiază layout-ul altui prezentator în cel curent": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copy another presenter's layout into the current one"
+          }
+        }
+      }
+    },
+    "Cu ziua săptămânii": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "With the weekday"
+          }
+        }
+      }
+    },
+    "Culoare evidențiere": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Highlight colour"
+          }
+        }
+      }
+    },
+    "Culoarea implicită": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Default colour"
+          }
+        }
+      }
+    },
+    "Culoarea umbrei acestei casete — opacitatea ei dă intensitatea": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This box's shadow colour — its opacity sets the strength"
+          }
+        }
+      }
+    },
+    "Culoarea umbrei — opacitatea ei dă intensitatea": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shadow colour — its opacity sets the strength"
+          }
+        }
+      }
+    },
+    "Cum se afișează data": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "How the date is shown"
+          }
+        }
+      }
+    },
+    "Cum se afișează ora (se actualizează live pe ecran)": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "How the time is shown (updates live on screen)"
+          }
+        }
+      }
+    },
+    "Cum umple imaginea/videoclipul ecranul de proiecție.": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "How the image/video fills the projection screen."
+          }
+        }
+      }
+    },
+    "Câmp:": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Field:"
+          }
+        }
+      }
+    },
+    "Câmp: 0.title / 0.description / 0.date": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Field: 0.title / 0.description / 0.date"
+          }
+        }
+      }
+    },
+    "Când apare pe ecran — ex. un decor doar pentru versetele biblice": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "When it appears on screen — e.g. a decoration only for Bible verses"
+          }
+        }
+      }
+    },
+    "Când sunt afișate 2+ versete, textul trece prin șablonul de mai jos.": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "When 2+ verses are shown, the text goes through the template below."
+          }
+        }
+      }
+    },
+    "Cântec": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Song"
+          }
+        }
+      }
+    },
+    "Cântec fără referință": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Song without a reference"
+          }
+        }
+      }
+    },
+    "Cântec nou": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "New song"
+          }
+        }
+      }
+    },
+    "Cântece": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Songs"
+          }
+        }
+      }
+    },
+    "Cântece indexate": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Indexed songs"
+          }
+        }
+      }
+    },
+    "Cântece – potrivire în versuri": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Songs – match in the lyrics"
+          }
+        }
+      }
+    },
+    "Cântece, Ioan 3:16, versete, media, sesiuni…": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Songs, John 3:16, verses, media, sessions…"
+          }
+        }
+      }
+    },
+    "Cădere": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fall"
+          }
+        }
+      }
+    },
+    "Căutare": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search"
+          }
+        }
+      }
+    },
+    "Căutări": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Searches"
+          }
+        }
+      }
+    },
+    "Căutări ⌘K înregistrate": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recorded ⌘K searches"
+          }
+        }
+      }
+    },
+    "Data completă (duminică, 21 iulie 2026)": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Full date (Sunday, 21 July 2026)"
+          }
+        }
+      }
+    },
+    "Data curentă": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Current date"
+          }
+        }
+      }
+    },
+    "Data scurtă (21.07.2026)": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Short date (21/07/2026)"
+          }
+        }
+      }
+    },
+    "Date interliniare disponibile pentru selecția curentă.": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Interlinear data available for the current selection."
+          }
+        }
+      }
+    },
+    "Datele dinamice se împrospătează la fiecare prezentare.": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dynamic data refreshes every time it is presented."
+          }
+        }
+      }
+    },
+    "Dată/Oră": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Date/Time"
+          }
+        }
+      }
+    },
+    "De câte ori": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "How many times"
+          }
+        }
+      }
+    },
+    "De câte ori se cântă": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "How many times it is sung"
+          }
+        }
+      }
+    },
+    "De unde vine conținutul casetei — Implicit = câmpul ei natural": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Where the box's content comes from — Default = its natural field"
+          }
+        }
+      }
+    },
+    "Descarcă și instalează automat": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Download and install automatically"
+          }
+        }
+      }
+    },
+    "Deschide istoricul prezentărilor": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open the presentation history"
+          }
+        }
+      }
+    },
+    "Detectare automată a formatului": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Automatic format detection"
+          }
+        }
+      }
+    },
+    "Dezactivat = caseta moștenește setările globale de text": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Off = the box inherits the global text settings"
+          }
+        }
+      }
+    },
+    "Dezactivat = caseta urmează tranzițiile generale ale prezentatorului": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Off = the box follows the presenter's general transitions"
+          }
+        }
+      }
+    },
+    "Dezactivat = fereastra de proiecție rămâne transparentă": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Off = the projection window stays transparent"
+          }
+        }
+      }
+    },
+    "Doar Bibliile care conțin marcajul „cuvinte ale lui Isus” vor fi colorate; celelalte rămân normale.": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Only Bibles that carry the “words of Jesus” markup will be coloured; the rest stay as they are."
+          }
+        }
+      }
+    },
+    "Doar Cântece": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Songs only"
+          }
+        }
+      }
+    },
+    "Doar afișare — nu modifică acordurile salvate.": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Display only — does not change the saved chords."
+          }
+        }
+      }
+    },
+    "Duplică": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Duplicate"
+          }
+        }
+      }
+    },
+    "Duplică strofa": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Duplicate verse"
+          }
+        }
+      }
+    },
+    "După:": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "After:"
+          }
+        }
+      }
+    },
+    "Durata acestei tranziții — 0 = instant": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This transition's duration — 0 = instant"
+          }
+        }
+      }
+    },
+    "Durata tranziției acestei casete — 0 = instant": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This box's transition duration — 0 = instant"
+          }
+        }
+      }
+    },
+    "Durată:": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Duration:"
+          }
+        }
+      }
+    },
+    "Ecran de Proiecție": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Projection Screen"
+          }
+        }
+      }
+    },
+    "Ecran țintă": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Target screen"
+          }
+        }
+      }
+    },
+    "Ecranul pe care se proiectează": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The screen being projected onto"
+          }
+        }
+      }
+    },
+    "Ecranul țintă curent — layout-ul se adaptează automat la schimbarea lui": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The current target screen — the layout adapts automatically when it changes"
+          }
+        }
+      }
+    },
+    "Editează": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Edit"
+          }
+        }
+      }
+    },
+    "Editează cântecul": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Edit the song"
+          }
+        }
+      }
+    },
+    "Editează cântecul…": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Edit the song…"
+          }
+        }
+      }
+    },
+    "Editează…": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Edit…"
+          }
+        }
+      }
+    },
+    "Editor cântec": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Song editor"
+          }
+        }
+      }
+    },
+    "Efectul cu care textul APARE pe ecran — de la transparență la conținut": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The effect the text APPEARS with — from transparent to content"
+          }
+        }
+      }
+    },
+    "Efectul cu care textul DISPARE — de la conținut la transparență (Hide, Clear, ESC)": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The effect the text DISAPPEARS with — from content to transparent (Hide, Clear, ESC)"
+          }
+        }
+      }
+    },
+    "Efectul ÎNTRE slide-uri (verset → verset, strofă → strofă)": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The effect BETWEEN slides (verse → verse, section → section)"
+          }
+        }
+      }
+    },
+    "Element lipsă din bibliotecă": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Item missing from the library"
+          }
+        }
+      }
+    },
+    "Elimină": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remove"
+          }
+        }
+      }
+    },
+    "Elimină caseta (o poți reactiva cu ochiul)": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remove the box (you can bring it back with the eye)"
+          }
+        }
+      }
+    },
+    "Elimină imaginea de fundal": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remove the background image"
+          }
+        }
+      }
+    },
+    "Estompare la margini — opacitatea scade gradual spre bordură": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Edge fade — opacity falls off gradually towards the border"
+          }
+        }
+      }
+    },
+    "Eticheta strofei la cântece (ex. Strofa 1, Refren)": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The section label on songs (e.g. Verse 1, Chorus)"
+          }
+        }
+      }
+    },
+    "Etichetă": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Label"
+          }
+        }
+      }
+    },
+    "Etichetă Strofă": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verse Label"
+          }
+        }
+      }
+    },
+    "Etichetă strofă (live)": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verse label (live)"
+          }
+        }
+      }
+    },
+    "Evenimente în istoric": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Events in history"
+          }
+        }
+      }
+    },
+    "Evidențiază cuvintele lui Isus": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Highlight the words of Jesus"
+          }
+        }
+      }
+    },
+    "Evidențierea folosește accentul": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Highlight follows the accent"
+          }
+        }
+      }
+    },
+    "Exportă JSON…": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Export JSON…"
+          }
+        }
+      }
+    },
+    "Exportă sesiunea…": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Export the session…"
+          }
+        }
+      }
+    },
+    "Exportă tema ca pachet .tptheme (include toate fișierele media)": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Export the theme as a .tptheme package (includes all media files)"
+          }
+        }
+      }
+    },
+    "Exportă…": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Export…"
+          }
+        }
+      }
+    },
+    "Feed-ul de actualizări lipsește.": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The update feed is missing."
+          }
+        }
+      }
+    },
+    "Fiecare prezentator (Biblie, Cântece, Slide-uri) are propriul layout: casete, fundal și tranziții": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Each presenter (Bible, Songs, Slides) has its own layout: boxes, background and transitions"
+          }
+        }
+      }
+    },
+    "Fiindcă atât de mult a iubit Dumnezeu lumea, că a dat pe singurul Lui Fiu, pentru ca oricine crede în El să nu piară, ci să aibă viața veșnică.": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "For God so loved the world, that he gave his only Son, that whoever believes in him should not perish but have eternal life."
+          }
+        }
+      }
+    },
+    "Filă Nouă": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "New Tab"
+          }
+        }
+      }
+    },
+    "Filă nouă (tab nou de prezentare)": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "New tab (new presentation tab)"
+          }
+        }
+      }
+    },
+    "Fixat pentru această sesiune": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pinned for this session"
+          }
+        }
+      }
+    },
+    "Fixează sus": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pin to top"
+          }
+        }
+      }
+    },
+    "Fișier": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "File"
+          }
+        }
+      }
+    },
+    "Fișierul importat": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The imported file"
+          }
+        }
+      }
+    },
+    "Fișierul nu este o arhivă ZIP validă.": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The file is not a valid ZIP archive."
+          }
+        }
+      }
+    },
+    "Fișierul nu este o sesiune TopPresenter.": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The file is not a TopPresenter session."
+          }
+        }
+      }
+    },
+    "Folosește ca fundal": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Use as background"
+          }
+        }
+      }
+    },
+    "Fontul de bază pentru tot textul": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The base font for all text"
+          }
+        }
+      }
+    },
+    "Frecvență": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Frequency"
+          }
+        }
+      }
+    },
+    "Fundal global: imagine, GIF animat sau video în buclă": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Global background: image, animated GIF or looping video"
+          }
+        }
+      }
+    },
+    "Fundal pentru acest prezentator: imagine, GIF sau video în buclă": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Background for this presenter: image, GIF or looping video"
+          }
+        }
+      }
+    },
+    "Fundalul rămâne la Ascundere": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Background stays on Hide"
+          }
+        }
+      }
+    },
+    "Fără": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "None"
+          }
+        }
+      }
+    },
+    "Fără carte": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No book"
+          }
+        }
+      }
+    },
+    "Fără temă": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No theme"
+          }
+        }
+      }
+    },
+    "Fără titlu": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Untitled"
+          }
+        }
+      }
+    },
+    "Glisare stânga": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Swipe left"
+          }
+        }
+      }
+    },
+    "Global (toate prezentările)": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Global (all presentations)"
+          }
+        }
+      }
+    },
+    "Glosă interliniară (live)": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Interlinear gloss (live)"
+          }
+        }
+      }
+    },
+    "Golește Ecranul": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clear the Screen"
+          }
+        }
+      }
+    },
+    "Golește Tot": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clear All"
+          }
+        }
+      }
+    },
+    "Golește Tot (ecran + selecție)": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clear All (screen + selection)"
+          }
+        }
+      }
+    },
+    "Golește recentele ⌘K": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clear recent ⌘K"
+          }
+        }
+      }
+    },
+    "Golește și Ecran Negru": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clear and Black Screen"
+          }
+        }
+      }
+    },
+    "Golește și Mergi la Biblie": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clear and Go to Bible"
+          }
+        }
+      }
+    },
+    "Golește și Mergi la Cântece": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clear and Go to Songs"
+          }
+        }
+      }
+    },
+    "Golește și Mergi la Media": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clear and Go to Media"
+          }
+        }
+      }
+    },
+    "Greutatea de bază a fontului (referința rămâne semibold)": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The base font weight (the reference stays semibold)"
+          }
+        }
+      }
+    },
+    "Grilă": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Grid"
+          }
+        }
+      }
+    },
+    "Iconițe bară laterală:": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sidebar icons:"
+          }
+        }
+      }
+    },
+    "Identitate cântec": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Song identity"
+          }
+        }
+      }
+    },
+    "Ieșire": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Output"
+          }
+        }
+      }
+    },
+    "Ieșire:": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Output:"
+          }
+        }
+      }
+    },
+    "Import Parțial": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Partial Import"
+          }
+        }
+      }
+    },
+    "Importă imagini, audio sau video": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Import images, audio or video"
+          }
+        }
+      }
+    },
+    "Importă imagini, audio sau video — sau ajustează filtrul/căutarea.": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Import images, audio or video — or adjust the filter/search."
+          }
+        }
+      }
+    },
+    "Importă sesiuni (.tpschedule)": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Import sessions (.tpschedule)"
+          }
+        }
+      }
+    },
+    "Importă teme (.tptheme)": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Import themes (.tptheme)"
+          }
+        }
+      }
+    },
+    "Include metadata în exporturi": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Include metadata in exports"
+          }
+        }
+      }
+    },
+    "Inserează": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Insert"
+          }
+        }
+      }
+    },
+    "Inserează date:": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Insert data:"
+          }
+        }
+      }
+    },
+    "Inserează din API sau RSS": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Insert from an API or RSS"
+          }
+        }
+      }
+    },
+    "Inserează din cântec": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Insert from a song"
+          }
+        }
+      }
+    },
+    "Inserează un pasaj": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Insert a passage"
+          }
+        }
+      }
+    },
+    "Instalează": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Install"
+          }
+        }
+      }
+    },
+    "Interfață": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Interface"
+          }
+        }
+      }
+    },
+    "Istoric modificări": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Change history"
+          }
+        }
+      }
+    },
+    "Istoricul a fost șters.": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "History cleared."
+          }
+        }
+      }
+    },
+    "Istoricul prezentărilor ȘI al căutărilor ⌘K dispare definitiv. Nu se poate anula.": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The presentation history AND the ⌘K search history are gone for good. This cannot be undone."
+          }
+        }
+      }
+    },
+    "La Ascunde/Golește se ascunde doar conținutul — fundalul temei rămâne pe ecran. Dezactivează pentru ecran complet gol.": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "On Hide/Clear only the content is hidden — the theme's background stays on screen. Turn off for a completely blank screen."
+          }
+        }
+      }
+    },
+    "La fiecare oră": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Every hour"
+          }
+        }
+      }
+    },
+    "Layout-ul se adaptează automat la orice rezoluție, raport de aspect sau PPI: casetele sunt definite procentual, iar fonturile se scalează față de o înălțime de referință de 1080p.": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The layout adapts automatically to any resolution, aspect ratio or PPI: boxes are defined as percentages and fonts scale against a 1080p reference height."
+          }
+        }
+      }
+    },
+    "Limba interfeței:": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Interface language:"
+          }
+        }
+      }
+    },
+    "Limbă": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Language"
+          }
+        }
+      }
+    },
+    "Limbă implicită": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Default language"
+          }
+        }
+      }
+    },
+    "Listă": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "List"
+          }
+        }
+      }
+    },
+    "Lățime completă": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Full width"
+          }
+        }
+      }
+    },
+    "Lățime completă (apasă din nou pentru a reveni)": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Full width (press again to revert)"
+          }
+        }
+      }
+    },
+    "Lățimea casetei (% din ecran)": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Box width (% of the screen)"
+          }
+        }
+      }
+    },
+    "Mai multe setări...": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "More settings..."
+          }
+        }
+      }
+    },
+    "Mai puține": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fewer"
+          }
+        }
+      }
+    },
+    "Mai în față": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bring forward"
+          }
+        }
+      }
+    },
+    "Mai în spate": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Send backward"
+          }
+        }
+      }
+    },
+    "Marchează ca original — devine versiunea implicită": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mark as the original — becomes the default version"
+          }
+        }
+      }
+    },
+    "Marchează cântecul ca verificat": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mark the song as verified"
+          }
+        }
+      }
+    },
+    "Marchează verificat": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mark verified"
+          }
+        }
+      }
+    },
+    "Media anterioară": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Previous media"
+          }
+        }
+      }
+    },
+    "Media următoare": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Next media"
+          }
+        }
+      }
+    },
+    "Meniul se ascunde automat când părăsești Setările și reapare cu 10 click-uri rapide pe butonul Setări din bara laterală.": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The menu hides itself when you leave Settings and comes back with 10 quick clicks on the Settings button in the sidebar."
+          }
+        }
+      }
+    },
+    "Mentă": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mint"
+          }
+        }
+      }
+    },
+    "Mergi la Cântece": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Go to Songs"
+          }
+        }
+      }
+    },
+    "Micșorează automat fontul ca textul să încapă în caseta lui": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shrink the font automatically so the text fits its box"
+          }
+        }
+      }
+    },
+    "Micșorează automat fontul ca textul să încapă în casetă — Global = comportamentul general": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shrink the font automatically so the text fits the box — Global = the general behaviour"
+          }
+        }
+      }
+    },
+    "Moștenește datele din „Original”. Activează pentru a edita.": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Inherits the data from “Original”. Turn on to edit."
+          }
+        }
+      }
+    },
+    "Mută jos": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Move down"
+          }
+        }
+      }
+    },
+    "Mută sus": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Move up"
+          }
+        }
+      }
+    },
+    "Mărime": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Size"
+          }
+        }
+      }
+    },
+    "Mărime:": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Size:"
+          }
+        }
+      }
+    },
+    "Mărimea de bază (la 1080p — se scalează automat cu ecranul)": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Base size (at 1080p — scales automatically with the screen)"
+          }
+        }
+      }
+    },
+    "Mărimea fontului (la referința 1080p — se scalează automat)": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Font size (at the 1080p reference — scales automatically)"
+          }
+        }
+      }
+    },
+    "Navighează": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Navigate"
+          }
+        }
+      }
+    },
+    "Nicio modificare înregistrată.": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No changes recorded."
+          }
+        }
+      }
+    },
+    "Nicio temă salvată": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No saved themes"
+          }
+        }
+      }
+    },
+    "Nicio temă încă — importă pachete .tptheme cu ⤓ sau salvează aspectul curent cu +.": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No themes yet — import .tptheme packages with ⤓ or save the current layout with +."
+          }
+        }
+      }
+    },
+    "Nicio versiune publicată încă": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No published version yet"
+          }
+        }
+      }
+    },
+    "Niciun cântec": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No songs"
+          }
+        }
+      }
+    },
+    "Niciun fișier media": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No media files"
+          }
+        }
+      }
+    },
+    "Niciun pachet .tptheme valid în selecție.": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No valid .tptheme package in the selection."
+          }
+        }
+      }
+    },
+    "Nimic găsit — verifică URL-ul și calea.": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nothing found — check the URL and the path."
+          }
+        }
+      }
+    },
+    "Nivel fereastră:": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Window level:"
+          }
+        }
+      }
+    },
+    "Nivelul ferestrei de proiecție": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The projection window's level"
+          }
+        }
+      }
+    },
+    "Notă de subsol (live)": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Footnote (live)"
+          }
+        }
+      }
+    },
+    "Nu a fost găsit niciun cântec.": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No song found."
+          }
+        }
+      }
+    },
+    "Nu s-au putut încărca versiunile": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not load the versions"
+          }
+        }
+      }
+    },
+    "Numele afișat în listă și pe canvas": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The name shown in the list and on the canvas"
+          }
+        }
+      }
+    },
+    "Număr CCLI (live)": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CCLI number (live)"
+          }
+        }
+      }
+    },
+    "Număr slide (2 / 7)": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Slide number (2 / 7)"
+          }
+        }
+      }
+    },
+    "Numărul": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The number"
+          }
+        }
+      }
+    },
+    "Opacitatea de bază a textului — se combină cu opacitatea fiecărei casete": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The base text opacity — combines with each box's own opacity"
+          }
+        }
+      }
+    },
+    "Oprește": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stop"
+          }
+        }
+      }
+    },
+    "Oprită": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Off"
+          }
+        }
+      }
+    },
+    "Opțiunile de conținut se află în Editorul de aspect.": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Content options live in the Layout Editor."
+          }
+        }
+      }
+    },
+    "Ora curentă": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Current time"
+          }
+        }
+      }
+    },
+    "Oră : Minute": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hour : Minute"
+          }
+        }
+      }
+    },
+    "Oră : Minute : Secunde": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hour : Minute : Second"
+          }
+        }
+      }
+    },
+    "Pachetul de temă este invalid (lipsește theme.json).": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The theme package is invalid (theme.json is missing)."
+          }
+        }
+      }
+    },
+    "Pe ce slide-uri apare caseta — ex. titlul cântecului doar pe primul, „Amin.” doar pe ultimul": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Which slides the box appears on — e.g. the song title only on the first, “Amen.” only on the last"
+          }
+        }
+      }
+    },
+    "Personalizează textul": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Customise the text"
+          }
+        }
+      }
+    },
+    "Personalizează tranziția": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Customise the transition"
+          }
+        }
+      }
+    },
+    "Pornește sesiunea": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Start the session"
+          }
+        }
+      }
+    },
+    "Pornită": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "On"
+          }
+        }
+      }
+    },
+    "Poziția orizontală (% din lățimea ecranului)": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Horizontal position (% of screen width)"
+          }
+        }
+      }
+    },
+    "Poziția verticală (% din înălțimea ecranului)": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vertical position (% of screen height)"
+          }
+        }
+      }
+    },
+    "Poziție și Dimensiune": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Position and Size"
+          }
+        }
+      }
+    },
+    "Preferințe": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Preferences"
+          }
+        }
+      }
+    },
+    "Preferințele aplicației": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Application preferences"
+          }
+        }
+      }
+    },
+    "Prefixează fiecare verset cu numărul lui, ex. „(3) Fiindcă atât de mult…”.": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Prefix each verse with its number, e.g. “(3) For God so loved…”."
+          }
+        }
+      }
+    },
+    "Previzualizare locală": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Local preview"
+          }
+        }
+      }
+    },
+    "Previzualizare — scrie sau inserează date": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Preview — type or insert data"
+          }
+        }
+      }
+    },
+    "Previzualizează": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Preview"
+          }
+        }
+      }
+    },
+    "Previzualizează efectul pe canvas": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Preview the effect on the canvas"
+          }
+        }
+      }
+    },
+    "Prezintă": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Present"
+          }
+        }
+      }
+    },
+    "Proiectează": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Project"
+          }
+        }
+      }
+    },
+    "Proiecție": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Projection"
+          }
+        }
+      }
+    },
+    "Păstrează ambele": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keep both"
+          }
+        }
+      }
+    },
+    "Readuce toate casetele la pozițiile implicite": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Return every box to its default position"
+          }
+        }
+      }
+    },
+    "Redenumește caseta": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rename the box"
+          }
+        }
+      }
+    },
+    "Redenumește tema": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rename the theme"
+          }
+        }
+      }
+    },
+    "Redenumește tema…": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rename the theme…"
+          }
+        }
+      }
+    },
+    "Redenumește…": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rename…"
+          }
+        }
+      }
+    },
+    "Redă video în buclă": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Loop the video"
+          }
+        }
+      }
+    },
+    "Referința": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The reference"
+          }
+        }
+      }
+    },
+    "Referințe încrucișate": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cross-references"
+          }
+        }
+      }
+    },
+    "Referințe încrucișate (live)": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cross-references (live)"
+          }
+        }
+      }
+    },
+    "Referință": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reference"
+          }
+        }
+      }
+    },
+    "Referință (live)": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reference (live)"
+          }
+        }
+      }
+    },
+    "Referință biblică": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bible reference"
+          }
+        }
+      }
+    },
+    "Referință biblică incompletă": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Incomplete Bible reference"
+          }
+        }
+      }
+    },
+    "Referință nerecunoscută.": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reference not recognised."
+          }
+        }
+      }
+    },
+    "Referință: Ioan 3:16-18, Psalmi 23…": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reference: John 3:16-18, Psalm 23…"
+          }
+        }
+      }
+    },
+    "Refă modificarea anulată": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Redo the undone change"
+          }
+        }
+      }
+    },
+    "Reindexare pornită — se termină în fundal.": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reindexing started — it finishes in the background."
+          }
+        }
+      }
+    },
+    "Reindexează tot": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reindex everything"
+          }
+        }
+      }
+    },
+    "Reinstalează": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reinstall"
+          }
+        }
+      }
+    },
+    "Renunță": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Discard"
+          }
+        }
+      }
+    },
+    "Repetări:": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Repeats:"
+          }
+        }
+      }
+    },
+    "Repornește TopPresenter ca schimbarea să aibă efect.": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restart TopPresenter for the change to take effect."
+          }
+        }
+      }
+    },
+    "Resetează": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reset"
+          }
+        }
+      }
+    },
+    "Resetează Layout": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reset Layout"
+          }
+        }
+      }
+    },
+    "Resetează caseta la poziția implicită": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reset the box to its default position"
+          }
+        }
+      }
+    },
+    "Resetează poziția": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reset the position"
+          }
+        }
+      }
+    },
+    "Resetează încadrarea": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reset the framing"
+          }
+        }
+      }
+    },
+    "Restul câmpurilor se editează per versiune, mai sus.": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The remaining fields are edited per version, above."
+          }
+        }
+      }
+    },
+    "Revino la culoarea globală a textului": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Back to the global text colour"
+          }
+        }
+      }
+    },
+    "Revino la spațierea globală a literelor": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Back to the global letter spacing"
+          }
+        }
+      }
+    },
+    "Reîmprospătează ecranele": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Refresh the screens"
+          }
+        }
+      }
+    },
+    "Reține ultimul modul folosit": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remember the last module used"
+          }
+        }
+      }
+    },
+    "Ridicare fină": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fine ascent"
+          }
+        }
+      }
+    },
+    "Rotunjirea colțurilor": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Corner rounding"
+          }
+        }
+      }
+    },
+    "Roșu": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Red"
+          }
+        }
+      }
+    },
+    "Roșu clasic": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Classic red"
+          }
+        }
+      }
+    },
+    "Rulează sesiunea element cu element (înainte/înapoi în panoul din dreapta).": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Run the session item by item (forward/back in the right-hand panel)."
+          }
+        }
+      }
+    },
+    "Rând nou": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "New line"
+          }
+        }
+      }
+    },
+    "Salvează": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Save"
+          }
+        }
+      }
+    },
+    "Salvează aspectul curent (casete, stiluri, fundal, media) ca temă.": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Save the current layout (boxes, styles, background, media) as a theme."
+          }
+        }
+      }
+    },
+    "Salvează aspectul curent ca temă nouă": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Save the current layout as a new theme"
+          }
+        }
+      }
+    },
+    "Salvează ca temă nouă…": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Save as a new theme…"
+          }
+        }
+      }
+    },
+    "Schimbă culoarea casetei (doar în editor)": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Change the box colour (editor only)"
+          }
+        }
+      }
+    },
+    "Scrie acordurile între paranteze: [G]Mare ești [D]Tu": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Write chords in brackets: [G]How great [D]Thou art"
+          }
+        }
+      }
+    },
+    "Se caută…": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Searching…"
+          }
+        }
+      }
+    },
+    "Se combină: ex. „‖: … :‖ (×2)”. Marcajele apar la strofele cu ×N ≥ 2.": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "They combine: e.g. “‖: … :‖ (×2)”. The marks appear on verses with ×N ≥ 2."
+          }
+        }
+      }
+    },
+    "Se indexează biblioteca…": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Indexing the library…"
+          }
+        }
+      }
+    },
+    "Se indexează versetele…": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Indexing the verses…"
+          }
+        }
+      }
+    },
+    "Secțiunea de start:": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Startup section:"
+          }
+        }
+      }
+    },
+    "Selectează automat primul modul": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Select the first module automatically"
+          }
+        }
+      }
+    },
+    "Selectează o casetă din listă sau de pe canvas.": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Select a box from the list or on the canvas."
+          }
+        }
+      }
+    },
+    "Selectează o casetă pe canvas pentru a-i personaliza textul.": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Select a box on the canvas to customise its text."
+          }
+        }
+      }
+    },
+    "Selectează o casetă pentru a-i personaliza tranziția.": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Select a box to customise its transition."
+          }
+        }
+      }
+    },
+    "Selectează un cântec": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Select a song"
+          }
+        }
+      }
+    },
+    "Selectează un fișier media în galerie.": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Select a media file in the gallery."
+          }
+        }
+      }
+    },
+    "Sesiune importată": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Session imported"
+          }
+        }
+      }
+    },
+    "Sesiune nouă…": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "New session…"
+          }
+        }
+      }
+    },
+    "Setări": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Settings"
+          }
+        }
+      }
+    },
+    "Setări…": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Settings…"
+          }
+        }
+      }
+    },
+    "Simboluri: {verses} = versetele, {ref} = referința, {n} = câte versete. Fără {verses}, versetele se adaugă la final.": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Symbols: {verses} = the verses, {ref} = the reference, {n} = how many verses. Without {verses}, the verses are appended at the end."
+          }
+        }
+      }
+    },
+    "Slide-ul / elementul următor": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Next slide / item"
+          }
+        }
+      }
+    },
+    "Spațiere coloane:": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Column spacing:"
+          }
+        }
+      }
+    },
+    "Spațiere rânduri:": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Row spacing:"
+          }
+        }
+      }
+    },
+    "Spațiere:": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Spacing:"
+          }
+        }
+      }
+    },
+    "Spațierea dintre litere (tracking, la referința 1080p)": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Letter spacing (tracking, at the 1080p reference)"
+          }
+        }
+      }
+    },
+    "Spațierea dintre litere — Global = setarea generală": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Letter spacing — Global = the general setting"
+          }
+        }
+      }
+    },
+    "Spațierea dintre rânduri — Global = setarea generală": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Line spacing — Global = the general setting"
+          }
+        }
+      }
+    },
+    "Spațiul dintre rânduri": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The space between lines"
+          }
+        }
+      }
+    },
+    "Spațiul interior orizontal al casetei — Global = setarea generală": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The box's horizontal inner padding — Global = the general setting"
+          }
+        }
+      }
+    },
+    "Spațiul interior orizontal al fiecărei casete": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Each box's horizontal inner padding"
+          }
+        }
+      }
+    },
+    "Stilul textului (font, mărime, culoare…) se editează în tab-ul Text.": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Text styling (font, size, colour…) is edited in the Text tab."
+          }
+        }
+      }
+    },
+    "Strofă": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verse"
+          }
+        }
+      }
+    },
+    "Sursă:": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Source:"
+          }
+        }
+      }
+    },
+    "Săptămânal": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Weekly"
+          }
+        }
+      }
+    },
+    "Sări peste": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Skip"
+          }
+        }
+      }
+    },
+    "Tema nu a fost găsită.": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Theme not found."
+          }
+        }
+      }
+    },
+    "Teme: salvează și comută între layout-uri complete (casete, stiluri, fundal, media)": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Themes: save and switch between complete layouts (boxes, styles, background, media)"
+          }
+        }
+      }
+    },
+    "Temă fără nume": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unnamed theme"
+          }
+        }
+      }
+    },
+    "Temă nouă": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "New theme"
+          }
+        }
+      }
+    },
+    "Testează": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Test"
+          }
+        }
+      }
+    },
+    "Text + referință": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Text + reference"
+          }
+        }
+      }
+    },
+    "Text fix adăugat în jurul valorii live (gol când valoarea lipsește)": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fixed text added around the live value (empty when the value is missing)"
+          }
+        }
+      }
+    },
+    "Titlu Cântec": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Song Title"
+          }
+        }
+      }
+    },
+    "Titlu afișat": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Displayed title"
+          }
+        }
+      }
+    },
+    "Titlu canonic (pentru bibliotecă)": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Canonical title (for the library)"
+          }
+        }
+      }
+    },
+    "Titlu cântec (live)": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Song title (live)"
+          }
+        }
+      }
+    },
+    "Titlu secțiune (live)": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Section title (live)"
+          }
+        }
+      }
+    },
+    "Titluri de secțiune": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Section titles"
+          }
+        }
+      }
+    },
+    "Toate Bibliile au fost șterse.": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "All Bibles have been deleted."
+          }
+        }
+      }
+    },
+    "Toate colecțiile, cântecele, versiunile și cărțile de cântări dispar definitiv. Nu se poate anula.": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Every collection, song, version and songbook is gone for good. This cannot be undone."
+          }
+        }
+      }
+    },
+    "Toate cântecele au fost șterse.": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "All songs have been deleted."
+          }
+        }
+      }
+    },
+    "Toate setările de proiecție...": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "All projection settings..."
+          }
+        }
+      }
+    },
+    "Toate traducerile importate (cărți, capitole, versete) dispar definitiv. Nu se poate anula.": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Every imported translation (books, chapters, verses) is gone for good. This cannot be undone."
+          }
+        }
+      }
+    },
+    "Tonalități recomandate": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recommended keys"
+          }
+        }
+      }
+    },
+    "TopPresenter JSON este formatul recomandat pentru fidelitate completă, inclusiv referințe încrucișate, note de subsol și titluri de secțiuni.": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "TopPresenter JSON is the recommended format for full fidelity, including cross-references, footnotes and section headings."
+          }
+        }
+      }
+    },
+    "Trage în previzualizare pentru a repoziționa imaginea pe ecran.": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Drag in the preview to reposition the image on screen."
+          }
+        }
+      }
+    },
+    "Transformarea implicită a textului pentru TOATE casetele acestui prezentator — personalizabilă per casetă mai jos": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The default text transform for ALL of this presenter's boxes — customisable per box below"
+          }
+        }
+      }
+    },
+    "Transformarea textului acestei casete — Global = setarea generală a prezentatorului": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This box's text transform — Global = the presenter's general setting"
+          }
+        }
+      }
+    },
+    "Transparența imaginii de fundal": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Background image transparency"
+          }
+        }
+      }
+    },
+    "Tranziții": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Transitions"
+          }
+        }
+      }
+    },
+    "Tranzițiile (efecte și durate pentru Intrare / Intermediar / Ieșire) se setează per prezentator în Editor de Teme ▸ Tranziții.": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Transitions (effects and durations for Enter / Between / Exit) are set per presenter in Theme Editor ▸ Transitions."
+          }
+        }
+      }
+    },
+    "Trimite în spate": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Send to back"
+          }
+        }
+      }
+    },
+    "Ultima dată": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Last time"
+          }
+        }
+      }
+    },
+    "Umbra textului acestei casete — Global = setarea generală": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This box's text shadow — Global = the general setting"
+          }
+        }
+      }
+    },
+    "Umbră:": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shadow:"
+          }
+        }
+      }
+    },
+    "Un moment de ecran negru în sesiune (rugăciune, tranziție).": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A moment of black screen in the session (prayer, transition)."
+          }
+        }
+      }
+    },
+    "Verificare eliminată": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verification removed"
+          }
+        }
+      }
+    },
+    "Verificarea rulează la pornire și apoi la intervalul ales. Notificările sunt discrete — poți dezactiva oricând.": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The check runs at launch and then at the chosen interval. Notifications are discreet — you can turn them off at any time."
+          }
+        }
+      }
+    },
+    "Verifică": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Check"
+          }
+        }
+      }
+    },
+    "Versete indexate (traducerea activă)": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Indexed verses (active translation)"
+          }
+        }
+      }
+    },
+    "Versiune curentă": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Current version"
+          }
+        }
+      }
+    },
+    "Versiune nouă": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "New version"
+          }
+        }
+      }
+    },
+    "Versiunea originală (implicită)": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The original (default) version"
+          }
+        }
+      }
+    },
+    "Video (buclă, fără sunet)": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Video (loop, muted)"
+          }
+        }
+      }
+    },
+    "Video în buclă implicit": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Loop video by default"
+          }
+        }
+      }
+    },
+    "Videoclipurile proiectate reiau de la capăt automat.": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Projected videos restart automatically."
+          }
+        }
+      }
+    },
+    "Videoclipurile rulează în buclă, fără sunet, doar pe ecranul de proiecție.": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Videos loop, muted, on the projection screen only."
+          }
+        }
+      }
+    },
+    "Ziua săptămânii": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Weekday"
+          }
+        }
+      }
+    },
+    "separate prin virgulă": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "comma separated"
+          }
+        }
+      }
+    },
+    "ÎNGHEȚAT": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "FROZEN"
+          }
+        }
+      }
+    },
+    "În linie": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Inline"
+          }
+        }
+      }
+    },
+    "Înainte:": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Before:"
+          }
+        }
+      }
+    },
+    "Încadrare video:": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Video framing:"
+          }
+        }
+      }
+    },
+    "Încadrarea se aplică live pe ecranul de proiecție.": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The framing applies live on the projection screen."
+          }
+        }
+      }
+    },
+    "Încadrează": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fit"
+          }
+        }
+      }
+    },
+    "Încadrează = totul vizibil • Umple = acoperă caseta": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fit = everything visible • Fill = covers the box"
+          }
+        }
+      }
+    },
+    "Închide": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Close"
+          }
+        }
+      }
+    },
+    "Închide editorul (modificările se salvează automat)": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Close the editor (changes are saved automatically)"
+          }
+        }
+      }
+    },
+    "Îngheață": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Freeze"
+          }
+        }
+      }
+    },
+    "Îngheață Prezentarea": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Freeze the Presentation"
+          }
+        }
+      }
+    },
+    "Înlocuiește complet": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Replace completely"
+          }
+        }
+      }
+    },
+    "Înlocuiește fundalul global doar pentru acest tip de prezentare": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Overrides the global background for this presentation type only"
+          }
+        }
+      }
+    },
+    "Înlocuiește…": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Replace…"
+          }
+        }
+      }
+    },
+    "Întotdeauna": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Always"
+          }
+        }
+      }
+    },
+    "Întreabă": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ask"
+          }
+        }
+      }
+    },
+    "Întârzie tranziția acestei casete față de celelalte — efect în cascadă (titlul intră primul, versurile după)": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delay this box's transition relative to the others — a cascade effect (the title enters first, the lyrics after)"
+          }
+        }
+      }
+    },
+    "Întârziere:": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delay:"
+          }
+        }
+      }
+    },
+    "Înălțime completă": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Full height"
+          }
+        }
+      }
+    },
+    "Înălțime completă (apasă din nou pentru a reveni)": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Full height (press again to revert)"
+          }
+        }
+      }
+    },
+    "Înălțimea casetei (% din ecran)": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Box height (% of the screen)"
+          }
+        }
+      }
+    },
+    "Șablon": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Template"
+          }
+        }
+      }
+    },
+    "Șterge": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delete"
+          }
+        }
+      }
+    },
+    "Șterge Bibliile": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delete the Bibles"
+          }
+        }
+      }
+    },
+    "Șterge TOATE Bibliile?": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delete ALL Bibles?"
+          }
+        }
+      }
+    },
+    "Șterge TOATE cântecele?": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delete ALL songs?"
+          }
+        }
+      }
+    },
+    "Șterge cache-urile de căutare (memorie + disc + Spotlight) și reconstruiește indexul din bibliotecă. Indexarea rulează oricum automat la import — folosește doar dacă rezultatele par greșite.": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clears the search caches (memory + disk + Spotlight) and rebuilds the index from the library. Indexing runs automatically on import anyway — use this only if the results look wrong."
+          }
+        }
+      }
+    },
+    "Șterge caseta": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delete the box"
+          }
+        }
+      }
+    },
+    "Șterge cântecele": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delete the songs"
+          }
+        }
+      }
+    },
+    "Șterge cântecul": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delete the song"
+          }
+        }
+      }
+    },
+    "Șterge istoricul": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clear the history"
+          }
+        }
+      }
+    },
+    "Șterge istoricul (prezentări + căutări)": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clear the history (presentations + searches)"
+          }
+        }
+      }
+    },
+    "Șterge slide-ul": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delete the slide"
+          }
+        }
+      }
+    },
+    "Șterge tema": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delete the theme"
+          }
+        }
+      }
+    },
+    "Șterge toate Bibliile": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delete all Bibles"
+          }
+        }
+      }
+    },
+    "Șterge toate cântecele": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delete all songs"
+          }
+        }
+      }
+    },
+    "Șterge toate fixările": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clear all pins"
+          }
+        }
+      }
+    },
+    "Șterge tot istoricul?": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clear the whole history?"
+          }
+        }
+      }
+    },
+    "Șterge versiunea": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delete the version"
+          }
+        }
+      }
+    },
+    "Ștergi această secțiune?": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delete this section?"
+          }
+        }
+      }
+    },
+    "„Sistem” urmează culoarea de accent și mărimea iconițelor din Setările macOS. Evidențierea colorează selecțiile (versete, capitole, rezultate).": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "“System” follows the accent colour and icon size from macOS Settings. Highlighting colours selections (verses, chapters, results)."
+          }
+        }
+      }
+    },
+    "„Sistem” urmează limba din Setările macOS. Traducerile sunt încă parțiale — textul netradus apare în limba în care a fost scris.": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "“System” follows the language from macOS Settings. Translations are still partial — untranslated text appears in the language it was written in."
+          }
+        }
+      }
+    },
+    "%lld capitole": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld chapters"
+          }
+        }
+      }
+    },
+    "%lld cântece": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld songs"
+          }
+        }
+      }
+    },
+    "%lld elemente": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld items"
+          }
+        }
+      }
+    },
+    "%lld elemente selectate": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld items selected"
+          }
+        }
+      }
+    },
+    "%lld rezultate": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld results"
+          }
+        }
+      }
+    },
+    "%lld rămase": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld remaining"
+          }
+        }
+      }
+    },
+    "%lld secțiuni": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld sections"
+          }
+        }
+      }
+    },
+    "%lld sesiuni importate.": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld sessions imported."
+          }
+        }
+      }
+    },
+    "%lld versete": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld verses"
+          }
+        }
+      }
+    },
+    "%lld versiuni": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld versions"
+          }
+        }
+      }
+    },
+    "Arhivă ZIP coruptă: %@": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Corrupt ZIP archive: %@"
+          }
+        }
+      }
+    },
+    "Arhivă ZIP nesuportată: %@": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unsupported ZIP archive: %@"
+          }
+        }
+      }
+    },
+    "Au fost importate %lld cântece în \"%@\".": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld songs were imported into \"%@\"."
+          }
+        }
+      }
+    },
+    "Caută cântece cu „%@”": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search songs with “%@”"
+          }
+        }
+      }
+    },
+    "Caută „%@”": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search “%@”"
+          }
+        }
+      }
+    },
+    "Elementul a fost adăugat la „%@”.": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The item was added to “%@”."
+          }
+        }
+      }
+    },
+    "Exportul a eșuat: %@": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Export failed: %@"
+          }
+        }
+      }
+    },
+    "Eșuate: %@": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Failed: %@"
+          }
+        }
+      }
+    },
+    "Fișiere media lipsă din pachet: %@. Fundalurile respective vor fi goale.": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Media files missing from the package: %@. Those backgrounds will be empty."
+          }
+        }
+      }
+    },
+    "Fișierul media „%@” lipsește": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The media file “%@” is missing"
+          }
+        }
+      }
+    },
+    "Importate: %lld. Eșuate: %lld.\n%@": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Imported: %lld. Failed: %lld.\n%@"
+          }
+        }
+      }
+    },
+    "Linii per slide: %lld": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lines per slide: %lld"
+          }
+        }
+      }
+    },
+    "Media lipsă din bibliotecă: %@. Importă fișierele în modulul Media pentru rezolvare automată.": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Media missing from the library: %@. Import the files in the Media module to resolve them automatically."
+          }
+        }
+      }
+    },
+    "Modificat %@": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modified %@"
+          }
+        }
+      }
+    },
+    "Niciun rezultat pentru „%@”": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No results for “%@”"
+          }
+        }
+      }
+    },
+    "Pasajul %@ %lld lipsește din %@": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The passage %@ %lld is missing from %@"
+          }
+        }
+      }
+    },
+    "Prezentat %lld×": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Presented %lld×"
+          }
+        }
+      }
+    },
+    "Repetare: %@": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Repeat: %@"
+          }
+        }
+      }
+    },
+    "S-au importat %lld teme.": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld themes imported."
+          }
+        }
+      }
+    },
+    "Scrie o referință — pasajul se leagă de traducerea activă (%@).": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Type a reference — the passage links to the active translation (%@)."
+          }
+        }
+      }
+    },
+    "Se importă %@…": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Importing %@…"
+          }
+        }
+      }
+    },
+    "Slide dinamic — %lld surse de date": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dynamic slide — %lld data sources"
+          }
+        }
+      }
+    },
+    "Slide-ul face parte din secțiunea «%@», care va fi ștearsă din cântec.": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The slide belongs to the section «%@», which will be deleted from the song."
+          }
+        }
+      }
+    },
+    "Ton: %@": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Key: %@"
+          }
+        }
+      }
+    },
+    "Traducerea %@ nu e în bibliotecă": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The %@ translation is not in the library"
+          }
+        }
+      }
+    },
+    "Tranziții pentru %@ — alege un efect și îl vezi imediat pe canvas.": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Transitions for %@ — pick an effect and see it on the canvas right away."
+          }
+        }
+      }
+    },
+    "Ultima verificare: %@": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Last check: %@"
+          }
+        }
+      }
+    },
+    "Versete (%@)": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verses (%@)"
+          }
+        }
+      }
+    },
+    "Versetele %lld-%lld lipsesc": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verses %lld-%lld are missing"
+          }
+        }
+      }
+    },
+    "Versiune «%@» adăugată": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Version «%@» added"
+          }
+        }
+      }
+    },
+    "Versiune «%@» ștearsă": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Version «%@» deleted"
+          }
+        }
+      }
+    },
+    "afișate %lld din %lld — rafinează căutarea": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "showing %lld of %lld — refine the search"
+          }
+        }
+      }
+    },
+    "forme în %@": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "shapes in %@"
+          }
+        }
+      }
+    },
+    "«%@» adăugat": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "«%@» added"
+          }
+        }
+      }
+    },
+    "«%@» editat": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "«%@» edited"
+          }
+        }
+      }
+    },
+    "«%@» șters": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "«%@» deleted"
+          }
+        }
+      }
+    },
+    "Șterge «%@»": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delete «%@»"
+          }
+        }
+      }
+    },
+    "Ștergerea nu a putut fi salvată: %@": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The deletion could not be saved: %@"
+          }
+        }
+      }
+    },
+    "„%@” adăugat ✓": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "“%@” added ✓"
+          }
+        }
+      }
+    },
+    "„%@” există deja (%@, %lld versete). Noul fișier are %lld versete.": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "“%@” already exists (%@, %lld verses). The new file has %lld verses."
+          }
+        }
+      }
+    },
+    "„%@” nu mai e în bibliotecă": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "“%@” is no longer in the library"
+          }
+        }
+      }
+    },
+    "„%@” → %@ ✓": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "“%@” → %@ ✓"
+          }
+        }
+      }
+    },
+    "Adaugă cântece, versete, media sau text din compozitorul de mai jos — totul direct din bibliotecă.": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add songs, verses, media or text from the composer below — all straight from the library."
+          }
+        }
+      }
+    },
+    "Alege o sesiune din stânga sau creează una nouă.": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose a session on the left or create a new one."
+          }
+        }
+      }
+    },
+    "Bine ați venit!\nVă așteptăm duminică la ora 10:00.": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Welcome!\nJoin us on Sunday at 10:00."
+          }
+        }
+      }
+    },
+    "Ce mare ești Tu, Doamne!\nCât de minunate sunt lucrările Tale,\nÎntreg pământul cântă slava Ta.": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "How great Thou art, O Lord!\nHow wonderful are Thy works,\nThe whole earth sings Thy glory."
+          }
+        }
+      }
+    },
+    "Nicio sesiune selectată": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No session selected"
+          }
+        }
+      }
+    },
+    "Sesiune goală": {
+      "comment": "",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Empty session"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

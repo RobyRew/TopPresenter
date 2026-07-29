@@ -2952,10 +2952,14 @@ struct HistoryStoreTests {
         let new = result(title: "Cântec nou", verified: true, sections: [v1edited, chorus])
 
         let s = ImportService.summarizeChanges(old: old, new: new)
-        #expect(s.contains("Titlu modificat"))
-        #expect(s.contains("Marcat verificat"))
-        #expect(s.contains { $0.contains("Strofa 1") && $0.contains("editat") })
-        #expect(s.contains { $0.contains("Refren") && $0.contains("adăugat") })
+        // Compare against the SAME localized strings the code produces — asserting
+        // the Romanian wording made these tests fail the moment English shipped.
+        #expect(s.contains(String(localized: "Titlu modificat", comment: "Edit log")))
+        #expect(s.contains(String(localized: "Marcat verificat", comment: "Edit log")))
+        // The section labels are DATA, so they stay verbatim in every language.
+        #expect(s.contains { $0.contains("Strofa 1") })
+        #expect(s.contains { $0.contains("Refren") })
+        #expect(s.count == 4)
 
         // No changes → no entries.
         #expect(ImportService.summarizeChanges(old: old, new: old).isEmpty)
@@ -2967,7 +2971,12 @@ struct HistoryStoreTests {
         let old = result(title: "C", sections: [v1, chorus])
         let new = result(title: "C", sections: [v1])
         let s = ImportService.summarizeChanges(old: old, new: new)
-        #expect(s.contains { $0.contains("Refren") && $0.contains("șters") })
+        // Build the expectation through the SAME interpolated key the code uses
+        // («%@» șters). A literal "«Refren» șters" is a different key entirely —
+        // untranslated, so it would resolve to Romanian while the code returns
+        // the localized form.
+        let label = "Refren"
+        #expect(s == [String(localized: "«\(label)» șters", comment: "Edit log")])
     }
 }
 
