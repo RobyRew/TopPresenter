@@ -8156,6 +8156,12 @@
             "state": "translated",
             "value": "Customise the text"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Personalizar el texto"
+          }
         }
       }
     },
@@ -8166,6 +8172,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Customise the transition"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Personalizar la transición"
           }
         }
       }
@@ -8178,6 +8190,12 @@
             "state": "translated",
             "value": "Start the session"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Iniciar la sesión"
+          }
         }
       }
     },
@@ -8188,6 +8206,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "On"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Encendido"
           }
         }
       }
@@ -8200,6 +8224,12 @@
             "state": "translated",
             "value": "Horizontal position (% of screen width)"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Posición horizontal (% del ancho de pantalla)"
+          }
         }
       }
     },
@@ -8210,6 +8240,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Vertical position (% of screen height)"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Posición vertical (% del alto de pantalla)"
           }
         }
       }
@@ -8222,6 +8258,12 @@
             "state": "translated",
             "value": "Position and Size"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Posición y tamaño"
+          }
         }
       }
     },
@@ -8232,6 +8274,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Preferences"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Preferencias"
           }
         }
       }
@@ -8244,6 +8292,12 @@
             "state": "translated",
             "value": "Application preferences"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Preferencias de la aplicación"
+          }
         }
       }
     },
@@ -8254,6 +8308,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Prefix each verse with its number, e.g. “(3) For God so loved…”."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Antepone a cada versículo su número, p. ej. «(3) Porque tanto amó Dios…»."
           }
         }
       }
@@ -8266,6 +8326,12 @@
             "state": "translated",
             "value": "Local preview"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vista previa local"
+          }
         }
       }
     },
@@ -8276,6 +8342,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Preview — type or insert data"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vista previa — escribe o inserta datos"
           }
         }
       }
@@ -8288,6 +8360,12 @@
             "state": "translated",
             "value": "Preview"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vista previa"
+          }
         }
       }
     },
@@ -8298,6 +8376,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Preview the effect on the canvas"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ver el efecto en el lienzo"
           }
         }
       }
@@ -8310,6 +8394,12 @@
             "state": "translated",
             "value": "Present"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Presentar"
+          }
         }
       }
     },
@@ -8320,6 +8410,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Project"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Proyectar"
           }
         }
       }
@@ -8332,6 +8428,12 @@
             "state": "translated",
             "value": "Projection"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Proyección"
+          }
         }
       }
     },
@@ -8342,6 +8444,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Keep both"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conservar ambas"
           }
         }
       }
@@ -8354,6 +8462,12 @@
             "state": "translated",
             "value": "Return every box to its default position"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Devolver todas las cajas a su posición predeterminada"
+          }
         }
       }
     },
@@ -8364,6 +8478,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Rename the box"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Renombrar la caja"
           }
         }
       }
@@ -8376,6 +8496,12 @@
             "state": "translated",
             "value": "Rename the theme"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Renombrar el tema"
+          }
         }
       }
     },
@@ -8386,6 +8512,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Rename the theme…"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Renombrar el tema…"
           }
         }
       }
@@ -8398,6 +8530,12 @@
             "state": "translated",
             "value": "Rename…"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Renombrar…"
+          }
         }
       }
     },
@@ -8408,6 +8546,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Loop the video"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reproducir el vídeo en bucle"
           }
         }
       }
@@ -8420,6 +8564,12 @@
             "state": "translated",
             "value": "The reference"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La referencia"
+          }
         }
       }
     },
@@ -8430,6 +8580,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Cross-references"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Referencias cruzadas"
           }
         }
       }
@@ -8442,6 +8598,12 @@
             "state": "translated",
             "value": "Cross-references (live)"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Referencias cruzadas (en vivo)"
+          }
         }
       }
     },
@@ -8452,6 +8614,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Reference"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Referencia"
           }
         }
       }
@@ -8464,6 +8632,12 @@
             "state": "translated",
             "value": "Reference (live)"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Referencia (en vivo)"
+          }
         }
       }
     },
@@ -8474,6 +8648,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Bible reference"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Referencia bíblica"
           }
         }
       }
@@ -8486,6 +8666,12 @@
             "state": "translated",
             "value": "Incomplete Bible reference"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Referencia bíblica incompleta"
+          }
         }
       }
     },
@@ -8496,6 +8682,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Reference not recognised."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Referencia no reconocida."
           }
         }
       }
@@ -8508,6 +8700,12 @@
             "state": "translated",
             "value": "Reference: John 3:16-18, Psalm 23…"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Referencia: Juan 3:16-18, Salmo 23…"
+          }
         }
       }
     },
@@ -8518,6 +8716,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Redo the undone change"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rehacer el cambio deshecho"
           }
         }
       }
@@ -8530,6 +8734,12 @@
             "state": "translated",
             "value": "Reindexing started — it finishes in the background."
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reindexación iniciada: termina en segundo plano."
+          }
         }
       }
     },
@@ -8540,6 +8750,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Reindex everything"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reindexar todo"
           }
         }
       }
@@ -8552,6 +8768,12 @@
             "state": "translated",
             "value": "Reinstall"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reinstalar"
+          }
         }
       }
     },
@@ -8562,6 +8784,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Discard"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Descartar"
           }
         }
       }
@@ -8574,6 +8802,12 @@
             "state": "translated",
             "value": "Repeats:"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Repeticiones:"
+          }
         }
       }
     },
@@ -8584,6 +8818,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Restart TopPresenter for the change to take effect."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reinicia TopPresenter para que el cambio surta efecto."
           }
         }
       }
@@ -8596,6 +8836,12 @@
             "state": "translated",
             "value": "Reset"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restablecer"
+          }
         }
       }
     },
@@ -8606,6 +8852,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Reset Layout"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restablecer el diseño"
           }
         }
       }
@@ -8618,6 +8870,12 @@
             "state": "translated",
             "value": "Reset the box to its default position"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restablecer la caja a su posición predeterminada"
+          }
         }
       }
     },
@@ -8628,6 +8886,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Reset the position"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restablecer la posición"
           }
         }
       }
@@ -8640,6 +8904,12 @@
             "state": "translated",
             "value": "Reset the framing"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restablecer el encuadre"
+          }
         }
       }
     },
@@ -8650,6 +8920,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "The remaining fields are edited per version, above."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El resto de campos se editan por versión, arriba."
           }
         }
       }
@@ -8662,6 +8938,12 @@
             "state": "translated",
             "value": "Back to the global text colour"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Volver al color de texto global"
+          }
         }
       }
     },
@@ -8672,6 +8954,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Back to the global letter spacing"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Volver al espaciado de letras global"
           }
         }
       }
@@ -8684,6 +8972,12 @@
             "state": "translated",
             "value": "Refresh the screens"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Actualizar las pantallas"
+          }
         }
       }
     },
@@ -8694,6 +8988,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Remember the last module used"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recordar el último módulo usado"
           }
         }
       }
@@ -8706,6 +9006,12 @@
             "state": "translated",
             "value": "Fine ascent"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ascenso fino"
+          }
         }
       }
     },
@@ -8716,6 +9022,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Corner rounding"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Redondeo de esquinas"
           }
         }
       }
@@ -8728,6 +9040,12 @@
             "state": "translated",
             "value": "Red"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rojo"
+          }
         }
       }
     },
@@ -8738,6 +9056,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Classic red"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rojo clásico"
           }
         }
       }
@@ -8750,6 +9074,12 @@
             "state": "translated",
             "value": "Run the session item by item (forward/back in the right-hand panel)."
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ejecuta la sesión elemento a elemento (adelante/atrás en el panel derecho)."
+          }
         }
       }
     },
@@ -8760,6 +9090,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "New line"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Línea nueva"
           }
         }
       }
@@ -8772,6 +9108,12 @@
             "state": "translated",
             "value": "Save"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Guardar"
+          }
         }
       }
     },
@@ -8782,6 +9124,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Save the current layout (boxes, styles, background, media) as a theme."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Guarda el diseño actual (cajas, estilos, fondo, multimedia) como tema."
           }
         }
       }
@@ -8794,6 +9142,12 @@
             "state": "translated",
             "value": "Save the current layout as a new theme"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Guardar el diseño actual como tema nuevo"
+          }
         }
       }
     },
@@ -8804,6 +9158,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Save as a new theme…"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Guardar como tema nuevo…"
           }
         }
       }
@@ -8816,6 +9176,12 @@
             "state": "translated",
             "value": "Change the box colour (editor only)"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cambiar el color de la caja (solo en el editor)"
+          }
         }
       }
     },
@@ -8826,6 +9192,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Write chords in brackets: [G]How great [D]Thou art"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Escribe los acordes entre corchetes: [G]Cuán grande [D]es Él"
           }
         }
       }
@@ -8838,6 +9210,12 @@
             "state": "translated",
             "value": "Searching…"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Buscando…"
+          }
         }
       }
     },
@@ -8848,6 +9226,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "They combine: e.g. “‖: … :‖ (×2)”. The marks appear on verses with ×N ≥ 2."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Se combinan: p. ej. «‖: … :‖ (×2)». Las marcas aparecen en estrofas con ×N ≥ 2."
           }
         }
       }
@@ -8860,6 +9244,12 @@
             "state": "translated",
             "value": "Indexing the library…"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Indexando la biblioteca…"
+          }
         }
       }
     },
@@ -8870,6 +9260,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Indexing the verses…"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Indexando los versículos…"
           }
         }
       }
@@ -8882,6 +9278,12 @@
             "state": "translated",
             "value": "Startup section:"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sección de inicio:"
+          }
         }
       }
     },
@@ -8892,6 +9294,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Select the first module automatically"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seleccionar el primer módulo automáticamente"
           }
         }
       }
@@ -8904,6 +9312,12 @@
             "state": "translated",
             "value": "Select a box from the list or on the canvas."
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Selecciona una caja de la lista o del lienzo."
+          }
         }
       }
     },
@@ -8914,6 +9328,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Select a box on the canvas to customise its text."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Selecciona una caja en el lienzo para personalizar su texto."
           }
         }
       }
@@ -8926,6 +9346,12 @@
             "state": "translated",
             "value": "Select a box to customise its transition."
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Selecciona una caja para personalizar su transición."
+          }
         }
       }
     },
@@ -8936,6 +9362,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Select a song"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Selecciona una canción"
           }
         }
       }
@@ -8948,6 +9380,12 @@
             "state": "translated",
             "value": "Select a media file in the gallery."
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Selecciona un archivo multimedia de la galería."
+          }
         }
       }
     },
@@ -8958,6 +9396,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Session imported"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sesión importada"
           }
         }
       }
@@ -8970,6 +9414,12 @@
             "state": "translated",
             "value": "New session…"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sesión nueva…"
+          }
         }
       }
     },
@@ -8980,6 +9430,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Settings"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ajustes"
           }
         }
       }
@@ -8992,6 +9448,12 @@
             "state": "translated",
             "value": "Settings…"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ajustes…"
+          }
         }
       }
     },
@@ -9002,6 +9464,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Symbols: {verses} = the verses, {ref} = the reference, {n} = how many verses. Without {verses}, the verses are appended at the end."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Símbolos: {verses} = los versículos, {ref} = la referencia, {n} = cuántos versículos. Sin {verses}, los versículos se añaden al final."
           }
         }
       }
@@ -9014,6 +9482,12 @@
             "state": "translated",
             "value": "Next slide / item"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diapositiva / elemento siguiente"
+          }
         }
       }
     },
@@ -9024,6 +9498,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Column spacing:"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Espaciado de columnas:"
           }
         }
       }
@@ -9036,6 +9516,12 @@
             "state": "translated",
             "value": "Row spacing:"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Espaciado de filas:"
+          }
         }
       }
     },
@@ -9046,6 +9532,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Spacing:"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Espaciado:"
           }
         }
       }
@@ -9058,6 +9550,12 @@
             "state": "translated",
             "value": "Letter spacing (tracking, at the 1080p reference)"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Espaciado entre letras (tracking, en la referencia 1080p)"
+          }
         }
       }
     },
@@ -9068,6 +9566,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Letter spacing — Global = the general setting"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Espaciado entre letras — Global = el ajuste general"
           }
         }
       }
@@ -9080,6 +9584,12 @@
             "state": "translated",
             "value": "Line spacing — Global = the general setting"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Interlineado — Global = el ajuste general"
+          }
         }
       }
     },
@@ -9090,6 +9600,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "The space between lines"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El espacio entre líneas"
           }
         }
       }
@@ -9102,6 +9618,12 @@
             "state": "translated",
             "value": "The box's horizontal inner padding — Global = the general setting"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Relleno interior horizontal de la caja — Global = el ajuste general"
+          }
         }
       }
     },
@@ -9112,6 +9634,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Each box's horizontal inner padding"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Relleno interior horizontal de cada caja"
           }
         }
       }
@@ -9124,6 +9652,12 @@
             "state": "translated",
             "value": "Text styling (font, size, colour…) is edited in the Text tab."
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El estilo del texto (fuente, tamaño, color…) se edita en la pestaña Texto."
+          }
         }
       }
     },
@@ -9134,6 +9668,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Verse"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Estrofa"
           }
         }
       }
@@ -9146,6 +9686,12 @@
             "state": "translated",
             "value": "Source:"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fuente:"
+          }
         }
       }
     },
@@ -9156,6 +9702,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Weekly"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Semanal"
           }
         }
       }
@@ -9168,6 +9720,12 @@
             "state": "translated",
             "value": "Skip"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Omitir"
+          }
         }
       }
     },
@@ -9178,6 +9736,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Theme not found."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tema no encontrado."
           }
         }
       }
@@ -9190,6 +9754,12 @@
             "state": "translated",
             "value": "Themes: save and switch between complete layouts (boxes, styles, background, media)"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Temas: guarda y alterna entre diseños completos (cajas, estilos, fondo, multimedia)"
+          }
         }
       }
     },
@@ -9200,6 +9770,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Unnamed theme"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tema sin nombre"
           }
         }
       }
@@ -9212,6 +9788,12 @@
             "state": "translated",
             "value": "New theme"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tema nuevo"
+          }
         }
       }
     },
@@ -9222,6 +9804,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Test"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Probar"
           }
         }
       }
@@ -9234,6 +9822,12 @@
             "state": "translated",
             "value": "Text + reference"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Texto + referencia"
+          }
         }
       }
     },
@@ -9244,6 +9838,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Fixed text added around the live value (empty when the value is missing)"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Texto fijo añadido alrededor del valor en vivo (vacío cuando falta el valor)"
           }
         }
       }
@@ -9256,6 +9856,12 @@
             "state": "translated",
             "value": "Song Title"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Título de la canción"
+          }
         }
       }
     },
@@ -9266,6 +9872,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Displayed title"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Título mostrado"
           }
         }
       }
@@ -9278,6 +9890,12 @@
             "state": "translated",
             "value": "Canonical title (for the library)"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Título canónico (para la biblioteca)"
+          }
         }
       }
     },
@@ -9288,6 +9906,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Song title (live)"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Título de la canción (en vivo)"
           }
         }
       }
@@ -9300,6 +9924,12 @@
             "state": "translated",
             "value": "Section title (live)"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Título de sección (en vivo)"
+          }
         }
       }
     },
@@ -9310,6 +9940,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Section titles"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Títulos de sección"
           }
         }
       }
@@ -9322,6 +9958,12 @@
             "state": "translated",
             "value": "All Bibles have been deleted."
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Se han eliminado todas las Biblias."
+          }
         }
       }
     },
@@ -9332,6 +9974,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Every collection, song, version and songbook is gone for good. This cannot be undone."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Todas las colecciones, canciones, versiones y cancioneros desaparecen para siempre. No se puede deshacer."
           }
         }
       }
@@ -9344,6 +9992,12 @@
             "state": "translated",
             "value": "All songs have been deleted."
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Se han eliminado todas las canciones."
+          }
         }
       }
     },
@@ -9354,6 +10008,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "All projection settings..."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Todos los ajustes de proyección..."
           }
         }
       }
@@ -9366,6 +10026,12 @@
             "state": "translated",
             "value": "Every imported translation (books, chapters, verses) is gone for good. This cannot be undone."
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Todas las traducciones importadas (libros, capítulos, versículos) desaparecen para siempre. No se puede deshacer."
+          }
         }
       }
     },
@@ -9376,6 +10042,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Recommended keys"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tonalidades recomendadas"
           }
         }
       }
@@ -9388,6 +10060,12 @@
             "state": "translated",
             "value": "TopPresenter JSON is the recommended format for full fidelity, including cross-references, footnotes and section headings."
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "TopPresenter JSON es el formato recomendado para máxima fidelidad, con referencias cruzadas, notas al pie y títulos de sección."
+          }
         }
       }
     },
@@ -9398,6 +10076,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Drag in the preview to reposition the image on screen."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Arrastra en la vista previa para recolocar la imagen en pantalla."
           }
         }
       }
@@ -9410,6 +10094,12 @@
             "state": "translated",
             "value": "The default text transform for ALL of this presenter's boxes — customisable per box below"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La transformación de texto predeterminada para TODAS las cajas de este presentador — personalizable por caja abajo"
+          }
         }
       }
     },
@@ -9420,6 +10110,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "This box's text transform — Global = the presenter's general setting"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La transformación de texto de esta caja — Global = el ajuste general del presentador"
           }
         }
       }
@@ -9432,6 +10128,12 @@
             "state": "translated",
             "value": "Background image transparency"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Transparencia de la imagen de fondo"
+          }
         }
       }
     },
@@ -9442,6 +10144,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Transitions"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Transiciones"
           }
         }
       }
@@ -9454,6 +10162,12 @@
             "state": "translated",
             "value": "Transitions (effects and durations for Enter / Between / Exit) are set per presenter in Theme Editor ▸ Transitions."
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Las transiciones (efectos y duraciones de Entrada / Intermedio / Salida) se ajustan por presentador en Editor de temas ▸ Transiciones."
+          }
         }
       }
     },
@@ -9464,6 +10178,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Send to back"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enviar al fondo"
           }
         }
       }
@@ -9476,6 +10196,12 @@
             "state": "translated",
             "value": "Last time"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Última vez"
+          }
         }
       }
     },
@@ -9486,6 +10212,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "This box's text shadow — Global = the general setting"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La sombra del texto de esta caja — Global = el ajuste general"
           }
         }
       }
@@ -9498,6 +10230,12 @@
             "state": "translated",
             "value": "Shadow:"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sombra:"
+          }
         }
       }
     },
@@ -9508,6 +10246,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "A moment of black screen in the session (prayer, transition)."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un momento de pantalla en negro en la sesión (oración, transición)."
           }
         }
       }
@@ -9520,6 +10264,12 @@
             "state": "translated",
             "value": "Verification removed"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verificación quitada"
+          }
         }
       }
     },
@@ -9530,6 +10280,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "The check runs at launch and then at the chosen interval. Notifications are discreet — you can turn them off at any time."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La comprobación se hace al arrancar y luego en el intervalo elegido. Los avisos son discretos: puedes desactivarlos cuando quieras."
           }
         }
       }
@@ -9542,6 +10298,12 @@
             "state": "translated",
             "value": "Check"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Comprobar"
+          }
         }
       }
     },
@@ -9552,6 +10314,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Indexed verses (active translation)"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Versículos indexados (traducción activa)"
           }
         }
       }
@@ -9564,6 +10332,12 @@
             "state": "translated",
             "value": "Current version"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Versión actual"
+          }
         }
       }
     },
@@ -9574,6 +10348,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "New version"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Versión nueva"
           }
         }
       }
@@ -9586,6 +10366,12 @@
             "state": "translated",
             "value": "The original (default) version"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La versión original (predeterminada)"
+          }
         }
       }
     },
@@ -9596,6 +10382,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Video (loop, muted)"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vídeo (bucle, sin sonido)"
           }
         }
       }
@@ -9608,6 +10400,12 @@
             "state": "translated",
             "value": "Loop video by default"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vídeo en bucle por defecto"
+          }
         }
       }
     },
@@ -9618,6 +10416,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Projected videos restart automatically."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Los vídeos proyectados se reinician automáticamente."
           }
         }
       }
@@ -9630,6 +10434,12 @@
             "state": "translated",
             "value": "Videos loop, muted, on the projection screen only."
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Los vídeos van en bucle, sin sonido, solo en la pantalla de proyección."
+          }
         }
       }
     },
@@ -9640,6 +10450,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Weekday"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Día de la semana"
           }
         }
       }
@@ -9652,6 +10468,12 @@
             "state": "translated",
             "value": "comma separated"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "separados por comas"
+          }
         }
       }
     },
@@ -9662,6 +10484,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "FROZEN"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CONGELADO"
           }
         }
       }
@@ -9674,6 +10502,12 @@
             "state": "translated",
             "value": "Inline"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "En línea"
+          }
         }
       }
     },
@@ -9684,6 +10518,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Before:"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Antes:"
           }
         }
       }
@@ -9696,6 +10536,12 @@
             "state": "translated",
             "value": "Video framing:"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Encuadre de vídeo:"
+          }
         }
       }
     },
@@ -9706,6 +10552,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "The framing applies live on the projection screen."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El encuadre se aplica en vivo en la pantalla de proyección."
           }
         }
       }
@@ -9718,6 +10570,12 @@
             "state": "translated",
             "value": "Fit"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ajustar"
+          }
         }
       }
     },
@@ -9728,6 +10586,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Fit = everything visible • Fill = covers the box"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ajustar = todo visible • Llenar = cubre la caja"
           }
         }
       }
@@ -9740,6 +10604,12 @@
             "state": "translated",
             "value": "Close"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cerrar"
+          }
         }
       }
     },
@@ -9750,6 +10620,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Close the editor (changes are saved automatically)"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cerrar el editor (los cambios se guardan solos)"
           }
         }
       }
@@ -9762,6 +10638,12 @@
             "state": "translated",
             "value": "Freeze"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Congelar"
+          }
         }
       }
     },
@@ -9772,6 +10654,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Freeze the Presentation"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Congelar la presentación"
           }
         }
       }
@@ -9784,6 +10672,12 @@
             "state": "translated",
             "value": "Replace completely"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sustituir por completo"
+          }
         }
       }
     },
@@ -9794,6 +10688,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Overrides the global background for this presentation type only"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sustituye el fondo global solo para este tipo de presentación"
           }
         }
       }
@@ -9806,6 +10706,12 @@
             "state": "translated",
             "value": "Replace…"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sustituir…"
+          }
         }
       }
     },
@@ -9816,6 +10722,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Always"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Siempre"
           }
         }
       }
@@ -9828,6 +10740,12 @@
             "state": "translated",
             "value": "Ask"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Preguntar"
+          }
         }
       }
     },
@@ -9838,6 +10756,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Delay this box's transition relative to the others — a cascade effect (the title enters first, the lyrics after)"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Retrasa la transición de esta caja respecto a las demás — efecto en cascada (el título entra primero, la letra después)"
           }
         }
       }
@@ -9850,6 +10774,12 @@
             "state": "translated",
             "value": "Delay:"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Retraso:"
+          }
         }
       }
     },
@@ -9860,6 +10790,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Full height"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alto completo"
           }
         }
       }
@@ -9872,6 +10808,12 @@
             "state": "translated",
             "value": "Full height (press again to revert)"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alto completo (pulsa otra vez para revertir)"
+          }
         }
       }
     },
@@ -9882,6 +10824,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Box height (% of the screen)"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alto de la caja (% de la pantalla)"
           }
         }
       }
@@ -9894,6 +10842,12 @@
             "state": "translated",
             "value": "Template"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Plantilla"
+          }
         }
       }
     },
@@ -9904,6 +10858,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Delete"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eliminar"
           }
         }
       }
@@ -9916,6 +10876,12 @@
             "state": "translated",
             "value": "Delete the Bibles"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eliminar las Biblias"
+          }
         }
       }
     },
@@ -9926,6 +10892,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Delete ALL Bibles?"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Eliminar TODAS las Biblias?"
           }
         }
       }
@@ -9938,6 +10910,12 @@
             "state": "translated",
             "value": "Delete ALL songs?"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Eliminar TODAS las canciones?"
+          }
         }
       }
     },
@@ -9948,6 +10926,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Clears the search caches (memory + disk + Spotlight) and rebuilds the index from the library. Indexing runs automatically on import anyway — use this only if the results look wrong."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Borra las cachés de búsqueda (memoria + disco + Spotlight) y reconstruye el índice desde la biblioteca. La indexación ya se hace sola al importar: úsalo solo si los resultados parecen erróneos."
           }
         }
       }
@@ -9960,6 +10944,12 @@
             "state": "translated",
             "value": "Delete the box"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eliminar la caja"
+          }
         }
       }
     },
@@ -9970,6 +10960,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Delete the songs"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eliminar las canciones"
           }
         }
       }
@@ -9982,6 +10978,12 @@
             "state": "translated",
             "value": "Delete the song"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eliminar la canción"
+          }
         }
       }
     },
@@ -9992,6 +10994,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Clear the history"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Borrar el historial"
           }
         }
       }
@@ -10004,6 +11012,12 @@
             "state": "translated",
             "value": "Clear the history (presentations + searches)"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Borrar el historial (presentaciones + búsquedas)"
+          }
         }
       }
     },
@@ -10014,6 +11028,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Delete the slide"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eliminar la diapositiva"
           }
         }
       }
@@ -10026,6 +11046,12 @@
             "state": "translated",
             "value": "Delete the theme"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eliminar el tema"
+          }
         }
       }
     },
@@ -10036,6 +11062,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Delete all Bibles"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eliminar todas las Biblias"
           }
         }
       }
@@ -10048,6 +11080,12 @@
             "state": "translated",
             "value": "Delete all songs"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eliminar todas las canciones"
+          }
         }
       }
     },
@@ -10058,6 +11096,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Clear all pins"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quitar todos los fijados"
           }
         }
       }
@@ -10070,6 +11114,12 @@
             "state": "translated",
             "value": "Clear the whole history?"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Borrar todo el historial?"
+          }
         }
       }
     },
@@ -10080,6 +11130,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Delete the version"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eliminar la versión"
           }
         }
       }
@@ -10092,6 +11148,12 @@
             "state": "translated",
             "value": "Delete this section?"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Eliminar esta sección?"
+          }
         }
       }
     },
@@ -10103,6 +11165,12 @@
             "state": "translated",
             "value": "“System” follows the accent colour and icon size from macOS Settings. Highlighting colours selections (verses, chapters, results)."
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "«Sistema» sigue el color de acento y el tamaño de iconos de los Ajustes de macOS. El resaltado colorea las selecciones (versículos, capítulos, resultados)."
+          }
         }
       }
     },
@@ -10113,6 +11181,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "“System” follows the language from macOS Settings. Translations are still partial — untranslated text appears in the language it was written in."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "«Sistema» sigue el idioma de los Ajustes de macOS. Las traducciones aún son parciales: el texto sin traducir aparece en el idioma en que se escribió."
           }
         }
       }
@@ -10693,6 +11767,12 @@
             "state": "translated",
             "value": "Presented %lld×"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Presentado %lld×"
+          }
         }
       }
     },
@@ -10703,6 +11783,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Repeat: %@"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Repetición: %@"
           }
         }
       }
@@ -10715,6 +11801,12 @@
             "state": "translated",
             "value": "%lld themes imported."
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld temas importados."
+          }
         }
       }
     },
@@ -10725,6 +11817,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Type a reference — the passage links to the active translation (%@)."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Escribe una referencia: el pasaje se enlaza con la traducción activa (%@)."
           }
         }
       }
@@ -10737,6 +11835,12 @@
             "state": "translated",
             "value": "Importing %@…"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Importando %@…"
+          }
         }
       }
     },
@@ -10747,6 +11851,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Dynamic slide — %lld data sources"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diapositiva dinámica — %lld fuentes de datos"
           }
         }
       }
@@ -10759,6 +11869,12 @@
             "state": "translated",
             "value": "The slide belongs to the section «%@», which will be deleted from the song."
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La diapositiva pertenece a la sección «%@», que se eliminará de la canción."
+          }
         }
       }
     },
@@ -10769,6 +11885,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Key: %@"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tonalidad: %@"
           }
         }
       }
@@ -10781,6 +11903,12 @@
             "state": "translated",
             "value": "The %@ translation is not in the library"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La traducción %@ no está en la biblioteca"
+          }
         }
       }
     },
@@ -10791,6 +11919,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Transitions for %@ — pick an effect and see it on the canvas right away."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Transiciones para %@ — elige un efecto y lo ves al momento en el lienzo."
           }
         }
       }
@@ -10803,6 +11937,12 @@
             "state": "translated",
             "value": "Last check: %@"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Última comprobación: %@"
+          }
         }
       }
     },
@@ -10813,6 +11953,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Verses (%@)"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Versículos (%@)"
           }
         }
       }
@@ -10825,6 +11971,12 @@
             "state": "translated",
             "value": "Verses %lld-%lld are missing"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Faltan los versículos %lld-%lld"
+          }
         }
       }
     },
@@ -10835,6 +11987,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Version «%@» added"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Versión «%@» añadida"
           }
         }
       }
@@ -10847,6 +12005,12 @@
             "state": "translated",
             "value": "Version «%@» deleted"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Versión «%@» eliminada"
+          }
         }
       }
     },
@@ -10857,6 +12021,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "showing %lld of %lld — refine the search"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mostrando %lld de %lld — afina la búsqueda"
           }
         }
       }
@@ -10869,6 +12039,12 @@
             "state": "translated",
             "value": "shapes in %@"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "formas en %@"
+          }
         }
       }
     },
@@ -10879,6 +12055,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "«%@» added"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "«%@» añadida"
           }
         }
       }
@@ -10891,6 +12073,12 @@
             "state": "translated",
             "value": "«%@» edited"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "«%@» editada"
+          }
         }
       }
     },
@@ -10901,6 +12089,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "«%@» deleted"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "«%@» eliminada"
           }
         }
       }
@@ -10913,6 +12107,12 @@
             "state": "translated",
             "value": "Delete «%@»"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eliminar «%@»"
+          }
         }
       }
     },
@@ -10923,6 +12123,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "The deletion could not be saved: %@"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se ha podido guardar la eliminación: %@"
           }
         }
       }
@@ -10935,6 +12141,12 @@
             "state": "translated",
             "value": "“%@” added ✓"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "«%@» añadido ✓"
+          }
         }
       }
     },
@@ -10946,6 +12158,12 @@
             "state": "translated",
             "value": "“%@” already exists (%@, %lld verses). The new file has %lld verses."
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "«%@» ya existe (%@, %lld versículos). El archivo nuevo tiene %lld versículos."
+          }
         }
       }
     },
@@ -10956,6 +12174,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "“%@” is no longer in the library"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "«%@» ya no está en la biblioteca"
           }
         }
       }
@@ -11063,6 +12287,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Empty session"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sesión vacía"
           }
         }
       }
@@ -15321,6 +16551,12 @@
             "state": "translated",
             "value": "Alege o traducere ca să-i răsfoiești cărțile, capitolele și versetele — apoi trimite orice pasaj pe ecran. Poți schimba traducerea oricând din bara de sus."
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Elige una traducción para explorar sus libros, capítulos y versículos, y envía cualquier pasaje a la pantalla. Puedes cambiar de traducción cuando quieras desde la barra de arriba."
+          }
         }
       }
     },
@@ -15331,6 +16567,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Redă"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reproducir"
           }
         }
       }
@@ -15343,6 +16585,12 @@
             "state": "translated",
             "value": "Se pregătește exportul…"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Preparando la exportación…"
+          }
         }
       }
     },
@@ -15353,6 +16601,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Capitolul anterior"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Capítulo anterior"
           }
         }
       }
@@ -15365,6 +16619,12 @@
             "state": "translated",
             "value": "Versetul anterior"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Versículo anterior"
+          }
         }
       }
     },
@@ -15375,6 +16635,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Versetul / strofa anterioară"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Versículo / estrofa anterior"
           }
         }
       }
@@ -15387,6 +16653,12 @@
             "state": "translated",
             "value": "Căutare rapidă (tot)"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Búsqueda rápida (todo)"
+          }
         }
       }
     },
@@ -15394,6 +16666,12 @@
       "comment": "",
       "localizations": {
         "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "RSS / Atom"
+          }
+        },
+        "es": {
           "stringUnit": {
             "state": "translated",
             "value": "RSS / Atom"
@@ -15409,6 +16687,12 @@
             "state": "translated",
             "value": "Se citește fișierul…"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Leyendo el archivo…"
+          }
         }
       }
     },
@@ -15419,6 +16703,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Recent"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reciente"
           }
         }
       }
@@ -15431,6 +16721,12 @@
             "state": "translated",
             "value": "Recomandat"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recomendado"
+          }
         }
       }
     },
@@ -15441,6 +16737,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Referință"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Referencia"
           }
         }
       }
@@ -15453,6 +16755,12 @@
             "state": "translated",
             "value": "Reîmprospătează"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Actualizar"
+          }
         }
       }
     },
@@ -15463,6 +16771,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Obișnuit"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Normal"
           }
         }
       }
@@ -15475,6 +16789,12 @@
             "state": "translated",
             "value": "Revino la un singur verset"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Volver a un solo versículo"
+          }
         }
       }
     },
@@ -15485,6 +16805,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Ordinea slujbei"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Orden del culto"
           }
         }
       }
@@ -15497,6 +16823,12 @@
             "state": "translated",
             "value": "Salvează"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Guardar"
+          }
         }
       }
     },
@@ -15507,6 +16839,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Se salvează…"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Guardando…"
           }
         }
       }
@@ -15519,6 +16857,12 @@
             "state": "translated",
             "value": "Se scanează directorul…"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Escaneando la carpeta…"
+          }
         }
       }
     },
@@ -15529,6 +16873,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Se caută fișiere de Biblie și cântece…"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Buscando archivos de Biblia y canciones…"
           }
         }
       }
@@ -15541,6 +16891,12 @@
             "state": "translated",
             "value": "Sesiuni"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sesiones"
+          }
         }
       }
     },
@@ -15551,6 +16907,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Selectează"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seleccionar"
           }
         }
       }
@@ -15563,6 +16925,12 @@
             "state": "translated",
             "value": "Selectează tot"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seleccionar todo"
+          }
         }
       }
     },
@@ -15573,6 +16941,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Alege fișiere de Biblie pentru import"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Selecciona archivos de Biblia para importar"
           }
         }
       }
@@ -15585,6 +16959,12 @@
             "state": "translated",
             "value": "Alege fișiere și/sau foldere de Biblie — subfolderele sunt scanate automat"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Selecciona archivos y/o carpetas de Biblia; las subcarpetas se escanean automáticamente"
+          }
         }
       }
     },
@@ -15595,6 +16975,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Alege folderul"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seleccionar carpeta"
           }
         }
       }
@@ -15607,6 +16993,12 @@
             "state": "translated",
             "value": "Selectează mai multe versete"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seleccionar varios versículos"
+          }
         }
       }
     },
@@ -15617,6 +17009,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Alege un modul biblic"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Selecciona un módulo bíblico"
           }
         }
       }
@@ -15629,6 +17027,12 @@
             "state": "translated",
             "value": "Alege o carte"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Selecciona un libro"
+          }
         }
       }
     },
@@ -15639,6 +17043,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Alege o carte și un capitol pentru a vedea versetele"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Selecciona un libro y un capítulo para ver los versículos"
           }
         }
       }
@@ -15651,6 +17061,12 @@
             "state": "translated",
             "value": "Alege un folder cu fișiere USFM"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Selecciona una carpeta con archivos USFM"
+          }
         }
       }
     },
@@ -15661,6 +17077,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Alege un modul"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Selecciona un módulo"
           }
         }
       }
@@ -15673,6 +17095,12 @@
             "state": "translated",
             "value": "Alege un cântec ca să-i vezi istoricul"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Selecciona una canción para ver su historial"
+          }
         }
       }
     },
@@ -15683,6 +17111,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Modulul de exportat:"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Módulo a exportar:"
           }
         }
       }
@@ -15695,6 +17129,12 @@
             "state": "translated",
             "value": "Module:"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Módulos:"
+          }
         }
       }
     },
@@ -15705,6 +17145,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Sesiuni"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sesiones"
           }
         }
       }
@@ -15717,6 +17163,12 @@
             "state": "translated",
             "value": "Setări"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ajustes"
+          }
         }
       }
     },
@@ -15727,6 +17179,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Afișează"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mostrar"
           }
         }
       }
@@ -15739,6 +17197,12 @@
             "state": "translated",
             "value": "Arată scurtăturile de tastatură"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ver los atajos de teclado"
+          }
         }
       }
     },
@@ -15749,6 +17213,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Arată selecția pe ecran"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mostrar la selección en pantalla"
           }
         }
       }
@@ -15761,6 +17231,12 @@
             "state": "translated",
             "value": "Arată versetul pe ecran"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mostrar el versículo en pantalla"
+          }
         }
       }
     },
@@ -15771,6 +17247,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Arată pe ecran"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mostrar en pantalla"
           }
         }
       }
@@ -15783,6 +17265,12 @@
             "state": "translated",
             "value": "Prezentări"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Presentaciones"
+          }
         }
       }
     },
@@ -15793,6 +17281,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Fișier text simplu cu numere de carte, capitol și verset"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Archivo de texto simple con números de libro, capítulo y versículo"
           }
         }
       }
@@ -15805,6 +17299,12 @@
             "state": "translated",
             "value": "Slide-uri"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diapositivas"
+          }
         }
       }
     },
@@ -15815,6 +17315,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Cântecele și versetele pe care le prezinți vor apărea aici."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Las canciones y los versículos que presentes en pantalla se registrarán aquí."
           }
         }
       }
@@ -15827,6 +17333,12 @@
             "state": "translated",
             "value": "Viteză:"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Velocidad:"
+          }
         }
       }
     },
@@ -15837,6 +17349,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Pornește / arată prezentarea"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Iniciar / mostrar la presentación"
           }
         }
       }
@@ -15849,6 +17367,12 @@
             "state": "translated",
             "value": "Începe exportul…"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Iniciando la exportación…"
+          }
         }
       }
     },
@@ -15859,6 +17383,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Începe importul…"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Iniciando la importación…"
           }
         }
       }
@@ -15871,6 +17401,12 @@
             "state": "translated",
             "value": "Subtitlu"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Subtítulo"
+          }
         }
       }
     },
@@ -15881,6 +17417,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "„%@” a fost exportat ca %@."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "«%@» se exportó como %@."
           }
         }
       }
@@ -15893,6 +17435,12 @@
             "state": "translated",
             "value": "%lld modul(e) exportate în %@/"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld módulo(s) exportados a %@/"
+          }
         }
       }
     },
@@ -15903,6 +17451,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "„%@” importat cu %lld cărți."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "«%@» importado con %lld libros."
           }
         }
       }
@@ -15915,6 +17469,12 @@
             "state": "translated",
             "value": "%lld fișier(e) importate."
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld archivo(s) importados."
+          }
         }
       }
     },
@@ -15925,6 +17485,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Formate acceptate"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Formatos admitidos"
           }
         }
       }
@@ -15937,6 +17503,12 @@
             "state": "translated",
             "value": "Sistem"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sistema"
+          }
         }
       }
     },
@@ -15947,6 +17519,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Format text cu tabulatori, din proiectul Unbound Bible"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Formato de texto con tabuladores, del proyecto Unbound Bible"
           }
         }
       }
@@ -15959,6 +17537,12 @@
             "state": "translated",
             "value": "Etichetă"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Etiqueta"
+          }
         }
       }
     },
@@ -15969,6 +17553,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Text și afișare"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Texto y visualización"
           }
         }
       }
@@ -15981,6 +17571,12 @@
             "state": "translated",
             "value": "Fișierul este gol."
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El archivo está vacío."
+          }
         }
       }
     },
@@ -15991,6 +17587,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "ori"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "veces"
           }
         }
       }
@@ -16003,6 +17605,12 @@
             "state": "translated",
             "value": "Sfat: majoritatea scurtăturilor sunt și în bara de meniu."
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Consejo: la mayoría de atajos también están en la barra de menús."
+          }
         }
       }
     },
@@ -16013,6 +17621,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Titlu"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Título"
           }
         }
       }
@@ -16025,6 +17639,12 @@
             "state": "translated",
             "value": "Comută înghețarea"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alternar congelado"
+          }
         }
       }
     },
@@ -16035,6 +17655,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Format JSON nativ TopPresenter, cu referințe încrucișate, note de subsol și titluri"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Formato JSON nativo de TopPresenter, con referencias cruzadas, notas al pie y títulos"
           }
         }
       }
@@ -16047,6 +17673,12 @@
             "state": "translated",
             "value": "Traducere"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Traducción"
+          }
         }
       }
     },
@@ -16054,6 +17686,12 @@
       "comment": "",
       "localizations": {
         "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "USFM"
+          }
+        },
+        "es": {
           "stringUnit": {
             "state": "translated",
             "value": "USFM"
@@ -16069,6 +17707,12 @@
             "state": "translated",
             "value": "Unbound Bible"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unbound Bible"
+          }
         }
       }
     },
@@ -16079,6 +17723,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Unified Standard Format Markers (folder cu fișiere .usfm)"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unified Standard Format Markers (carpeta con archivos .usfm)"
           }
         }
       }
@@ -16091,6 +17741,12 @@
             "state": "translated",
             "value": "Format nesuportat: %@"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Formato no compatible: %@"
+          }
         }
       }
     },
@@ -16101,6 +17757,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Fără titlu"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sin título"
           }
         }
       }
@@ -16113,6 +17775,12 @@
             "state": "translated",
             "value": "Sesiune fără nume"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sesión sin nombre"
+          }
         }
       }
     },
@@ -16123,6 +17791,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Navigare versete și slide-uri"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Navegación de versículos y diapositivas"
           }
         }
       }
@@ -16135,6 +17809,12 @@
             "state": "translated",
             "value": "Se scrie fișierul…"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Escribiendo el archivo…"
+          }
         }
       }
     },
@@ -16142,6 +17822,12 @@
       "comment": "",
       "localizations": {
         "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zefania XML"
+          }
+        },
+        "es": {
           "stringUnit": {
             "state": "translated",
             "value": "Zefania XML"
@@ -16157,6 +17843,12 @@
             "state": "translated",
             "value": "Format biblic Zefania XML"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Formato bíblico Zefania XML"
+          }
         }
       }
     },
@@ -16167,6 +17859,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "sau dă click pentru a răsfoi"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "o haz clic para explorar"
           }
         }
       }
@@ -16179,6 +17877,12 @@
             "state": "translated",
             "value": "prezentări"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "presentaciones"
+          }
         }
       }
     },
@@ -16190,6 +17894,12 @@
             "state": "translated",
             "value": "afișări de versete"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "apariciones de versículos"
+          }
         }
       }
     },
@@ -16200,6 +17910,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "⚠️ Doar 1 verset încape la mărimea curentă a fontului"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "⚠️ Solo cabe 1 versículo al tamaño de fuente actual"
           }
         }
       }
@@ -16297,6 +18013,12 @@
             "state": "translated",
             "value": "Semi-aldin"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Semibold"
+          }
         }
       }
     },
@@ -16307,6 +18029,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Oprește și curăță ieșirea"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Detener y limpiar la salida"
           }
         }
       }
@@ -18240,6 +19968,12 @@
             "state": "translated",
             "value": "On"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Activado"
+          }
         }
       }
     },
@@ -18250,6 +19984,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Orange"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Naranja"
           }
         }
       }
@@ -18262,6 +20002,12 @@
             "state": "translated",
             "value": "Pre-chorus"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pre-estribillo"
+          }
         }
       }
     },
@@ -18272,6 +20018,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Category preview:"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vista previa de categorías:"
           }
         }
       }
@@ -18284,6 +20036,12 @@
             "state": "translated",
             "value": "First"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Primera"
+          }
         }
       }
     },
@@ -18294,6 +20052,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "First slide (text)"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Primera diapositiva (texto)"
           }
         }
       }
@@ -18306,6 +20070,12 @@
             "state": "translated",
             "value": "First line"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Primer verso"
+          }
         }
       }
     },
@@ -18316,6 +20086,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Profile"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Perfil"
           }
         }
       }
@@ -18328,6 +20104,12 @@
             "state": "translated",
             "value": "Schedule"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Programa"
+          }
         }
       }
     },
@@ -18338,6 +20120,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Bridge"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Puente"
           }
         }
       }
@@ -18350,6 +20138,12 @@
             "state": "translated",
             "value": "Recent"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recientes"
+          }
         }
       }
     },
@@ -18360,6 +20154,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Recent ⌘K searches cleared."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recientes de ⌘K borradas."
           }
         }
       }
@@ -18372,6 +20172,12 @@
             "state": "translated",
             "value": "Chorus"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Estribillo"
+          }
         }
       }
     },
@@ -18382,6 +20188,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Repeat"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Repetición"
           }
         }
       }
@@ -18394,6 +20206,12 @@
             "state": "translated",
             "value": "3D rotation"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rotación 3D"
+          }
         }
       }
     },
@@ -18404,6 +20222,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Pink"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rosa"
           }
         }
       }
@@ -18416,6 +20240,12 @@
             "state": "translated",
             "value": "Jump to passage"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ir al pasaje"
+          }
         }
       }
     },
@@ -18426,6 +20256,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Remove verification"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quitar la verificación"
           }
         }
       }
@@ -18438,6 +20274,12 @@
             "state": "translated",
             "value": "Short (11/06/2026)"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Corta (11/06/2026)"
+          }
         }
       }
     },
@@ -18448,6 +20290,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Meaning"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Significado"
           }
         }
       }
@@ -18460,6 +20308,12 @@
             "state": "translated",
             "value": "Session"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sesión"
+          }
         }
       }
     },
@@ -18470,6 +20324,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Sessions"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sesiones"
           }
         }
       }
@@ -18482,6 +20342,12 @@
             "state": "translated",
             "value": "System"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sistema"
+          }
         }
       }
     },
@@ -18492,6 +20358,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Previous slide / item"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diapositiva / elemento anterior"
           }
         }
       }
@@ -18504,6 +20376,12 @@
             "state": "translated",
             "value": "Slides"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diapositivas"
+          }
         }
       }
     },
@@ -18514,6 +20392,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Style"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Estilo"
           }
         }
       }
@@ -18526,6 +20410,12 @@
             "state": "translated",
             "value": "Style (live)"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Estilo (en vivo)"
+          }
         }
       }
     },
@@ -18536,6 +20426,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Verse 1"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Estrofa 1"
           }
         }
       }
@@ -18548,6 +20444,12 @@
             "state": "translated",
             "value": "Verses"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Estrofas"
+          }
         }
       }
     },
@@ -18558,6 +20460,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Subtitle"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Subtítulo"
           }
         }
       }
@@ -18570,6 +20478,12 @@
             "state": "translated",
             "value": "Subtitle (live)"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Subtítulo (en vivo)"
+          }
         }
       }
     },
@@ -18580,6 +20494,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Themes"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Temas"
           }
         }
       }
@@ -18592,6 +20512,12 @@
             "state": "translated",
             "value": "Themes changed"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Temas modificados"
+          }
         }
       }
     },
@@ -18602,6 +20528,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Tempo (live)"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tempo (en vivo)"
           }
         }
       }
@@ -18614,6 +20546,12 @@
             "state": "translated",
             "value": "Tempo changed"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tempo modificado"
+          }
         }
       }
     },
@@ -18624,6 +20562,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Global Text"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Texto global"
           }
         }
       }
@@ -18636,6 +20580,12 @@
             "state": "translated",
             "value": "New text"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Texto nuevo"
+          }
         }
       }
     },
@@ -18646,6 +20596,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Custom text for multi-verse"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Texto personalizado para multiversículo"
           }
         }
       }
@@ -18658,6 +20614,12 @@
             "state": "translated",
             "value": "Static text"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Texto estático"
+          }
         }
       }
     },
@@ -18668,6 +20630,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Verse text (live)"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Texto del versículo (en vivo)"
           }
         }
       }
@@ -18680,6 +20648,12 @@
             "state": "translated",
             "value": "The text"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El texto"
+          }
         }
       }
     },
@@ -18690,6 +20664,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Text…"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Texto…"
           }
         }
       }
@@ -18702,6 +20682,12 @@
             "state": "translated",
             "value": "Title"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Título"
+          }
         }
       }
     },
@@ -18712,6 +20698,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Slide Title"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Título de la diapositiva"
           }
         }
       }
@@ -18724,6 +20716,12 @@
             "state": "translated",
             "value": "Title changed"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Título modificado"
+          }
         }
       }
     },
@@ -18734,6 +20732,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Slide title (live)"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Título de diapositiva (en vivo)"
           }
         }
       }
@@ -18746,6 +20750,12 @@
             "state": "translated",
             "value": "The title"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El título"
+          }
         }
       }
     },
@@ -18756,6 +20766,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "All"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Todo"
           }
         }
       }
@@ -18768,6 +20784,12 @@
             "state": "translated",
             "value": "All versions"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Todas las versiones"
+          }
         }
       }
     },
@@ -18778,6 +20800,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "All versions…"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Todas las versiones…"
           }
         }
       }
@@ -18790,6 +20818,12 @@
             "state": "translated",
             "value": "Key"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tonalidad"
+          }
         }
       }
     },
@@ -18800,6 +20834,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Key changed"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tonalidad modificada"
           }
         }
       }
@@ -18812,6 +20852,12 @@
             "state": "translated",
             "value": "Original key"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tonalidad original"
+          }
         }
       }
     },
@@ -18822,6 +20868,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Key (live)"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tonalidad (en vivo)"
           }
         }
       }
@@ -18834,6 +20886,12 @@
             "state": "translated",
             "value": "Translation"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Traducción"
+          }
         }
       }
     },
@@ -18844,6 +20902,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Translation (live)"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Traducción (en vivo)"
           }
         }
       }
@@ -18856,6 +20920,12 @@
             "state": "translated",
             "value": "Translated by"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Traducido por"
+          }
         }
       }
     },
@@ -18866,6 +20936,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Drag to reorder (first = on top on screen)"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Arrastra para reordenar (la primera = arriba en pantalla)"
           }
         }
       }
@@ -18878,6 +20954,12 @@
             "state": "translated",
             "value": "Drag to reorder"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Arrastra para reordenar"
+          }
         }
       }
     },
@@ -18888,6 +20970,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Transform:"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Transformar:"
           }
         }
       }
@@ -18900,6 +20988,12 @@
             "state": "translated",
             "value": "Transpose"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Transponer"
+          }
         }
       }
     },
@@ -18910,6 +21004,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Turquoise"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Turquesa"
           }
         }
       }
@@ -18922,6 +21022,12 @@
             "state": "translated",
             "value": "Last"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Última"
+          }
         }
       }
     },
@@ -18932,6 +21038,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Fill"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Llenar"
           }
         }
       }
@@ -18944,6 +21056,12 @@
             "state": "translated",
             "value": "Fill:"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Llenado:"
+          }
         }
       }
     },
@@ -18954,6 +21072,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Green"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verde"
           }
         }
       }
@@ -18966,6 +21090,12 @@
             "state": "translated",
             "value": "Verified"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verificada"
+          }
         }
       }
     },
@@ -18976,6 +21106,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Verse"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Versículo"
           }
         }
       }
@@ -18988,6 +21124,12 @@
             "state": "translated",
             "value": "Verses"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Versículos"
+          }
         }
       }
     },
@@ -18998,6 +21140,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Version"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Versión"
           }
         }
       }
@@ -19010,6 +21158,12 @@
             "state": "translated",
             "value": "Lyrics"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Letra"
+          }
         }
       }
     },
@@ -19020,6 +21174,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Lyrics (live)"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Letra (en vivo)"
           }
         }
       }
@@ -19032,6 +21192,12 @@
             "state": "translated",
             "value": "Lyrics by"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Letra de"
+          }
         }
       }
     },
@@ -19039,6 +21205,12 @@
       "comment": "",
       "localizations": {
         "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vertical:"
+          }
+        },
+        "es": {
           "stringUnit": {
             "state": "translated",
             "value": "Vertical:"
@@ -19054,6 +21226,12 @@
             "state": "translated",
             "value": "Visible:"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Visible:"
+          }
         }
       }
     },
@@ -19064,6 +21242,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Daily"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diario"
           }
         }
       }
@@ -19076,6 +21260,12 @@
             "state": "translated",
             "value": "current"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "actual"
+          }
         }
       }
     },
@@ -19086,6 +21276,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "e.g. “ (NIV)”"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "p. ej. « (RVR)»"
           }
         }
       }
@@ -19098,6 +21294,12 @@
             "state": "translated",
             "value": "e.g. “Ref: ”"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "p. ej. «Ref: »"
+          }
         }
       }
     },
@@ -19109,6 +21311,12 @@
             "state": "translated",
             "value": "lowercase"
           }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "minúsculas"
+          }
         }
       }
     },
@@ -19119,6 +21327,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "semitones"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "semitonos"
           }
         }
       }
@@ -19240,6 +21454,127 @@
           "stringUnit": {
             "state": "translated",
             "value": "Original"
+          }
+        }
+      }
+    },
+    "PowerPoint": {
+      "comment": "",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "PowerPoint"
+          }
+        }
+      }
+    },
+    "Strong": {
+      "comment": "",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Strong"
+          }
+        }
+      }
+    },
+    "Tempo": {
+      "comment": "",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tempo"
+          }
+        }
+      }
+    },
+    "Text": {
+      "comment": "",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Texto"
+          }
+        }
+      }
+    },
+    "TopPresenter JSON": {
+      "comment": "",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "TopPresenter JSON"
+          }
+        }
+      }
+    },
+    "TopPresenter Song JSON": {
+      "comment": "",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "TopPresenter Song JSON"
+          }
+        }
+      }
+    },
+    "Transparent": {
+      "comment": "",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Transparente"
+          }
+        }
+      }
+    },
+    "Zoom +": {
+      "comment": "",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zoom +"
+          }
+        }
+      }
+    },
+    "Zoom −": {
+      "comment": "",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zoom −"
+          }
+        }
+      }
+    },
+    "bis/ter": {
+      "comment": "",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bis/ter"
+          }
+        }
+      }
+    },
+    "https://…": {
+      "comment": "",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "https://…"
           }
         }
       }
