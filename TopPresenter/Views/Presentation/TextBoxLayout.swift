@@ -374,6 +374,33 @@ struct BackgroundMediaThumb: View {
     }
 }
 
+/// The font list has 100+ families and NEVER changes, but a bare `ForEach` inside
+/// a picker rebuilds one `Text` per family every time its enclosing tab
+/// re-evaluates — which, in the Theme Editor, is on every keystroke and every
+/// slider tick. `Equatable` on the selection alone lets SwiftUI skip the whole
+/// subtree when only unrelated state moved.
+struct FontFamilyPicker: View, Equatable {
+    let fonts: [String]
+    /// Shown before the families — "Global" inherit, "System", etc.
+    let leading: [(tag: String, title: String)]
+    @Binding var selection: String
+
+    static func == (lhs: Self, rhs: Self) -> Bool { lhs.selection == rhs.selection }
+
+    var body: some View {
+        Picker("", selection: $selection) {
+            ForEach(leading, id: \.tag) { item in
+                Text(item.title).tag(item.tag)
+            }
+            ForEach(fonts, id: \.self) { font in
+                Text(font).tag(font)
+            }
+        }
+        .labelsHidden()
+        .controlSize(.small)
+    }
+}
+
 /// Where the box pulls its content from — shown in the inspector and context menu.
 func boxSourceDescription(for identity: BoxIdentity, pm: PresentationManager) -> String {
     switch identity {
@@ -524,7 +551,7 @@ private struct TextBoxHandle: View {
 
             // Corner resize handles
             ForEach(Array(Corner.allCases.enumerated()), id: \.offset) { _, corner in
-                handleView(for: corner, in: rect)
+                handleView(for: corner, in: rect, color: color)
             }
         }
         .frame(width: rect.width, height: rect.height)
@@ -679,11 +706,11 @@ private struct TextBoxHandle: View {
     // MARK: Resize
 
     @ViewBuilder
-    private func handleView(for corner: Corner, in rect: CGRect) -> some View {
+    private func handleView(for corner: Corner, in rect: CGRect, color: Color) -> some View {
         let handleSize: CGFloat = 9
         RoundedRectangle(cornerRadius: 2)
             .fill(.white)
-            .overlay(RoundedRectangle(cornerRadius: 2).strokeBorder(boxColor(for: identity, pm: pm), lineWidth: 1.5))
+            .overlay(RoundedRectangle(cornerRadius: 2).strokeBorder(color, lineWidth: 1.5))
             .frame(width: handleSize, height: handleSize)
             .contentShape(Rectangle().inset(by: -5))
             .pointerStyle(.frameResize(position: corner.resizePosition))
@@ -2432,18 +2459,16 @@ struct LayoutEditorSheet: View {
 
                     // SAME options, SAME order as Text Global.
                     labeledRow(String(localized: "Font:", comment: "Setting label")) {
-                        Picker("", selection: Binding(
-                            get: { style.wrappedValue.fontName },
-                            set: { style.wrappedValue.fontName = $0 }
-                        )) {
-                            Text(String(localized: "Global", comment: "Font option")).tag("")
-                            Text("System").tag("System")
-                            ForEach(availableFonts, id: \.self) { font in
-                                Text(font).tag(font)
-                            }
-                        }
-                        .labelsHidden()
-                        .controlSize(.small)
+                        FontFamilyPicker(
+                            fonts: availableFonts,
+                            leading: [("", String(localized: "Global", comment: "Font option")),
+                                      ("System", "System")],
+                            selection: Binding(
+                                get: { style.wrappedValue.fontName },
+                                set: { style.wrappedValue.fontName = $0 }
+                            )
+                        )
+                        .equatable()
                     }
 
                     labeledRow(String(localized: "Mărime:", comment: "Setting label")) {
@@ -2882,14 +2907,12 @@ struct LayoutEditorSheet: View {
             GroupBox {
                 VStack(alignment: .leading, spacing: 8) {
                     labeledRow(String(localized: "Font:", comment: "Setting label")) {
-                        Picker("", selection: pmBinding.fontName) {
-                            Text(String(localized: "System", comment: "Font option")).tag("System")
-                            ForEach(availableFonts, id: \.self) { font in
-                                Text(font).tag(font)
-                            }
-                        }
-                        .labelsHidden()
-                        .controlSize(.small)
+                        FontFamilyPicker(
+                            fonts: availableFonts,
+                            leading: [("System", String(localized: "System", comment: "Font option"))],
+                            selection: pmBinding.fontName
+                        )
+                        .equatable()
                     }
                     .help(String(localized: "Fontul de bază pentru tot textul", comment: "Tooltip"))
 
@@ -3283,14 +3306,17 @@ struct LayoutEditorSheet: View {
 
     @ViewBuilder
     private func contentBackgroundGroup(key: String) -> some View {
+        // Read ONCE. Every Toggle/Slider/ColorPicker binding below used to call
+        // backgroundConfig(for:) again in its own getter, so drawing this one
+        // group cost nine profile lookups instead of one.
         let config = pm.backgroundConfig(for: key)
 
         GroupBox {
             VStack(alignment: .leading, spacing: 8) {
                 Toggle(isOn: Binding(
-                    get: { pm.backgroundConfig(for: key).enabled },
+                    get: { config.enabled },
                     set: { enabled in
-                        var c = pm.backgroundConfig(for: key)
+                        var c = pm.backgroundConfig(for: key)   // read fresh: a captured snapshot would lose a sibling edit made before the next render
                         c.enabled = enabled
                         pm.setBackgroundConfig(c, for: key)
                     }
@@ -3304,9 +3330,9 @@ struct LayoutEditorSheet: View {
 
                 if config.enabled {
                     Toggle(isOn: Binding(
-                        get: { pm.backgroundConfig(for: key).showColor },
+                        get: { config.showColor },
                         set: { v in
-                            var c = pm.backgroundConfig(for: key)
+                            var c = pm.backgroundConfig(for: key)   // read fresh: a captured snapshot would lose a sibling edit made before the next render
                             c.showColor = v
                             pm.setBackgroundConfig(c, for: key)
                         }
@@ -3320,9 +3346,9 @@ struct LayoutEditorSheet: View {
                     if config.showColor {
                         labeledRow(String(localized: "Culoare:", comment: "Setting label")) {
                             ColorPicker("", selection: Binding(
-                                get: { Color(hex: pm.backgroundConfig(for: key).colorHex) ?? .black },
+                                get: { Color(hex: config.colorHex) ?? .black },
                                 set: { v in
-                                    var c = pm.backgroundConfig(for: key)
+                                    var c = pm.backgroundConfig(for: key)   // read fresh: a captured snapshot would lose a sibling edit made before the next render
                                     c.colorHex = v.toHex()
                                     pm.setBackgroundConfig(c, for: key)
                                 }
@@ -3334,9 +3360,9 @@ struct LayoutEditorSheet: View {
                     labeledRow(String(localized: "Opacitate:", comment: "Setting label")) {
                         Slider(
                             value: Binding(
-                                get: { pm.backgroundConfig(for: key).opacity },
+                                get: { config.opacity },
                                 set: { v in
-                                    var c = pm.backgroundConfig(for: key)
+                                    var c = pm.backgroundConfig(for: key)   // read fresh: a captured snapshot would lose a sibling edit made before the next render
                                     c.opacity = v
                                     pm.setBackgroundConfig(c, for: key)
                                 }
@@ -3693,6 +3719,9 @@ struct BoxFrameFields: View {
         keyPath: WritableKeyPath<PresentationManager.TextBoxFrame, Double>,
         help: String
     ) -> some View {
+        // One read per field: the getters below used to call boxFrame() again on
+        // every control, so showing four fields cost eight profile lookups.
+        let current = pm.boxFrame(for: identity)[keyPath: keyPath] * 100
         HStack(spacing: 4) {
             Text(label)
                 .font(.caption.monospaced())
@@ -3701,7 +3730,7 @@ struct BoxFrameFields: View {
             TextField(
                 "",
                 value: Binding(
-                    get: { (pm.boxFrame(for: identity)[keyPath: keyPath] * 100).rounded() },
+                    get: { current.rounded() },
                     set: { newValue in
                         var frame = pm.boxFrame(for: identity)
                         frame[keyPath: keyPath] = newValue / 100
@@ -3716,7 +3745,7 @@ struct BoxFrameFields: View {
             Stepper(
                 "",
                 value: Binding(
-                    get: { pm.boxFrame(for: identity)[keyPath: keyPath] * 100 },
+                    get: { current },
                     set: { newValue in
                         var frame = pm.boxFrame(for: identity)
                         frame[keyPath: keyPath] = newValue / 100
