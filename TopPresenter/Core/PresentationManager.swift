@@ -37,6 +37,12 @@ struct FlipFadeModifier: ViewModifier {
 }
 
 @Observable
+// Explicit, not inherited from SWIFT_DEFAULT_ACTOR_ISOLATION: the `isolated
+// deinit` below REQUIRES the class to be actor-isolated, and relying on the
+// build setting made that true only in some configurations. Building with
+// ENABLE_TESTABILITY=YES under Release failed with "deinit is marked isolated,
+// but containing class 'PresentationManager' is not isolated to an actor".
+@MainActor
 final class PresentationManager {
     /// Where this manager's settings live.
     ///

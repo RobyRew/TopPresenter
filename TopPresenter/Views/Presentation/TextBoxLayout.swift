@@ -1830,6 +1830,19 @@ struct LayoutEditorSheet: View {
         // `initial` records the tab the editor opens on; without it the first
         // switch away would drop it and pay a rebuild on the way back.
         .onChange(of: activeTab, initial: true) { visitedTabs.insert(activeTab) }
+        #if DEBUG
+        // Temporary: report what a real switch actually costs, because synthetic
+        // control clusters kept under-predicting it. The async hop lands after
+        // SwiftUI's update + layout for this runloop turn.
+        .onChange(of: activeTab) { _, new in
+            let started = Date.now
+            let firstVisit = !visitedTabs.contains(new)
+            DispatchQueue.main.async {
+                let ms = Int(Date.now.timeIntervalSince(started) * 1000)
+                print("[TopPresenter] tab -> \(new.rawValue) \(firstVisit ? "(first visit)" : "(revisit)"): \(ms) ms")
+            }
+        }
+        #endif
     }
 
     @ViewBuilder
