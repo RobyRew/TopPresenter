@@ -1657,113 +1657,35 @@ struct LayoutEditorSheet: View {
     private func sampleContent(size: CGSize) -> some View {
         let targetScale = pm.targetFontScale
         let canvasScale = size.width / max(metrics.points.width, 1)
-        let fontScale = targetScale * canvasScale
 
         // Transforms (MAJUSCULE etc.) are part of each box's resolved style —
         // they show on the canvas the moment they're toggled in the Text tab.
-        let fields = (main: sampleVerse, reference: sampleReference,
-                      translation: sampleTranslation, subtitle: sampleSubtitle)
+        let fields = EditorSampleFields(main: sampleVerse, reference: sampleReference,
+                                        translation: sampleTranslation, subtitle: sampleSubtitle)
+        let runs = sampleRuns
+        let ilRuns = sampleInterlinearRuns
 
-        ZStack(alignment: .topLeading) {
+        // Each box is its own view: resolving a style and measuring auto-fit text
+        // used to happen here, in the sheet's body, for every box on every pass.
+        return ZStack(alignment: .topLeading) {
             // Unified stacking order — exactly what the output renders
             ForEach(pm.orderedBoxTokens(), id: \.self) { token in
-                switch boxIdentity(fromToken: token) {
-                case .section(let section):
-                    if section == .chords, pm.isSectionVisible(section) {
-                        // Chord chart preview: live song lines, else a sample chart.
-                        let rect = pm.boxFrame(for: section).rect(in: size)
-                        let style = pm.resolvedStyle(for: section)
-                        let lines = pm.liveContent.songLines.isEmpty ? Self.sampleChordLines : pm.transposedSongLines()
-                        ChordChartText(lines: lines, lyricStyle: style,
-                                       chordStyle: pm.resolvedChordRowStyle(), rect: rect, fontScale: fontScale)
-                    } else if section != .chords, pm.isSectionVisible(section),
-                              !(section == .verseContent && pm.activeProfileKey == "song" && pm.isSectionVisible(.chords)) {
-                        let text = pm.sectionText(
-                            section,
-                            main: fields.main, reference: fields.reference,
-                            translation: fields.translation, subtitle: fields.subtitle,
-                            slideNumber: "1 / 4"
-                        )
-                        if !text.isEmpty {
-                            let rect = pm.boxFrame(for: section).rect(in: size)
-                            let style = pm.resolvedStyle(for: section)
-                            let fitted: CGFloat? = style.autoFit
-                                ? pm.fittedVerseFontSize(
-                                    text: text,
-                                    boxSize: pm.boxFrame(for: section).rect(in: metrics.points).size,
-                                    maxSize: CGFloat(style.fontSize) * targetScale,
-                                    padding: CGFloat(style.padding) * targetScale,
-                                    fontName: style.fontName,
-                                    lineSpacing: style.lineSpacing
-                                  ) * canvasScale
-                                : nil
-                            let ilOpts = pm.contentOptions(for: pm.activeProfileKey)
-                            let ilRuns = sampleInterlinearRuns
-                            if section == .verseContent, pm.activeProfileKey == "bible",
-                               interlinearLiveEnabled, interlinearHasContent(ilRuns, options: ilOpts) {
-                                InterlinearText(columns: interlinearColumns(from: ilRuns), style: style,
-                                                options: ilOpts, wocColor: pm.wocColor, rect: rect, fontScale: fontScale)
-                            } else {
-                                sampleBoxText(text, style: style, rect: rect, fontScale: fontScale, fittedSize: fitted,
-                                              runs: section == .verseContent ? sampleRuns : [])
-                            }
-                        }
-                    }
-                case .custom(let id):
-                    if let box = pm.customTextBox(id: id), box.isVisible {
-                        let resolved = box.resolvedText(
-                            main: fields.main, reference: fields.reference,
-                            translation: fields.translation, subtitle: fields.subtitle,
-                            slideNumber: "1 / 4"
-                        )
-                        let text = resolved.isEmpty ? box.sourceLabel : resolved
-                        let rect = box.frame.rect(in: size)
-                        let style = pm.resolvedCustomStyle(box)
-                        sampleBoxText(text, style: style, rect: rect, fontScale: fontScale, fittedSize: nil)
-                    }
-                case .media(let id):
-                    // Editor shows every visible media box, ignoring content filters
-                    if let box = pm.mediaBox(id: id), box.isVisible {
-                        MediaBoxContent(box: box, canvasSize: size, playsVideo: false)
-                            .allowsHitTesting(false)
-                    }
-                case nil:
-                    EmptyView()
+                if let identity = boxIdentity(fromToken: token) {
+                    EditorCanvasBox(
+                        identity: identity,
+                        canvasSize: size,
+                        referenceSize: metrics.points,
+                        targetScale: targetScale,
+                        canvasScale: canvasScale,
+                        fields: fields,
+                        sampleRuns: runs,
+                        interlinearRuns: ilRuns,
+                        interlinearEnabled: interlinearLiveEnabled,
+                        chordFallback: Self.sampleChordLines
+                    )
                 }
             }
         }
-    }
-
-    private func sampleBoxText(
-        _ text: String,
-        style: PresentationManager.ResolvedBoxStyle,
-        rect: CGRect, fontScale: CGFloat,
-        fittedSize: CGFloat?,
-        runs: [VerseRun] = []
-    ) -> some View {
-        let size = fittedSize ?? CGFloat(style.fontSize) * fontScale
-        let composed: Text = runs.contains(where: { $0.kind == "woc" })
-            ? runs.reduce(Text("")) { acc, run in
-                let c = (run.kind == "woc") ? pm.wocColor : style.color
-                return acc + Text(style.display(run.text)).foregroundColor(c.opacity(style.opacity))
-              }
-            : Text(style.display(text)).foregroundColor(style.color.opacity(style.opacity))
-        return composed
-            .font(style.font(at: size))
-            .multilineTextAlignment(style.hAlign)
-            .lineSpacing(style.lineSpacing * size * 0.1)
-            .tracking(style.tracking * fontScale)
-            .minimumScaleFactor(fittedSize == nil ? 0.2 : 1.0)
-            .shadow(
-                color: style.shadowEnabled ? style.shadowColor : .clear,
-                radius: style.shadowEnabled ? style.shadowRadius * fontScale : 0,
-                x: 0,
-                y: style.shadowEnabled ? 2 * fontScale : 0
-            )
-            .padding(.horizontal, CGFloat(style.padding) * fontScale)
-            .frame(width: rect.width, height: rect.height, alignment: style.frameAlignment)
-            .position(x: rect.midX, y: rect.midY)
-            .allowsHitTesting(false)
     }
 
     // MARK: Inspector
