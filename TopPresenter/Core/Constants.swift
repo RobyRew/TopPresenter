@@ -222,6 +222,14 @@ nonisolated enum PresentationDefaults {
     static let lineSpacing: Double = 1.2
     static let padding: Double = 40.0
     static let transitionDuration: Double = 0.3
+    // These four were literals repeated 3× each across the property default, the
+    // ThemePayload default, the decoder fallback and init() — four edit sites the
+    // compiler would never catch if one were missed.
+    static let shadowRadius: Double = 3.0
+    static let shadowColor = "000000B3"
+    /// Words-of-Christ (red-letter) colour.
+    static let wocColor = "C0392B"
+    static let themeName = "Temă"
 }
 
 // MARK: - Bible Book Names (English canonical order)

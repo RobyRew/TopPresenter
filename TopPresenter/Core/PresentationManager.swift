@@ -2033,7 +2033,7 @@ final class PresentationManager {
         init(from decoder: Decoder) throws {
             let c = try decoder.container(keyedBy: CodingKeys.self)
             id = try c.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
-            name = try c.decodeIfPresent(String.self, forKey: .name) ?? "Temă"
+            name = try c.decodeIfPresent(String.self, forKey: .name) ?? PresentationDefaults.themeName
             formatRaw = try c.decodeIfPresent(String.self, forKey: .formatRaw) ?? "all"
             payload = try c.decodeIfPresent(ThemePayload.self, forKey: .payload) ?? ThemePayload()
         }
@@ -2060,11 +2060,11 @@ final class PresentationManager {
         var lineSpacing: Double = PresentationDefaults.lineSpacing
         var padding: Double = PresentationDefaults.padding
         var shadowEnabled: Bool = true
-        var shadowRadius: Double = 3.0
-        var shadowColorHex: String = "000000B3"
+        var shadowRadius: Double = PresentationDefaults.shadowRadius
+        var shadowColorHex: String = PresentationDefaults.shadowColor
         var letterTracking: Double = 0
         var wocStyleEnabled: Bool = true
-        var wocColorHex: String = "C0392B"
+        var wocColorHex: String = PresentationDefaults.wocColor
         var autoFitVerseFont: Bool = false
         var globalWeightRaw: String = "regular"
         var globalVAlignRaw: String = "center"
@@ -2091,11 +2091,11 @@ final class PresentationManager {
             lineSpacing = try c.decodeIfPresent(Double.self, forKey: .lineSpacing) ?? PresentationDefaults.lineSpacing
             padding = try c.decodeIfPresent(Double.self, forKey: .padding) ?? PresentationDefaults.padding
             shadowEnabled = try c.decodeIfPresent(Bool.self, forKey: .shadowEnabled) ?? true
-            shadowRadius = try c.decodeIfPresent(Double.self, forKey: .shadowRadius) ?? 3.0
-            shadowColorHex = try c.decodeIfPresent(String.self, forKey: .shadowColorHex) ?? "000000B3"
+            shadowRadius = try c.decodeIfPresent(Double.self, forKey: .shadowRadius) ?? PresentationDefaults.shadowRadius
+            shadowColorHex = try c.decodeIfPresent(String.self, forKey: .shadowColorHex) ?? PresentationDefaults.shadowColor
             letterTracking = try c.decodeIfPresent(Double.self, forKey: .letterTracking) ?? 0
             wocStyleEnabled = try c.decodeIfPresent(Bool.self, forKey: .wocStyleEnabled) ?? true
-            wocColorHex = try c.decodeIfPresent(String.self, forKey: .wocColorHex) ?? "C0392B"
+            wocColorHex = try c.decodeIfPresent(String.self, forKey: .wocColorHex) ?? PresentationDefaults.wocColor
             autoFitVerseFont = try c.decodeIfPresent(Bool.self, forKey: .autoFitVerseFont) ?? false
             globalWeightRaw = try c.decodeIfPresent(String.self, forKey: .globalWeightRaw) ?? "regular"
             globalVAlignRaw = try c.decodeIfPresent(String.self, forKey: .globalVAlignRaw) ?? "center"
@@ -2283,7 +2283,7 @@ final class PresentationManager {
     /// The portable theme file format (versioned for future evolution).
     struct ThemeArchive: Codable {
         var version: Int = 1
-        var name: String = "Temă"
+        var name: String = PresentationDefaults.themeName
         var format: String = "all"
         var payload: ThemePayload = ThemePayload()
         var assets: [ThemeAssetRef] = []
@@ -2293,7 +2293,7 @@ final class PresentationManager {
         init(from decoder: Decoder) throws {
             let c = try decoder.container(keyedBy: CodingKeys.self)
             version = try c.decodeIfPresent(Int.self, forKey: .version) ?? 1
-            name = try c.decodeIfPresent(String.self, forKey: .name) ?? "Temă"
+            name = try c.decodeIfPresent(String.self, forKey: .name) ?? PresentationDefaults.themeName
             format = try c.decodeIfPresent(String.self, forKey: .format) ?? "all"
             payload = try c.decodeIfPresent(ThemePayload.self, forKey: .payload) ?? ThemePayload()
             assets = try c.decodeIfPresent([ThemeAssetRef].self, forKey: .assets) ?? []
@@ -2776,11 +2776,11 @@ final class PresentationManager {
         self.lineSpacing = d.object(forKey: "pm_lineSpacing") as? Double ?? PresentationDefaults.lineSpacing
         self.padding = d.object(forKey: "pm_padding") as? Double ?? PresentationDefaults.padding
         self.shadowEnabled = d.object(forKey: "pm_shadowEnabled") as? Bool ?? true
-        self.shadowRadius = d.object(forKey: "pm_shadowRadius") as? Double ?? 3.0
-        self.shadowColorHex = d.string(forKey: "pm_shadowColorHex") ?? "000000B3"
+        self.shadowRadius = d.object(forKey: "pm_shadowRadius") as? Double ?? PresentationDefaults.shadowRadius
+        self.shadowColorHex = d.string(forKey: "pm_shadowColorHex") ?? PresentationDefaults.shadowColor
         self.letterTracking = d.object(forKey: "pm_letterTracking") as? Double ?? 0
         self.wocStyleEnabled = d.object(forKey: "pm_wocStyleEnabled") as? Bool ?? true
-        self.wocColorHex = d.string(forKey: "pm_wocColorHex") ?? "C0392B"
+        self.wocColorHex = d.string(forKey: "pm_wocColorHex") ?? PresentationDefaults.wocColor
         self.transitionDuration = d.object(forKey: "pm_transitionDuration") as? Double ?? PresentationDefaults.transitionDuration
         self.globalWeightRaw = d.string(forKey: "pm_globalWeightRaw") ?? "regular"
         self.globalVAlignRaw = d.string(forKey: "pm_globalVAlignRaw") ?? "center"
@@ -3150,6 +3150,8 @@ final class PresentationManager {
         return true
     }
 
+    // MARK: - Show* — everything that puts content on the output
+
     func showBibleVerse(text: String, reference: String, translationName: String = "", runs: [VerseRun] = [],
                         footnote: String = "", crossReference: String = "", heading: String = "",
                         gloss: String = "", strongs: String = "",
@@ -3296,6 +3298,10 @@ final class PresentationManager {
             removeBackgroundImage()
         }
     }
+
+    // MARK: - Output Window Management
+    // NOTE: screen SELECTION and the disconnect/connect prompts live far above,
+    // under "Screen Management" — these are the NSWindow mechanics only.
 
     /// Positions the presentation window on the specified screen
     func positionOnScreen(_ screen: NSScreen) {
