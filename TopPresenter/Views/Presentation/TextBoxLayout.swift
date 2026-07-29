@@ -1371,14 +1371,10 @@ struct LayoutEditorSheet: View {
     @State private var selection: BoxIdentity? = .section(.verseContent)
     @State private var activeTab: EditorTab = .layout
     #if DEBUG
-    /// Temporary, for the timing line below: which tabs already had their views
-    /// built before the current switch.
-    @State private var mountedBefore: Set<EditorTab> = []
+    /// Temporary, for the timing line in `inspector`: which tabs have been built
+    /// at least once this session.
+    @State private var builtTabs: Set<EditorTab> = []
     #endif
-
-    /// Tabs the operator has opened at least once. They stay mounted so coming
-    /// back to one is a visibility change instead of a rebuild — see `inspector`.
-    @State private var visitedTabs: Set<EditorTab> = []
     /// Mirrors the output's interlinear master switch so the canvas preview matches.
     @AppStorage("interlinearLiveEnabled") private var interlinearLiveEnabled = true
     /// Quick-align toggle memory: pressing the same action again restores the
@@ -1808,46 +1804,26 @@ struct LayoutEditorSheet: View {
 
             Divider()
 
-            // A `switch` here destroyed the outgoing tab and rebuilt the incoming
-            // one from scratch — measured at ~165 ms of main-thread CPU per
-            // switch, and the same again every time you came BACK to a tab you
-            // had already opened. The cost is AppKit control instantiation: a
-            // SwiftUI Picker runs ~7 ms, a Slider ~4.5 ms, and a tab holds
-            // dozens of them.
-            //
-            // So a visited tab stays mounted and only its visibility changes:
-            // ~41 ms per switch instead of ~165. Each tab keeps its own scroll
-            // position as a side effect. Hidden tabs are opacity 0 AND disabled,
-            // so keyboard navigation can't land on a control nobody can see.
-            ZStack {
-                ForEach(EditorTab.allCases) { tab in
-                    if tab == activeTab || visitedTabs.contains(tab) {
-                        ScrollView { tabContent(tab) }
-                            .opacity(tab == activeTab ? 1 : 0)
-                            .allowsHitTesting(tab == activeTab)
-                            .accessibilityHidden(tab != activeTab)
-                            .disabled(tab != activeTab)
-                    }
-                }
+            // Only the active tab exists. Keeping every visited tab mounted in a
+            // ZStack was tried and REVERTED: to size itself the ZStack has to
+            // measure its children, which defeats the LazyVStacks inside them and
+            // made the first build of a tab 4.8x more expensive (measured: 95 ms
+            // for the switch, 462 ms for a ZStack of four). It bought cheap
+            // revisits and paid for them where it hurts most — the first open.
+            ScrollView {
+                tabContent(activeTab)
             }
         }
-        // `initial` records the tab the editor opens on; without it the first
-        // switch away would drop it and pay a rebuild on the way back.
-        .onChange(of: activeTab, initial: true) { visitedTabs.insert(activeTab) }
         #if DEBUG
-        // Temporary: report what a real switch actually costs, because synthetic
-        // control clusters kept under-predicting it. The async hop lands after
-        // SwiftUI's update + layout for this runloop turn.
-        .onChange(of: activeTab) { old, new in
+        // Temporary: report what a real switch costs, so the revert can be
+        // confirmed from the console rather than assumed.
+        .onChange(of: activeTab) { _, new in
             let started = Date.now
-            // `visitedTabs` is already updated by the onChange above, so ask the
-            // question that actually distinguishes the slow case: was this tab
-            // mounted before this switch? The label used to always say "revisit".
-            let wasMounted = visitedTabs.contains(new) && old != new && mountedBefore.contains(new)
-            mountedBefore.insert(new)
+            let seen = builtTabs.contains(new)
+            builtTabs.insert(new)
             DispatchQueue.main.async {
                 let ms = Int(Date.now.timeIntervalSince(started) * 1000)
-                print("[TopPresenter] tab -> \(new.rawValue) \(wasMounted ? "(mounted)" : "(FIRST BUILD)"): \(ms) ms")
+                print("[TopPresenter] tab -> \(new.rawValue) \(seen ? "(seen before)" : "(FIRST BUILD)"): \(ms) ms")
             }
         }
         #endif
@@ -2197,7 +2173,9 @@ struct LayoutEditorSheet: View {
         switch identity {
         case .section(.chords):
             // The Acorduri box dresses lyrics + chord letters independently.
-            VStack(alignment: .leading, spacing: 10) {
+            // Lazy: two full style groups is ~38 native controls, and the second
+            // one is almost always below the fold.
+            LazyVStack(alignment: .leading, spacing: 10) {
                 textStyleGroup(
                     title: String(localized: "Versuri", comment: "Chord box — lyric style"),
                     style: Binding(
