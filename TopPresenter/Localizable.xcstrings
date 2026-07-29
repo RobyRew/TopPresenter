@@ -1,0 +1,527 @@
+{
+  "sourceLanguage": "en",
+  "strings": {
+    "About TopPresenter": {
+      "comment": "Menu item",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Despre TopPresenter"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Acerca de TopPresenter"
+          }
+        }
+      }
+    },
+    "Batch Export...": {
+      "comment": "Menu item",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Export în masă…"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Exportación por lotes…"
+          }
+        }
+      }
+    },
+    "Bible": {
+      "comment": "Sidebar item",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Biblie"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Biblia"
+          }
+        }
+      }
+    },
+    "Black Screen": {
+      "comment": "Menu item",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ecran negru"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pantalla en negro"
+          }
+        }
+      }
+    },
+    "Cancel": {
+      "comment": "Alert button",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Anulează"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cancelar"
+          }
+        }
+      }
+    },
+    "Clear Output": {
+      "comment": "Menu item",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Curăță ieșirea"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Limpiar salida"
+          }
+        }
+      }
+    },
+    "Custom Slides": {
+      "comment": "Sidebar item",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Slide-uri proprii"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diapositivas propias"
+          }
+        }
+      }
+    },
+    "Decrease Font Size": {
+      "comment": "Menu item",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Micșorează textul"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reducir tamaño de texto"
+          }
+        }
+      }
+    },
+    "Delete": {
+      "comment": "Alert button",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Șterge"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eliminar"
+          }
+        }
+      }
+    },
+    "Delete Media": {
+      "comment": "Alert title",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Șterge fișierul media"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eliminar archivo multimedia"
+          }
+        }
+      }
+    },
+    "Delete Session": {
+      "comment": "Alert title",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Șterge sesiunea"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eliminar sesión"
+          }
+        }
+      }
+    },
+    "Delete Slide": {
+      "comment": "Alert title",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Șterge slide-ul"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eliminar diapositiva"
+          }
+        }
+      }
+    },
+    "Delete Song": {
+      "comment": "Alert title",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Șterge cântecul"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eliminar canción"
+          }
+        }
+      }
+    },
+    "Editor de Teme…": {
+      "comment": "Menu item",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Editor de temas…"
+          }
+        }
+      }
+    },
+    "Export Bible Module...": {
+      "comment": "Menu item",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Exportă modul biblic…"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Exportar módulo bíblico…"
+          }
+        }
+      }
+    },
+    "Focus Search": {
+      "comment": "Menu item",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mergi la căutare"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ir a la búsqueda"
+          }
+        }
+      }
+    },
+    "Freeze/Unfreeze": {
+      "comment": "Menu item",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Îngheață/Dezgheață"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Congelar/Descongelar"
+          }
+        }
+      }
+    },
+    "Import Bible...": {
+      "comment": "Menu item",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Importă Biblie…"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Importar Biblia…"
+          }
+        }
+      }
+    },
+    "Import Songs...": {
+      "comment": "Menu item",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Importă cântece…"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Importar canciones…"
+          }
+        }
+      }
+    },
+    "Increase Font Size": {
+      "comment": "Menu item",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mărește textul"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aumentar tamaño de texto"
+          }
+        }
+      }
+    },
+    "Keyboard Shortcuts": {
+      "comment": "Menu item",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scurtături de tastatură"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Atajos de teclado"
+          }
+        }
+      }
+    },
+    "Media": {
+      "comment": "Sidebar item",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Media"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Multimedia"
+          }
+        }
+      }
+    },
+    "New Schedule": {
+      "comment": "Menu item",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sesiune nouă"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nueva sesión"
+          }
+        }
+      }
+    },
+    "Presentation": {
+      "comment": "Menu title",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Prezentare"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Presentación"
+          }
+        }
+      }
+    },
+    "Presentation History": {
+      "comment": "Menu item",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Istoric prezentări"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Historial de presentaciones"
+          }
+        }
+      }
+    },
+    "Quick Search": {
+      "comment": "Menu item",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Căutare rapidă"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Búsqueda rápida"
+          }
+        }
+      }
+    },
+    "Reset Font Size": {
+      "comment": "Menu item",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Resetează mărimea textului"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restablecer tamaño de texto"
+          }
+        }
+      }
+    },
+    "Schedule": {
+      "comment": "Sidebar item",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sesiune"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sesión"
+          }
+        }
+      }
+    },
+    "Songs": {
+      "comment": "Sidebar item",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cântece"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Canciones"
+          }
+        }
+      }
+    },
+    "Start Presentation": {
+      "comment": "Menu item",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pornește prezentarea"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Iniciar presentación"
+          }
+        }
+      }
+    },
+    "TopPresenter Help": {
+      "comment": "Menu item",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ajutor TopPresenter"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ayuda de TopPresenter"
+          }
+        }
+      }
+    }
+  },
+  "version": "1.0"
+}

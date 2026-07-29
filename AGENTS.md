@@ -412,10 +412,18 @@ signatures (e.g. a dev-team app with ad-hoc Sparkle, or vice versa) crash at lau
 
 ## Localization
 
-- All user-visible strings use `String(localized: "...", comment: "...")` — never raw string literals
-- Locales in `i18n/locales/`: `en`, `ro` (Romanian is the primary deployment language)
+- All user-visible strings use `String(localized: "...", comment: "...")` — never raw string literals. This discipline IS followed: there are no raw `Text("literal")` calls with UI copy.
+- Catalog: **`TopPresenter/Localizable.xcstrings`**, `sourceLanguage: en`, with `ro` and `es` registered in `knownRegions`. There is no `i18n/locales/` directory — earlier revisions of this document claimed one; it never existed.
 - Alert strings in `AppState.showError` / `showSuccess` must be localized
-- One existing Romanian string slipped into `MainControlView`: `"Ecran Deconectat"` — leave it, it's intentional
+
+### The state of play, honestly
+Roughly 44% of the ~1400 `String(localized:)` **keys are written in Romanian** and the rest in English, so the shipping UI is a MIX — English menus next to Romanian alerts. That is the real, visible bug, not a theoretical one.
+
+**The fix is additive, not a rewrite.** The literal stays the key; the catalog supplies `ro`/`es`. A Romanian key needs no `ro` entry (it falls back to itself, correctly), so only English-authored keys need translating — and every entry added makes a Romanian Mac *more* consistent without touching a line of Swift. This is safe at every intermediate state, which a mass rename of 615 literals would not be.
+
+**Adding translations:** the catalog is plain JSON and can be hand-edited (`{"KEY": {"comment": …, "localizations": {"ro": {"stringUnit": {"state": "translated", "value": …}}}}}`); Xcode's String Catalog editor reconciles it against the extracted `.stringsdata` on the next build. Verify with `ls …/TopPresenter.app/Contents/Resources | grep lproj` and `plutil -p …/ro.lproj/Localizable.strings` — an empty catalog silently produces NO `.lproj` at all, so a green build proves nothing on its own.
+
+Normalizing the Romanian keys to English is optional cleanup, worth doing module by module — never as one sweep.
 
 ---
 
