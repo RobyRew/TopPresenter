@@ -30,6 +30,9 @@ struct TopPresenterApp: App {
     private let commandRouter: PresentationCommandRouter
 
     init() {
+        // Enumerating the installed font families costs ~268 ms on first call.
+        // Pay it in the background now so no UI ever blocks on it.
+        FontFamilies.warm()
         let video = VideoPlayerService()
         let history = HistoryStore()
         let pm = PresentationManager()

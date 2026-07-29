@@ -391,7 +391,6 @@ struct BackgroundMediaThumb: View {
 /// single item the closed control displays. `NSPopUpButton` is what SwiftUI's
 /// menu-style `Picker` wraps anyway, so the control itself looks the same.
 struct FontFamilyPicker: NSViewRepresentable {
-    let fonts: [String]
     /// Shown before the families — "Global" inherit, "System", etc.
     let leading: [(tag: String, title: String)]
     @Binding var selection: String
@@ -441,8 +440,10 @@ struct FontFamilyPicker: NSViewRepresentable {
             showClosedSelection()
         }
 
+        /// Read at menu-open time, never at appear time — enumerating the
+        /// installed families is what used to cost the editor 268 ms.
         private var entries: [(tag: String, title: String)] {
-            owner.leading + owner.fonts.map { (tag: $0, title: $0) }
+            owner.leading + FontFamilies.all.map { (tag: $0, title: $0) }
         }
 
         /// A leading option shows its own title; a family shows its name.
@@ -1377,9 +1378,6 @@ struct LayoutEditorSheet: View {
     /// Quick-align toggle memory: pressing the same action again restores the
     /// frame from before the action was applied.
     @State private var quickActionMemory: [BoxIdentity: [String: PresentationManager.TextBoxFrame]] = [:]
-    @State private var availableFonts: [String] = {
-        NSFontManager.shared.availableFontFamilies.sorted()
-    }()
     @State private var renameTarget: BoxIdentity?
     @State private var renameText = ""
     /// Canvas demo of a transition effect: changing the tick re-inserts the
@@ -2464,7 +2462,6 @@ struct LayoutEditorSheet: View {
                     // SAME options, SAME order as Text Global.
                     labeledRow(String(localized: "Font:", comment: "Setting label")) {
                         FontFamilyPicker(
-                            fonts: availableFonts,
                             leading: [("", String(localized: "Global", comment: "Font option")),
                                       ("System", "System")],
                             selection: Binding(
@@ -2911,7 +2908,6 @@ struct LayoutEditorSheet: View {
                 LazyVStack(alignment: .leading, spacing: 8) {
                     labeledRow(String(localized: "Font:", comment: "Setting label")) {
                         FontFamilyPicker(
-                            fonts: availableFonts,
                             leading: [("System", String(localized: "System", comment: "Font option"))],
                             selection: pmBinding.fontName
                         )

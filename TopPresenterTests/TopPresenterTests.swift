@@ -4405,7 +4405,6 @@ struct RemoteExtractionTests {
 
     private func makePicker(_ box: Box) -> FontFamilyPicker {
         FontFamilyPicker(
-            fonts: ["Arial", "Courier", "Helvetica"],
             leading: [("", "Global"), ("System", "System")],
             selection: Binding(get: { box.value }, set: { box.value = $0 })
         )
@@ -4425,27 +4424,30 @@ struct RemoteExtractionTests {
         let box = Box("Helvetica")
         let (coordinator, button, menu) = attached(makePicker(box))
 
-        // Closed: exactly the one item the control shows.
+        // Closed: exactly the one item the control shows. This is the whole
+        // point — enumerating the families costs ~268 ms on first call, so it
+        // must not happen just because the Text tab appeared.
         #expect(menu.numberOfItems == 1)
         #expect(menu.item(at: 0)?.title == "Helvetica")
 
-        // Opening builds the lot: 2 leading + 3 families.
+        // Opening builds the lot: the 2 leading options + every family.
         coordinator.menuWillOpen(menu)
         coordinator.menuNeedsUpdate(menu)
-        #expect(menu.numberOfItems == 5)
-        #expect(button.indexOfSelectedItem == 4)
+        #expect(menu.numberOfItems == 2 + FontFamilies.all.count)
+        #expect(button.indexOfSelectedItem >= 0)
     }
 
-    @Test func pickingAFamilyWritesThroughTheBinding() {
+    @Test func pickingAFamilyWritesThroughTheBinding() throws {
         let box = Box("Helvetica")
         let (coordinator, button, menu) = attached(makePicker(box))
 
         coordinator.menuWillOpen(menu)
         coordinator.menuNeedsUpdate(menu)
-        button.selectItem(at: 2)          // Arial
+        let family = try #require(FontFamilies.all.first)
+        button.selectItem(at: 2)          // the first real family
         coordinator.selectionChanged(button)
 
-        #expect(box.value == "Arial")
+        #expect(box.value == family)
     }
 
     @Test func anInheritedSelectionShowsItsLeadingTitle() {
@@ -4456,5 +4458,28 @@ struct RemoteExtractionTests {
 
         #expect(menu.numberOfItems == 1)
         #expect(menu.item(at: 0)?.title == "Global")
+    }
+}
+
+// MARK: - Font family enumeration
+@MainActor struct FontFamiliesTests {
+
+    /// ~268 ms on the first call, 0.1 ms after — so it must be computed once and
+    /// never from a view initialiser. This asserts the shape, not the timing.
+    @Test func theListIsNonEmptyStableAndSorted() {
+        let first = FontFamilies.all
+        #expect(!first.isEmpty)
+        #expect(first == first.sorted())
+        // System-internal families (".AppleSystemUIFont") are hidden, matching
+        // what NSFontManager.availableFontFamilies used to return.
+        #expect(first.allSatisfy { !$0.hasPrefix(".") })
+        // Same array object semantics on a second read: computed once.
+        #expect(FontFamilies.all == first)
+    }
+
+    @Test func warmingIsSafeToCallRepeatedly() {
+        FontFamilies.warm()
+        FontFamilies.warm()
+        #expect(!FontFamilies.all.isEmpty)
     }
 }
