@@ -286,7 +286,7 @@ final class PresentationManager {
         switch key {
         case "bible": return String(localized: "Biblie", comment: "Content type")
         case "song": return String(localized: "Cântece", comment: "Content type")
-        default: return String(localized: "Slide-uri", comment: "Content type")
+        default: return String(localized: "Slide-uri proprii", comment: "Content type — the Custom Slides profile")
         }
     }
 
@@ -2042,7 +2042,7 @@ final class PresentationManager {
             switch raw {
             case "bible": return String(localized: "Biblie", comment: "Theme format")
             case "song": return String(localized: "Cântece", comment: "Theme format")
-            case "text": return String(localized: "Slide-uri", comment: "Theme format")
+            case "text": return String(localized: "Slide-uri proprii", comment: "Theme format — the Custom Slides profile")
             default: return String(localized: "Toate", comment: "Theme format")
             }
         }
