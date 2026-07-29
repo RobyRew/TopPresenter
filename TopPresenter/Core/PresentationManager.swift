@@ -663,10 +663,33 @@ final class PresentationManager {
     static let profileKeys = ["bible", "song", "text"]
 
     var profiles: [String: LayoutProfile] {
-        didSet {
-            if let data = try? JSONEncoder().encode(profiles) {
-                UserDefaults.standard.set(data, forKey: "pm_layoutProfiles")
-            }
+        didSet { scheduleProfilesPersist() }
+    }
+
+    @ObservationIgnored private var profilesPersistWork: DispatchWorkItem?
+
+    /// Coalesces profile writes. Every profile mutation reassigns `profiles`, and
+    /// the high-frequency ones are brutal: a box drag calls `setBoxFrame` on every
+    /// reported delta (tens per second) and the static-text field calls
+    /// `setStaticText` on every keystroke — each one used to JSON-encode ALL three
+    /// profiles (frames, styles, custom + media boxes, transitions, backgrounds)
+    /// and write the whole blob to UserDefaults.
+    private func scheduleProfilesPersist() {
+        profilesPersistWork?.cancel()
+        let work = DispatchWorkItem { [weak self] in self?.persistProfilesNow() }
+        profilesPersistWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3, execute: work)
+    }
+
+    /// Writes the profiles blob RIGHT NOW. Call this anywhere the app could go
+    /// away before the debounce fires — end of a drag, app termination,
+    /// deactivation. Losing a layout edit because the operator quit 200 ms after
+    /// nudging a box is not an acceptable trade for the write coalescing.
+    func persistProfilesNow() {
+        profilesPersistWork?.cancel()
+        profilesPersistWork = nil
+        if let data = try? JSONEncoder().encode(profiles) {
+            UserDefaults.standard.set(data, forKey: "pm_layoutProfiles")
         }
     }
 
@@ -1057,9 +1080,32 @@ final class PresentationManager {
         }
     }
 
+    /// Observers that force a pending profile write out before the app can vanish.
+    @ObservationIgnored private var persistenceObservers: [any NSObjectProtocol] = []
+
+    /// The debounce is only safe because these exist: quitting or switching away
+    /// 200 ms after nudging a box must not lose the edit.
+    func startPersistenceGuards() {
+        guard persistenceObservers.isEmpty else { return }
+        for name in [NSApplication.willTerminateNotification, NSApplication.didResignActiveNotification] {
+            persistenceObservers.append(
+                NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                    MainActor.assumeIsolated { self?.persistProfilesNow() }
+                }
+            )
+        }
+    }
+
+    func stopPersistenceGuards() {
+        for observer in persistenceObservers { NotificationCenter.default.removeObserver(observer) }
+        persistenceObservers = []
+    }
+
     // isolated deinit (SE-0371): runs on the main actor — may touch isolated state.
     isolated deinit {
         stopScreenMonitoring()
+        stopPersistenceGuards()
+        persistProfilesNow()   // never let a queued write die with the object
     }
 
     func handleScreenConfigurationChange() {
@@ -3324,7 +3370,7 @@ final class PresentationManager {
     /// Cache key for the last auto-fit computation. The binary search below measures
     /// text up to 17 times — without this, every SwiftUI body evaluation of the output
     /// AND the preview card would redo all that text layout work.
-    private struct FitCacheKey: Equatable {
+    private struct FitCacheKey: Equatable, Hashable {
         let text: String
         let boxSize: CGSize
         let maxSize: Double
@@ -3332,8 +3378,18 @@ final class PresentationManager {
         let lineSpacing: Double
         let padding: Double
     }
-    @ObservationIgnored private var fitCacheKey: FitCacheKey?
-    @ObservationIgnored private var fitCacheValue: CGFloat = 0
+
+    /// Keyed by request, NOT a single slot. As one slot it was worthless in exactly
+    /// the case it was written for: with two auto-fit boxes on screen (the verse box
+    /// plus an auto-fit custom box) every call saw a different key, missed, and
+    /// overwrote the slot with its own — so both boxes re-ran the ≤17-measurement
+    /// binary search on every single body evaluation.
+    @ObservationIgnored private var fitCache: [FitCacheKey: CGFloat] = [:]
+
+    /// Bounded so a long service (every verse of a chapter, every slide of a set)
+    /// cannot grow it without limit; cleared wholesale rather than tracking an LRU,
+    /// since a rebuild costs one frame of measurement and nothing else.
+    private static let fitCacheLimit = 256
 
     /// Returns the largest font size ≤ `maxSize` at which the verse text fits inside
     /// the given box. Pass `maxSize`/`padding` already scaled by the screen's font
@@ -3349,7 +3405,7 @@ final class PresentationManager {
             text: text, boxSize: boxSize, maxSize: maxSize,
             fontName: fontName, lineSpacing: lineSpacing, padding: padding
         )
-        if key == fitCacheKey { return fitCacheValue }
+        if let hit = fitCache[key] { return hit }
 
         let minSize: CGFloat = 10.0
         var result = maxSize
@@ -3369,8 +3425,8 @@ final class PresentationManager {
             result = max(best, minSize)
         }
 
-        fitCacheKey = key
-        fitCacheValue = result
+        if fitCache.count >= Self.fitCacheLimit { fitCache.removeAll(keepingCapacity: true) }
+        fitCache[key] = result
         return result
     }
 

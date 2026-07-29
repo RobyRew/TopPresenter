@@ -141,6 +141,14 @@ TopPresenter/
 - `clearOutput()` MUST bump the generation and cancel: Show-while-hidden followed immediately by Escape otherwise re-mounts the content 60 ms after the clear.
 - `SessionRunner` has the same hazard with a longer fuse: a `{{url:…}}`/`{{rss:…}}` TEXT item resolves asynchronously (up to `RemoteContentService`'s 6 s timeout) while nothing is on screen, so the operator very plausibly hits `next()` first. `present(item:slide:)` bumps its own `presentGeneration`, cancels `dynamicSlideTask`, and the resolution checks the generation before touching `pm`. `stop()` strands in-flight work the same way. `isResolvingSlide` drives the "resolving" affordance.
 
+### Layout profile persistence is DEBOUNCED (v10.14)
+- `profiles.didSet` no longer writes. It schedules `persistProfilesNow()` 0.3 s later, cancelling any pending write. Every profile mutation reassigns `profiles`, and the hot paths are brutal: a box drag calls `setBoxFrame` per reported delta and the static-text field calls `setStaticText` per keystroke — each previously JSON-encoded ALL three profiles and wrote the blob to UserDefaults.
+- **The debounce is only safe because of the flush points.** `persistProfilesNow()` is called at the end of both editor drag gestures, from `startPersistenceGuards()` on `willTerminate`/`didResignActive` (wired in `MainControlView.onAppear`), and from `isolated deinit`. Add a flush anywhere else the app can vanish mid-edit.
+- Tests that read `pm_layoutProfiles` back must call `pm.persistProfilesNow()` first.
+
+### Auto-fit font cache is keyed, not a single slot
+`fitCache` is a bounded dictionary (`fitCacheLimit`), not one key/value pair. As a single slot it was worthless in exactly the case it existed for: two auto-fit boxes on screen (verse box + an auto-fit custom box) meant every call missed and overwrote the other's entry, so both re-ran the ≤17-measurement binary search on every body evaluation.
+
 ### Bookmarks & security scopes
 - `resolveBookmarkRefreshing(_:)` returns the URL **plus a rebuilt bookmark when the stored one was stale** — the caller re-persists it, because only the caller knows where that bookmark lives (`Self.backgroundBookmarkKey`, a `BackgroundConfig`, a `MediaBox`). `isStale` used to be read into a local and thrown away, so bookmarks were never refreshed and eventually stopped resolving — a blank background with no error anywhere.
 - `resolveBookmark(_:)` keeps its scope open on purpose: the media it points at renders continuously. For **one-shot** use (copy/export) use `withScopedBookmark(_:_:)`, which closes the scope — the export path otherwise leaked one open scope per asset.

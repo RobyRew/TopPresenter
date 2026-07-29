@@ -185,6 +185,8 @@ struct MainControlView: View {
             }
             // Start monitoring screen connect/disconnect
             presentationManager.startScreenMonitoring()
+            // Flush debounced layout writes before the app can quit or deactivate.
+            presentationManager.startPersistenceGuards()
         }
         // Screen change prompt — the output is already parked (hidden) when this
         // shows for a disconnect, so nothing is projected until the operator picks.

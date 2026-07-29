@@ -1227,12 +1227,61 @@ struct PresentationManagerTests {
         let frame = pm.boxFrame(for: .verseContent, in: "bible")
         #expect(frame.x + frame.width <= 1.0)
 
-        // Profiles persist as ONE blob — decode it back and compare
+        // Profiles persist as ONE blob, written debounced — flush first, exactly as
+        // the editor does at the end of a drag.
+        pm.persistProfilesNow()
         let data = try #require(UserDefaults.standard.data(forKey: "pm_layoutProfiles"))
         let profiles = try JSONDecoder().decode(
             [String: PresentationManager.LayoutProfile].self, from: data
         )
         #expect(profiles["bible"]?.frames[TextBoxSection.verseContent.rawValue] == frame)
+    }
+
+    /// The debounce must never cost an edit: the write is deferred, but a flush
+    /// point (gesture end, app quit/deactivate) commits it immediately.
+    @Test func debouncedProfileWriteIsFlushedOnDemand() throws {
+        let pm = PresentationManager()
+        let original = pm.boxFrame(for: .verseContent, in: "song")
+        defer { pm.setBoxFrame(original, for: .verseContent, in: "song"); pm.persistProfilesNow() }
+
+        pm.setBoxFrame(.init(x: 0.11, y: 0.22, width: 0.33, height: 0.15), for: .verseContent, in: "song")
+        pm.persistProfilesNow()
+
+        let data = try #require(UserDefaults.standard.data(forKey: "pm_layoutProfiles"))
+        let profiles = try JSONDecoder().decode(
+            [String: PresentationManager.LayoutProfile].self, from: data
+        )
+        #expect(profiles["song"]?.frames[TextBoxSection.verseContent.rawValue]
+                == pm.boxFrame(for: .verseContent, in: "song"))
+    }
+
+    /// Two auto-fit boxes on screen must both stay cached. As a single slot the
+    /// cache thrashed: each call missed and overwrote the other's entry.
+    @Test func autoFitCacheServesSeveralBoxesAtOnce() {
+        let pm = PresentationManager()
+        let wasEnabled = pm.autoFitVerseFont
+        pm.autoFitVerseFont = true
+        defer { pm.autoFitVerseFont = wasEnabled }
+
+        let long = String(repeating: "Cuvântul Domnului rămâne în veac. ", count: 12)
+        let short = "Ioan 3:16"
+        let bigBox = CGSize(width: 900, height: 300)
+        let smallBox = CGSize(width: 300, height: 90)
+
+        let a1 = pm.fittedVerseFontSize(text: long, boxSize: bigBox, maxSize: 96, padding: 12,
+                                        fontName: "Helvetica", lineSpacing: 1.0)
+        let b1 = pm.fittedVerseFontSize(text: short, boxSize: smallBox, maxSize: 48, padding: 8,
+                                        fontName: "Helvetica", lineSpacing: 1.0)
+        // Interleave again — with a one-slot cache these would both be recomputed.
+        let a2 = pm.fittedVerseFontSize(text: long, boxSize: bigBox, maxSize: 96, padding: 12,
+                                        fontName: "Helvetica", lineSpacing: 1.0)
+        let b2 = pm.fittedVerseFontSize(text: short, boxSize: smallBox, maxSize: 48, padding: 8,
+                                        fontName: "Helvetica", lineSpacing: 1.0)
+
+        #expect(a1 == a2)
+        #expect(b1 == b2)
+        #expect(a1 <= 96)
+        #expect(b1 <= 48)
     }
 
     @Test func profilesAreIndependentPerPresenter() {

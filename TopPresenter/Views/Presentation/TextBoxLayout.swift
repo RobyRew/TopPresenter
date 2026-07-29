@@ -667,7 +667,12 @@ private struct TextBoxHandle: View {
                 frame.y = start.y + value.translation.height / canvasSize.height
                 pm.setBoxFrame(frame, for: identity)
             }
-            .onEnded { _ in gestureStartFrame = nil }
+            .onEnded { _ in
+                gestureStartFrame = nil
+                // The profile write is debounced; a gesture ending is a natural
+                // commit point, so don't leave the new frame sitting in a timer.
+                pm.persistProfilesNow()
+            }
     }
 
     // MARK: Resize
@@ -730,7 +735,12 @@ private struct TextBoxHandle: View {
                 }
                 pm.setBoxFrame(frame, for: identity)
             }
-            .onEnded { _ in gestureStartFrame = nil }
+            .onEnded { _ in
+                gestureStartFrame = nil
+                // The profile write is debounced; a gesture ending is a natural
+                // commit point, so don't leave the new frame sitting in a timer.
+                pm.persistProfilesNow()
+            }
     }
 }
 
