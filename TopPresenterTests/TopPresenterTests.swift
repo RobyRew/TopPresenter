@@ -12,6 +12,25 @@ import SwiftUI
 import SwiftData
 @testable import TopPresenter
 
+/// A `PresentationManager` on a throwaway settings suite.
+///
+/// The test host runs inside the real app bundle, so a plain
+/// `makeTestManager()` read AND wrote the operator's actual saved layouts,
+/// themes and settings. That corrupted real data on every run, and left tests
+/// depending on whatever the previous run happened to leave behind. Each manager
+/// now gets its own empty domain and therefore its own clean defaults.
+@MainActor func makeTestManager(_ store: UserDefaults? = nil) -> PresentationManager {
+    PresentationManager(defaults: store ?? makeTestDefaults())
+}
+
+/// An empty settings domain. Pass the SAME one to two managers to test that a
+/// setting survives a relaunch — that is the only reason to share a store.
+@MainActor func makeTestDefaults() -> UserDefaults {
+    // Force-unwrap is right here: a suite name that isn't a reserved domain
+    // always succeeds, and a nil would silently hand back .standard.
+    UserDefaults(suiteName: "TopPresenterTests-" + UUID().uuidString)!
+}
+
 // MARK: - TopPresenter JSON Importer Tests
 
 @MainActor struct TopPresenterImporterTests {
@@ -993,7 +1012,7 @@ import SwiftData
 @MainActor
 struct PresentationManagerTests {
     @Test func freezeSnapshotsCurrentValues() {
-        let pm = PresentationManager()
+        let pm = makeTestManager()
         pm.fontSize = 72.0
         pm.fontName = "Helvetica"
 
@@ -1009,7 +1028,7 @@ struct PresentationManagerTests {
     }
 
     @Test func unfreezeRestoresLiveValues() {
-        let pm = PresentationManager()
+        let pm = makeTestManager()
         pm.fontSize = 72.0
         pm.toggleFreeze()
         pm.fontSize = 48.0
@@ -1021,7 +1040,7 @@ struct PresentationManagerTests {
     }
 
     @Test func clearOutputResetsFreezeAndBlack() {
-        let pm = PresentationManager()
+        let pm = makeTestManager()
         pm.toggleFreeze()
         pm.isBlackScreen = true
         pm.liveContent.setBibleVerse(text: "Test", reference: "Gen 1:1")
@@ -1145,7 +1164,7 @@ struct PresentationManagerTests {
     /// generation token the staged apply then overwrites the projector with stale
     /// content 60 ms after the operator already moved on.
     @Test func newerShowSupersedesAStagedOne() async {
-        let pm = PresentationManager()
+        let pm = makeTestManager()
         // Staging only exists where there IS an output window; a headless CI
         // runner has none, and the race cannot occur there either. Asserting the
         // equivalence keeps this honest in both environments instead of passing
@@ -1166,7 +1185,7 @@ struct PresentationManagerTests {
 
     /// Same hazard in the other direction: Show while hidden, then Escape.
     @Test func clearCancelsAStagedShow() async {
-        let pm = PresentationManager()
+        let pm = makeTestManager()
         pm.hidePresentationWindow()
 
         let stages = pm.hasPresentationWindow
@@ -1185,7 +1204,7 @@ struct PresentationManagerTests {
     // MARK: - Screen changes must never lock the operator out
 
     @Test func askOnDisconnectParksOutputWithoutRetargeting() {
-        let pm = PresentationManager()
+        let pm = makeTestManager()
         pm.screenDisconnectAction = .ask
         pm.isPresentationWindowOpen = true
         pm.presentationScreenIndex = 99  // target display no longer exists
@@ -1208,7 +1227,7 @@ struct PresentationManagerTests {
     }
 
     @Test func goBlackOnDisconnectActsWithoutPrompting() {
-        let pm = PresentationManager()
+        let pm = makeTestManager()
         pm.screenDisconnectAction = .goBlack
         pm.isPresentationWindowOpen = true
         pm.presentationScreenIndex = 99
@@ -1222,7 +1241,7 @@ struct PresentationManagerTests {
     }
 
     @Test func screenChangeIsSilentWhenOutputWindowClosed() {
-        let pm = PresentationManager()
+        let pm = makeTestManager()
         pm.screenDisconnectAction = .ask
         pm.isPresentationWindowOpen = false
         pm.presentationScreenIndex = 99
@@ -1235,20 +1254,21 @@ struct PresentationManagerTests {
     /// It used to be a computed property over UserDefaults — the only one of the
     /// 34 persisted settings that was, which also kept it outside Observation.
     @Test func screenDisconnectActionPersistsLikeItsSiblings() {
-        let pm = PresentationManager()
-        let original = pm.screenDisconnectAction
-        defer { pm.screenDisconnectAction = original }
+        // One store, two managers — the point is that the second one reads back
+        // what the first one wrote, exactly as a relaunch would.
+        let store = makeTestDefaults()
+        let pm = makeTestManager(store)
 
         pm.screenDisconnectAction = .goBlack
         // A fresh instance restores it in init(), like every other didSet setting.
-        #expect(PresentationManager().screenDisconnectAction == .goBlack)
+        #expect(makeTestManager(store).screenDisconnectAction == .goBlack)
 
         pm.screenDisconnectAction = .moveToAvailable
-        #expect(PresentationManager().screenDisconnectAction == .moveToAvailable)
+        #expect(makeTestManager(store).screenDisconnectAction == .moveToAvailable)
     }
 
     @Test func pendingScreenMoveIgnoresMissingTarget() {
-        let pm = PresentationManager()
+        let pm = makeTestManager()
         pm.presentationScreenIndex = 0
 
         pm.pendingConnectedScreenIndex = nil
@@ -1263,12 +1283,12 @@ struct PresentationManagerTests {
     /// A single display always means the output is sitting on the operator's own
     /// screen — that is what makes Escape/⌘⎋ hide it instead of leaving it up.
     @Test func singleDisplayImpliesOutputCoversOperator() {
-        let pm = PresentationManager()
+        let pm = makeTestManager()
         #expect(!pm.isSingleScreenMode || pm.isOutputOnOperatorScreen)
     }
 
     @Test func hideOutputNowKeepsLiveContentIntact() {
-        let pm = PresentationManager()
+        let pm = makeTestManager()
         pm.liveContent.setBibleVerse(text: "Test", reference: "Gen 1:1")
         pm.liveContent.isLive = true
 
@@ -1283,7 +1303,7 @@ struct PresentationManagerTests {
     }
 
     @Test func showBibleVerseBlockedWhenFrozen() {
-        let pm = PresentationManager()
+        let pm = makeTestManager()
         pm.liveContent.setBibleVerse(text: "First verse", reference: "Gen 1:1")
         pm.toggleFreeze()
 
@@ -1294,7 +1314,7 @@ struct PresentationManagerTests {
     }
 
     @Test func toggleBlack() {
-        let pm = PresentationManager()
+        let pm = makeTestManager()
         #expect(pm.isBlackScreen == false)
 
         pm.toggleBlack()
@@ -1327,7 +1347,7 @@ struct PresentationManagerTests {
     }
 
     @Test func setBoxFrameClampsAndPersistsRoundTrip() throws {
-        let pm = PresentationManager()
+        let pm = makeTestManager()
         let original = pm.boxFrame(for: .verseContent, in: "bible")
         pm.setBoxFrame(.init(x: 0.95, y: 0.1, width: 0.3, height: 0.2), for: .verseContent, in: "bible")
         defer { pm.setBoxFrame(original, for: .verseContent, in: "bible") }
@@ -1339,7 +1359,7 @@ struct PresentationManagerTests {
         // Profiles persist as ONE blob, written debounced — flush first, exactly as
         // the editor does at the end of a drag.
         pm.persistProfilesNow()
-        let data = try #require(UserDefaults.standard.data(forKey: "pm_layoutProfiles"))
+        let data = try #require(pm.defaults.data(forKey: "pm_layoutProfiles"))
         let profiles = try JSONDecoder().decode(
             [String: PresentationManager.LayoutProfile].self, from: data
         )
@@ -1349,14 +1369,14 @@ struct PresentationManagerTests {
     /// The debounce must never cost an edit: the write is deferred, but a flush
     /// point (gesture end, app quit/deactivate) commits it immediately.
     @Test func debouncedProfileWriteIsFlushedOnDemand() throws {
-        let pm = PresentationManager()
+        let pm = makeTestManager()
         let original = pm.boxFrame(for: .verseContent, in: "song")
         defer { pm.setBoxFrame(original, for: .verseContent, in: "song"); pm.persistProfilesNow() }
 
         pm.setBoxFrame(.init(x: 0.11, y: 0.22, width: 0.33, height: 0.15), for: .verseContent, in: "song")
         pm.persistProfilesNow()
 
-        let data = try #require(UserDefaults.standard.data(forKey: "pm_layoutProfiles"))
+        let data = try #require(pm.defaults.data(forKey: "pm_layoutProfiles"))
         let profiles = try JSONDecoder().decode(
             [String: PresentationManager.LayoutProfile].self, from: data
         )
@@ -1367,7 +1387,7 @@ struct PresentationManagerTests {
     /// Two auto-fit boxes on screen must both stay cached. As a single slot the
     /// cache thrashed: each call missed and overwrote the other's entry.
     @Test func autoFitCacheServesSeveralBoxesAtOnce() {
-        let pm = PresentationManager()
+        let pm = makeTestManager()
         let wasEnabled = pm.autoFitVerseFont
         pm.autoFitVerseFont = true
         defer { pm.autoFitVerseFont = wasEnabled }
@@ -1394,7 +1414,7 @@ struct PresentationManagerTests {
     }
 
     @Test func profilesAreIndependentPerPresenter() {
-        let pm = PresentationManager()
+        let pm = makeTestManager()
         let originalSong = pm.boxFrame(for: .verseContent, in: "song")
         let originalBible = pm.boxFrame(for: .verseContent, in: "bible")
         defer {
@@ -1419,7 +1439,7 @@ struct PresentationManagerTests {
         #expect(PresentationManager.relevantSections(for: "bible") == TextBoxSection.allCases.filter { $0 != .chords })
 
         // The unified z-order only offers a profile's relevant boxes
-        let pm = PresentationManager()
+        let pm = makeTestManager()
         #expect(!pm.orderedBoxTokens(in: "song").contains("section:translationName"))
         #expect(pm.orderedBoxTokens(in: "song").contains("section:chords"))
         #expect(pm.orderedBoxTokens(in: "bible").contains("section:translationName"))
@@ -1435,7 +1455,7 @@ struct PresentationManagerTests {
     }
 
     @Test func copyProfileClonesLayoutBetweenPresenters() {
-        let pm = PresentationManager()
+        let pm = makeTestManager()
         let originalSong = pm.profile("song")
         let originalBibleRef = pm.boxFrame(for: .reference, in: "bible")
         defer {
@@ -1450,7 +1470,7 @@ struct PresentationManagerTests {
     }
 
     @Test func slideScopeMatchesFirstAndLast() {
-        let pm = PresentationManager()
+        let pm = makeTestManager()
         pm.liveContent.setSongVerse(text: "v1", title: "T", verseLabel: "Strofa 1", slideIndex: 0, slideCount: 3)
         #expect(pm.scopeMatchesLiveSlide("all"))
         #expect(pm.scopeMatchesLiveSlide("first"))
@@ -1491,7 +1511,7 @@ struct PresentationManagerTests {
     }
 
     @Test func boxColorPersistsPerToken() {
-        let pm = PresentationManager()
+        let pm = makeTestManager()
         let token = "section:reference"
         defer { pm.setBoxColorHex(nil, forToken: token, in: "song") }
 
@@ -1505,7 +1525,7 @@ struct PresentationManagerTests {
     }
 
     @Test func outputKeepsLastLiveProfileAfterClear() {
-        let pm = PresentationManager()
+        let pm = makeTestManager()
         pm.activeProfileKey = "bible"
         pm.showSongVerse(text: "v", title: "T", verseLabel: "S1")
         #expect(pm.outputProfileKey == "song")
@@ -1518,7 +1538,7 @@ struct PresentationManagerTests {
     }
 
     @Test func contentChangeKindTracksAppearChangeClear() {
-        let pm = PresentationManager()
+        let pm = makeTestManager()
         pm.clearOutput()
         pm.showSongVerse(text: "v1", title: "T", verseLabel: "S1", slideIndex: 0, slideCount: 2)
         #expect(pm.contentChangeKind == "appear")
@@ -1529,7 +1549,7 @@ struct PresentationManagerTests {
     }
 
     @Test func boxTransitionOverrideIsPerTokenAndProfile() {
-        let pm = PresentationManager()
+        let pm = makeTestManager()
         let token = "section:verseContent"
         let original = pm.boxTransitionOverride(forToken: token, in: "song")
         defer { pm.setBoxTransitionOverride(original, forToken: token, in: "song") }
@@ -1554,7 +1574,7 @@ struct PresentationManagerTests {
     }
 
     @Test func phaseDurationOverridesResolveInOrder() {
-        let pm = PresentationManager()
+        let pm = makeTestManager()
         let originalChange = pm.phaseDurationOverride("change", in: "song")
         let originalGeneral = pm.profile("song").transitionDurationOverride
         defer {
@@ -1579,7 +1599,7 @@ struct PresentationManagerTests {
     }
 
     @Test func themeHoverPreviewAppliesAndRestores() {
-        let pm = PresentationManager()
+        let pm = makeTestManager()
         pm.clearOutput()
         let originalFont = pm.fontSize
         defer { pm.fontSize = originalFont }
@@ -1605,7 +1625,7 @@ struct PresentationManagerTests {
     }
 
     @Test func themePayloadCarriesPerProfileTransitions() {
-        let pm = PresentationManager()
+        let pm = makeTestManager()
         let originalIn = pm.transitionInRaw(in: "song")
         defer { pm.setTransitionIn(originalIn, in: "song") }
 
@@ -1619,7 +1639,7 @@ struct PresentationManagerTests {
     }
 
     @Test func resetAllBoxFramesRestoresDefaults() {
-        let pm = PresentationManager()
+        let pm = makeTestManager()
         pm.setBoxFrame(.init(x: 0.2, y: 0.2, width: 0.4, height: 0.3), for: .reference)
 
         pm.resetAllBoxFrames()
@@ -1629,7 +1649,7 @@ struct PresentationManagerTests {
     }
 
     @Test func fittedFontSizeNeverExceedsConfiguredSize() {
-        let pm = PresentationManager()
+        let pm = makeTestManager()
         pm.autoFitVerseFont = true
 
         let longText = String(repeating: "For God so loved the world. ", count: 40)
@@ -1647,7 +1667,7 @@ struct PresentationManagerTests {
     }
 
     @Test func customTextBoxLifecycle() {
-        let pm = PresentationManager()
+        let pm = makeTestManager()
         let initialCount = pm.customTextBoxes.count
 
         var box = pm.addCustomTextBox()
@@ -1666,7 +1686,7 @@ struct PresentationManagerTests {
     }
 
     @Test func quickAlignCentersBox() {
-        let pm = PresentationManager()
+        let pm = makeTestManager()
         pm.setBoxFrame(.init(x: 0.0, y: 0.0, width: 0.4, height: 0.2), for: .verseContent)
 
         pm.centerBoxHorizontally(.section(.verseContent))
@@ -1702,7 +1722,7 @@ struct PresentationManagerTests {
     }
 
     @Test func sectionSourceOverrideResolvesText() {
-        let pm = PresentationManager()
+        let pm = makeTestManager()
         let originalSource = pm.sourceRaw(for: .reference)
         let originalStatic = pm.staticText(for: .reference)
 
@@ -1724,7 +1744,7 @@ struct PresentationManagerTests {
     }
 
     @Test func sectionVisibilityToggles() {
-        let pm = PresentationManager()
+        let pm = makeTestManager()
         let original = pm.refBoxVisible
 
         pm.setSectionVisible(false, for: .reference)
@@ -1749,7 +1769,7 @@ struct PresentationManagerTests {
     }
 
     @Test func duplicateCustomBoxOffsetsFrame() {
-        let pm = PresentationManager()
+        let pm = makeTestManager()
         var original = pm.addCustomTextBox()
         original.text = "Original"
         pm.updateCustomTextBox(original)
@@ -1765,7 +1785,7 @@ struct PresentationManagerTests {
     }
 
     @Test func boxStyleResolvesGlobalsWhenNotCustomized() {
-        let pm = PresentationManager()
+        let pm = makeTestManager()
         let originalStyle = pm.refStyle
         pm.refStyle = PresentationManager.BoxTextStyle() // not customized
 
@@ -1779,7 +1799,7 @@ struct PresentationManagerTests {
     }
 
     @Test func enableStyleCustomizationSeedsCurrentValues() {
-        let pm = PresentationManager()
+        let pm = makeTestManager()
         let originalStyle = pm.verseStyle
         pm.verseStyle = PresentationManager.BoxTextStyle()
 
@@ -1820,7 +1840,7 @@ struct PresentationManagerTests {
     }
 
     @Test func themeImportExportRoundTrip() throws {
-        let pm = PresentationManager()
+        let pm = makeTestManager()
         let fm = FileManager.default
         let tmp = fm.temporaryDirectory.appendingPathComponent("tptheme-test-\(UUID().uuidString)")
         defer { try? fm.removeItem(at: tmp) }
@@ -1873,7 +1893,7 @@ struct PresentationManagerTests {
     }
 
     @Test func verticalAlignFollowsGlobalWhenNotCustomized() {
-        let pm = PresentationManager()
+        let pm = makeTestManager()
         let originalStyle = pm.boxStyle(for: .reference, in: "bible")
         let originalVAlign = pm.globalVAlignRaw
         defer {
@@ -1897,7 +1917,7 @@ struct PresentationManagerTests {
     }
 
     @Test func trackingAndShadowColorResolve() {
-        let pm = PresentationManager()
+        let pm = makeTestManager()
         let originalStyle = pm.boxStyle(for: .verseContent, in: "bible")
         let originalTracking = pm.letterTracking
         let originalShadowHex = pm.shadowColorHex
@@ -1927,7 +1947,7 @@ struct PresentationManagerTests {
     }
 
     @Test func chorusScopeMatchesRefrenLabels() {
-        let pm = PresentationManager()
+        let pm = makeTestManager()
         pm.liveContent.setSongVerse(text: "v", title: "T", verseLabel: "Refren 2", slideIndex: 1, slideCount: 4)
         #expect(pm.scopeMatchesLiveSlide("chorus"))
         #expect(!pm.scopeMatchesLiveSlide("verses"))
@@ -1967,7 +1987,7 @@ struct PresentationManagerTests {
     }
 
     @Test func redLetterThemeTravelsWithThemes() {
-        let pm = PresentationManager()
+        let pm = makeTestManager()
         let originalEnabled = pm.wocStyleEnabled
         let originalColor = pm.wocColorHex
         defer { pm.wocStyleEnabled = originalEnabled; pm.wocColorHex = originalColor }
@@ -2017,7 +2037,7 @@ struct PresentationManagerTests {
     }
 
     @Test func interlinearOptionsTravelWithThemes() {
-        let pm = PresentationManager()
+        let pm = makeTestManager()
         let original = pm.contentOptions(for: "bible")
         defer { pm.setContentOptions(original, for: "bible") }
 
@@ -2097,7 +2117,7 @@ struct PresentationManagerTests {
     }
 
     @Test func liveContentCarriesVerseRuns() {
-        let pm = PresentationManager()
+        let pm = makeTestManager()
         pm.showBibleVerse(text: "I am the light.", reference: "John 8:12",
                           runs: [VerseRun(text: "I am the light.", kind: "woc")])
         #expect(pm.liveContent.mainRuns.contains { $0.kind == "woc" })
@@ -2108,7 +2128,7 @@ struct PresentationManagerTests {
     }
 
     @Test func perBoxPaddingShadowAutoFitResolve() {
-        let pm = PresentationManager()
+        let pm = makeTestManager()
         let original = pm.boxStyle(for: .reference, in: "song")
         defer { pm.setBoxStyle(original, for: .reference, in: "song") }
 
@@ -2133,7 +2153,7 @@ struct PresentationManagerTests {
     }
 
     @Test func transformResolvesGlobalAndPerBox() {
-        let pm = PresentationManager()
+        let pm = makeTestManager()
         let originalOptions = pm.contentOptions(for: "song")
         let originalStyle = pm.boxStyle(for: .verseContent, in: "song")
         defer {
@@ -2164,7 +2184,7 @@ struct PresentationManagerTests {
     }
 
     @Test func contentOptionsTravelWithThemes() {
-        let pm = PresentationManager()
+        let pm = makeTestManager()
         let originalOptions = pm.contentOptions
 
         var options = PresentationManager.ContentOptions()
@@ -2181,7 +2201,7 @@ struct PresentationManagerTests {
     }
 
     @Test func themesFilterByFormat() {
-        let pm = PresentationManager()
+        let pm = makeTestManager()
         let bible = pm.saveCurrentAsTheme(named: "B", formatRaw: "bible")
         let song = pm.saveCurrentAsTheme(named: "S", formatRaw: "song")
         let universal = pm.saveCurrentAsTheme(named: "U", formatRaw: "all")
@@ -2198,7 +2218,7 @@ struct PresentationManagerTests {
     }
 
     @Test func themeRoundTripRestoresLook() {
-        let pm = PresentationManager()
+        let pm = makeTestManager()
         let originalThemes = pm.themes
         let originalFrame = pm.verseBoxFrame
         let originalFontSize = pm.fontSize
@@ -2223,7 +2243,7 @@ struct PresentationManagerTests {
     }
 
     @Test func layoutUndoRedoRestoresBoxState() async throws {
-        let pm = PresentationManager()
+        let pm = makeTestManager()
         let originalFrame = pm.verseBoxFrame
 
         let moved = PresentationManager.TextBoxFrame(x: 0.1, y: 0.1, width: 0.5, height: 0.3)
@@ -2247,7 +2267,7 @@ struct PresentationManagerTests {
     }
 
     @Test func layoutUndoCoalescesRapidChanges() {
-        let pm = PresentationManager()
+        let pm = makeTestManager()
         let originalFrame = pm.verseBoxFrame
         let stackBefore = pm.layoutUndoStack.count
 
@@ -2262,7 +2282,7 @@ struct PresentationManagerTests {
     }
 
     @Test func unifiedZOrderReordersAnyBox() {
-        let pm = PresentationManager()
+        let pm = makeTestManager()
         let originalOrder = pm.boxOrder
 
         // Every box appears exactly once in the reconciled order
@@ -2289,7 +2309,7 @@ struct PresentationManagerTests {
     }
 
     @Test func freezeSnapshotsBoxFrames() {
-        let pm = PresentationManager()
+        let pm = makeTestManager()
         let custom = PresentationManager.TextBoxFrame(x: 0.1, y: 0.1, width: 0.5, height: 0.3)
         pm.setBoxFrame(custom, for: .verseContent)
 
@@ -3266,7 +3286,7 @@ struct SessionTests {
         SessionService.append(.text(title: "Încheiere", content: "Amin"), to: schedule, context: context)
         try context.save()
 
-        let pm = PresentationManager()
+        let pm = makeTestManager()
         pm.showPresentationWindow()     // visible → presentContent takes the immediate path
         let runner = SessionRunner()
         runner.pm = pm
@@ -4075,7 +4095,7 @@ struct RemoteExtractionTests {
     }
 
     @Test func showingMediaSwitchesTheOutputProfile() {
-        let pm = PresentationManager()
+        let pm = makeTestManager()
         pm.showPresentationWindow()
 
         pm.showBibleVerse(text: "Test", reference: "Gen 1:1")
@@ -4105,7 +4125,7 @@ struct RemoteExtractionTests {
     }
 
     @Test func movingOneBoxLeavesItsSiblingsAlone() {
-        let pm = PresentationManager()
+        let pm = makeTestManager()
         let verse = PresentationManager.sectionToken(.verseContent)
         let reference = PresentationManager.sectionToken(.reference)
 
@@ -4127,7 +4147,7 @@ struct RemoteExtractionTests {
     }
 
     @Test func editingOneProfileLeavesTheOthersAlone() {
-        let pm = PresentationManager()
+        let pm = makeTestManager()
         let before = ticks(pm, "song")
 
         pm.setStaticText("hello", for: .reference, in: "bible")
@@ -4136,7 +4156,7 @@ struct RemoteExtractionTests {
     }
 
     @Test func backgroundEditsDoNotInvalidateBoxes() {
-        let pm = PresentationManager()
+        let pm = makeTestManager()
         let verse = PresentationManager.sectionToken(.verseContent)
         let boxBefore = pm.observationTick(box: verse, in: "bible")
         let structureBefore = pm.observationTick(structureIn: "bible")
@@ -4151,7 +4171,7 @@ struct RemoteExtractionTests {
     }
 
     @Test func addingABoxIsAStructuralChange() {
-        let pm = PresentationManager()
+        let pm = makeTestManager()
         let before = pm.observationTick(structureIn: "bible")
 
         let box = pm.addCustomTextBox(in: "bible")
@@ -4177,7 +4197,7 @@ struct RemoteExtractionTests {
     }
 
     @Test func reorderingIsAStructuralChange() {
-        let pm = PresentationManager()
+        let pm = makeTestManager()
         let before = pm.observationTick(structureIn: "bible")
         let token = pm.orderedBoxTokens(in: "bible").first ?? ""
 
@@ -4188,7 +4208,7 @@ struct RemoteExtractionTests {
     }
 
     @Test func undoInvalidatesEverything() {
-        let pm = PresentationManager()
+        let pm = makeTestManager()
         let verse = PresentationManager.sectionToken(.verseContent)
         let original = pm.boxFrame(for: .verseContent, in: "bible")
 
@@ -4212,12 +4232,10 @@ struct RemoteExtractionTests {
     }
 
     @Test func narrowReadsStillSeeWholesaleReplacement() {
-        let pm = PresentationManager()
+        let pm = makeTestManager()
         let source = "bible"
         let target = "song"
-        // Unique per run: PresentationManager() reads the real UserDefaults, so
-        // a fixed marker would still be there from the previous run.
-        let marker = "copied-" + UUID().uuidString
+        let marker = "copied"
         pm.setStaticText(marker, for: .reference, in: source)
 
         pm.copyProfile(from: source, to: target)
@@ -4250,7 +4268,7 @@ struct RemoteExtractionTests {
     }
 
     @Test func movingABoxDoesNotInvalidateItsSiblingsStyle() {
-        let pm = PresentationManager()
+        let pm = makeTestManager()
         let fired = invalidates {
             _ = pm.resolvedStyle(for: .reference, in: "bible")
         } edit: {
@@ -4264,7 +4282,7 @@ struct RemoteExtractionTests {
     }
 
     @Test func movingABoxDoesNotInvalidateTheStackingOrder() {
-        let pm = PresentationManager()
+        let pm = makeTestManager()
         let fired = invalidates {
             _ = pm.orderedBoxTokens(in: "bible")
         } edit: {
@@ -4277,7 +4295,7 @@ struct RemoteExtractionTests {
     }
 
     @Test func movingABoxDoesNotInvalidateTheBackground() {
-        let pm = PresentationManager()
+        let pm = makeTestManager()
         let fired = invalidates {
             _ = pm.backgroundConfig(for: "bible")
         } edit: {
@@ -4288,7 +4306,7 @@ struct RemoteExtractionTests {
     }
 
     @Test func aBoxStillHearsAboutItsOwnEdits() {
-        let pm = PresentationManager()
+        let pm = makeTestManager()
 
         // Without this, every expectation above would pass by simply never
         // observing anything.
@@ -4311,7 +4329,7 @@ struct RemoteExtractionTests {
     }
 
     @Test func chromeEditsStillReachTheBoxesThatInheritThem() {
-        let pm = PresentationManager()
+        let pm = makeTestManager()
 
         // Boxes inherit the profile transform, so a chrome change MUST reach a
         // box's resolved style — the mirror image of the first test, and the
@@ -4327,12 +4345,49 @@ struct RemoteExtractionTests {
     }
 
     @Test func addingABoxInvalidatesTheStackingOrder() {
-        let pm = PresentationManager()
+        let pm = makeTestManager()
         let fired = invalidates {
             _ = pm.orderedBoxTokens(in: "bible")
         } edit: {
             _ = pm.addCustomTextBox(in: "bible")
         }
         #expect(fired)
+    }
+}
+
+// MARK: - Test isolation
+@MainActor struct TestIsolationTests {
+
+    /// The guard on the whole arrangement. The test host runs inside the real app
+    /// bundle, so a manager built on `.standard` writes the operator's actual
+    /// settings — running the suite used to overwrite real saved layouts. If
+    /// someone reintroduces `UserDefaults.standard` inside PresentationManager,
+    /// or builds one with `PresentationManager()` in a test, this fails.
+    @Test func aTestManagerNeverWritesTheRealDefaults() {
+        let key = "pm_fontSize"
+        let real = UserDefaults.standard
+        let before = real.object(forKey: key) as? Double
+
+        let pm = makeTestManager()
+        pm.fontSize = 123.456
+        pm.setBoxFrame(PresentationManager.TextBoxFrame(x: 0.5, y: 0.5, width: 0.2, height: 0.2),
+                       for: .verseContent, in: "bible")
+        pm.persistProfilesNow()
+
+        #expect(real.object(forKey: key) as? Double == before)
+        #expect(pm.defaults.double(forKey: key) == 123.456)
+        #expect(pm.defaults.data(forKey: "pm_layoutProfiles") != nil)
+    }
+
+    /// Two managers must not see each other — that independence is what makes the
+    /// suite order-insensitive.
+    @Test func separateTestManagersDoNotShareState() {
+        let a = makeTestManager()
+        let b = makeTestManager()
+
+        a.setStaticText("only-in-a", for: .reference, in: "bible")
+
+        #expect(a.staticText(for: .reference, in: "bible") == "only-in-a")
+        #expect(b.staticText(for: .reference, in: "bible") != "only-in-a")
     }
 }

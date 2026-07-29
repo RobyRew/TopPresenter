@@ -339,6 +339,8 @@ Same pattern — conform to `SongImporter`, add to `SupportedSongFormat`, regist
 ---
 
 ### Testing Gotchas
+- **Tests must build managers with `makeTestManager()`, never `PresentationManager()`.** The test host runs inside the REAL app bundle, so a manager on `UserDefaults.standard` reads and writes the operator's actual saved layouts, themes and settings — running the suite used to overwrite real data, and left every test depending on whatever the previous run happened to persist. `PresentationManager(defaults:)` takes the store; `makeTestManager()` hands it a throwaway suite. Pass the SAME `makeTestDefaults()` store to two managers only when the point is that a setting survives a relaunch (`screenDisconnectActionPersistsLikeItsSiblings`). Guarded by `TestIsolationTests`
+- A hermetic manager starts from DEFAULTS, not from whatever is on disk — a test that needs a stored value must write it through the manager (or seed its store) first
 - Run unit tests with `-only-testing:TopPresenterTests` — the UI test target launches the real app and needs Accessibility permissions (it fails/hangs headless)
 - Test targets MUST carry `DEVELOPMENT_TEAM = FJHAUWNNBH` like the app target; without it the xctest bundle is ad-hoc signed and dlopen rejects it ("different Team IDs")
 - If results look stale (old failures at shifted line numbers, missing new tests), `touch` the test file and rebuild — Xcode occasionally reuses a stale test bundle

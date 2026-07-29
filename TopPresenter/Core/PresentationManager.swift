@@ -38,6 +38,15 @@ struct FlipFadeModifier: ViewModifier {
 
 @Observable
 final class PresentationManager {
+    /// Where this manager's settings live.
+    ///
+    /// Injected rather than reaching for `.standard`, because the test host runs
+    /// inside the real app bundle: every `PresentationManager()` a test built read
+    /// and then WROTE the operator's actual saved layouts, themes and settings.
+    /// That both corrupted real data and made tests depend on the previous run.
+    /// Tests pass a throwaway suite; the app passes nothing.
+    @ObservationIgnored let defaults: UserDefaults
+
     // MARK: - Live Content
     var liveContent = LiveContent()
 
@@ -109,26 +118,26 @@ final class PresentationManager {
     var backgroundMediaURL: URL?
     /// "image" | "gif" | "video" — backgrounds support the full media trio.
     var backgroundMediaTypeRaw: String {
-        didSet { UserDefaults.standard.set(backgroundMediaTypeRaw, forKey: "pm_backgroundMediaTypeRaw") }
+        didSet { defaults.set(backgroundMediaTypeRaw, forKey: "pm_backgroundMediaTypeRaw") }
     }
     var backgroundImagePath: String? {
-        didSet { UserDefaults.standard.set(backgroundImagePath, forKey: "pm_backgroundImagePath") }
+        didSet { defaults.set(backgroundImagePath, forKey: "pm_backgroundImagePath") }
     }
     var backgroundOpacity: Double {
-        didSet { UserDefaults.standard.set(backgroundOpacity, forKey: "pm_backgroundOpacity") }
+        didSet { defaults.set(backgroundOpacity, forKey: "pm_backgroundOpacity") }
     }
     var useBackgroundImage: Bool {
-        didSet { UserDefaults.standard.set(useBackgroundImage, forKey: "pm_useBackgroundImage") }
+        didSet { defaults.set(useBackgroundImage, forKey: "pm_useBackgroundImage") }
     }
     /// When false (default), the output window is fully transparent — no solid background.
     /// Enable this to show the background color behind content.
     var backgroundEnabled: Bool {
-        didSet { UserDefaults.standard.set(backgroundEnabled, forKey: "pm_backgroundEnabled") }
+        didSet { defaults.set(backgroundEnabled, forKey: "pm_backgroundEnabled") }
     }
     /// Ascunde/Clear hides only the CONTENT — the theme background stays up.
     /// Part of the look (theme-persisted); default ON, toggleable in Fundal.
     var backgroundStaysOnHide: Bool {
-        didSet { UserDefaults.standard.set(backgroundStaysOnHide, forKey: "pm_backgroundStaysOnHide") }
+        didSet { defaults.set(backgroundStaysOnHide, forKey: "pm_backgroundStaysOnHide") }
     }
 
     // MARK: - Media Helpers (bookmarks + type detection)
@@ -497,24 +506,24 @@ final class PresentationManager {
     // MARK: - Media Module Output Preferences
     /// Whether "Play Video" loops by default (Media module).
     var videoLoopsByDefault: Bool {
-        didSet { UserDefaults.standard.set(videoLoopsByDefault, forKey: "pm_videoLoopsByDefault") }
+        didSet { defaults.set(videoLoopsByDefault, forKey: "pm_videoLoopsByDefault") }
     }
     /// Full-screen video gravity: "fit" | "fill".
     var fullscreenVideoFillRaw: String {
-        didSet { UserDefaults.standard.set(fullscreenVideoFillRaw, forKey: "pm_fullscreenVideoFillRaw") }
+        didSet { defaults.set(fullscreenVideoFillRaw, forKey: "pm_fullscreenVideoFillRaw") }
     }
     /// LIVE framing of full-screen media (image AND video), driven from the
     /// Media panel while something is on screen: zoom 1.0…3.0 plus a pan
     /// offset in FRACTIONS of the output size (resolution-independent, so the
     /// same framing looks identical on any projector).
     var mediaZoom: Double {
-        didSet { UserDefaults.standard.set(mediaZoom, forKey: "pm_mediaZoom") }
+        didSet { defaults.set(mediaZoom, forKey: "pm_mediaZoom") }
     }
     var mediaPanX: Double {
-        didSet { UserDefaults.standard.set(mediaPanX, forKey: "pm_mediaPanX") }
+        didSet { defaults.set(mediaPanX, forKey: "pm_mediaPanX") }
     }
     var mediaPanY: Double {
-        didSet { UserDefaults.standard.set(mediaPanY, forKey: "pm_mediaPanY") }
+        didSet { defaults.set(mediaPanY, forKey: "pm_mediaPanY") }
     }
 
     /// Back to 100%, centered (the „Resetează" button + every new present).
@@ -791,7 +800,7 @@ final class PresentationManager {
         profilesPersistWork?.cancel()
         profilesPersistWork = nil
         if let data = try? JSONEncoder().encode(profiles) {
-            UserDefaults.standard.set(data, forKey: "pm_layoutProfiles")
+            defaults.set(data, forKey: "pm_layoutProfiles")
         }
     }
 
@@ -938,64 +947,64 @@ final class PresentationManager {
 
     // MARK: - Global Text Settings
     var fontSize: Double {
-        didSet { UserDefaults.standard.set(fontSize, forKey: "pm_fontSize") }
+        didSet { defaults.set(fontSize, forKey: "pm_fontSize") }
     }
     var fontName: String {
-        didSet { UserDefaults.standard.set(fontName, forKey: "pm_fontName") }
+        didSet { defaults.set(fontName, forKey: "pm_fontName") }
     }
     var textColorHex: String {
-        didSet { UserDefaults.standard.set(textColorHex, forKey: "pm_textColorHex") }
+        didSet { defaults.set(textColorHex, forKey: "pm_textColorHex") }
     }
     var backgroundColorHex: String {
-        didSet { UserDefaults.standard.set(backgroundColorHex, forKey: "pm_backgroundColorHex") }
+        didSet { defaults.set(backgroundColorHex, forKey: "pm_backgroundColorHex") }
     }
     var textAlignment: TextAlignment {
-        didSet { UserDefaults.standard.set(Self.alignmentRaw(textAlignment), forKey: "pm_textAlignmentRaw") }
+        didSet { defaults.set(Self.alignmentRaw(textAlignment), forKey: "pm_textAlignmentRaw") }
     }
     var lineSpacing: Double {
-        didSet { UserDefaults.standard.set(lineSpacing, forKey: "pm_lineSpacing") }
+        didSet { defaults.set(lineSpacing, forKey: "pm_lineSpacing") }
     }
     var padding: Double {
-        didSet { UserDefaults.standard.set(padding, forKey: "pm_padding") }
+        didSet { defaults.set(padding, forKey: "pm_padding") }
     }
     var shadowEnabled: Bool {
-        didSet { UserDefaults.standard.set(shadowEnabled, forKey: "pm_shadowEnabled") }
+        didSet { defaults.set(shadowEnabled, forKey: "pm_shadowEnabled") }
     }
     var shadowRadius: Double {
-        didSet { UserDefaults.standard.set(shadowRadius, forKey: "pm_shadowRadius") }
+        didSet { defaults.set(shadowRadius, forKey: "pm_shadowRadius") }
     }
     /// Shadow color (RRGGBBAA — alpha carries the intensity).
     var shadowColorHex: String {
-        didSet { UserDefaults.standard.set(shadowColorHex, forKey: "pm_shadowColorHex") }
+        didSet { defaults.set(shadowColorHex, forKey: "pm_shadowColorHex") }
     }
     /// Letter spacing in points at the 1080p reference height.
     var letterTracking: Double {
-        didSet { UserDefaults.standard.set(letterTracking, forKey: "pm_letterTracking") }
+        didSet { defaults.set(letterTracking, forKey: "pm_letterTracking") }
     }
     /// Red-letter (words of Christ): when on, verse runs flagged `woc` render
     /// in `wocColorHex`. Travels with themes; applies to the Bible output.
     var wocStyleEnabled: Bool {
-        didSet { UserDefaults.standard.set(wocStyleEnabled, forKey: "pm_wocStyleEnabled") }
+        didSet { defaults.set(wocStyleEnabled, forKey: "pm_wocStyleEnabled") }
     }
     var wocColorHex: String {
-        didSet { UserDefaults.standard.set(wocColorHex, forKey: "pm_wocColorHex") }
+        didSet { defaults.set(wocColorHex, forKey: "pm_wocColorHex") }
     }
     var wocColor: Color { Color(hex: wocColorHex) ?? .red }
     var transitionDuration: Double {
-        didSet { UserDefaults.standard.set(transitionDuration, forKey: "pm_transitionDuration") }
+        didSet { defaults.set(transitionDuration, forKey: "pm_transitionDuration") }
     }
     /// Global font weight baseline — applied to every box whose section default
     /// is regular (reference keeps its semibold design default unless customized).
     var globalWeightRaw: String {
-        didSet { UserDefaults.standard.set(globalWeightRaw, forKey: "pm_globalWeightRaw") }
+        didSet { defaults.set(globalWeightRaw, forKey: "pm_globalWeightRaw") }
     }
     /// Global vertical alignment — inherited by every box that hasn't set its own.
     var globalVAlignRaw: String {
-        didSet { UserDefaults.standard.set(globalVAlignRaw, forKey: "pm_globalVAlignRaw") }
+        didSet { defaults.set(globalVAlignRaw, forKey: "pm_globalVAlignRaw") }
     }
     /// Global text opacity — multiplied into every non-customized box's opacity.
     var globalTextOpacity: Double {
-        didSet { UserDefaults.standard.set(globalTextOpacity, forKey: "pm_globalTextOpacity") }
+        didSet { defaults.set(globalTextOpacity, forKey: "pm_globalTextOpacity") }
     }
 
     static func alignmentRaw(_ alignment: TextAlignment) -> String {
@@ -1023,7 +1032,7 @@ final class PresentationManager {
     /// Window level for the presentation output window.
     /// Options: "normal", "floating", "alwaysOnTop", "behindDesktop"
     var windowLevel: String {
-        didSet { UserDefaults.standard.set(windowLevel, forKey: "pm_windowLevel") }
+        didSet { defaults.set(windowLevel, forKey: "pm_windowLevel") }
     }
 
     /// Maps the windowLevel string to an NSWindow.Level.
@@ -1172,7 +1181,7 @@ final class PresentationManager {
     /// computed property over UserDefaults it was invisible to Observation, so a
     /// view reading it would not re-render when it changed elsewhere.
     var screenDisconnectAction: ScreenDisconnectAction {
-        didSet { UserDefaults.standard.set(screenDisconnectAction.rawValue, forKey: "pm_screenDisconnectAction") }
+        didSet { defaults.set(screenDisconnectAction.rawValue, forKey: "pm_screenDisconnectAction") }
     }
 
     /// Which display change the pending prompt is about.
@@ -1339,7 +1348,7 @@ final class PresentationManager {
     // MARK: - Auto-Fit Verse Font
     /// When true, the verse font size is shrunk automatically to prevent overflow.
     var autoFitVerseFont: Bool {
-        didSet { UserDefaults.standard.set(autoFitVerseFont, forKey: "pm_autoFitVerseFont") }
+        didSet { defaults.set(autoFitVerseFont, forKey: "pm_autoFitVerseFont") }
     }
 
     // MARK: - Fixed Text Boxes
@@ -2291,12 +2300,12 @@ final class PresentationManager {
     var themes: [Theme] {
         didSet {
             if let data = try? JSONEncoder().encode(themes) {
-                UserDefaults.standard.set(data, forKey: "pm_themes")
+                defaults.set(data, forKey: "pm_themes")
             }
         }
     }
     var activeThemeID: UUID? {
-        didSet { UserDefaults.standard.set(activeThemeID?.uuidString ?? "", forKey: "pm_activeThemeID") }
+        didSet { defaults.set(activeThemeID?.uuidString ?? "", forKey: "pm_activeThemeID") }
     }
 
     /// Captures the entire current look into a payload.
@@ -2322,7 +2331,7 @@ final class PresentationManager {
         p.backgroundColorHex = backgroundColorHex
         p.backgroundOpacity = backgroundOpacity
         p.useBackgroundImage = useBackgroundImage
-        p.backgroundImageBookmark = UserDefaults.standard.data(forKey: Self.backgroundBookmarkKey)
+        p.backgroundImageBookmark = defaults.data(forKey: Self.backgroundBookmarkKey)
         p.backgroundMediaTypeRaw = backgroundMediaTypeRaw
         p.backgroundStaysOnHide = backgroundStaysOnHide
         p.profiles = profiles
@@ -2649,13 +2658,13 @@ final class PresentationManager {
         backgroundMediaTypeRaw = p.backgroundMediaTypeRaw
         backgroundStaysOnHide = p.backgroundStaysOnHide
         if let bookmark = p.backgroundImageBookmark {
-            UserDefaults.standard.set(bookmark, forKey: Self.backgroundBookmarkKey)
+            defaults.set(bookmark, forKey: Self.backgroundBookmarkKey)
             restoreBackgroundImage(from: bookmark)
         } else {
             backgroundImage = nil
             backgroundMediaURL = nil
             backgroundImagePath = nil
-            UserDefaults.standard.removeObject(forKey: Self.backgroundBookmarkKey)
+            defaults.removeObject(forKey: Self.backgroundBookmarkKey)
         }
         if !p.profiles.isEmpty {
             profiles = p.profiles
@@ -2913,8 +2922,9 @@ final class PresentationManager {
     }
 
     // MARK: - Init (restore from UserDefaults)
-    init() {
-        let d = UserDefaults.standard
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+        let d = defaults
         self.fontSize = d.object(forKey: "pm_fontSize") as? Double ?? PresentationDefaults.fontSize
         self.fontName = d.string(forKey: "pm_fontName") ?? PresentationDefaults.fontName
         self.textColorHex = d.string(forKey: "pm_textColorHex") ?? PresentationDefaults.textColor
@@ -3029,7 +3039,7 @@ final class PresentationManager {
     private func restoreBackgroundImage(from bookmark: Data) {
         guard let resolved = Self.resolveBookmarkRefreshing(bookmark) else { return }
         if let fresh = resolved.refreshed {
-            UserDefaults.standard.set(fresh, forKey: Self.backgroundBookmarkKey)
+            defaults.set(fresh, forKey: Self.backgroundBookmarkKey)
         }
         let url = resolved.url
         backgroundMediaURL = url
@@ -3405,7 +3415,7 @@ final class PresentationManager {
         backgroundImagePath = url.path
         useBackgroundImage = true
         if let bookmark = Self.makeBookmark(for: url) {
-            UserDefaults.standard.set(bookmark, forKey: Self.backgroundBookmarkKey)
+            defaults.set(bookmark, forKey: Self.backgroundBookmarkKey)
         }
     }
 
@@ -3421,7 +3431,7 @@ final class PresentationManager {
         backgroundMediaTypeRaw = "image"
         backgroundImagePath = nil
         useBackgroundImage = false
-        UserDefaults.standard.removeObject(forKey: Self.backgroundBookmarkKey)
+        defaults.removeObject(forKey: Self.backgroundBookmarkKey)
     }
 
     func applyStyle(_ style: PresentationStyle) {
