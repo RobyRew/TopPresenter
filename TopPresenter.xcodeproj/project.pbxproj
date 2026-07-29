@@ -199,6 +199,9 @@
 				en,
 				ro,
 				es,
+				fr,
+				de,
+				ru,
 				Base,
 			);
 			mainGroup = A9D0D3F12F65FF3F00CE2417;

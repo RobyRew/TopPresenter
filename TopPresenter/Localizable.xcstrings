@@ -15,6 +15,24 @@
             "state": "translated",
             "value": "Acerca de TopPresenter"
           }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "À propos de TopPresenter"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Über TopPresenter"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "О TopPresenter"
+          }
         }
       }
     },
@@ -31,6 +49,24 @@
           "stringUnit": {
             "state": "translated",
             "value": "Exportación por lotes…"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Exportation par lots…"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stapelexport…"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Пакетный экспорт…"
           }
         }
       }
@@ -49,6 +85,24 @@
             "state": "translated",
             "value": "Biblia"
           }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bible"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bibel"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Библия"
+          }
         }
       }
     },
@@ -65,6 +119,24 @@
           "stringUnit": {
             "state": "translated",
             "value": "Pantalla en negro"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Écran noir"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Schwarzbild"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Чёрный экран"
           }
         }
       }
@@ -83,6 +155,24 @@
             "state": "translated",
             "value": "Cancelar"
           }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Annuler"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abbrechen"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Отмена"
+          }
         }
       }
     },
@@ -99,6 +189,24 @@
           "stringUnit": {
             "state": "translated",
             "value": "Limpiar salida"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Effacer la sortie"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ausgabe leeren"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Очистить вывод"
           }
         }
       }
@@ -117,6 +225,24 @@
             "state": "translated",
             "value": "Diapositivas propias"
           }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diapositives personnalisées"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eigene Folien"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Свои слайды"
+          }
         }
       }
     },
@@ -133,6 +259,24 @@
           "stringUnit": {
             "state": "translated",
             "value": "Reducir tamaño de texto"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Réduire la taille du texte"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Schrift verkleinern"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Уменьшить шрифт"
           }
         }
       }
@@ -151,6 +295,24 @@
             "state": "translated",
             "value": "Eliminar"
           }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Supprimer"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Löschen"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Удалить"
+          }
         }
       }
     },
@@ -167,6 +329,24 @@
           "stringUnit": {
             "state": "translated",
             "value": "Eliminar archivo multimedia"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Supprimer le média"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Medium löschen"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Удалить медиа"
           }
         }
       }
@@ -185,6 +365,24 @@
             "state": "translated",
             "value": "Eliminar sesión"
           }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Supprimer la session"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sitzung löschen"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Удалить сессию"
+          }
         }
       }
     },
@@ -201,6 +399,24 @@
           "stringUnit": {
             "state": "translated",
             "value": "Eliminar diapositiva"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Supprimer la diapositive"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Folie löschen"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Удалить слайд"
           }
         }
       }
@@ -219,6 +435,24 @@
             "state": "translated",
             "value": "Eliminar canción"
           }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Supprimer le chant"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lied löschen"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Удалить песню"
+          }
         }
       }
     },
@@ -229,6 +463,30 @@
           "stringUnit": {
             "state": "translated",
             "value": "Editor de temas…"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Theme Editor…"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Éditeur de thèmes…"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Themen-Editor…"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Редактор тем…"
           }
         }
       }
@@ -247,6 +505,24 @@
             "state": "translated",
             "value": "Exportar módulo bíblico…"
           }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Exporter le module biblique…"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bibelmodul exportieren…"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Экспорт библейского модуля…"
+          }
         }
       }
     },
@@ -263,6 +539,24 @@
           "stringUnit": {
             "state": "translated",
             "value": "Ir a la búsqueda"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aller à la recherche"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zur Suche"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Перейти к поиску"
           }
         }
       }
@@ -281,6 +575,24 @@
             "state": "translated",
             "value": "Congelar/Descongelar"
           }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Geler/Dégeler"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Einfrieren/Fortsetzen"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Заморозить/Разморозить"
+          }
         }
       }
     },
@@ -297,6 +609,24 @@
           "stringUnit": {
             "state": "translated",
             "value": "Importar Biblia…"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Importer une Bible…"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bibel importieren…"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Импорт Библии…"
           }
         }
       }
@@ -315,6 +645,24 @@
             "state": "translated",
             "value": "Importar canciones…"
           }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Importer des chants…"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lieder importieren…"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Импорт песен…"
+          }
         }
       }
     },
@@ -331,6 +679,24 @@
           "stringUnit": {
             "state": "translated",
             "value": "Aumentar tamaño de texto"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Augmenter la taille du texte"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Schrift vergrößern"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Увеличить шрифт"
           }
         }
       }
@@ -349,6 +715,24 @@
             "state": "translated",
             "value": "Atajos de teclado"
           }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Raccourcis clavier"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tastaturkurzbefehle"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сочетания клавиш"
+          }
         }
       }
     },
@@ -365,6 +749,24 @@
           "stringUnit": {
             "state": "translated",
             "value": "Multimedia"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Médias"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Medien"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Медиа"
           }
         }
       }
@@ -383,6 +785,24 @@
             "state": "translated",
             "value": "Nueva sesión"
           }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nouvelle session"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Neue Sitzung"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Новая сессия"
+          }
         }
       }
     },
@@ -399,6 +819,24 @@
           "stringUnit": {
             "state": "translated",
             "value": "Presentación"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Présentation"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Präsentation"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Презентация"
           }
         }
       }
@@ -417,6 +855,24 @@
             "state": "translated",
             "value": "Historial de presentaciones"
           }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Historique des présentations"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Präsentationsverlauf"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "История презентаций"
+          }
         }
       }
     },
@@ -433,6 +889,24 @@
           "stringUnit": {
             "state": "translated",
             "value": "Búsqueda rápida"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recherche rapide"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Schnellsuche"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Быстрый поиск"
           }
         }
       }
@@ -451,6 +925,24 @@
             "state": "translated",
             "value": "Restablecer tamaño de texto"
           }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Réinitialiser la taille du texte"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Schriftgröße zurücksetzen"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сбросить размер шрифта"
+          }
         }
       }
     },
@@ -467,6 +959,24 @@
           "stringUnit": {
             "state": "translated",
             "value": "Sesión"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Session"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sitzung"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сессия"
           }
         }
       }
@@ -485,6 +995,24 @@
             "state": "translated",
             "value": "Canciones"
           }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chants"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lieder"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Песни"
+          }
         }
       }
     },
@@ -502,6 +1030,24 @@
             "state": "translated",
             "value": "Iniciar presentación"
           }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Démarrer la présentation"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Präsentation starten"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Начать презентацию"
+          }
         }
       }
     },
@@ -518,6 +1064,2264 @@
           "stringUnit": {
             "state": "translated",
             "value": "Ayuda de TopPresenter"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aide TopPresenter"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "TopPresenter-Hilfe"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Справка TopPresenter"
+          }
+        }
+      }
+    },
+    "Image": {
+      "comment": "Media type",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Imagine"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Imagen"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Image"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bild"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Изображение"
+          }
+        }
+      }
+    },
+    "Audio": {
+      "comment": "Media type",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Audio"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Audio"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Audio"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Audio"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Аудио"
+          }
+        }
+      }
+    },
+    "Video": {
+      "comment": "Media type",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Video"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vídeo"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vidéo"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Video"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Видео"
+          }
+        }
+      }
+    },
+    "OK": {
+      "comment": "Alert button",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "OK"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "OK"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "OK"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "OK"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ОК"
+          }
+        }
+      }
+    },
+    "Ecran Nou Detectat": {
+      "comment": "Alert title",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "New Screen Detected"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nueva pantalla detectada"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nouvel écran détecté"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Neuer Bildschirm erkannt"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Обнаружен новый экран"
+          }
+        }
+      }
+    },
+    "Ecran Deconectat": {
+      "comment": "Alert title",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Screen Disconnected"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pantalla desconectada"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Écran déconnecté"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bildschirm getrennt"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Экран отключён"
+          }
+        }
+      }
+    },
+    "S-a conectat un ecran nou. Muți prezentarea pe el?": {
+      "comment": "Alert message",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A new screen was connected. Move the presentation to it?"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Se ha conectado una pantalla nueva. ¿Mover la presentación a ella?"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un nouvel écran a été connecté. Y déplacer la présentation ?"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ein neuer Bildschirm wurde angeschlossen. Präsentation dorthin verschieben?"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Подключён новый экран. Перенести на него презентацию?"
+          }
+        }
+      }
+    },
+    "Ecranul de prezentare a fost deconectat. Ieșirea este ascunsă până alegi. Ce dorești să faci?": {
+      "comment": "Alert message",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The presentation screen was disconnected. The output stays hidden until you choose. What would you like to do?"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La pantalla de presentación se ha desconectado. La salida permanece oculta hasta que elijas. ¿Qué quieres hacer?"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "L'écran de présentation a été déconnecté. La sortie reste masquée jusqu'à votre choix. Que souhaitez-vous faire ?"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Präsentationsbildschirm wurde getrennt. Die Ausgabe bleibt ausgeblendet, bis Sie wählen. Was möchten Sie tun?"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Экран презентации отключён. Вывод скрыт до вашего выбора. Что сделать?"
+          }
+        }
+      }
+    },
+    "Mută prezentarea acolo": {
+      "comment": "Alert button",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Move Presentation There"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mover la presentación allí"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Y déplacer la présentation"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Präsentation dorthin verschieben"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Перенести презентацию туда"
+          }
+        }
+      }
+    },
+    "Lasă cum e": {
+      "comment": "Alert button",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Leave As Is"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dejar como está"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Laisser tel quel"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "So belassen"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Оставить как есть"
+          }
+        }
+      }
+    },
+    "Mută pe alt ecran": {
+      "comment": "Alert button",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Move to Another Screen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mover a otra pantalla"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Déplacer vers un autre écran"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auf anderen Bildschirm verschieben"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Перенести на другой экран"
+          }
+        }
+      }
+    },
+    "Ecran Negru": {
+      "comment": "Alert button",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Black Screen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pantalla en negro"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Écran noir"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Schwarzbild"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Чёрный экран"
+          }
+        }
+      }
+    },
+    "Lasă ascuns": {
+      "comment": "Alert button",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keep Hidden"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mantener oculto"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Garder masqué"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ausgeblendet lassen"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Оставить скрытым"
+          }
+        }
+      }
+    },
+    "Oprește prezentarea": {
+      "comment": "Alert button",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stop Presentation"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Detener la presentación"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Arrêter la présentation"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Präsentation beenden"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Остановить презентацию"
+          }
+        }
+      }
+    },
+    "Drop files to import": {
+      "comment": "Drag overlay",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Trage fișiere aici pentru import"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Suelta archivos para importar"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Déposez des fichiers à importer"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dateien zum Importieren ablegen"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Перетащите файлы для импорта"
+          }
+        }
+      }
+    },
+    "Bible, Songs, PowerPoint, Images, Audio, Video": {
+      "comment": "Drag overlay subtitle",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Biblii, cântece, PowerPoint, imagini, audio, video"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Biblias, canciones, PowerPoint, imágenes, audio, vídeo"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bibles, chants, PowerPoint, images, audio, vidéo"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bibeln, Lieder, PowerPoint, Bilder, Audio, Video"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Библии, песни, PowerPoint, изображения, аудио, видео"
+          }
+        }
+      }
+    },
+    "Media Imported": {
+      "comment": "Alert",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Media importată"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Multimedia importada"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Médias importés"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Medien importiert"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Медиа импортированы"
+          }
+        }
+      }
+    },
+    "Unrecognized Files": {
+      "comment": "Alert",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fișiere nerecunoscute"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Archivos no reconocidos"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fichiers non reconnus"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nicht erkannte Dateien"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Нераспознанные файлы"
+          }
+        }
+      }
+    },
+    "Import": {
+      "comment": "Toolbar button",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Importă"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Importar"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Importer"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Importieren"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Импорт"
+          }
+        }
+      }
+    },
+    "Import Bible Module": {
+      "comment": "Toolbar tooltip",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Importă un modul biblic"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Importar módulo bíblico"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Importer un module biblique"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bibelmodul importieren"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Импортировать библейский модуль"
+          }
+        }
+      }
+    },
+    "Delete Selected Module": {
+      "comment": "Toolbar tooltip",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Șterge modulul selectat"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eliminar el módulo seleccionado"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Supprimer le module sélectionné"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ausgewähltes Modul löschen"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Удалить выбранный модуль"
+          }
+        }
+      }
+    },
+    "Import Songs": {
+      "comment": "Toolbar tooltip",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Importă cântece"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Importar canciones"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Importer des chants"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lieder importieren"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Импортировать песни"
+          }
+        }
+      }
+    },
+    "Delete Selected Collection": {
+      "comment": "Toolbar tooltip",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Șterge colecția selectată"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eliminar la colección seleccionada"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Supprimer la collection sélectionnée"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ausgewählte Sammlung löschen"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Удалить выбранную коллекцию"
+          }
+        }
+      }
+    },
+    "Add Media": {
+      "comment": "Toolbar button",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Adaugă media"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Añadir multimedia"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ajouter un média"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Medien hinzufügen"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Добавить медиа"
+          }
+        }
+      }
+    },
+    "Import media files": {
+      "comment": "Toolbar tooltip",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Importă fișiere media"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Importar archivos multimedia"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Importer des fichiers multimédias"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mediendateien importieren"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Импортировать медиафайлы"
+          }
+        }
+      }
+    },
+    "Create new schedule": {
+      "comment": "Toolbar tooltip",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Creează o sesiune nouă"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Crear una sesión nueva"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Créer une nouvelle session"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Neue Sitzung erstellen"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Создать новую сессию"
+          }
+        }
+      }
+    },
+    "Add Item": {
+      "comment": "Toolbar button",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Adaugă element"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Añadir elemento"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ajouter un élément"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Element hinzufügen"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Добавить элемент"
+          }
+        }
+      }
+    },
+    "Add item to schedule": {
+      "comment": "Toolbar tooltip",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Adaugă un element în sesiune"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Añadir un elemento a la sesión"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ajouter un élément à la session"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Element zur Sitzung hinzufügen"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Добавить элемент в сессию"
+          }
+        }
+      }
+    },
+    "New Slide": {
+      "comment": "Toolbar button",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Slide nou"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nueva diapositiva"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nouvelle diapositive"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Neue Folie"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Новый слайд"
+          }
+        }
+      }
+    },
+    "Create new slide": {
+      "comment": "Toolbar tooltip",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Creează un slide nou"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Crear una diapositiva nueva"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Créer une nouvelle diapositive"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Neue Folie erstellen"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Создать новый слайд"
+          }
+        }
+      }
+    },
+    "Caută…": {
+      "comment": "Toolbar search button",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search…"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Buscar…"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rechercher…"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Suchen…"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Поиск…"
+          }
+        }
+      }
+    },
+    "Căutare globală — cântece, versete, media, sesiuni (⌘K)": {
+      "comment": "Toolbar tooltip",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Global search — songs, verses, media, sessions (⌘K)"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Búsqueda global: canciones, versículos, multimedia, sesiones (⌘K)"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recherche globale — chants, versets, médias, sessions (⌘K)"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Globale Suche — Lieder, Verse, Medien, Sitzungen (⌘K)"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Глобальный поиск — песни, стихи, медиа, сессии (⌘K)"
+          }
+        }
+      }
+    },
+    "Toggle Black Screen": {
+      "comment": "Toolbar tooltip",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Comută ecranul negru"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alternar pantalla en negro"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Basculer l'écran noir"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Schwarzbild umschalten"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Переключить чёрный экран"
+          }
+        }
+      }
+    },
+    "Unfreeze": {
+      "comment": "Toolbar button",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dezgheață"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Descongelar"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dégeler"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fortsetzen"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Разморозить"
+          }
+        }
+      }
+    },
+    "Freeze": {
+      "comment": "Toolbar button",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Îngheață"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Congelar"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Geler"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Einfrieren"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Заморозить"
+          }
+        }
+      }
+    },
+    "Îngheață ieșirea — modifici liber fără să se vadă pe ecran": {
+      "comment": "Toolbar tooltip",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Freeze the output — edit freely without it showing on screen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Congela la salida: edita libremente sin que se vea en pantalla"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gèle la sortie — modifiez librement sans que cela s'affiche"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ausgabe einfrieren — frei bearbeiten, ohne dass es auf dem Bildschirm erscheint"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Заморозить вывод — редактируйте, не показывая на экране"
+          }
+        }
+      }
+    },
+    "Clear": {
+      "comment": "Toolbar button",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Curăță"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Limpiar"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Effacer"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Leeren"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Очистить"
+          }
+        }
+      }
+    },
+    "Edit Mode": {
+      "comment": "Toolbar button",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mod editare"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modo edición"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mode édition"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bearbeitungsmodus"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Режим правки"
+          }
+        }
+      }
+    },
+    "Toggle Edit Mode — shows layout bounds": {
+      "comment": "Toolbar tooltip",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Comută modul editare — arată marginile casetelor"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alternar modo edición: muestra los límites de las cajas"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Basculer le mode édition — affiche les limites des cadres"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bearbeitungsmodus umschalten — zeigt die Rahmengrenzen"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Режим правки — показывает границы блоков"
+          }
+        }
+      }
+    },
+    "Editor de Teme": {
+      "comment": "Toolbar button",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Theme Editor"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Editor de temas"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Éditeur de thèmes"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Themen-Editor"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Редактор тем"
+          }
+        }
+      }
+    },
+    "Deschide Editorul de Teme — casete, text, fundal, ieșire": {
+      "comment": "Toolbar tooltip",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open the Theme Editor — boxes, text, background, output"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abre el editor de temas: cajas, texto, fondo, salida"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ouvrir l'éditeur de thèmes — cadres, texte, fond, sortie"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Themen-Editor öffnen — Rahmen, Text, Hintergrund, Ausgabe"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Открыть редактор тем — блоки, текст, фон, вывод"
+          }
+        }
+      }
+    },
+    "Orthodox": {
+      "comment": "Canon badge",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ortodox"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ortodoxo"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Orthodoxe"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Orthodox"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Православный"
+          }
+        }
+      }
+    },
+    "Full": {
+      "comment": "Canon badge",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Complet"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Completo"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Complet"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vollständig"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Полный"
+          }
+        }
+      }
+    },
+    "Select Module": {
+      "comment": "Picker placeholder",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alege modulul"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seleccionar módulo"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choisir un module"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modul wählen"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Выбрать модуль"
+          }
+        }
+      }
+    },
+    "List View": {
+      "comment": "Toolbar button",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vizualizare listă"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vista de lista"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vue liste"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Listenansicht"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Списком"
+          }
+        }
+      }
+    },
+    "Grid View": {
+      "comment": "Toolbar button",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vizualizare grilă"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vista de cuadrícula"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vue grille"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rasteransicht"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сеткой"
+          }
+        }
+      }
+    },
+    "Switch to list view": {
+      "comment": "Toolbar tooltip",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Comută la listă"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cambiar a vista de lista"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Passer en vue liste"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zur Listenansicht wechseln"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Переключить на список"
+          }
+        }
+      }
+    },
+    "Switch to grid view": {
+      "comment": "Toolbar tooltip",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Comută la grilă"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cambiar a vista de cuadrícula"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Passer en vue grille"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zur Rasteransicht wechseln"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Переключить на сетку"
+          }
+        }
+      }
+    },
+    "Collection": {
+      "comment": "Toolbar picker label",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Colecție"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Colección"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Collection"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sammlung"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Коллекция"
+          }
+        }
+      }
+    },
+    "All Collections": {
+      "comment": "Picker option",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Toate colecțiile"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Todas las colecciones"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Toutes les collections"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alle Sammlungen"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Все коллекции"
+          }
+        }
+      }
+    },
+    "Refresh Screens": {
+      "comment": "Menu item",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reîmprospătează ecranele"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Actualizar pantallas"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Actualiser les écrans"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bildschirme aktualisieren"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Обновить экраны"
+          }
+        }
+      }
+    },
+    "Screens": {
+      "comment": "Toolbar button",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ecrane"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pantallas"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Écrans"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bildschirme"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Экраны"
+          }
+        }
+      }
+    },
+    "Plain Text": {
+      "comment": "Export format",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Text simplu"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Texto sin formato"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Texte brut"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nur Text"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Обычный текст"
+          }
+        }
+      }
+    },
+    "Legea / Pentateuhul": {
+      "comment": "Bible category",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The Law / Pentateuch"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La Ley / Pentateuco"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La Loi / Pentateuque"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gesetz / Pentateuch"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Закон / Пятикнижие"
+          }
+        }
+      }
+    },
+    "Cărți Istorice": {
+      "comment": "Bible category",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Historical Books"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Libros históricos"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Livres historiques"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Geschichtsbücher"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Исторические книги"
+          }
+        }
+      }
+    },
+    "Poezie și Înțelepciune": {
+      "comment": "Bible category",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Poetry and Wisdom"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Poesía y sabiduría"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Poésie et sagesse"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Poesie und Weisheit"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Поэзия и мудрость"
+          }
+        }
+      }
+    },
+    "Profeți Mari": {
+      "comment": "Bible category",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Major Prophets"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Profetas mayores"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Grands prophètes"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Große Propheten"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Великие пророки"
+          }
+        }
+      }
+    },
+    "Profeți Mici": {
+      "comment": "Bible category",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Minor Prophets"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Profetas menores"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Petits prophètes"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kleine Propheten"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Малые пророки"
+          }
+        }
+      }
+    },
+    "Evanghelii": {
+      "comment": "Bible category",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gospels"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Evangelios"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Évangiles"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Evangelien"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Евангелия"
+          }
+        }
+      }
+    },
+    "Faptele Apostolilor": {
+      "comment": "Bible category",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Acts of the Apostles"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hechos de los Apóstoles"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Actes des Apôtres"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apostelgeschichte"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Деяния апостолов"
+          }
+        }
+      }
+    },
+    "Epistolele lui Pavel": {
+      "comment": "Bible category",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pauline Epistles"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Epístolas paulinas"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Épîtres de Paul"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Paulusbriefe"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Послания Павла"
+          }
+        }
+      }
+    },
+    "Epistole Generale": {
+      "comment": "Bible category",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "General Epistles"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Epístolas generales"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Épîtres générales"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Katholische Briefe"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Соборные послания"
+          }
+        }
+      }
+    },
+    "Profeție / Apocalipsa": {
+      "comment": "Bible category",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Prophecy / Revelation"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Profecía / Apocalipsis"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Prophétie / Apocalypse"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Prophetie / Offenbarung"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Пророчество / Откровение"
+          }
+        }
+      }
+    },
+    "PREVIEW": {
+      "comment": "",
+      "localizations": {
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "PREVIZUALIZARE"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "VISTA PREVIA"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "APERÇU"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "VORSCHAU"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ПРЕДПРОСМОТР"
           }
         }
       }
