@@ -1429,6 +1429,22 @@ struct AudioControlsView: View {
     }
 }
 
+extension View {
+    /// The fixed left column of a settings row in the side panel.
+    ///
+    /// One line, always. The column was 55pt in some sections and 70pt in
+    /// others, and "Deconect.:" translates to "Disconnect:" — wider than 55 —
+    /// so it WRAPPED, putting the colon alone on a second line and pushing the
+    /// row's control out of alignment with its neighbours. A shared width keeps
+    /// the sections aligned with each other, and shrinking beats wrapping for a
+    /// label whose length is a translator's choice.
+    func settingsRowLabel() -> some View {
+        self.lineLimit(1)
+            .minimumScaleFactor(0.7)
+            .frame(width: 74, alignment: .trailing)
+    }
+}
+
 // MARK: - Settings Panel
 /// Comprehensive inline settings panel with collapsible sections.
 /// Pass `sections` to control which sections are shown for each content type.
@@ -1566,7 +1582,7 @@ struct StyleQuickSettings: View {
         HStack {
             Text(String(localized: "Linii/slide:", comment: "Setting label"))
                 .font(.caption)
-                .frame(width: 70, alignment: .trailing)
+                .settingsRowLabel()
             Stepper(value: $songMaxLines, in: 0...20) {
                 Text(songMaxLines == 0
                      ? String(localized: "Nelimitat", comment: "Setting value")
@@ -1583,7 +1599,7 @@ struct StyleQuickSettings: View {
         HStack {
             Text(String(localized: "Paranteze:", comment: "Setting label — repeat bracket"))
                 .font(.caption)
-                .frame(width: 70, alignment: .trailing)
+                .settingsRowLabel()
             Picker("", selection: $songRepeatBracket) {
                 Text(String(localized: "Fără", comment: "Repeat style")).tag("none")
                 Text("/: :/").tag("slash")
@@ -1596,7 +1612,7 @@ struct StyleQuickSettings: View {
         HStack {
             Text(String(localized: "Repetări:", comment: "Setting label — repeat count"))
                 .font(.caption)
-                .frame(width: 70, alignment: .trailing)
+                .settingsRowLabel()
             Picker("", selection: $songRepeatCount) {
                 Text(String(localized: "Fără", comment: "Repeat count")).tag("none")
                 Text("(×N)").tag("times")
@@ -1623,7 +1639,7 @@ struct StyleQuickSettings: View {
         HStack {
             Text(String(localized: "Umplere:", comment: "Setting label — fullscreen media fill"))
                 .font(.caption)
-                .frame(width: 70, alignment: .trailing)
+                .settingsRowLabel()
             Picker("", selection: $pmBinding.fullscreenVideoFillRaw) {
                 Text(String(localized: "Încadrează", comment: "Media fill — fit")).tag("fit")
                 Text(String(localized: "Umple", comment: "Media fill — fill")).tag("fill")
@@ -1644,7 +1660,7 @@ struct StyleQuickSettings: View {
         HStack {
             Text(String(localized: "Ecran:", comment: "Setting label"))
                 .font(.caption)
-                .frame(width: 55, alignment: .trailing)
+                .settingsRowLabel()
             Picker("", selection: $pmBinding.presentationScreenIndex) {
                 Text(String(localized: "Auto", comment: "Picker option")).tag(nil as Int?)
                 ForEach(Array(pm.availableScreens.enumerated()), id: \.offset) { index, screen in
@@ -1659,7 +1675,7 @@ struct StyleQuickSettings: View {
         HStack {
             Text(String(localized: "Nivel:", comment: "Setting label"))
                 .font(.caption)
-                .frame(width: 55, alignment: .trailing)
+                .settingsRowLabel()
             Picker("", selection: $pmBinding.windowLevel) {
                 Text(String(localized: "Normal", comment: "Window level option")).tag("normal")
                 Text(String(localized: "Floating", comment: "Window level option")).tag("floating")
@@ -1674,7 +1690,7 @@ struct StyleQuickSettings: View {
         HStack {
             Text(String(localized: "Deconect.:", comment: "Setting label"))
                 .font(.caption)
-                .frame(width: 55, alignment: .trailing)
+                .settingsRowLabel()
             Picker("", selection: Binding(
                 get: { pm.screenDisconnectAction.rawValue },
                 set: { pm.screenDisconnectAction = PresentationManager.ScreenDisconnectAction(rawValue: $0) ?? .ask }
@@ -1720,7 +1736,7 @@ struct StyleQuickSettings: View {
             if pm.contentOptions(for: "bible").interlinearModeRaw != "off" {
                 HStack {
                     Text("")
-                        .frame(width: 55)
+                        .settingsRowLabel()
                     Toggle(String(localized: "Afișează interliniar (grilă)", comment: "Setting label"), isOn: $interlinearLiveEnabled)
                         .font(.caption)
                         .controlSize(.small)

@@ -272,9 +272,40 @@ struct MainControlView: View {
             presentationToolbarItems
         }
         .toolbarRole(.editor)
+        .background(ToolbarDisplayModeConfigurator(
+            toolbarID: appState.selectedSidebarItem.rawValue
+        ))
     }
 
     // MARK: - Drag & Drop
+
+    /// New toolbars start showing icons AND labels.
+    ///
+    /// The toolbar id is per-module (see above), so every module owns a separate
+    /// persisted configuration — and each one started at AppKit's icon-only
+    /// default. Choosing "Icon and Text" once fixed Bible and left Songs, Media,
+    /// Schedule and Slides untouched, which reads as the setting not sticking.
+    ///
+    /// A DEFAULT, not a lock: it seeds each toolbar once and records that, so a
+    /// deliberate change afterwards is never overwritten.
+    private struct ToolbarDisplayModeConfigurator: NSViewRepresentable {
+        let toolbarID: String
+
+        func makeNSView(context: Context) -> NSView { NSView(frame: .zero) }
+
+        func updateNSView(_ nsView: NSView, context: Context) {
+            let id = toolbarID
+            // The NSToolbar is attached after SwiftUI lays this out, so reaching
+            // for it synchronously finds nothing.
+            DispatchQueue.main.async {
+                guard let toolbar = nsView.window?.toolbar else { return }
+                let key = "tp_toolbarDisplayModeSeeded_\(id)"
+                guard !UserDefaults.standard.bool(forKey: key) else { return }
+                UserDefaults.standard.set(true, forKey: key)
+                toolbar.displayMode = .iconAndLabel
+            }
+        }
+    }
 
     private var dragTargetOverlay: some View {
         ZStack {

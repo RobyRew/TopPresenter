@@ -131,6 +131,33 @@ final class BibleBook {
     var sortedChapters: [BibleChapter] {
         chapters.sorted { $0.chapterNumber < $1.chapterNumber }
     }
+
+    /// A short label for this book, for grids and columns too narrow for the
+    /// full name.
+    ///
+    /// Modules carry `abbreviation` only when their source format had one, and
+    /// most imports do not, so it cannot be relied on — a derived form keeps the
+    /// compact views usable on every module rather than only on well-tagged ones.
+    /// Ordinal prefixes are kept ("1 Împărați" → "1Împ", not "Împ"), because
+    /// dropping them would collide 1/2 Samuel, 1/2/3 Ioan and the rest.
+    var displayAbbreviation: String {
+        let trimmed = abbreviation.trimmingCharacters(in: .whitespaces)
+        if !trimmed.isEmpty { return trimmed }
+        return Self.deriveAbbreviation(from: name)
+    }
+
+    /// nonisolated: called from @Model accessors, which are nonisolated under
+    /// Swift 6, and it is pure string math.
+    nonisolated static func deriveAbbreviation(from name: String) -> String {
+        let words = name.split(separator: " ", omittingEmptySubsequences: true)
+        guard let last = words.last else { return name }
+        // A leading ordinal ("1", "2", "III") stays glued to the stem.
+        let ordinal = words.count > 1 && words[0].allSatisfy({ $0.isNumber || $0 == "I" || $0 == "V" })
+            ? String(words[0])
+            : ""
+        let stem = last.prefix(ordinal.isEmpty ? 4 : 3)
+        return ordinal + stem
+    }
 }
 
 // MARK: - Bible Chapter

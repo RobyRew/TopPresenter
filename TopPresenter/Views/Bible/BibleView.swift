@@ -339,6 +339,8 @@ func projectBibleVerse(_ verse: BibleVerse, libraryManager: LibraryManager,
 struct BibleBooksGridPane: View {
     @Environment(LibraryManager.self) private var libraryManager
     @AppStorage("showBookCategoryColors") private var showBookCategoryColors: Bool = true
+    /// Compact grid: short labels at a larger size. Settings → Biblie.
+    @AppStorage("bibleBooksAbbreviated") private var abbreviated: Bool = false
 
     var body: some View {
         ScrollView {
@@ -371,7 +373,7 @@ struct BibleBooksGridPane: View {
                 .textCase(.uppercase)
                 .foregroundStyle(.tertiary)
                 .padding(.leading, 2)
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 86), spacing: 4)], spacing: 4) {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: abbreviated ? 58 : 86), spacing: 4)], spacing: 4) {
                 ForEach(books) { book in
                     bookCell(book)
                 }
@@ -385,12 +387,15 @@ struct BibleBooksGridPane: View {
         return Button {
             selectBookOpeningFirstChapter(book, in: libraryManager)
         } label: {
-            Text(book.name)
-                .font(.system(size: 11, weight: .medium))
+            // Abbreviated mode trades the full name for a bigger, denser grid:
+            // the short label fits at a size worth reading across the room, and
+            // the whole canon needs far less scrolling.
+            Text(abbreviated ? book.displayAbbreviation : book.name)
+                .font(.system(size: abbreviated ? 15 : 11, weight: abbreviated ? .semibold : .medium))
                 .lineLimit(1)
                 .minimumScaleFactor(0.65)
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 6)
+                .padding(.vertical, abbreviated ? 8 : 6)
                 .padding(.horizontal, 4)
                 .background(
                     isSelected
@@ -465,6 +470,21 @@ struct BibleNavigationPanel: View {
     }
 
     private func bookRow(_ book: BibleBook) -> some View {
+        // Three layouts, richest first: ViewThatFits picks the first whose IDEAL
+        // width fits the column, so the name is only shortened once it genuinely
+        // has nowhere to go. Truncating ("Cântarea Cântă…") tells the operator
+        // less than an abbreviation does in the same pixels.
+        ViewThatFits(in: .horizontal) {
+            bookRowContent(book, label: book.name, showsCategoryLabel: true)
+            bookRowContent(book, label: book.name, showsCategoryLabel: false)
+            bookRowContent(book, label: book.displayAbbreviation, showsCategoryLabel: false)
+        }
+        .tag(book.id)
+        .contentShape(Rectangle())
+        .help(book.name)
+    }
+
+    private func bookRowContent(_ book: BibleBook, label: String, showsCategoryLabel: Bool) -> some View {
         let category = BibleBookCategory.from(bookNumber: book.bookNumber)
         return HStack(spacing: 8) {
             // Color indicator dot (conditional)
@@ -473,13 +493,18 @@ struct BibleNavigationPanel: View {
                     .fill(category.color)
                     .frame(width: 10, height: 10)
             }
-            Text(book.name)
+            // fixedSize so a candidate cannot "fit" by truncating itself — that
+            // would make ViewThatFits stop at the first one every time.
+            Text(label)
                 .lineLimit(1)
-            Spacer()
-            if showBookCategoryColors && showBookCategoryLabels {
+                .fixedSize(horizontal: true, vertical: false)
+            Spacer(minLength: 6)
+            if showBookCategoryColors && showBookCategoryLabels && showsCategoryLabel {
                 Text(category.localizedName)
                     .font(.system(size: 9))
                     .foregroundStyle(category.darkColor)
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
                     .padding(.horizontal, 5)
                     .padding(.vertical, 2)
                     .background(category.color.opacity(0.2), in: Capsule())
@@ -487,9 +512,8 @@ struct BibleNavigationPanel: View {
             Text("\(book.chapters.count)")
                 .font(.caption)
                 .foregroundStyle(.secondary)
+                .fixedSize(horizontal: true, vertical: false)
         }
-        .tag(book.id)
-        .contentShape(Rectangle())
     }
 
 }
@@ -502,19 +526,41 @@ struct BibleChaptersPanel: View {
     /// exactly that many columns (list mode's narrow right column uses 2).
     var fixedColumns: Int? = nil
 
+    private enum CountStyle { case full, numberOnly }
+
+    @ViewBuilder
+    private func chaptersHeader(name: KeyPath<BibleBook, String>, countStyle: CountStyle) -> some View {
+        HStack(spacing: 6) {
+            Text(libraryManager.selectedBook?[keyPath: name]
+                 ?? String(localized: "Chapters", comment: "Section title"))
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
+            Spacer(minLength: 6)
+            if let book = libraryManager.selectedBook {
+                Text(countStyle == .full
+                     ? String(localized: "\(book.chapters.count) capitole", comment: "Chapter count")
+                     : "\(book.chapters.count)")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.tertiary)
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
+            }
+        }
+    }
+
     var body: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 6) {
-                Text(libraryManager.selectedBook?.name ?? String(localized: "Chapters", comment: "Section title"))
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                Spacer()
-                if let book = libraryManager.selectedBook {
-                    Text(String(localized: "\(book.chapters.count) capitole", comment: "Chapter count"))
-                        .font(.system(size: 10))
-                        .foregroundStyle(.tertiary)
-                }
+            // In list mode this header sits over a two-column strip, where the
+            // full name truncated to "1 Împă…" AND "22 chapters" wrapped onto a
+            // second line — a count broken across two lines reads as two facts.
+            // Each candidate keeps the count on ONE line and gives up detail
+            // instead: full name → abbreviation → bare number.
+            ViewThatFits(in: .horizontal) {
+                chaptersHeader(name: \.name, countStyle: .full)
+                chaptersHeader(name: \.displayAbbreviation, countStyle: .full)
+                chaptersHeader(name: \.displayAbbreviation, countStyle: .numberOnly)
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 6)

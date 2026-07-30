@@ -30639,6 +30639,129 @@
           }
         }
       }
+    },
+    "Grilă cărți" : {
+      "comment" : "Settings section",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bücherraster"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Book grid"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cuadrícula de libros"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Grille des livres"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Grilă cărți"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сетка книг"
+          }
+        }
+      }
+    },
+    "Nume prescurtate, text mai mare" : {
+      "comment" : "Setting label",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kurznamen, größerer Text"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abbreviated names, bigger text"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nombres abreviados, texto más grande"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Noms abrégés, texte plus grand"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nume prescurtate, text mai mare"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сокращённые названия, крупный текст"
+          }
+        }
+      }
+    },
+    "Butoanele arată „Gen”, „1Împ” în loc de numele întreg, la o dimensiune mult mai lizibilă — mai multe cărți pe ecran, mai puțin derulat. Numele complet rămâne în tooltip." : {
+      "comment" : "Setting hint",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Schaltflächen zeigen „Gen“, „1Kön“ statt des vollen Namens, in deutlich besser lesbarer Größe — mehr Bücher auf dem Bildschirm, weniger Scrollen. Der volle Name bleibt im Tooltip."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Buttons show “Gen”, “1Kgs” instead of the full name, at a far more readable size — more books on screen, less scrolling. The full name stays in the tooltip."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los botones muestran «Gén», «1Re» en lugar del nombre completo, a un tamaño mucho más legible: más libros en pantalla y menos desplazamiento. El nombre completo se mantiene en el tooltip."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les boutons affichent « Gen », « 1Rois » au lieu du nom complet, à une taille bien plus lisible — plus de livres à l’écran, moins de défilement. Le nom complet reste dans l’infobulle."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Butoanele arată „Gen”, „1Împ” în loc de numele întreg, la o dimensiune mult mai lizibilă — mai multe cărți pe ecran, mai puțin derulat. Numele complet rămâne în tooltip."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Кнопки показывают «Быт», «1Цар» вместо полного названия, гораздо более читаемым размером — больше книг на экране, меньше прокрутки. Полное название остаётся в подсказке."
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

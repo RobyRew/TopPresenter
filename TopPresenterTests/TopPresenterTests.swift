@@ -3708,6 +3708,74 @@ struct SpotlightIdentifierTests {
     }
 }
 
+// MARK: - Book abbreviations (compact grid + narrow columns)
+//
+// Most modules carry no `abbreviation` — the field exists only when the source
+// format had one — so the compact views cannot depend on it and derive a label
+// instead. What matters is that derived labels stay DISTINCT: an abbreviation
+// that collides is worse than a truncation, because it looks authoritative.
+
+struct BookAbbreviationTests {
+
+    @Test func aDerivedAbbreviationKeepsItsOrdinal() {
+        // 1/2 Samuel, 1/2 Împărați, 1/2/3 Ioan all share a stem. Dropping the
+        // ordinal would render them identically in the grid.
+        #expect(BibleBook.deriveAbbreviation(from: "1 Împărați") == "1Împ")
+        #expect(BibleBook.deriveAbbreviation(from: "2 Împărați") == "2Împ")
+        #expect(BibleBook.deriveAbbreviation(from: "1 Samuel") == "1Sam")
+        #expect(BibleBook.deriveAbbreviation(from: "2 Samuel") == "2Sam")
+        #expect(BibleBook.deriveAbbreviation(from: "1 Ioan") == "1Ioa")
+        #expect(BibleBook.deriveAbbreviation(from: "3 Ioan") == "3Ioa")
+    }
+
+    @Test func ordinalBooksStayDistinctFromEachOther() {
+        let names = ["1 Împărați", "2 Împărați", "1 Cronici", "2 Cronici",
+                     "1 Samuel", "2 Samuel", "1 Ioan", "2 Ioan", "3 Ioan",
+                     "1 Corinteni", "2 Corinteni", "1 Petru", "2 Petru",
+                     "1 Tesaloniceni", "2 Tesaloniceni", "1 Timotei", "2 Timotei"]
+        let derived = names.map { BibleBook.deriveAbbreviation(from: $0) }
+        #expect(Set(derived).count == names.count, "two books abbreviate the same: \(derived)")
+    }
+
+    @Test func aSingleWordBookUsesItsOwnStem() {
+        #expect(BibleBook.deriveAbbreviation(from: "Geneza") == "Gene")
+        #expect(BibleBook.deriveAbbreviation(from: "Exodul") == "Exod")
+        #expect(BibleBook.deriveAbbreviation(from: "Apocalipsa") == "Apoc")
+    }
+
+    @Test func aMultiWordBookAbbreviatesOnItsLastWord() {
+        // "Cântarea Cântărilor" and "Faptele Apostolilor" are the two that blow
+        // out the grid; the distinguishing word is the last one.
+        #expect(BibleBook.deriveAbbreviation(from: "Cântarea Cântărilor") == "Cânt")
+        #expect(BibleBook.deriveAbbreviation(from: "Faptele Apostolilor") == "Apos")
+    }
+
+    @Test func aShortNameIsLeftAlone() {
+        // Shorter than the stem length: prefix() must not pad or crash.
+        #expect(BibleBook.deriveAbbreviation(from: "Iov") == "Iov")
+        #expect(BibleBook.deriveAbbreviation(from: "Ezra") == "Ezra")
+        #expect(BibleBook.deriveAbbreviation(from: "") == "")
+    }
+
+    @Test func aModuleSuppliedAbbreviationWins() {
+        // When the source format DID carry one, it is authoritative — the
+        // translator's own short form beats anything derived from the name.
+        let book = BibleBook(name: "Cântarea Cântărilor", bookNumber: 22,
+                             testament: "OT", abbreviation: "Cânt.C")
+        #expect(book.displayAbbreviation == "Cânt.C")
+
+        let untagged = BibleBook(name: "Cântarea Cântărilor", bookNumber: 22, testament: "OT")
+        #expect(untagged.displayAbbreviation == "Cânt")
+    }
+
+    @Test func aBlankAbbreviationFallsBackRatherThanShowingNothing() {
+        // Some importers write "" or "   " into the field; an empty grid cell
+        // would be worse than a derived label.
+        let book = BibleBook(name: "Geneza", bookNumber: 1, testament: "OT", abbreviation: "   ")
+        #expect(book.displayAbbreviation == "Gene")
+    }
+}
+
 // MARK: - Bible Reference Parser Tests
 
 struct BibleReferenceParserTests {

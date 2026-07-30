@@ -282,12 +282,21 @@ struct BibleSettingsTab: View {
     @AppStorage("bibleShowFootnotes") private var showFootnotes: Bool = false
     @AppStorage("showBookCategoryColors") private var showBookCategoryColors: Bool = true
     @AppStorage("showBookCategoryLabels") private var showBookCategoryLabels: Bool = true
+    @AppStorage("bibleBooksAbbreviated") private var booksAbbreviated: Bool = false
 
     var body: some View {
         Form {
             Section(String(localized: "Module", comment: "Settings section")) {
                 Toggle(String(localized: "Selectează automat primul modul", comment: "Setting label"), isOn: $autoSelectFirstModule)
                 Toggle(String(localized: "Reține ultimul modul folosit", comment: "Setting label"), isOn: $rememberLastModule)
+            }
+
+            Section(String(localized: "Grilă cărți", comment: "Settings section")) {
+                Toggle(String(localized: "Nume prescurtate, text mai mare", comment: "Setting label"), isOn: $booksAbbreviated)
+                Text(String(localized: "Butoanele arată „Gen”, „1Împ” în loc de numele întreg, la o dimensiune mult mai lizibilă — mai multe cărți pe ecran, mai puțin derulat. Numele complet rămâne în tooltip.", comment: "Setting hint"))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
             Section(String(localized: "Conținut", comment: "Settings section")) {
