@@ -2543,6 +2543,7 @@
     },
     "Afișează / ascunde caseta" : {
       "comment" : "Tooltip",
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -2898,6 +2899,9 @@
           }
         }
       }
+    },
+    "Alege o temă pentru a o exporta" : {
+      "comment" : "Tooltip"
     },
     "Alege pachete .tptheme — sau un folder care le conține" : {
       "comment" : "Import panel message",
@@ -3873,6 +3877,9 @@
           }
         }
       }
+    },
+    "Ascunde caseta" : {
+      "comment" : "Tooltip"
     },
     "Ascunde Ieșirea" : {
       "comment" : "Menu item",
@@ -6034,6 +6041,12 @@
           }
         }
       }
+    },
+    "Caseta este ascunsă — apasă pentru a o afișa" : {
+      "comment" : "Tooltip"
+    },
+    "Casetă lipsă (%lld)" : {
+      "comment" : "Restore removed built-in casete"
     },
     "Casetă Media" : {
       "comment" : "Add media button",
@@ -11415,6 +11428,9 @@
         }
       }
     },
+    "Exportă tema activă ca pachet .tptheme" : {
+      "comment" : "Tooltip"
+    },
     "Exportă tema ca pachet .tptheme (include toate fișierele media)" : {
       "comment" : "Export panel message",
       "localizations" : {
@@ -11508,7 +11524,7 @@
       }
     },
     "Exportul a eșuat: %@" : {
-      "comment" : "Export error",
+      "comment" : "Export error\nExport result — failure",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -17711,6 +17727,9 @@
         }
       }
     },
+    "Nicio temă activă de exportat." : {
+      "comment" : "Export result — nothing selected"
+    },
     "Nicio temă încă — importă pachete .tptheme cu ⤓ sau salvează aspectul curent cu +." : {
       "comment" : "Theme gallery empty state",
       "localizations" : {
@@ -21077,6 +21096,9 @@
           }
         }
       }
+    },
+    "Readaugă o casetă integrată ștearsă — layoutul ei se păstrează" : {
+      "comment" : "Tooltip"
     },
     "Reading file..." : {
       "comment" : "Import progress",
@@ -25666,6 +25688,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Etichetă"
+          }
+        }
+      }
+    },
+    "Tema „%@” a fost exportată în %@." : {
+      "comment" : "Export result — success",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Tema „%1$@” a fost exportată în %2$@."
           }
         }
       }

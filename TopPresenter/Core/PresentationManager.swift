@@ -2450,6 +2450,77 @@ final class PresentationManager {
         loadContentBackgroundImages()
     }
 
+    /// Builds ONE new theme out of several: Bible's look from Galaxie, Songs' from
+    /// Default, and so on.
+    ///
+    /// The result is a plain `Theme` — a full-fledged one. It COPIES the chosen
+    /// profiles rather than referencing them, so editing Galaxie afterwards leaves
+    /// this theme alone, and it exports, imports, applies and deletes like any
+    /// other. There is no separate "pack" entity and no second file extension:
+    /// a combination IS a theme, saved as `.tptheme`.
+    ///
+    /// `picks` maps profile key → source theme. Keys left out take the CURRENT
+    /// look for that presenter, so combining two presenters does not silently
+    /// reset the other two.
+    ///
+    /// The payload-level globals (base font, size, shadow, tracking…) are shared by
+    /// every presenter, so they can only come from one place: the `base` theme, or
+    /// the first pick in `profileKeys` order. It matters visually — a box whose
+    /// style is not customised inherits them — so it is explicit rather than
+    /// whichever dictionary key happened to come first.
+    @discardableResult
+    func combineThemes(picks: [String: UUID], base: UUID? = nil, name: String? = nil) -> Theme? {
+        let resolvedPicks = picks.filter { Self.profileKeys.contains($0.key) }
+        guard !resolvedPicks.isEmpty else { return nil }
+
+        let baseID = base
+            ?? Self.profileKeys.compactMap { resolvedPicks[$0] }.first
+        guard let baseID,
+              let baseTheme = themes.first(where: { $0.id == baseID }) else { return nil }
+
+        // Start from the base theme so the globals are its own, then swap in each
+        // chosen presenter's profile.
+        var payload = baseTheme.payload
+        var sourceNames: [String] = []
+        for key in Self.profileKeys {
+            guard let sourceID = resolvedPicks[key] else {
+                // Not chosen: keep what this presenter looks like right now.
+                payload.profiles[key] = profile(key)
+                continue
+            }
+            guard let source = themes.first(where: { $0.id == sourceID }) else { continue }
+            payload.profiles[key] = source.payload.profiles[key] ?? .defaultProfile(for: key)
+            if !sourceNames.contains(source.name) { sourceNames.append(source.name) }
+        }
+
+        let combined = Theme(
+            name: uniqueThemeName(name ?? Self.combinedThemeName(from: sourceNames)),
+            formatRaw: "all",
+            payload: payload
+        )
+        themes.append(combined)
+        return combined
+    }
+
+    /// "Galaxie + Default". One source means it is a copy, not a combination.
+    static func combinedThemeName(from sources: [String]) -> String {
+        switch sources.count {
+        case 0: return String(localized: "Temă combinată", comment: "Default name for a combined theme")
+        case 1: return sources[0] + " " + String(localized: "(copie)", comment: "Combined theme name — single source")
+        default: return sources.joined(separator: " + ")
+        }
+    }
+
+    /// Keeps names distinct without refusing the operation — a clashing name would
+    /// otherwise leave two indistinguishable cards in the gallery.
+    func uniqueThemeName(_ desired: String) -> String {
+        let existing = Set(themes.map(\.name))
+        guard existing.contains(desired) else { return desired }
+        var n = 2
+        while existing.contains("\(desired) \(n)") { n += 1 }
+        return "\(desired) \(n)"
+    }
+
     /// Clears a presenter's pin, sending it back to the global theme.
     func clearThemeAssignment(for key: String? = nil) {
         themeAssignments[resolvedKey(key)] = nil

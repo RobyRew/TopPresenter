@@ -5147,3 +5147,125 @@ struct RemoteExtractionTests {
                 "media must come back with MEDIA's defaults, not another presenter's")
     }
 }
+
+// MARK: - Combining themes
+//
+// A combination IS a theme — a plain, full-fledged one. It COPIES the chosen
+// profiles, so editing a source afterwards leaves it alone, and it exports,
+// imports, applies and deletes like any other. There is no separate pack entity
+// and no second file extension.
+@MainActor struct CombinedThemeTests {
+
+    private func sourceThemes(_ pm: PresentationManager) -> (UUID, UUID) {
+        for key in PresentationManager.profileKeys {
+            pm.setStaticText("galaxie-\(key)", for: .reference, in: key)
+        }
+        let galaxie = pm.saveCurrentAsTheme(named: "Galaxie").id
+        for key in PresentationManager.profileKeys {
+            pm.setStaticText("default-\(key)", for: .reference, in: key)
+        }
+        let standard = pm.saveCurrentAsTheme(named: "Default").id
+        return (galaxie, standard)
+    }
+
+    @Test func itTakesEachPresenterFromItsChosenSource() throws {
+        let pm = makeTestManager()
+        let (galaxie, standard) = sourceThemes(pm)
+
+        let combined = try #require(pm.combineThemes(picks: ["bible": galaxie, "song": standard]))
+
+        #expect(combined.payload.profiles["bible"]?.staticTexts[TextBoxSection.reference.rawValue] == "galaxie-bible")
+        #expect(combined.payload.profiles["song"]?.staticTexts[TextBoxSection.reference.rawValue] == "default-song")
+    }
+
+    @Test func itIsANormalThemeInTheLibrary() throws {
+        let pm = makeTestManager()
+        let (galaxie, standard) = sourceThemes(pm)
+        let combined = try #require(pm.combineThemes(picks: ["bible": galaxie, "song": standard]))
+
+        #expect(pm.themes.contains { $0.id == combined.id })
+        #expect(combined.id != galaxie && combined.id != standard, "a new theme gets a new id")
+        // Applies and deletes like any other.
+        pm.applyTheme(id: combined.id)
+        #expect(pm.activeThemeID == combined.id)
+        #expect(pm.deleteTheme(id: combined.id).isEmpty)
+    }
+
+    @Test func itCopiesRatherThanReferences() throws {
+        let pm = makeTestManager()
+        let (galaxie, standard) = sourceThemes(pm)
+        let combined = try #require(pm.combineThemes(picks: ["bible": galaxie, "song": standard]))
+
+        // Edit the SOURCE afterwards. A reference would follow; a copy must not.
+        let i = try #require(pm.themes.firstIndex(where: { $0.id == galaxie }))
+        pm.themes[i].payload.profiles["bible"]?.staticTexts[TextBoxSection.reference.rawValue] = "edited"
+
+        let stored = try #require(pm.themes.first(where: { $0.id == combined.id }))
+        #expect(stored.payload.profiles["bible"]?.staticTexts[TextBoxSection.reference.rawValue] == "galaxie-bible")
+    }
+
+    @Test func theNameIsBuiltFromItsSourcesAndStaysUnique() throws {
+        let pm = makeTestManager()
+        let (galaxie, standard) = sourceThemes(pm)
+
+        let first = try #require(pm.combineThemes(picks: ["bible": galaxie, "song": standard]))
+        #expect(first.name == "Galaxie + Default")
+
+        // Combining the same pair again must not leave two identical cards.
+        let second = try #require(pm.combineThemes(picks: ["bible": galaxie, "song": standard]))
+        #expect(second.name == "Galaxie + Default 2")
+
+        // And it can be renamed like any theme.
+        pm.renameTheme(id: second.id, to: "Duminică")
+        #expect(pm.themes.first(where: { $0.id == second.id })?.name == "Duminică")
+    }
+
+    @Test func presentersNotChosenKeepTheirCurrentLook() throws {
+        let pm = makeTestManager()
+        let (galaxie, _) = sourceThemes(pm)
+        pm.setStaticText("live-media", for: .reference, in: "media")
+
+        let combined = try #require(pm.combineThemes(picks: ["bible": galaxie]))
+
+        // Combining two presenters must not silently reset the other two.
+        #expect(combined.payload.profiles["media"]?.staticTexts[TextBoxSection.reference.rawValue] == "live-media")
+    }
+
+    @Test func theGlobalsComeFromAnExplicitBase() throws {
+        let pm = makeTestManager()
+        pm.fontSize = 40
+        let a = pm.saveCurrentAsTheme(named: "Big").id
+        pm.fontSize = 18
+        let b = pm.saveCurrentAsTheme(named: "Small").id
+
+        // Shared text globals can only come from one source, so it is stated
+        // rather than left to dictionary ordering.
+        let fromA = try #require(pm.combineThemes(picks: ["bible": a, "song": b], base: a))
+        #expect(fromA.payload.fontSize == 40)
+        let fromB = try #require(pm.combineThemes(picks: ["bible": a, "song": b], base: b))
+        #expect(fromB.payload.fontSize == 18)
+    }
+
+    @Test func itSurvivesExportAndImportLikeAnyTheme() throws {
+        let pm = makeTestManager()
+        let (galaxie, standard) = sourceThemes(pm)
+        let combined = try #require(pm.combineThemes(picks: ["bible": galaxie, "song": standard]))
+
+        let package = FileManager.default.temporaryDirectory
+            .appendingPathComponent("tp-combined-\(UUID().uuidString).tptheme")
+        defer { try? FileManager.default.removeItem(at: package) }
+        try pm.exportTheme(id: combined.id, to: package)
+
+        let target = makeTestManager()
+        let imported = try target.importTheme(from: package)
+        #expect(imported.payload.profiles["bible"]?.staticTexts[TextBoxSection.reference.rawValue] == "galaxie-bible")
+        #expect(imported.payload.profiles["song"]?.staticTexts[TextBoxSection.reference.rawValue] == "default-song")
+    }
+
+    @Test func nonsensicalInputIsRefusedRatherThanGuessed() {
+        let pm = makeTestManager()
+        #expect(pm.combineThemes(picks: [:]) == nil)
+        #expect(pm.combineThemes(picks: ["bible": UUID()]) == nil, "unknown source theme")
+        #expect(pm.combineThemes(picks: ["nope": UUID()]) == nil, "unknown profile key")
+    }
+}
