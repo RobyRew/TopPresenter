@@ -4992,3 +4992,158 @@ struct RemoteExtractionTests {
         #expect(imported.payload.profiles["bible"]?.removedSections == [TextBoxSection.subtitle.rawValue])
     }
 }
+
+// MARK: - Per-presenter themes (B1)
+//
+// Off by default so nothing changes for anyone who does not ask for it. On, each
+// presenter resolves its own theme and anything unassigned still falls back to the
+// global one — turning the switch on is never a cliff.
+@MainActor struct PerPresenterThemeTests {
+
+    private func twoThemes(_ pm: PresentationManager) -> (UUID, UUID) {
+        pm.setStaticText("look-A", for: .reference, in: "bible")
+        pm.setStaticText("look-A", for: .reference, in: "song")
+        let a = pm.saveCurrentAsTheme(named: "A").id
+        pm.setStaticText("look-B", for: .reference, in: "bible")
+        pm.setStaticText("look-B", for: .reference, in: "song")
+        let b = pm.saveCurrentAsTheme(named: "B").id
+        return (a, b)
+    }
+
+    @Test func unifiedIsTheDefaultAndBehavesAsBefore() {
+        let pm = makeTestManager()
+        #expect(pm.usesPerPresenterThemes == false)
+        let (a, _) = twoThemes(pm)
+
+        pm.applyTheme(id: a)
+
+        // One theme dressed every presenter, and it is the global one.
+        #expect(pm.activeThemeID == a)
+        #expect(pm.staticText(for: .reference, in: "bible") == "look-A")
+        #expect(pm.staticText(for: .reference, in: "song") == "look-A")
+        #expect(pm.themeAssignments.isEmpty)
+    }
+
+    @Test func unassignedPresentersFallBackToTheGlobalTheme() {
+        let pm = makeTestManager()
+        let (a, b) = twoThemes(pm)
+        pm.activeThemeID = a
+        pm.usesPerPresenterThemes = true
+        pm.themeAssignments["song"] = b
+
+        #expect(pm.resolvedThemeID(for: "song") == b)
+        #expect(pm.resolvedThemeID(for: "bible") == a)   // no assignment → global
+        #expect(pm.resolvedThemeID(for: "media") == a)
+    }
+
+    @Test func theSwitchOnlyChangesResolutionNotStoredState() {
+        let pm = makeTestManager()
+        let (a, b) = twoThemes(pm)
+        pm.activeThemeID = a
+        pm.themeAssignments["song"] = b
+
+        // Off: assignments are remembered but ignored, so flipping back and forth
+        // cannot lose a mixed setup.
+        pm.usesPerPresenterThemes = false
+        #expect(pm.resolvedThemeID(for: "song") == a)
+        pm.usesPerPresenterThemes = true
+        #expect(pm.resolvedThemeID(for: "song") == b)
+    }
+
+    // 1a
+    @Test func inPerPresenterModeApplyingDressesOnlyTheActivePresenter() {
+        let pm = makeTestManager()
+        let (a, b) = twoThemes(pm)
+        pm.applyTheme(id: a)                 // unified: everyone on A
+        pm.usesPerPresenterThemes = true
+        pm.activeProfileKey = "song"
+
+        pm.applyTheme(id: b)
+
+        #expect(pm.staticText(for: .reference, in: "song") == "look-B")
+        #expect(pm.staticText(for: .reference, in: "bible") == "look-A", "Bible must not move")
+        #expect(pm.themeAssignments["song"] == b)
+        #expect(pm.themeAssignments["bible"] == nil)
+        #expect(pm.activeThemeID == a, "the global theme is unchanged")
+    }
+
+    @Test func aMixedLookIsWhatTheFeatureIsFor() {
+        let pm = makeTestManager()
+        let (a, b) = twoThemes(pm)
+        pm.usesPerPresenterThemes = true
+
+        pm.applyTheme(id: a, toProfileOnly: "bible")
+        pm.applyTheme(id: b, toProfileOnly: "song")
+
+        #expect(pm.staticText(for: .reference, in: "bible") == "look-A")
+        #expect(pm.staticText(for: .reference, in: "song") == "look-B")
+    }
+
+    @Test func applyingAThemeThatLacksThePresenterLeavesItAlone() {
+        let pm = makeTestManager()
+        pm.setStaticText("mine", for: .reference, in: "media")
+        var partial = pm.saveCurrentAsTheme(named: "Partial")
+        partial.payload.profiles["media"] = nil
+        if let i = pm.themes.firstIndex(where: { $0.id == partial.id }) { pm.themes[i] = partial }
+
+        pm.applyTheme(id: partial.id, toProfileOnly: "media")
+
+        #expect(pm.staticText(for: .reference, in: "media") == "mine")
+        #expect(pm.themeAssignments["media"] == nil, "a no-op must not claim the pin")
+    }
+
+    @Test func clearingAnAssignmentReturnsToTheGlobalTheme() {
+        let pm = makeTestManager()
+        let (a, b) = twoThemes(pm)
+        pm.activeThemeID = a
+        pm.usesPerPresenterThemes = true
+        pm.themeAssignments["song"] = b
+
+        pm.clearThemeAssignment(for: "song")
+        #expect(pm.resolvedThemeID(for: "song") == a)
+    }
+
+    // 4b
+    @Test func aThemeAPresenterIsPinnedToCannotBeDeleted() {
+        let pm = makeTestManager()
+        let (a, b) = twoThemes(pm)
+        pm.usesPerPresenterThemes = true
+        pm.themeAssignments["song"] = b
+        pm.themeAssignments["text"] = b
+
+        let blockers = pm.deleteTheme(id: b)
+
+        #expect(blockers == ["song", "text"], "must name who is using it")
+        #expect(pm.themes.contains { $0.id == b }, "and must not delete it")
+
+        // An unpinned one still deletes.
+        #expect(pm.deleteTheme(id: a).isEmpty)
+        #expect(!pm.themes.contains { $0.id == a })
+    }
+
+    // 2b
+    @Test func importFillsMissingPresentersFromTheirDefaults() throws {
+        let source = makeTestManager()
+        _ = source.saveCurrentAsTheme(named: "Partial")
+        guard var saved = source.themes.first(where: { $0.name == "Partial" }) else { return }
+        saved.payload.profiles["media"] = nil
+        saved.payload.profiles["text"] = nil
+        if let i = source.themes.firstIndex(where: { $0.id == saved.id }) { source.themes[i] = saved }
+
+        let package = FileManager.default.temporaryDirectory
+            .appendingPathComponent("tp-partial-\(UUID().uuidString).tptheme")
+        defer { try? FileManager.default.removeItem(at: package) }
+        try source.exportTheme(id: saved.id, to: package)
+
+        let target = makeTestManager()
+        let imported = try target.importTheme(from: package)
+
+        // Absent reads as "nothing configured" downstream and would blank the
+        // presenter, so the gap is filled with that presenter's own defaults.
+        for key in PresentationManager.profileKeys {
+            #expect(imported.payload.profiles[key] != nil, "\(key) missing after import")
+        }
+        #expect(imported.payload.profiles["media"]?.visibility[TextBoxSection.reference.rawValue] == false,
+                "media must come back with MEDIA's defaults, not another presenter's")
+    }
+}

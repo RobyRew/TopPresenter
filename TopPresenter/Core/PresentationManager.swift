@@ -2398,6 +2398,63 @@ final class PresentationManager {
         didSet { defaults.set(activeThemeID?.uuidString ?? "", forKey: "pm_activeThemeID") }
     }
 
+    // MARK: - Per-presenter themes
+    //
+    // Off by default, so nothing changes for anyone who does not ask for it: one
+    // theme dresses every presenter, exactly as before. On, each presenter resolves
+    // its own, and anything unassigned still falls back to `activeThemeID` — so
+    // turning the switch on is never a cliff.
+
+    var usesPerPresenterThemes: Bool {
+        didSet { defaults.set(usesPerPresenterThemes, forKey: "pm_usesPerPresenterThemes") }
+    }
+
+    /// Profile key → theme id. Only consulted while `usesPerPresenterThemes`.
+    var themeAssignments: [String: UUID] {
+        didSet {
+            let raw = themeAssignments.mapValues(\.uuidString)
+            if let data = try? JSONEncoder().encode(raw) {
+                defaults.set(data, forKey: "pm_themeAssignments")
+            }
+        }
+    }
+
+    /// Which theme dresses `key` right now. The assignment wins, then the global
+    /// one — a presenter is never themeless just because it has no assignment.
+    func resolvedThemeID(for key: String? = nil) -> UUID? {
+        let k = resolvedKey(key)
+        guard usesPerPresenterThemes else { return activeThemeID }
+        return themeAssignments[k] ?? activeThemeID
+    }
+
+    /// Presenters currently pinned to this theme. Non-empty means deletion is
+    /// refused — the operator gets told who is using it instead of silently
+    /// losing a presenter's look.
+    func presentersUsing(themeID: UUID) -> [String] {
+        themeAssignments.filter { $0.value == themeID }.keys.sorted()
+    }
+
+    /// Applies just ONE presenter's profile out of a theme, leaving the other three
+    /// and the global text settings alone. This is what makes a mixed look possible:
+    /// Bible from one theme, Songs from another.
+    func applyTheme(id: UUID, toProfileOnly key: String) {
+        endThemeHoverPreview()
+        guard let theme = themes.first(where: { $0.id == id }) else { return }
+        let k = resolvedKey(key)
+        // A theme that never carried this presenter would blank it; leave it be.
+        guard let incoming = theme.payload.profiles[k] else { return }
+        registerLayoutUndo()
+        profiles[k] = incoming
+        invalidateAllProfiles()
+        themeAssignments[k] = id
+        loadContentBackgroundImages()
+    }
+
+    /// Clears a presenter's pin, sending it back to the global theme.
+    func clearThemeAssignment(for key: String? = nil) {
+        themeAssignments[resolvedKey(key)] = nil
+    }
+
     /// Captures the entire current look into a payload.
     private func captureThemePayload() -> ThemePayload {
         var p = ThemePayload()
@@ -2458,12 +2515,26 @@ final class PresentationManager {
         themes[idx].name = name
     }
 
-    func deleteTheme(id: UUID) {
+    /// Refuses when a presenter is pinned to this theme, and says which — deleting
+    /// it would strip that presenter's look with no way to tell what happened.
+    /// Returns the blocking presenters; empty means it was deleted.
+    @discardableResult
+    func deleteTheme(id: UUID) -> [String] {
+        let blockers = presentersUsing(themeID: id)
+        guard blockers.isEmpty else { return blockers }
         themes.removeAll { $0.id == id }
         if activeThemeID == id { activeThemeID = nil }
+        return []
     }
 
     func applyTheme(id: UUID) {
+        // Per-presenter mode: a click in the gallery dresses the presenter you are
+        // editing and nobody else. Applying to all four is what unified mode is for,
+        // and doing it here would quietly undo a carefully mixed look.
+        if usesPerPresenterThemes {
+            applyTheme(id: id, toProfileOnly: activeProfileKey)
+            return
+        }
         // A hover preview may be showing — fall back to the REAL look first so
         // the undo snapshot captures the true previous state.
         endThemeHoverPreview()
@@ -2667,6 +2738,13 @@ final class PresentationManager {
         try fm.createDirectory(at: containerDir, withIntermediateDirectories: true)
 
         var payload = archive.payload
+        // A theme that only carries some presenters fills the rest from THEIR
+        // defaults rather than leaving them absent — an absent profile reads as
+        // "nothing configured" everywhere downstream and would blank that
+        // presenter the moment the theme was applied.
+        for key in Self.profileKeys where payload.profiles[key] == nil {
+            payload.profiles[key] = .defaultProfile(for: key)
+        }
         let packageMedia = packageURL.appendingPathComponent("media", isDirectory: true)
 
         for asset in archive.assets {
@@ -3057,6 +3135,13 @@ final class PresentationManager {
             self.activeThemeID = id
         } else {
             self.activeThemeID = nil
+        }
+        self.usesPerPresenterThemes = d.bool(forKey: "pm_usesPerPresenterThemes")
+        if let data = d.data(forKey: "pm_themeAssignments"),
+           let raw = try? JSONDecoder().decode([String: String].self, from: data) {
+            self.themeAssignments = raw.compactMapValues(UUID.init(uuidString:))
+        } else {
+            self.themeAssignments = [:]
         }
 
         // Layout profiles — per-presenter layouts. Migrate from the old flat
