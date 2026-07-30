@@ -5574,3 +5574,74 @@ struct RemoteExtractionTests {
         pm.clearOutput()
     }
 }
+
+// MARK: - Saving a theme for one presenter (3c)
+//
+// In per-presenter mode the four may be wearing four different themes, so "save
+// the current look" is ambiguous — a full snapshot would bottle the mix, which is
+// rarely what someone editing one presenter means. The editor asks; these hold
+// what each answer does.
+@MainActor struct SingleProfileThemeTests {
+
+    @Test func savingOnePresenterKeepsOnlyThatProfile() {
+        let pm = makeTestManager()
+        for key in PresentationManager.profileKeys {
+            pm.setStaticText("look-\(key)", for: .reference, in: key)
+        }
+
+        let theme = pm.saveCurrentAsTheme(named: "Just songs", onlyProfile: "song")
+
+        #expect(theme.payload.profiles.keys.sorted() == ["song"])
+        #expect(theme.payload.profiles["song"]?.staticTexts[TextBoxSection.reference.rawValue] == "look-song")
+    }
+
+    @Test func itIsTaggedWithThePresenterItCameFrom() {
+        let pm = makeTestManager()
+        let theme = pm.saveCurrentAsTheme(named: "Only bible", onlyProfile: "bible")
+        #expect(theme.formatRaw == "bible", "so the gallery can badge it")
+    }
+
+    @Test func savingEverythingStillDoes() {
+        let pm = makeTestManager()
+        let theme = pm.saveCurrentAsTheme(named: "All four")
+        #expect(theme.payload.profiles.count == PresentationManager.profileKeys.count)
+        #expect(theme.formatRaw == "all")
+    }
+
+    @Test func theMissingPresentersComeBackAsTheirOwnDefaults() throws {
+        // 2b applies: the absent three are filled from THEIR defaults on import,
+        // not from whatever the operator who saved it had on screen.
+        let pm = makeTestManager()
+        pm.setStaticText("mine", for: .reference, in: "bible")
+        let theme = pm.saveCurrentAsTheme(named: "Bible only", onlyProfile: "bible")
+
+        let package = FileManager.default.temporaryDirectory
+            .appendingPathComponent("tp-single-\(UUID().uuidString).tptheme")
+        defer { try? FileManager.default.removeItem(at: package) }
+        try pm.exportTheme(id: theme.id, to: package)
+
+        let target = makeTestManager()
+        let imported = try target.importTheme(from: package)
+
+        #expect(imported.payload.profiles["bible"]?.staticTexts[TextBoxSection.reference.rawValue] == "mine")
+        for key in PresentationManager.profileKeys {
+            #expect(imported.payload.profiles[key] != nil, "\(key) must not be absent")
+        }
+        // Media's own defaults, which ship the live casetă and hidden text boxes.
+        #expect(imported.payload.profiles["media"]?.mediaBoxes.contains { $0.sourceRaw == "live" } == true)
+    }
+
+    @Test func applyingItInPerPresenterModeTouchesOnlyThatPresenter() {
+        let pm = makeTestManager()
+        pm.setStaticText("bible-look", for: .reference, in: "bible")
+        pm.setStaticText("song-look", for: .reference, in: "song")
+        let theme = pm.saveCurrentAsTheme(named: "Bible only", onlyProfile: "bible")
+
+        pm.usesPerPresenterThemes = true
+        pm.setStaticText("changed", for: .reference, in: "bible")
+        pm.applyTheme(id: theme.id, toProfileOnly: "bible")
+
+        #expect(pm.staticText(for: .reference, in: "bible") == "bible-look")
+        #expect(pm.staticText(for: .reference, in: "song") == "song-look", "untouched")
+    }
+}

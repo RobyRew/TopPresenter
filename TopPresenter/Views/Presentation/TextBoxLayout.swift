@@ -892,6 +892,13 @@ struct ThemeMenuControl: View {
     @Environment(PresentationManager.self) private var pm
 
     @State private var showNewThemeAlert = false
+
+    private var newThemeNameOrDefault: String {
+        let trimmed = newThemeName.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty
+            ? String(localized: "Temă fără nume", comment: "Default theme name")
+            : trimmed
+    }
     @State private var showRenameAlert = false
     @State private var newThemeName = ""
 
@@ -960,13 +967,25 @@ struct ThemeMenuControl: View {
             isPresented: $showNewThemeAlert
         ) {
             TextField(String(localized: "Numele temei", comment: "Theme name field"), text: $newThemeName)
-            Button(String(localized: "Salvează", comment: "Save button")) {
-                let name = newThemeName.trimmingCharacters(in: .whitespacesAndNewlines)
-                pm.saveCurrentAsTheme(named: name.isEmpty ? String(localized: "Temă fără nume", comment: "Default theme name") : name)
+            // In per-presenter mode the four may be wearing four different themes,
+            // so "save the current look" is ambiguous — ask instead of guessing.
+            if pm.usesPerPresenterThemes {
+                Button(String(localized: "Toate prezentatoarele", comment: "Save theme scope")) {
+                    pm.saveCurrentAsTheme(named: newThemeNameOrDefault)
+                }
+                Button(String(localized: "Doar \(PresentationManager.contentKeyLabel(pm.activeProfileKey))", comment: "Save theme scope — active presenter only")) {
+                    pm.saveCurrentAsTheme(named: newThemeNameOrDefault, onlyProfile: pm.activeProfileKey)
+                }
+            } else {
+                Button(String(localized: "Salvează", comment: "Save button")) {
+                    pm.saveCurrentAsTheme(named: newThemeNameOrDefault)
+                }
             }
             Button(String(localized: "Anulează", comment: "Cancel button"), role: .cancel) { }
         } message: {
-            Text(String(localized: "Salvează aspectul curent (casete, stiluri, fundal, media) ca temă.", comment: "New theme alert message"))
+            Text(pm.usesPerPresenterThemes
+                 ? String(localized: "Fiecare prezentator poate avea acum tema lui. Salvezi întregul amestec sau doar prezentatorul pe care îl editezi?", comment: "New theme alert message — per-presenter mode")
+                 : String(localized: "Salvează aspectul curent (casete, stiluri, fundal, media) ca temă.", comment: "New theme alert message"))
         }
         .alert(
             String(localized: "Redenumește tema", comment: "Rename theme alert title"),
@@ -995,6 +1014,13 @@ struct ThemeGalleryView: View {
 
     @State private var showNewThemeAlert = false
     @State private var newThemeName = ""
+
+    private var newThemeNameOrDefault: String {
+        let trimmed = newThemeName.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty
+            ? String(localized: "Temă fără nume", comment: "Default theme name")
+            : trimmed
+    }
     @State private var renameThemeID: UUID?
     @State private var renameText = ""
     @State private var importResultMessage: String?

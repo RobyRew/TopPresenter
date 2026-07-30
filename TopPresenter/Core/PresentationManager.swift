@@ -2703,6 +2703,24 @@ final class PresentationManager {
         return p
     }
 
+    /// Saves the current look, keeping only ONE presenter's profile.
+    ///
+    /// In per-presenter mode the four presenters may be wearing four different
+    /// themes, so "save the current look" is ambiguous: a full snapshot would
+    /// bottle the mix, which is rarely what someone editing one presenter means.
+    /// The other three are simply absent, and import fills them from THEIR
+    /// defaults (the 2b rule) rather than from whatever this operator happened to
+    /// have on screen.
+    @discardableResult
+    func saveCurrentAsTheme(named name: String, onlyProfile key: String) -> Theme {
+        let theme = saveCurrentAsTheme(named: name)
+        guard let idx = themes.firstIndex(where: { $0.id == theme.id }) else { return theme }
+        let k = resolvedKey(key)
+        themes[idx].payload.profiles = [k: themes[idx].payload.profiles[k] ?? profile(k)]
+        themes[idx].formatRaw = k
+        return themes[idx]
+    }
+
     @discardableResult
     func saveCurrentAsTheme(named name: String, formatRaw: String = "all") -> Theme {
         let theme = Theme(name: name, formatRaw: formatRaw, payload: captureThemePayload())
