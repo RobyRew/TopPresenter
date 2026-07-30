@@ -45,13 +45,21 @@ struct EditorBoxListRow: View {
             Button {
                 pm.toggleBoxVisibility(identity)
             } label: {
+                // The glyph already switched to eye.slash when hidden, but the row
+                // dims to 0.55 and washed it out — the state read as "grey", not as
+                // "crossed out". So the crossed eye is drawn bold, tinted, and at
+                // full strength, immune to the row's dimming.
                 Image(systemName: isVisible ? "eye" : "eye.slash")
-                    .font(.caption2)
+                    .font(.caption2.weight(isVisible ? .regular : .bold))
+                    .foregroundStyle(isVisible ? AnyShapeStyle(.secondary) : AnyShapeStyle(Color.orange))
+                    .opacity(isVisible ? 1.0 : 1.0 / 0.55)
                     .frame(width: 18, height: 18)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.borderless)
-            .help(String(localized: "Afișează / ascunde caseta", comment: "Tooltip"))
+            .help(isVisible
+                  ? String(localized: "Ascunde caseta", comment: "Tooltip")
+                  : String(localized: "Caseta este ascunsă — apasă pentru a o afișa", comment: "Tooltip"))
 
             Button(role: .destructive) {
                 onRemove()

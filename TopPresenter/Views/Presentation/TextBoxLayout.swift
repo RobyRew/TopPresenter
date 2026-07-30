@@ -1006,6 +1006,21 @@ struct ThemeGalleryView: View {
                 .buttonStyle(.borderless)
                 .help(String(localized: "Importă teme (.tptheme)", comment: "Tooltip"))
 
+                // Export used to exist ONLY in a theme card's context menu, so it
+                // was effectively undiscoverable. It sits next to Import now, and
+                // reports failures instead of swallowing them.
+                Button {
+                    exportActiveTheme()
+                } label: {
+                    Image(systemName: "square.and.arrow.up")
+                        .font(.caption)
+                }
+                .buttonStyle(.borderless)
+                .disabled(pm.activeThemeID == nil)
+                .help(pm.activeThemeID == nil
+                      ? String(localized: "Alege o temă pentru a o exporta", comment: "Tooltip")
+                      : String(localized: "Exportă tema activă ca pachet .tptheme", comment: "Tooltip"))
+
                 Button {
                     newThemeName = ""
                     showNewThemeAlert = true
@@ -1101,6 +1116,30 @@ struct ThemeGalleryView: View {
             Button(String(localized: "Anulează", comment: "Cancel button"), role: .cancel) {
                 renameThemeID = nil
             }
+        }
+    }
+
+    /// Exports the ACTIVE theme. The per-card context menu still works; this is the
+    /// discoverable path, and unlike the card's version it does not swallow errors.
+    private func exportActiveTheme() {
+        guard let id = pm.activeThemeID,
+              let theme = pm.themes.first(where: { $0.id == id }) else {
+            importResultMessage = String(localized: "Nicio temă activă de exportat.",
+                                         comment: "Export result — nothing selected")
+            return
+        }
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = theme.name + ".tptheme"
+        panel.message = String(localized: "Exportă tema ca pachet .tptheme (include toate fișierele media)",
+                               comment: "Export panel message")
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do {
+            try pm.exportTheme(id: id, to: url)
+            importResultMessage = String(localized: "Tema „\(theme.name)” a fost exportată în \(url.lastPathComponent).",
+                                         comment: "Export result — success")
+        } catch {
+            importResultMessage = String(localized: "Exportul a eșuat: \(error.localizedDescription)",
+                                         comment: "Export result — failure")
         }
     }
 

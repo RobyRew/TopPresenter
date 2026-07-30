@@ -6145,6 +6145,9 @@
         }
       }
     },
+    "Casetele de aici sunt suprapuneri" : {
+      "comment" : "Theme editor canvas hint — media profile boxes are overlays"
+    },
     "Casetele media nu au setări de text." : {
       "comment" : "Inspector hint",
       "localizations" : {
@@ -16620,6 +16623,9 @@
           }
         }
       }
+    },
+    "Media pe tot ecranul" : {
+      "comment" : "Theme editor canvas stand-in for the media profile"
     },
     "Media următoare" : {
       "comment" : "Tooltip",

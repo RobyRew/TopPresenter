@@ -4691,3 +4691,218 @@ struct RemoteExtractionTests {
         #expect(PresentationManager.relevantSections(for: "media") == [.reference])
     }
 }
+
+// MARK: - Theme export / import round trip
+//
+// "Exports fully and imports fully" is a claim that has to be demonstrated, not
+// asserted: a theme carries all four presenters' profiles, every box, every style,
+// backgrounds, transitions, colours and scopes. A field added to LayoutProfile and
+// forgotten in ThemePayload would vanish silently on export.
+@MainActor struct ThemeRoundTripTests {
+
+    private func tempPackage() -> URL {
+        FileManager.default.temporaryDirectory
+            .appendingPathComponent("tp-roundtrip-\(UUID().uuidString).tptheme")
+    }
+
+    /// Marks every profile distinctly so a cross-profile mix-up cannot pass.
+    private func decorate(_ pm: PresentationManager) {
+        for (i, key) in PresentationManager.profileKeys.enumerated() {
+            pm.mutateProfile(key) { p in
+                p.frames[TextBoxSection.verseContent.rawValue] =
+                    PresentationManager.TextBoxFrame(x: 0.1 + Double(i) / 20.0, y: 0.2,
+                                                     width: 0.5, height: 0.3)
+                p.staticTexts[TextBoxSection.reference.rawValue] = "static-\(key)"
+                p.sources[TextBoxSection.reference.rawValue] = "static"
+                p.displayOn[TextBoxSection.reference.rawValue] = "first"
+                p.boxColors["section:" + TextBoxSection.reference.rawValue] = "#A1B2C\(i)"
+                p.transitionInRaw = "zoomIn"
+                p.transitionChangeRaw = "blur"
+                p.transitionOutRaw = "fall"
+                p.transitionInDuration = 0.4 + Double(i) / 10.0
+                p.background.enabled = true
+                p.background.showColor = true
+                p.background.colorHex = "11223\(i)"
+                p.background.opacity = 0.5
+                p.options.textTransformRaw = "upper"
+
+                var custom = PresentationManager.CustomTextBox()
+                custom.text = "custom-\(key)"
+                custom.frame = PresentationManager.TextBoxFrame(x: 0.3, y: 0.4, width: 0.2, height: 0.1)
+                custom.style.isCustomized = true
+                custom.style.fontSize = 44
+                p.customTextBoxes = [custom]
+
+                var media = PresentationManager.MediaBox()
+                media.fileName = "clip-\(key).mp4"
+                media.mediaTypeRaw = "video"
+                media.frame = PresentationManager.TextBoxFrame(x: 0.05, y: 0.05, width: 0.3, height: 0.2)
+                media.opacity = 0.8
+                p.mediaBoxes = [media]
+
+                p.boxOrder = ["media:" + media.id.uuidString,
+                              "section:" + TextBoxSection.reference.rawValue,
+                              "custom:" + custom.id.uuidString]
+            }
+        }
+    }
+
+    @Test func everyProfileSurvivesExportAndImport() throws {
+        let source = makeTestManager()
+        decorate(source)
+        _ = source.saveCurrentAsTheme(named: "RoundTrip")
+        let saved = try #require(source.themes.first(where: { $0.name == "RoundTrip" }))
+
+        let package = tempPackage()
+        defer { try? FileManager.default.removeItem(at: package) }
+        try source.exportTheme(id: saved.id, to: package)
+
+        // A DIFFERENT manager, so nothing can leak through shared state.
+        let target = makeTestManager()
+        let imported = try target.importTheme(from: package)
+
+        #expect(imported.name == "RoundTrip")
+        for key in PresentationManager.profileKeys {
+            let a = try #require(saved.payload.profiles[key], "exported \(key)")
+            let b = try #require(imported.payload.profiles[key], "imported \(key)")
+
+            #expect(a.frames == b.frames, "frames differ for \(key)")
+            #expect(a.staticTexts == b.staticTexts, "static texts differ for \(key)")
+            #expect(a.sources == b.sources, "sources differ for \(key)")
+            #expect(a.displayOn == b.displayOn, "slide scopes differ for \(key)")
+            #expect(a.boxColors == b.boxColors, "box colours differ for \(key)")
+            #expect(a.boxOrder == b.boxOrder, "stacking order differs for \(key)")
+            #expect(a.options == b.options, "content options differ for \(key)")
+            #expect(a.transitionInRaw == b.transitionInRaw, "in transition differs for \(key)")
+            #expect(a.transitionChangeRaw == b.transitionChangeRaw)
+            #expect(a.transitionOutRaw == b.transitionOutRaw)
+            #expect(a.transitionInDuration == b.transitionInDuration)
+
+            // Backgrounds: everything but the bookmark, which is re-made on import
+            // against the file copied into the container.
+            #expect(a.background.enabled == b.background.enabled)
+            #expect(a.background.showColor == b.background.showColor)
+            #expect(a.background.colorHex == b.background.colorHex, "bg colour differs for \(key)")
+            #expect(a.background.opacity == b.background.opacity)
+
+            #expect(a.customTextBoxes.count == b.customTextBoxes.count, "custom box count for \(key)")
+            let ca = try #require(a.customTextBoxes.first), cb = try #require(b.customTextBoxes.first)
+            #expect(ca.id == cb.id, "custom box identity must survive — boxOrder refers to it")
+            #expect(ca.text == cb.text)
+            #expect(ca.frame == cb.frame)
+            #expect(ca.style.fontSize == cb.style.fontSize)
+
+            #expect(a.mediaBoxes.count == b.mediaBoxes.count, "media box count for \(key)")
+            let ma = try #require(a.mediaBoxes.first), mb = try #require(b.mediaBoxes.first)
+            #expect(ma.id == mb.id, "media box identity must survive")
+            #expect(ma.fileName == mb.fileName)
+            #expect(ma.mediaTypeRaw == mb.mediaTypeRaw)
+            #expect(ma.frame == mb.frame)
+            #expect(ma.opacity == mb.opacity)
+        }
+    }
+
+    @Test func theWholePayloadIsPreserved() throws {
+        // The blunt instrument, and the one that catches a NEW LayoutProfile field
+        // nobody wired into the archive: compare the encoded payloads outright.
+        let source = makeTestManager()
+        decorate(source)
+        _ = source.saveCurrentAsTheme(named: "Exact")
+        let saved = try #require(source.themes.first(where: { $0.name == "Exact" }))
+
+        let package = tempPackage()
+        defer { try? FileManager.default.removeItem(at: package) }
+        try source.exportTheme(id: saved.id, to: package)
+
+        let target = makeTestManager()
+        let imported = try target.importTheme(from: package)
+
+        // Bookmarks legitimately differ: export strips them, import re-creates them
+        // against the copied files. Clear them and everything else must match.
+        func normalised(_ p: PresentationManager.ThemePayload) -> Data? {
+            var payload = p
+            payload.backgroundImageBookmark = nil
+            for (key, var prof) in payload.profiles {
+                prof.background.imageBookmark = nil
+                for i in prof.mediaBoxes.indices { prof.mediaBoxes[i].bookmarkData = nil }
+                payload.profiles[key] = prof
+            }
+            let enc = JSONEncoder()
+            enc.outputFormatting = [.sortedKeys]
+            return try? enc.encode(payload)
+        }
+
+        let a = try #require(normalised(saved.payload))
+        let b = try #require(normalised(imported.payload))
+        #expect(a == b, "payload changed across export/import")
+    }
+
+    @Test func importReportsAssetsItCouldNotFind() throws {
+        let source = makeTestManager()
+        _ = source.saveCurrentAsTheme(named: "NoAssets")
+        let saved = try #require(source.themes.first(where: { $0.name == "NoAssets" }))
+        let package = tempPackage()
+        defer { try? FileManager.default.removeItem(at: package) }
+        try source.exportTheme(id: saved.id, to: package)
+
+        let target = makeTestManager()
+        _ = try target.importTheme(from: package)
+        // Nothing was referenced, so nothing may be reported missing — the list
+        // must not accumulate stale entries from an earlier import either.
+        #expect(target.lastThemeImportSkippedAssets.isEmpty)
+    }
+}
+
+// MARK: - Copy layout between presenters
+@MainActor struct CopyProfileTests {
+
+    @Test func sectionsTheTargetCannotShowAreDropped() {
+        let pm = makeTestManager()
+        // Bible has a translation box; Songs does not.
+        pm.setStaticText("translation", for: .translationName, in: "bible")
+        pm.setBoxFrame(PresentationManager.TextBoxFrame(x: 0.4, y: 0.4, width: 0.2, height: 0.1),
+                       for: .translationName, in: "bible")
+
+        pm.copyProfile(from: "bible", to: "song")
+
+        // Carried across, it would sit in the theme and reappear if that layout
+        // were copied onward to a presenter that DOES have the section.
+        let song = pm.profile("song")
+        #expect(song.staticTexts[TextBoxSection.translationName.rawValue] == nil)
+        #expect(song.frames[TextBoxSection.translationName.rawValue] == nil)
+        #expect(!song.boxOrder.contains("section:" + TextBoxSection.translationName.rawValue))
+    }
+
+    @Test func sectionsTheTargetDoesHaveComeAcross() {
+        let pm = makeTestManager()
+        pm.setStaticText("carried", for: .reference, in: "bible")
+        pm.copyProfile(from: "bible", to: "song")
+        #expect(pm.staticText(for: .reference, in: "song") == "carried")
+    }
+
+    @Test func customAndMediaBoxesAlwaysCarry() {
+        let pm = makeTestManager()
+        let custom = pm.addCustomTextBox(in: "bible")
+        pm.copyProfile(from: "bible", to: "media")
+        // They belong to no fixed slot, so no presenter can reject them.
+        #expect(pm.customTextBox(id: custom.id, in: "media") != nil)
+    }
+
+    @Test func theTargetKeepsItsOwnDefaultsForWhatItDidNotReceive() {
+        let pm = makeTestManager()
+        pm.copyProfile(from: "bible", to: "media")
+        // Media ships every text box hidden; copying a Bible layout onto it must not
+        // silently un-hide boxes by leaving their visibility unset.
+        for section in PresentationManager.relevantSections(for: "media") {
+            #expect(pm.profile("media").visibility[section.rawValue] != nil,
+                    "\(section.rawValue) lost its visibility entry")
+        }
+    }
+
+    @Test func copyingOntoItselfIsANoOp() {
+        let pm = makeTestManager()
+        pm.setStaticText("keep", for: .reference, in: "bible")
+        pm.copyProfile(from: "bible", to: "bible")
+        #expect(pm.staticText(for: .reference, in: "bible") == "keep")
+    }
+}

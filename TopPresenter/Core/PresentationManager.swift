@@ -933,11 +933,47 @@ final class PresentationManager {
         profileTick[k, default: 0] &+= 1
     }
 
-    /// Copies one presenter's entire layout onto another (undo-able).
+    /// Copies one presenter's layout onto another (undo-able).
+    ///
+    /// Sections the TARGET does not offer are dropped rather than carried across:
+    /// Songs has no Bible translation box, Slides has neither translation nor verse
+    /// label, Media offers only a caption. Copying them left entries keyed to boxes
+    /// that presenter can never show — invisible in the editor (`orderedBoxTokens`
+    /// filters by `relevantSections`) but still exported inside the theme and still
+    /// resurrected if the same layout was copied onward to a presenter that DOES
+    /// have that section.
+    ///
+    /// Custom and media boxes always come across: they are the operator's own and
+    /// belong to no fixed slot.
     func copyProfile(from source: String, to target: String) {
         guard source != target else { return }
         let snapshot = profile(source)
-        mutateProfile(target) { $0 = snapshot }
+        let allowed = Set(Self.relevantSections(for: target).map(\.rawValue))
+        let dropped = Set(TextBoxSection.allCases.map(\.rawValue)).subtracting(allowed)
+
+        mutateProfile(target) { p in
+            p = snapshot
+            for raw in dropped {
+                p.frames[raw] = nil
+                p.visibility[raw] = nil
+                p.styles[raw] = nil
+                p.sources[raw] = nil
+                p.sourceFormats[raw] = nil
+                p.staticTexts[raw] = nil
+                p.displayOn[raw] = nil
+                p.boxTransitionOverrides["section:" + raw] = nil
+                p.boxColors["section:" + raw] = nil
+            }
+            p.boxOrder = p.boxOrder.filter { token in
+                guard token.hasPrefix("section:") else { return true }
+                return allowed.contains(String(token.dropFirst("section:".count)))
+            }
+            // Whatever the target does not carry falls back to its own defaults.
+            let defaults = LayoutProfile.defaultProfile(for: target)
+            for raw in allowed where p.visibility[raw] == nil {
+                p.visibility[raw] = defaults.visibility[raw]
+            }
+        }
     }
 
     /// The profile that was last presented — after Hide/Clear/ESC the exit
