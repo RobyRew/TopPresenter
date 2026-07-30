@@ -14,6 +14,7 @@
 //
 
 import SwiftUI
+import SwiftData
 import AppKit
 import UniformTypeIdentifiers
 
@@ -1563,6 +1564,10 @@ struct LayoutEditorSheet: View {
     /// Quick-align toggle memory: pressing the same action again restores the
     /// frame from before the action was applied.
     @State private var quickActionMemory: [BoxIdentity: [String: PresentationManager.TextBoxFrame]] = [:]
+    @Query(sort: \MediaItem.importDate, order: .reverse) private var mediaLibrary: [MediaItem]
+    @Environment(\.modelContext) private var modelContext
+    /// Remembered, so someone who always wants both does not re-tick it each time.
+    @AppStorage("mediaBoxAlsoImportsToLibrary") private var alsoImportToLibrary = false
     @State private var renameTarget: BoxIdentity?
     @State private var renameText = ""
     /// Canvas demo of a transition effect: changing the tick re-inserts the
@@ -1724,11 +1729,32 @@ struct LayoutEditorSheet: View {
         panel.allowsMultipleSelection = false
         panel.canChooseDirectories = false
 
-        if panel.runModal() == .OK, let url = panel.url {
-            if let box = pm.addMediaBox(url: url) {
-                selection = .media(box.id)
-                activeTab = .layout
-            }
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        if let box = pm.addMediaBox(url: url) {
+            selection = .media(box.id)
+            activeTab = .layout
+        }
+        // Same file, two homes: the casetă keeps its own bookmark either way, and
+        // the library copy makes it reachable from the Media module next time.
+        if alsoImportToLibrary {
+            let kind = ["mp4", "mov", "m4v", "avi", "mkv", "webm"].contains(url.pathExtension.lowercased())
+                ? "video" : (url.pathExtension.lowercased() == "gif" ? "image" : "image")
+            let item = MediaItem(name: url.lastPathComponent, filePath: url.path, mediaType: kind)
+            modelContext.insert(item)
+            item.createBookmark(from: url)
+            try? modelContext.save()
+        }
+    }
+
+    /// Adds a casetă for something already in the library, resolving its bookmark
+    /// so the box keeps working after a relaunch.
+    private func addMediaBox(fromLibrary item: MediaItem) {
+        guard let url = item.resolvedURL else { return }
+        let accessing = url.startAccessingSecurityScopedResource()
+        defer { if accessing { url.stopAccessingSecurityScopedResource() } }
+        if let box = pm.addMediaBox(url: url) {
+            selection = .media(box.id)
+            activeTab = .layout
         }
     }
 
@@ -2056,13 +2082,29 @@ struct LayoutEditorSheet: View {
                     }
                     .help(String(localized: "Adaugă o casetă de text nouă", comment: "Tooltip"))
 
-                    Button {
-                        addMediaFromPanel()
+                    // Asks WHERE the media comes from instead of always opening a
+                    // file panel: most of the time it is already in the library.
+                    Menu {
+                        if mediaLibrary.isEmpty {
+                            Text(String(localized: "Biblioteca Media este goală", comment: "Add media menu — empty library"))
+                        } else {
+                            Section(String(localized: "Din biblioteca Media", comment: "Add media menu section")) {
+                                ForEach(mediaLibrary.prefix(12)) { item in
+                                    Button(item.name) { addMediaBox(fromLibrary: item) }
+                                }
+                            }
+                        }
+                        Divider()
+                        Button(String(localized: "Din fișier…", comment: "Add media menu — from disk")) {
+                            addMediaFromPanel()
+                        }
+                        Toggle(String(localized: "Importă și în bibliotecă", comment: "Add media menu — also import"),
+                               isOn: $alsoImportToLibrary)
                     } label: {
                         Label(String(localized: "Casetă Media", comment: "Add media button"), systemImage: "photo.badge.plus")
                             .frame(maxWidth: .infinity)
                     }
-                    .help(String(localized: "Adaugă imagine, GIF sau video", comment: "Tooltip"))
+                    .help(String(localized: "Adaugă din biblioteca Media sau dintr-un fișier nou", comment: "Tooltip"))
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.small)
