@@ -1919,6 +1919,31 @@ struct LayoutEditorSheet: View {
                 .buttonStyle(.bordered)
                 .controlSize(.small)
                 .padding(.top, 6)
+
+                // Only appears when something is missing — deleting a built-in is
+                // only safe because this is how it comes back, with its layout intact.
+                let restorable = pm.restorableSections()
+                if !restorable.isEmpty {
+                    Menu {
+                        ForEach(restorable, id: \.self) { section in
+                            Button {
+                                pm.restoreSection(section)
+                                selection = .section(section)
+                                activeTab = .layout
+                            } label: {
+                                Text(section.label(for: pm.activeProfileKey))
+                            }
+                        }
+                    } label: {
+                        Label(String(localized: "Casetă lipsă (\(restorable.count))", comment: "Restore removed built-in casete"),
+                              systemImage: "arrow.uturn.backward.square")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .menuStyle(.borderlessButton)
+                    .controlSize(.small)
+                    .padding(.top, 4)
+                    .help(String(localized: "Readaugă o casetă integrată ștearsă — layoutul ei se păstrează", comment: "Tooltip"))
+                }
             }
         } label: {
             HStack {
@@ -2007,7 +2032,13 @@ struct LayoutEditorSheet: View {
     private func removeOrHide(_ identity: BoxIdentity) {
         switch identity {
         case .section(let section):
-            pm.setSectionVisible(false, for: section)
+            // Built-ins used to only hide here, so the trash on them did nothing a
+            // trash should. They delete now — recoverable from the "Casetă lipsă"
+            // menu below the list, which keeps their frame and style.
+            pm.removeSection(section)
+            if selection == identity {
+                selection = pm.orderedBoxTokens().compactMap { boxIdentity(fromToken: $0) }.first
+            }
         case .custom(let id):
             pm.removeCustomTextBox(id: id)
             if selection == identity { selection = .section(.verseContent) }

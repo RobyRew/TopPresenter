@@ -4906,3 +4906,89 @@ struct RemoteExtractionTests {
         #expect(pm.staticText(for: .reference, in: "bible") == "keep")
     }
 }
+
+// MARK: - Deleting and restoring built-in casetes
+//
+// Built-ins used to only ever hide, so the trash on them was a lie. They delete
+// now, which is only safe because they come back with their layout intact — these
+// hold both halves of that bargain.
+@MainActor struct RemovableSectionTests {
+
+    @Test func aDeletedSectionLeavesThePresentersList() {
+        let pm = makeTestManager()
+        let token = PresentationManager.sectionToken(.reference)
+        #expect(pm.orderedBoxTokens(in: "bible").contains(token))
+
+        pm.removeSection(.reference, in: "bible")
+
+        #expect(!pm.orderedBoxTokens(in: "bible").contains(token))
+        #expect(pm.isSectionRemoved(.reference, in: "bible"))
+    }
+
+    @Test func deletedIsNotTheSameAsHidden() {
+        let pm = makeTestManager()
+        pm.setSectionVisible(false, for: .reference, in: "bible")
+
+        // Hidden: still a casetă, still listed, the eye brings it back.
+        #expect(pm.orderedBoxTokens(in: "bible").contains(PresentationManager.sectionToken(.reference)))
+        #expect(!pm.isSectionRemoved(.reference, in: "bible"))
+        #expect(pm.restorableSections(in: "bible").isEmpty)
+    }
+
+    @Test func restoringBringsTheLayoutBackRatherThanResettingIt() {
+        let pm = makeTestManager()
+        let frame = PresentationManager.TextBoxFrame(x: 0.33, y: 0.44, width: 0.2, height: 0.1)
+        pm.setBoxFrame(frame, for: .reference, in: "bible")
+        pm.setStaticText("keep me", for: .reference, in: "bible")
+
+        pm.removeSection(.reference, in: "bible")
+        pm.restoreSection(.reference, in: "bible")
+
+        #expect(pm.boxFrame(for: .reference, in: "bible") == frame)
+        #expect(pm.staticText(for: .reference, in: "bible") == "keep me")
+        // And visible, or it would return looking broken.
+        #expect(pm.isSectionVisible(.reference, in: "bible"))
+    }
+
+    @Test func onlyDeletedSectionsAreOfferedBack() {
+        let pm = makeTestManager()
+        #expect(pm.restorableSections(in: "bible").isEmpty)
+
+        pm.removeSection(.subtitle, in: "bible")
+        #expect(pm.restorableSections(in: "bible") == [.subtitle])
+
+        pm.restoreSection(.subtitle, in: "bible")
+        #expect(pm.restorableSections(in: "bible").isEmpty)
+    }
+
+    @Test func aPresenterNeverOffersASectionItDoesNotHave() {
+        let pm = makeTestManager()
+        // Songs has no Bible translation box, so removing it must not make it
+        // appear in Songs' restore menu.
+        pm.removeSection(.translationName, in: "song")
+        #expect(!pm.restorableSections(in: "song").contains(.translationName))
+    }
+
+    @Test func removalIsPerPresenter() {
+        let pm = makeTestManager()
+        pm.removeSection(.reference, in: "bible")
+        #expect(pm.orderedBoxTokens(in: "song")
+            .contains(PresentationManager.sectionToken(.reference)))
+    }
+
+    @Test func removalSurvivesAThemeRoundTrip() throws {
+        let source = makeTestManager()
+        source.removeSection(.subtitle, in: "bible")
+        _ = source.saveCurrentAsTheme(named: "Removed")
+        let saved = try #require(source.themes.first(where: { $0.name == "Removed" }))
+
+        let package = FileManager.default.temporaryDirectory
+            .appendingPathComponent("tp-removed-\(UUID().uuidString).tptheme")
+        defer { try? FileManager.default.removeItem(at: package) }
+        try source.exportTheme(id: saved.id, to: package)
+
+        let target = makeTestManager()
+        let imported = try target.importTheme(from: package)
+        #expect(imported.payload.profiles["bible"]?.removedSections == [TextBoxSection.subtitle.rawValue])
+    }
+}

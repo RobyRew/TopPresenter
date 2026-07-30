@@ -599,6 +599,13 @@ final class PresentationManager {
         /// Custom accent colors for the editor chrome (list swatch, canvas
         /// border). Keyed by z-order token; absent = the kind's default color.
         var boxColors: [String: String] = [:]
+        /// Built-in sections the operator DELETED from this presenter, by rawValue.
+        ///
+        /// Distinct from `visibility`: hidden means "still a casetă, currently not
+        /// drawn" (the eye toggles it), removed means "not in this presenter's list
+        /// at all". Their frames/styles are deliberately KEPT, so restoring a
+        /// section from the add menu brings its layout back rather than resetting it.
+        var removedSections: [String] = []
 
         init() {}
 
@@ -625,6 +632,7 @@ final class PresentationManager {
             displayOn = try c.decodeIfPresent([String: String].self, forKey: .displayOn) ?? [:]
             boxTransitionOverrides = try c.decodeIfPresent([String: BoxTransition].self, forKey: .boxTransitionOverrides) ?? [:]
             boxColors = try c.decodeIfPresent([String: String].self, forKey: .boxColors) ?? [:]
+            removedSections = try c.decodeIfPresent([String].self, forKey: .removedSections) ?? []
         }
 
         /// Sensible starting layout per presenter.
@@ -2151,8 +2159,11 @@ final class PresentationManager {
     private func canonicalTokens(in key: String?) -> [String] {
         let k = resolvedKey(key)
         return readStructure(in: k) { p in
-            p.mediaBoxes.map { Self.mediaToken($0.id) }
-                + Self.relevantSections(for: k).map { Self.sectionToken($0) }
+            let removed = Set(p.removedSections)
+            return p.mediaBoxes.map { Self.mediaToken($0.id) }
+                + Self.relevantSections(for: k)
+                    .filter { !removed.contains($0.rawValue) }
+                    .map { Self.sectionToken($0) }
                 + p.customTextBoxes.map { Self.customToken($0.id) }
         }
     }
@@ -2200,6 +2211,43 @@ final class PresentationManager {
         ordered.insert(token, at: to)
         let next = ordered
         mutateProfile(key) { $0.boxOrder = next }
+    }
+
+    // MARK: - Removing and restoring built-in sections
+
+    /// Deletes a built-in section from this presenter.
+    ///
+    /// Built-ins used to only ever hide — the trash on them was a lie. They are
+    /// deletable now because they are recoverable: `restorableSections(in:)` feeds
+    /// the add menu, and the section's frame, style and source survive, so bringing
+    /// it back restores the layout instead of resetting it.
+    func removeSection(_ section: TextBoxSection, in key: String? = nil) {
+        mutateProfile(key) { p in
+            guard !p.removedSections.contains(section.rawValue) else { return }
+            p.removedSections.append(section.rawValue)
+        }
+    }
+
+    func restoreSection(_ section: TextBoxSection, in key: String? = nil) {
+        mutateProfile(key) { p in
+            p.removedSections.removeAll { $0 == section.rawValue }
+            // Back visible, or it would return as an invisible row and look broken.
+            p.visibility[section.rawValue] = true
+        }
+    }
+
+    /// Sections this presenter offers that have been deleted — what the add menu
+    /// lists. Ordered as the presenter declares them, not as they were removed.
+    func restorableSections(in key: String? = nil) -> [TextBoxSection] {
+        let k = resolvedKey(key)
+        return readStructure(in: k) { p in
+            let removed = Set(p.removedSections)
+            return Self.relevantSections(for: k).filter { removed.contains($0.rawValue) }
+        }
+    }
+
+    func isSectionRemoved(_ section: TextBoxSection, in key: String? = nil) -> Bool {
+        readStructure(in: key) { $0.removedSections.contains(section.rawValue) }
     }
 
     // MARK: - Edit Mode
