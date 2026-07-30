@@ -2262,6 +2262,9 @@
         }
       }
     },
+    "Adaugă din biblioteca Media sau dintr-un fișier nou": {
+      "comment": "Tooltip"
+    },
     "Adaugă ecran negru": {
       "comment": "Button",
       "localizations": {
@@ -2287,6 +2290,7 @@
     },
     "Adaugă imagine, GIF sau video": {
       "comment": "Tooltip",
+      "extractionState": "stale",
       "localizations": {
         "en": {
           "stringUnit": {
@@ -5235,6 +5239,9 @@
           }
         }
       }
+    },
+    "Biblioteca Media este goală": {
+      "comment": "Add media menu — empty library"
     },
     "Bine ați venit!\nVă așteptăm duminică la ora 10:00.": {
       "comment": "Layout editor sample slide text",
@@ -9707,6 +9714,12 @@
           }
         }
       }
+    },
+    "Din biblioteca Media": {
+      "comment": "Add media menu section"
+    },
+    "Din fișier…": {
+      "comment": "Add media menu — from disk"
     },
     "Directorul este gol.": {
       "comment": "Import error",
@@ -14535,6 +14548,9 @@
           }
         }
       }
+    },
+    "Importă și în bibliotecă": {
+      "comment": "Add media menu — also import"
     },
     "Importă teme (.tptheme)": {
       "comment": "Tooltip",
@@ -25808,6 +25824,9 @@
         }
       }
     },
+    "Subtitlu slide (live)": {
+      "comment": "Box source"
+    },
     "Successfully exported \"%@\" as %@.": {
       "comment": "Alert message",
       "localizations": {
@@ -26523,6 +26542,9 @@
         }
       }
     },
+    "Text principal (live)": {
+      "comment": "Box source"
+    },
     "Text static": {
       "comment": "Box source\nBox source option",
       "localizations": {
@@ -26683,6 +26705,9 @@
           }
         }
       }
+    },
+    "Timp pe slide-ul curent": {
+      "comment": "Box source"
     },
     "Timp scurs": {
       "comment": "Box source"
@@ -26894,6 +26919,9 @@
           }
         }
       }
+    },
+    "Titlu media (live)": {
+      "comment": "Box source"
     },
     "Titlu modificat": {
       "comment": "Edit log",

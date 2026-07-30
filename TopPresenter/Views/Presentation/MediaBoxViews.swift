@@ -103,6 +103,7 @@ enum MediaThumbnailer {
 /// corner radius, edge feather (soft border fade), and opacity applied.
 struct MediaBoxContent: View {
     @Environment(PresentationManager.self) private var pm
+    @Environment(LibraryManager.self) private var libraryManager: LibraryManager?
 
     let box: PresentationManager.MediaBox
     let canvasSize: CGSize
@@ -149,7 +150,14 @@ struct MediaBoxContent: View {
 
     @ViewBuilder
     private var liveContent: some View {
-        if let image = pm.liveContent.mediaImage, pm.liveContent.mediaKind == "image" {
+        if let preview = editorPreviewImage {
+            // Nothing live, but something is selected in the Media module: preview
+            // it so the casetă can be sized against real content rather than a
+            // placeholder. The Bible profile does the same with the selected verse.
+            Image(nsImage: preview)
+                .resizable()
+                .aspectRatio(contentMode: box.contentModeRaw == "fill" ? .fill : .fit)
+        } else if let image = pm.liveContent.mediaImage, pm.liveContent.mediaKind == "image" {
             Image(nsImage: image)
                 .resizable()
                 .aspectRatio(contentMode: box.contentModeRaw == "fill" ? .fill : .fit)
@@ -164,6 +172,18 @@ struct MediaBoxContent: View {
             placeholder(icon: "play.rectangle",
                         caption: String(localized: "Media în direct", comment: "Live media box placeholder"))
         }
+    }
+
+    /// The Media module's current selection, for previewing while editing. Only
+    /// when nothing is live — what is on the projector always wins.
+    private var editorPreviewImage: NSImage? {
+        guard !pm.liveContent.isLive,
+              let item = libraryManager?.selectedMediaItem,
+              let url = item.resolvedURL else { return nil }
+        let accessing = url.startAccessingSecurityScopedResource()
+        defer { if accessing { url.stopAccessingSecurityScopedResource() } }
+        if let data = item.thumbnailData, let image = NSImage(data: data) { return image }
+        return NSImage(contentsOf: url)
     }
 
     @ViewBuilder

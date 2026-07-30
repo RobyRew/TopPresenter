@@ -1780,15 +1780,6 @@ struct LayoutEditorSheet: View {
                                 .clipped()
                         }
 
-                        // The media profile ships every text box hidden and no media
-                        // boxes, so without a stand-in this canvas was pure black —
-                        // nothing to position an overlay against. Yields to real live
-                        // media when there is any.
-                        if pm.activeProfileKey == "media", !liveMatchesProfile {
-                            MediaProfileStandIn()
-                                .frame(width: size.width, height: size.height)
-                        }
-
                         // Content + media rendered in the unified stacking order.
                         // The id/transition pair powers the Tranziții demo.
                         sampleContent(size: size)
