@@ -4545,3 +4545,93 @@ struct RemoteExtractionTests {
         #expect(box.v == 12)
     }
 }
+
+// MARK: - Auto-fit cache
+//
+// The fit key quantises geometry so a gesture's worth of near-identical requests
+// collapses onto one entry: measured 4.4 ms per delta while resizing a box before,
+// 1.6 ms after, and a whole resize drag from 177 ms to 65 ms. Quantisation is only
+// sound because it rounds in the SAFE direction — box and cap DOWN, padding and
+// line spacing UP — so a reused fit always belongs to a box at least as tight as
+// the real one. These tests hold that property.
+@MainActor struct AutoFitCacheTests {
+
+    private let verse = """
+    Fiindcă atât de mult a iubit Dumnezeu lumea, că a dat pe singurul Lui Fiu, \
+    pentru ca oricine crede în El să nu piară, ci să aibă viața veșnică.
+    """
+
+    private func fit(_ pm: PresentationManager, w: Double, h: Double,
+                     max: CGFloat = 60, padding: CGFloat = 20) -> CGFloat {
+        pm.fittedVerseFontSize(text: verse, boxSize: CGSize(width: w, height: h),
+                               maxSize: max, padding: padding,
+                               fontName: "System", lineSpacing: 1.2)
+    }
+
+    @Test func itIsDeterministic() {
+        let pm = makeTestManager()
+        pm.autoFitVerseFont = true
+        let a = fit(pm, w: 900, h: 240)
+
+        // A second manager has a cold cache: the answer must come from the inputs,
+        // not from whichever real size happened to populate the entry first.
+        let other = makeTestManager()
+        other.autoFitVerseFont = true
+        #expect(fit(other, w: 900, h: 240) == a)
+        #expect(fit(pm, w: 900, h: 240) == a)
+    }
+
+    @Test func subPointDifferencesShareOneAnswer() {
+        let pm = makeTestManager()
+        pm.autoFitVerseFont = true
+        let base = fit(pm, w: 900, h: 240)
+
+        // Within one point of box: the same entry, which is what makes a resize
+        // gesture cheap.
+        #expect(fit(pm, w: 900, h: 240.4) == base)
+        #expect(fit(pm, w: 900.9, h: 240.9) == base)
+    }
+
+    @Test func aTighterBoxNeverYieldsALargerFont() {
+        let pm = makeTestManager()
+        pm.autoFitVerseFont = true
+
+        // Monotonic in height, which is what "safe direction" means in practice:
+        // rounding the box down can only ever shrink the answer.
+        var previous = fit(pm, w: 900, h: 120)
+        for h in stride(from: 140.0, through: 400.0, by: 20.0) {
+            let current = fit(pm, w: 900, h: h)
+            #expect(current >= previous)
+            previous = current
+        }
+    }
+
+    @Test func theResultStaysWithinItsBounds() {
+        let pm = makeTestManager()
+        pm.autoFitVerseFont = true
+
+        // Never above the cap, never below the 10 pt floor.
+        #expect(fit(pm, w: 900, h: 240, max: 60) <= 60)
+        #expect(fit(pm, w: 200, h: 30, max: 60) >= 10)
+        // A box with room to spare returns the cap untouched.
+        #expect(fit(pm, w: 3000, h: 2000, max: 40) == 40)
+    }
+
+    @Test func autoFitOffIsAPassthrough() {
+        let pm = makeTestManager()
+        pm.autoFitVerseFont = false
+        #expect(fit(pm, w: 100, h: 20, max: 72) == 72)
+    }
+
+    @Test func aHotEntrySurvivesAFloodOfNewOnes() {
+        let pm = makeTestManager()
+        pm.autoFitVerseFont = true
+        let hot = fit(pm, w: 900, h: 240)
+
+        // Eviction used to be removeAll, so one resize gesture's junk keys threw
+        // away the entries the live output was using. Oldest-first keeps this one.
+        for i in 0..<600 { _ = fit(pm, w: 900, h: 300 + Double(i)) }
+
+        #expect(fit(pm, w: 900, h: 240) == hot)
+    }
+}

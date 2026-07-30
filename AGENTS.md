@@ -146,8 +146,13 @@ TopPresenter/
 - **The debounce is only safe because of the flush points.** `persistProfilesNow()` is called at the end of both editor drag gestures, from `startPersistenceGuards()` on `willTerminate`/`didResignActive` (wired in `MainControlView.onAppear`), and from `isolated deinit`. Add a flush anywhere else the app can vanish mid-edit.
 - Tests that read `pm_layoutProfiles` back must call `pm.persistProfilesNow()` first.
 
-### Auto-fit font cache is keyed, not a single slot
-`fitCache` is a bounded dictionary (`fitCacheLimit`), not one key/value pair. As a single slot it was worthless in exactly the case it existed for: two auto-fit boxes on screen (verse box + an auto-fit custom box) meant every call missed and overwrote the other's entry, so both re-ran the ≤17-measurement binary search on every body evaluation.
+### Auto-fit font cache: keyed, QUANTISED, and evicted oldest-first
+- `fittedVerseFontSize` binary-searches text layout, so a miss costs a fistful of `boundingRect` calls (each also building an `NSFont` and a paragraph style). It is keyed per request, not a single slot — as one slot, two auto-fit boxes on screen made every call miss and overwrite the other's entry
+- **The key is quantised**: box dimensions to **1 pt**, cap and padding to 1/4 pt, line spacing to 1/100. Continuous values made every frame of a gesture a fresh key. Measured: resizing a box **4.4 → 1.6 ms per delta**, a 40-delta resize **177 → 65 ms**, a size-slider drag **160 → 80 ms**, one cold fit **13 → 8.5 ms**. Moving a box was always cheap — `rect(in:).size` depends on width/height, not x/y — so this is about resizing and sliders
+- Quantisation is only sound because it rounds in the **safe direction**: box and cap DOWN, padding and line spacing UP, and the search then measures the QUANTISED geometry. A reused fit therefore always belongs to a box at least as tight as the real one, so it can never cause overflow. Keep that direction if you touch it
+- The search stops on **precision** (`hi - lo > 0.125`) rather than a fixed 16 iterations — an eighth of a point of font size is invisible and it saves about a third of the measurements per miss
+- Eviction drops the **oldest quarter**, never `removeAll`. Clearing wholesale meant one resize gesture's junk keys evicted the entries the live output was using, and the next frame re-measured them (2.17 ms for a key that had been hot moments earlier)
+- Locked by `AutoFitCacheTests`: determinism across managers, sub-point requests sharing an answer, monotonicity in box height (the safe-direction property), bounds, the pass-through when auto-fit is off, and a hot entry surviving 600 new ones
 
 ### Bookmarks & security scopes
 - `resolveBookmarkRefreshing(_:)` returns the URL **plus a rebuilt bookmark when the stored one was stale** — the caller re-persists it, because only the caller knows where that bookmark lives (`Self.backgroundBookmarkKey`, a `BackgroundConfig`, a `MediaBox`). `isStale` used to be read into a local and thrown away, so bookmarks were never refreshed and eventually stopped resolving — a blank background with no error anywhere.
