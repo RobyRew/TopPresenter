@@ -2049,6 +2049,12 @@ final class PresentationManager {
         var needsSeconds: Bool { style == "hms" }
     }
 
+    /// Whether the current locale writes 13:00 rather than 1 PM.
+    static var usesTwentyFourHourClock: Bool {
+        let template = DateFormatter.dateFormat(fromTemplate: "j", options: 0, locale: .current) ?? "H"
+        return !template.contains("a")
+    }
+
     /// Renders a countdown/elapsed span. Always the same width family so the text
     /// does not jitter as digits change: h:mm:ss above an hour, m:ss below.
     static func formattedSpan(_ seconds: TimeInterval, style: String) -> String {
@@ -2081,7 +2087,12 @@ final class PresentationManager {
                 return now.formatted(s)
             }
         case "time":
-            var s = Date.FormatStyle().hour(.twoDigits(amPM: .omitted)).minute(.twoDigits)
+            // AM/PM is omitted on a 24-hour locale, where it means nothing, and
+            // KEPT on a 12-hour one, where dropping it renders 21:00 as a bare
+            // "09" — indistinguishable from nine in the morning on a projector.
+            var s = Date.FormatStyle()
+                .hour(usesTwentyFourHourClock ? .twoDigits(amPM: .omitted) : .defaultDigits(amPM: .abbreviated))
+                .minute(.twoDigits)
             if options.style == "hms" { s = s.second(.twoDigits) }
             s.timeZone = options.timeZone
             return now.formatted(s)

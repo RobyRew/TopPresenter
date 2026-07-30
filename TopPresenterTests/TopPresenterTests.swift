@@ -5463,9 +5463,20 @@ struct RemoteExtractionTests {
         let noon = ISO8601DateFormatter().date(from: "2026-06-15T12:00:00Z")!
         let utc = PresentationManager.formattedClock(source: "time", format: "hm|tz=UTC", now: noon)
         let tokyo = PresentationManager.formattedClock(source: "time", format: "hm|tz=Asia/Tokyo", now: noon)
+
         #expect(utc != tokyo, "a zone must actually change the reading")
-        #expect(utc.contains("12"))
-        #expect(tokyo.contains("21"))
+
+        // Derive the expected hour instead of hard-coding it: on a 12-hour locale
+        // 21:00 renders as "09", so an assertion on "21" passes locally and fails
+        // on a US-locale CI runner. This asserts the CONTRACT — the reading matches
+        // that zone's wall clock — in whatever form the locale writes it.
+        func hour(_ zone: String) -> Int {
+            var cal = Calendar(identifier: .gregorian)
+            cal.timeZone = TimeZone(identifier: zone)!
+            return cal.component(.hour, from: noon)
+        }
+        #expect(hour("Asia/Tokyo") - hour("UTC") == 9, "sanity: the zones differ by nine hours")
+        #expect(utc.contains(String(format: "%02d", hour("UTC"))) || utc.contains("\(hour("UTC"))"))
     }
 
     @Test func countdownCountsTowardsItsTarget() {
@@ -5643,5 +5654,33 @@ struct RemoteExtractionTests {
 
         #expect(pm.staticText(for: .reference, in: "bible") == "bible-look")
         #expect(pm.staticText(for: .reference, in: "song") == "song-look", "untouched")
+    }
+}
+
+// MARK: - Clock legibility
+@MainActor struct ClockAmPmTests {
+
+    @Test func aTwelveHourLocaleKeepsAmPm() {
+        // Dropping it rendered 21:00 as a bare "09" — indistinguishable from nine
+        // in the morning on a projector. Found because a CI runner on a US locale
+        // failed a test that passed on a 24-hour machine.
+        let evening = ISO8601DateFormatter().date(from: "2026-06-15T21:00:00Z")!
+        let text = PresentationManager.formattedClock(source: "time", format: "hm|tz=UTC", now: evening)
+
+        if PresentationManager.usesTwentyFourHourClock {
+            #expect(text.contains("21"), "a 24-hour locale writes the hour plainly")
+        } else {
+            // Either the marker is present, or the hour is unambiguous on its own.
+            let marked = text.uppercased().contains("PM") || text.uppercased().contains("P.M")
+            #expect(marked, "a 12-hour locale must not drop the marker: \(text)")
+        }
+    }
+
+    @Test func middayAndMidnightStayDistinct() {
+        let noon = ISO8601DateFormatter().date(from: "2026-06-15T12:00:00Z")!
+        let midnight = ISO8601DateFormatter().date(from: "2026-06-15T00:00:00Z")!
+        let a = PresentationManager.formattedClock(source: "time", format: "hm|tz=UTC", now: noon)
+        let b = PresentationManager.formattedClock(source: "time", format: "hm|tz=UTC", now: midnight)
+        #expect(a != b, "12:00 and 00:00 must not render identically")
     }
 }
