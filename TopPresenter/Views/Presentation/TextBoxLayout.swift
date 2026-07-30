@@ -1419,11 +1419,8 @@ struct LayoutEditorSheet: View {
         .frame(minWidth: 1030, idealWidth: 1190, minHeight: 640, idealHeight: 720)
         .onAppear {
             // Open on the profile of the module the editor was launched from.
-            switch appState.selectedSidebarItem {
-            case .bible: pm.activeProfileKey = "bible"
-            case .songs: pm.activeProfileKey = "song"
-            case .customSlides: pm.activeProfileKey = "text"
-            default: break
+            if let key = appState.selectedSidebarItem.layoutProfileKey {
+                pm.activeProfileKey = key
             }
         }
         .onChange(of: pm.activeProfileKey) {
@@ -1570,6 +1567,15 @@ struct LayoutEditorSheet: View {
                                 .clipped()
                         }
 
+                        // The media profile ships every text box hidden and no media
+                        // boxes, so without a stand-in this canvas was pure black —
+                        // nothing to position an overlay against. Yields to real live
+                        // media when there is any.
+                        if pm.activeProfileKey == "media", !liveMatchesProfile {
+                            MediaProfileStandIn()
+                                .frame(width: size.width, height: size.height)
+                        }
+
                         // Content + media rendered in the unified stacking order.
                         // The id/transition pair powers the Tranziții demo.
                         sampleContent(size: size)
@@ -1577,7 +1583,11 @@ struct LayoutEditorSheet: View {
                             .transition(PresentationManager.transitionPart(transitionPreviewRaw ?? "fade"))
 
                         // Interactive box overlay — always on in the editor
-                        TextBoxEditOverlay(canvasSize: size, showsHiddenBoxes: false, selection: $selection)
+                        // showsHiddenBoxes: the preview card hides them, the EDITOR
+                        // shows them as ghosts so a hidden box can still be selected
+                        // and moved. It passed false, which left the media profile
+                        // with no handles at all.
+                        TextBoxEditOverlay(canvasSize: size, showsHiddenBoxes: true, selection: $selection)
                     }
                     .frame(width: size.width, height: size.height)
                     .clipShape(RoundedRectangle(cornerRadius: 8))

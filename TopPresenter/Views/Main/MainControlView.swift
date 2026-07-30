@@ -157,11 +157,8 @@ struct MainControlView: View {
         // The module you're in decides which layout profile the right bar,
         // preview Edit Mode and Editor de Teme operate on.
         .onChange(of: appState.selectedSidebarItem, initial: true) {
-            switch appState.selectedSidebarItem {
-            case .bible: presentationManager.activeProfileKey = "bible"
-            case .songs: presentationManager.activeProfileKey = "song"
-            case .customSlides: presentationManager.activeProfileKey = "text"
-            default: break // Media/Schedule keep the last edited profile
+            if let key = appState.selectedSidebarItem.layoutProfileKey {
+                presentationManager.activeProfileKey = key
             }
         }
         // Keep the ⌘K verse full-text index pointed at the ACTIVE translation.

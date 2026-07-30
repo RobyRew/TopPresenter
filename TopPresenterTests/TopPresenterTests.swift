@@ -4635,3 +4635,59 @@ struct RemoteExtractionTests {
         #expect(fit(pm, w: 900, h: 240) == hot)
     }
 }
+
+// MARK: - Module → layout profile
+//
+// Media became a layout profile long after the two switches that mapped module to
+// profile were written, and neither picked it up — so opening the Theme Editor
+// from Media edited whichever profile happened to be last touched. The mapping now
+// lives on SidebarItem, and these hold it exhaustively so the next module added
+// cannot slip through the same way.
+@MainActor struct SidebarProfileMappingTests {
+
+    @Test func everyContentModuleWithAProfileMapsToARealOne() {
+        for item in AppState.SidebarItem.contentItems {
+            guard let key = item.layoutProfileKey else { continue }
+            #expect(PresentationManager.profileKeys.contains(key),
+                    "\(item.rawValue) maps to '\(key)', which is not a profile")
+        }
+    }
+
+    @Test func mediaEditsTheMediaProfile() {
+        #expect(AppState.SidebarItem.media.layoutProfileKey == "media")
+        #expect(AppState.SidebarItem.bible.layoutProfileKey == "bible")
+        #expect(AppState.SidebarItem.songs.layoutProfileKey == "song")
+        #expect(AppState.SidebarItem.customSlides.layoutProfileKey == "text")
+    }
+
+    @Test func scheduleAndUtilitiesOwnNoProfile() {
+        // Schedule mixes content types — each item renders with its own profile, so
+        // entering it must NOT repoint the editor.
+        #expect(AppState.SidebarItem.schedule.layoutProfileKey == nil)
+        for item in AppState.SidebarItem.utilityItems {
+            #expect(item.layoutProfileKey == nil)
+        }
+    }
+
+    @Test func everyProfileIsReachableFromSomeModule() {
+        // The other direction: a profile no module opens would be unreachable in
+        // the editor except through the header picker.
+        let reachable = Set(AppState.SidebarItem.allCases.compactMap(\.layoutProfileKey))
+        for key in PresentationManager.profileKeys {
+            #expect(reachable.contains(key), "no module opens the '\(key)' profile")
+        }
+    }
+
+    @Test func theMediaProfileShipsItsTextBoxesHidden() {
+        // Why the media canvas was blank: full-screen media is the content, so every
+        // built-in box starts hidden and the profile carries no media boxes. The
+        // editor draws MediaProfileStandIn so overlays have something to sit on.
+        let profile = PresentationManager.LayoutProfile.defaultProfile(for: "media")
+        for section in TextBoxSection.allCases {
+            #expect(profile.visibility[section.rawValue] != true,
+                    "\(section.rawValue) should start hidden in the media profile")
+        }
+        #expect(profile.mediaBoxes.isEmpty)
+        #expect(PresentationManager.relevantSections(for: "media") == [.reference])
+    }
+}

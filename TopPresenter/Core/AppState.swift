@@ -52,6 +52,25 @@ final class AppState {
 
         var id: String { rawValue }
 
+        /// The layout profile this module edits, or nil when it has none.
+        ///
+        /// Lives here, next to the cases, so adding a module forces the question
+        /// "which profile?" to be answered once instead of in every `switch` that
+        /// happens to map it. Media was added as a profile long after the two
+        /// call-site switches were written and neither picked it up, so opening the
+        /// Theme Editor from Media edited whichever profile was last touched.
+        /// Schedule genuinely has none — it mixes content types and each item
+        /// renders with its own profile.
+        var layoutProfileKey: String? {
+            switch self {
+            case .bible: return "bible"
+            case .songs: return "song"
+            case .customSlides: return "text"
+            case .media: return "media"
+            case .schedule, .history, .settings, .account: return nil
+            }
+        }
+
         /// Content sections (top of the sidebar).
         static let contentItems: [SidebarItem] = [.bible, .songs, .media, .schedule, .customSlides]
         /// Utility destinations pinned to the bottom of the sidebar.
