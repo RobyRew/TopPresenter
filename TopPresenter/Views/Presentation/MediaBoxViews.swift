@@ -342,6 +342,9 @@ struct MediaBoxVideoView: NSViewRepresentable {
         view.controlsStyle = .none
         view.videoGravity = fills ? .resizeAspectFill : .resizeAspect
         view.allowsPictureInPicturePlayback = false
+        // See OutputVideoView: a decorative looping overlay has even less use for
+        // Live Text than the projector does.
+        view.allowsVideoFrameAnalysis = false
 
         let item = AVPlayerItem(url: url)
         let player = AVQueuePlayer()

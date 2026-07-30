@@ -336,6 +336,12 @@ struct OutputVideoView: NSViewRepresentable {
         view.controlsStyle = .none
         view.videoGravity = fills ? .resizeAspectFill : .resizeAspect
         view.allowsPictureInPicturePlayback = false
+        // Live Text is ON by default on AVPlayerView. It ships every paused frame
+        // to the media-analysis daemon for text/subject detection, which spends
+        // CPU and XPC traffic mid-service and floods the log with VisionKit
+        // chatter ("isTranslatable: NO", "userCanceledErr", zero-bounds DD frames)
+        // — all of it work for a feature a projector surface can never use.
+        view.allowsVideoFrameAnalysis = false
         return view
     }
 

@@ -6,6 +6,12 @@ struct EditorSampleFields: Equatable {
     var reference: String
     var translation: String
     var subtitle: String
+    /// The media the canvas describes, for the „Nume fișier / Tip media" sources.
+    /// Without it they resolved against `liveContent`, which is empty unless
+    /// something is on the projector — so they read as blank while editing even
+    /// with a file selected in the Media module.
+    var mediaURL: URL? = nil
+    var mediaKind: String = ""
 }
 
 /// ONE box on the Theme Editor canvas.
@@ -64,7 +70,8 @@ struct EditorCanvasBox: View {
                 section,
                 main: fields.main, reference: fields.reference,
                 translation: fields.translation, subtitle: fields.subtitle,
-                slideNumber: "1 / 4"
+                slideNumber: "1 / 4",
+                mediaURL: fields.mediaURL, mediaKind: fields.mediaKind
             )
             if !text.isEmpty {
                 let frame = pm.boxFrame(for: section)
@@ -100,7 +107,8 @@ struct EditorCanvasBox: View {
             let resolved = box.resolvedText(
                 main: fields.main, reference: fields.reference,
                 translation: fields.translation, subtitle: fields.subtitle,
-                slideNumber: "1 / 4"
+                slideNumber: "1 / 4",
+                mediaURL: fields.mediaURL, mediaKind: fields.mediaKind
             )
             let text = resolved.isEmpty ? box.sourceLabel : resolved
             EditorCanvasText(text: text, style: pm.resolvedCustomStyle(box),

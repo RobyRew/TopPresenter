@@ -5407,6 +5407,46 @@ struct RemoteExtractionTests {
         }
     }
 
+    @Test func mediaSourcesNeverResolveToBibleContent() {
+        // The editor canvas and the right panel both fed these boxes the
+        // operator's BIBLE selection, because "media" fell into the `default:`
+        // arm of their sample switches. The Media theme showed a verse in its
+        // main box and "Geneza 1:1" in its title — text the media presenter can
+        // never actually produce. Nothing in the media presenter's own resolution
+        // may read a Bible field.
+        let pm = makeTestManager()
+        let clip = URL(fileURLWithPath: "/tmp/Intro Bumper.mov")
+
+        // Whatever a Bible box would have supplied is passed as empty here, which
+        // is what a media host now sends: the sources must stand on media alone.
+        for raw in ["mainText", "reference", "subtitle", "translation"] {
+            pm.setSourceRaw(raw, for: .verseContent, in: "media")
+            let text = pm.sectionText(
+                .verseContent, main: "", reference: "", translation: "", subtitle: "",
+                mediaURL: clip, mediaKind: "video", in: "media"
+            )
+            #expect(text.isEmpty, "'\(raw)' invented content for a media box")
+        }
+
+        // The media-specific ones DO resolve — against the file, not the Bible.
+        pm.setSourceRaw("mediaName", for: .verseContent, in: "media")
+        #expect(pm.sectionText(.verseContent, main: "", reference: "", translation: "",
+                               subtitle: "", mediaURL: clip, mediaKind: "video",
+                               in: "media") == "Intro Bumper")
+    }
+
+    @Test func withNoMediaSelectedTheBoxesAreEmpty() {
+        // "…or nothing if no file is selected" — an empty box does not mount, so
+        // an idle media presenter projects a clean screen rather than stale text.
+        let pm = makeTestManager()
+        for raw in ["mediaFile", "mediaName", "mediaKind", "mediaExtension", "reference"] {
+            pm.setSourceRaw(raw, for: .reference, in: "media")
+            let text = pm.sectionText(.reference, main: "", reference: "", translation: "",
+                                      subtitle: "", in: "media")
+            #expect(text.isEmpty, "'\(raw)' showed something with no media selected")
+        }
+    }
+
     @Test func theMediaProfileStillOptsOutOfBibleOnlyBoxes() {
         // Widening the list must not hand media a translation-name box: nothing
         // ever fills it, so it would be a permanently empty casetă in the list.

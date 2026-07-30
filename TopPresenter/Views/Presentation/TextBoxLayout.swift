@@ -1846,6 +1846,40 @@ struct LayoutEditorSheet: View {
         SongLine(text: "Întreg pământul cântă slava Ta.", chords: [SongChord(sym: "G", pos: 0), SongChord(sym: "D", pos: 16), SongChord(sym: "G", pos: 23)]),
     ]
 
+    // MARK: Media context for the canvas
+    //
+    // The media presenter describes MEDIA. It used to fall into the `default:`
+    // arm of these switches — the Bible one — so editing the Media theme showed
+    // a verse in the main box and "Geneza 1:1" in the title, sampled from the
+    // operator's Bible selection. Nothing in the media presenter can ever
+    // produce that text, so the canvas was previewing an impossible layout.
+
+    /// The media the canvas describes: what is live when media IS live, else the
+    /// Media module's current selection. Nothing when neither exists.
+    private var sampleMediaURL: URL? {
+        if pm.liveContent.isLive, pm.liveContent.contentType == .media {
+            return pm.liveContent.mediaURL
+        }
+        return libraryManager.selectedMediaItem?.resolvedURL
+    }
+
+    private var sampleMediaKind: String {
+        if pm.liveContent.isLive, pm.liveContent.contentType == .media {
+            return pm.liveContent.mediaKind
+        }
+        return libraryManager.selectedMediaItem?.mediaType ?? ""
+    }
+
+    /// The clip's title — the file name without its extension, matching what
+    /// `setMedia` puts on `liveContent.reference` when it goes live.
+    private var sampleMediaTitle: String {
+        if let url = sampleMediaURL {
+            return url.deletingPathExtension().lastPathComponent
+        }
+        guard let name = libraryManager.selectedMediaItem?.name else { return "" }
+        return (name as NSString).deletingPathExtension
+    }
+
     private var sampleVerse: String {
         if liveMatchesProfile, !pm.liveContent.mainText.isEmpty {
             return pm.liveContent.mainText
@@ -1855,6 +1889,11 @@ struct LayoutEditorSheet: View {
             return String(localized: "Ce mare ești Tu, Doamne!\nCât de minunate sunt lucrările Tale,\nÎntreg pământul cântă slava Ta.", comment: "Layout editor sample song lyrics")
         case "text":
             return String(localized: "Bine ați venit!\nVă așteptăm duminică la ora 10:00.", comment: "Layout editor sample slide text")
+        case "media":
+            // A clip has no body text. The casetă is still there to be placed and
+            // styled — it just draws whatever source you bind it to (static text,
+            // a clock, the file name), and nothing at all until you do.
+            return ""
         default:
             if !libraryManager.selectedVerses.isEmpty {
                 return libraryManager.selectedVersesText
@@ -1872,6 +1911,9 @@ struct LayoutEditorSheet: View {
             return String(localized: "Ce mare ești Tu", comment: "Layout editor sample song title")
         case "text":
             return String(localized: "Anunțuri", comment: "Layout editor sample slide title")
+        case "media":
+            // The selected file's title, or nothing — never a Bible reference.
+            return sampleMediaTitle
         default:
             if !libraryManager.selectedVerses.isEmpty {
                 return libraryManager.selectedVersesReference
@@ -1892,6 +1934,8 @@ struct LayoutEditorSheet: View {
         if liveMatchesProfile, !pm.liveContent.subtitle.isEmpty {
             return pm.liveContent.subtitle
         }
+        // "Strofa 1" is a SONG label; media has no subtitle of its own.
+        guard pm.activeProfileKey != "media" else { return "" }
         return String(localized: "Strofa 1", comment: "Layout editor sample subtitle")
     }
 
@@ -1968,7 +2012,8 @@ struct LayoutEditorSheet: View {
         // Transforms (MAJUSCULE etc.) are part of each box's resolved style —
         // they show on the canvas the moment they're toggled in the Text tab.
         let fields = EditorSampleFields(main: sampleVerse, reference: sampleReference,
-                                        translation: sampleTranslation, subtitle: sampleSubtitle)
+                                        translation: sampleTranslation, subtitle: sampleSubtitle,
+                                        mediaURL: sampleMediaURL, mediaKind: sampleMediaKind)
         let runs = sampleRuns
         let ilRuns = sampleInterlinearRuns
 

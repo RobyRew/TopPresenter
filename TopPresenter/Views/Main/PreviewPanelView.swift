@@ -127,10 +127,18 @@ struct PresentationPreviewCard: View {
     /// Media to render inside the live casetă instead of the live output.
     var mediaOverride: MediaBoxContent.LiveOverride? = nil
 
-    /// What would go live next: the panel-supplied content, or the Bible selection.
+    /// What would go live next: the panel-supplied content, or — for the BIBLE
+    /// panel only — the current verse selection.
+    ///
+    /// The verse-selection fallback used to apply to every host. A panel that
+    /// supplies no `pendingContent` therefore previewed the operator's Bible
+    /// selection no matter what it was showing, so the Media preview rendered a
+    /// verse and its reference. `isBibleContent` is exactly the flag that says
+    /// "the Bible selection IS this panel's pending content"; nothing else may
+    /// borrow it.
     private var pendingText: String {
         if let pendingContent { return pendingContent.text }
-        guard !libraryManager.selectedVerses.isEmpty else { return "" }
+        guard isBibleContent, !libraryManager.selectedVerses.isEmpty else { return "" }
         let mv = pm.bibleMultiVerse
         return libraryManager.formattedSelectedVersesText(
             layout: mv.layout, showPrefix: mv.showNumbers,
@@ -140,7 +148,7 @@ struct PresentationPreviewCard: View {
 
     private var pendingReference: String {
         if let pendingContent { return pendingContent.reference }
-        guard !libraryManager.selectedVerses.isEmpty else { return "" }
+        guard isBibleContent, !libraryManager.selectedVerses.isEmpty else { return "" }
         return libraryManager.selectedVersesReference
     }
 
