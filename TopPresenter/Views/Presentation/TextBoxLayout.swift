@@ -515,6 +515,29 @@ func boxSourceDescription(for identity: BoxIdentity, pm: PresentationManager) ->
 
 // MARK: - Edit Overlay (drag + resize directly on a canvas)
 
+
+#if DEBUG
+/// Temporary. Attributes the Text tab's cost to individual inspector groups:
+/// `inspector` resets the clock on a tab switch, each group reports when it
+/// finished appearing, and the GAPS between consecutive marks are the cost of
+/// whatever sits between them.
+@MainActor
+enum EditorPerfClock {
+    static var startedAt = Date.now
+    static func reset() { startedAt = .now }
+    static func mark(_ name: String) {
+        let ms = Int(Date.now.timeIntervalSince(startedAt) * 1000)
+        print("[TopPresenter]     +\(ms) ms  \(name)")
+    }
+}
+
+extension View {
+    func perfMark(_ name: String) -> some View {
+        onAppear { EditorPerfClock.mark(name) }
+    }
+}
+#endif
+
 /// Overlay that draws every fixed box (built-in, custom text, media) and lets
 /// the user move and resize them by direct manipulation, with right-click menus.
 struct TextBoxEditOverlay: View {
@@ -1819,6 +1842,7 @@ struct LayoutEditorSheet: View {
         // confirmed from the console rather than assumed.
         .onChange(of: activeTab) { _, new in
             let started = Date.now
+            EditorPerfClock.reset()
             let seen = builtTabs.contains(new)
             builtTabs.insert(new)
             DispatchQueue.main.async {
@@ -3071,6 +3095,7 @@ struct LayoutEditorSheet: View {
                 Label(String(localized: "Text Global", comment: "Inspector group"), systemImage: "textformat")
                     .font(.caption.bold())
             }
+            .perfMark("group1@L2944")
 
             // Red-letter, interlinear and multi-verse all style the VERSE text and
             // nothing else, so they belong to the verse cassette — same rule the
@@ -3112,6 +3137,7 @@ struct LayoutEditorSheet: View {
                     Label(String(localized: "Cuvintele lui Isus", comment: "Inspector group"), systemImage: "quote.bubble")
                         .font(.caption.bold())
                 }
+                .perfMark("group2@L3104")
 
                 // Interlinear — stacked word columns (original + gloss + Strong's + morph).
                 GroupBox {
@@ -3167,6 +3193,7 @@ struct LayoutEditorSheet: View {
                     Label(String(localized: "Interliniar", comment: "Inspector group"), systemImage: "text.word.spacing")
                         .font(.caption.bold())
                 }
+                .perfMark("group3@L3141")
 
                 // Multi-verse — how several selected verses render together.
                 // Stored in the theme (exports/imports with it).
@@ -3208,12 +3235,14 @@ struct LayoutEditorSheet: View {
                         Label(String(localized: "Multi-verset", comment: "Inspector group"), systemImage: "text.justify.leading")
                             .font(.caption.bold())
                     }
+                    .perfMark("group4@L3198")
                 }
             }
 
             // Per-box text style — select a box on the canvas, customize here.
             if let selection {
                 selectedBoxStyleGroup(selection)
+                    .perfMark("selectedBoxStyleGroup")
             } else {
                 Text(String(localized: "Selectează o casetă pe canvas pentru a-i personaliza textul.", comment: "Inspector hint"))
                     .font(.caption2)
