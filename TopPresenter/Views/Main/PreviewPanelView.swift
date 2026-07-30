@@ -81,6 +81,9 @@ struct PresentationPreviewCard: View {
         if pm.liveContent.isLive {
             return PresentationManager.contentKey(for: pm.liveContent.contentType)
         }
+        // Queued media projects through the media profile whatever panel is
+        // hosting the card — the session runner's next item included.
+        if pendingMedia != nil { return "media" }
         return formatHint ?? (isBibleContent ? "bible" : "text")
     }
 
@@ -96,14 +99,33 @@ struct PresentationPreviewCard: View {
     }
     var pendingContent: PendingContent? = nil
 
-    /// Media the hosting panel wants previewed (Media tab / session runner) — the
-    /// card renders it letterboxed on black instead of the text-box pipeline.
+    /// Media the hosting panel wants previewed (Media tab / session runner).
+    ///
+    /// It renders through the media profile's live casetă, exactly like the
+    /// projector. The card used to letterbox it on black INSTEAD of the box
+    /// pipeline, which is why the media presenter was the one presenter whose
+    /// preview showed neither its theme background nor any of its casete.
+    /// The full-bleed path survives only for a profile with no live casetă.
     struct PendingMedia {
         var thumbnail: NSImage?
         var kindRaw: String
         var name: String
+        var url: URL? = nil
     }
     var pendingMedia: PendingMedia? = nil
+
+    /// Hides the PREVIEW/black/resolution badges — the Media tab uses this card
+    /// as its viewer, where they would be chrome over the operator's content.
+    var showsBadges: Bool = true
+
+    /// Whether a live media casetă may run video here. False everywhere the LIVE
+    /// player is involved: only one surface per `AVPlayer` draws, so a second one
+    /// would take the video off the projector. The Media tab passes true because
+    /// it supplies its own audition player through `mediaOverride`.
+    var playsVideo: Bool = false
+
+    /// Media to render inside the live casetă instead of the live output.
+    var mediaOverride: MediaBoxContent.LiveOverride? = nil
 
     /// What would go live next: the panel-supplied content, or the Bible selection.
     private var pendingText: String {
@@ -148,6 +170,11 @@ struct PresentationPreviewCard: View {
         }
         if pm.liveContent.isLive, !pm.liveContent.reference.isEmpty {
             return pm.liveContent.reference
+        }
+        if pendingReference.isEmpty, let media = pendingMedia {
+            // A media panel offers no text, but the clip has a title, and that is
+            // what the media profile's „Titlu Media" casetă is bound to.
+            return (media.url?.deletingPathExtension().lastPathComponent) ?? media.name
         }
         return pendingReference
     }
@@ -200,10 +227,23 @@ struct PresentationPreviewCard: View {
         return pm.liveContent.isLive ? pm.liveContent.mainRuns : libraryManager.selectedVersesRuns
     }
 
+    /// The media a box bound to „Nume fișier (live)" should describe: what is on
+    /// the projector, or — before it goes live — what the panel is offering.
+    private var previewMediaURL: URL? {
+        if pm.liveContent.isLive { return pm.liveContent.mediaURL }
+        return pendingMedia?.url ?? mediaOverride?.url
+    }
+
+    private var previewMediaKind: String {
+        if pm.liveContent.isLive { return pm.liveContent.mediaKind }
+        return pendingMedia?.kindRaw ?? mediaOverride?.kindRaw ?? ""
+    }
+
     private var hasContent: Bool { !previewText.isEmpty }
 
     private var isPreviewOnly: Bool {
-        let notLiveYet = !pm.liveContent.isLive && !pendingText.isEmpty
+        let hasPending = !pendingText.isEmpty || pendingMedia != nil
+        let notLiveYet = !pm.liveContent.isLive && hasPending
         let frozenAndPreparing = pm.isFrozen && !pendingText.isEmpty
         return notLiveYet || frozenAndPreparing
     }
@@ -224,51 +264,44 @@ struct PresentationPreviewCard: View {
             )
     }
 
+    /// True when media has to be drawn full-bleed because the profile carries no
+    /// live casetă to draw it into — themes saved before the casetă existed.
+    private var needsFullBleedMediaFallback: Bool {
+        guard previewsMedia else { return false }
+        return !pm.hasLiveMediaBox(in: activeContentKey)
+    }
+
+    /// Whether this card is showing media at all (live, or pending from a panel).
+    private var previewsMedia: Bool {
+        if pm.liveContent.isLive { return pm.liveContent.contentType == .media }
+        return pendingMedia != nil
+    }
+
     @ViewBuilder
     private func cardContent(size: CGSize) -> some View {
         ZStack {
                 // Black bg (stands in for transparent on projector)
                 Color.black
 
-                // Background layers — per-content override or global.
+                // Background layers — per-content override or global. Media gets
+                // the theme's background like every other presenter; its own
+                // content arrives through the live casetă below.
                 // NOTE: Black/Freeze affect ONLY the output — the preview keeps
                 // showing content (status badges signal the output state).
-                if pm.liveContent.isLive, pm.liveContent.contentType == .media {
-                    // Live full-screen media mirror (image decoded at present time;
-                    // video shows a placeholder — the real frames play on the output).
-                    if let image = pm.liveContent.mediaImage {
-                        Image(nsImage: image)
-                            .resizable()
-                            .aspectRatio(contentMode: pm.fullscreenVideoFillRaw == "fill" ? .fill : .fit)
-                            .frame(width: size.width, height: size.height)
-                            .clipped()
-                    } else {
-                        mediaPlaceholder(kind: pm.liveContent.mediaKind,
-                                         name: pm.liveContent.mediaURL?.lastPathComponent ?? "")
-                    }
-                } else if let media = pendingMedia {
-                    // Pending media preview — letterboxed thumbnail, dimmed like text previews.
-                    if let thumb = media.thumbnail {
-                        Image(nsImage: thumb)
-                            .resizable()
-                            .aspectRatio(contentMode: .fit)
-                            .frame(width: size.width, height: size.height)
-                            .opacity(0.85)
-                    } else {
-                        mediaPlaceholder(kind: media.kindRaw, name: media.name)
-                    }
-                } else {
-                    let bg = pm.activeBackground(forKey: activeContentKey, frozen: false)
-                    if bg.showColor {
-                        bg.color
-                    }
-                    if bg.useMedia {
-                        BackgroundMediaView(background: bg, plays: false)
-                    }
-
-                    // Content + media — same unified stacking order as the output, scaled.
-                    previewBoxes(size: size)
+                let bg = pm.activeBackground(forKey: activeContentKey, frozen: false)
+                if bg.showColor {
+                    bg.color
                 }
+                if bg.useMedia {
+                    BackgroundMediaView(background: bg, plays: false)
+                }
+
+                if needsFullBleedMediaFallback {
+                    fullBleedMedia(size: size)
+                }
+
+                // Content + media — same unified stacking order as the output, scaled.
+                previewBoxes(size: size)
 
                 // Edit Mode: box overlays — drag to move, corner handles to resize
                 if pm.isEditMode {
@@ -276,7 +309,9 @@ struct PresentationPreviewCard: View {
                 }
 
                 // Badges overlay
-                badges(size: size)
+                if showsBadges {
+                    badges(size: size)
+                }
             }
             .frame(width: size.width, height: size.height)
             .clipShape(RoundedRectangle(cornerRadius: 6))
@@ -288,6 +323,33 @@ struct PresentationPreviewCard: View {
                     )
             )
             .shadow(radius: 2)
+    }
+
+    /// The pre-casetă rendering: media stretched across the whole card.
+    @ViewBuilder
+    private func fullBleedMedia(size: CGSize) -> some View {
+        if pm.liveContent.isLive {
+            if let image = pm.liveContent.mediaImage {
+                Image(nsImage: image)
+                    .resizable()
+                    .aspectRatio(contentMode: pm.fullscreenVideoFillRaw == "fill" ? .fill : .fit)
+                    .frame(width: size.width, height: size.height)
+                    .clipped()
+            } else {
+                mediaPlaceholder(kind: pm.liveContent.mediaKind,
+                                 name: pm.liveContent.mediaURL?.lastPathComponent ?? "")
+            }
+        } else if let media = pendingMedia {
+            if let thumb = media.thumbnail {
+                Image(nsImage: thumb)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: size.width, height: size.height)
+                    .opacity(0.85)
+            } else {
+                mediaPlaceholder(kind: media.kindRaw, name: media.name)
+            }
+        }
     }
 
     /// Icon + filename placeholder for media without a renderable frame
@@ -346,6 +408,7 @@ struct PresentationPreviewCard: View {
                             main: fields.main, reference: fields.reference,
                             translation: fields.translation, subtitle: fields.subtitle,
                             slideNumber: pm.liveContent.slideNumberText,
+                            mediaURL: previewMediaURL, mediaKind: previewMediaKind,
                             in: key
                         )
                         if !text.isEmpty {
@@ -386,7 +449,9 @@ struct PresentationPreviewCard: View {
                             translation: fields.translation, subtitle: fields.subtitle,
                             slideNumber: pm.liveContent.slideNumberText,
                             footnote: previewFootnote, crossReference: previewCrossReference,
-                            heading: previewHeading, gloss: previewGloss, strongs: previewStrongs
+                            heading: previewHeading, gloss: previewGloss, strongs: previewStrongs,
+                            mediaURL: previewMediaURL, mediaKind: previewMediaKind,
+                            slideShownAt: pm.slideShownAt
                         )
                         if !text.isEmpty {
                             let rect = box.frame.rect(in: size)
@@ -408,7 +473,9 @@ struct PresentationPreviewCard: View {
                     if let box = pm.mediaBox(id: id, in: key),
                        box.isVisible,
                        box.showsFor(contentType: pm.liveContent.contentType, isLive: pm.liveContent.isLive) {
-                        MediaBoxContent(box: box, canvasSize: size, playsVideo: false)
+                        MediaBoxContent(box: box, canvasSize: size,
+                                        playsVideo: playsVideo && box.sourceRaw == "live",
+                                        liveOverride: box.sourceRaw == "live" ? mediaOverride : nil)
                             .allowsHitTesting(false)
                     }
                 case nil:

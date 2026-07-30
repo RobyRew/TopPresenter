@@ -332,7 +332,8 @@ struct SchedulePreviewPanel: View {
               case let .media(mediaItem) = SessionService.resolve(item, context: modelContext)
         else { return nil }
         let thumb = mediaItem.thumbnailData.flatMap { NSImage(data: $0) }
-        return .init(thumbnail: thumb, kindRaw: mediaItem.mediaType, name: mediaItem.name)
+        return .init(thumbnail: thumb, kindRaw: mediaItem.mediaType, name: mediaItem.name,
+                     url: mediaItem.resolvedURL)
     }
 
     private func iconForType(_ type: String) -> String {

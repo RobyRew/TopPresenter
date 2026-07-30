@@ -381,11 +381,17 @@ final class LiveContent {
         setMedia(kind: "video", url: nil)
     }
 
-    /// Marks the output as showing full-screen media (image or video). Audio
-    /// plays through AudioPlayerManager and never claims the visual output.
+    /// Marks the output as showing media (image or video). Audio plays through
+    /// AudioPlayerManager and never claims the visual output.
+    ///
+    /// `reference` carries the media TITLE. It used to be blanked along with the
+    /// other text fields, which quietly broke the media presenter's own casete:
+    /// the „Titlu media (live)" source reads `reference`, so every box bound to it
+    /// resolved to an empty string and never mounted. The file name without its
+    /// extension is what an operator means by the title of a clip.
     func setMedia(kind: String, url: URL?, image: NSImage? = nil) {
         self.mainText = ""
-        self.reference = ""
+        self.reference = url?.deletingPathExtension().lastPathComponent ?? ""
         self.subtitle = ""
         self.translationName = ""
         self.contentType = .media

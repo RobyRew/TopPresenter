@@ -32,7 +32,8 @@ struct MediaPreviewPanel: View {
     private var pendingMedia: PresentationPreviewCard.PendingMedia? {
         guard let item = selectedItem else { return nil }
         let thumb = item.thumbnailData.flatMap { NSImage(data: $0) }
-        return .init(thumbnail: thumb, kindRaw: item.mediaType, name: item.name)
+        return .init(thumbnail: thumb, kindRaw: item.mediaType, name: item.name,
+                     url: item.resolvedURL)
     }
 
     var body: some View {
@@ -41,8 +42,11 @@ struct MediaPreviewPanel: View {
 
             Divider()
 
-            // Preview: pending media letterboxed; live media mirrored.
-            PresentationPreviewCard(formatHint: "text", pendingMedia: pendingMedia)
+            // Preview: the media profile, rendered exactly as it will project —
+            // theme background, casete in their own order, the selection (or the
+            // live clip) inside the live casetă. The hint was "text", so this
+            // panel previewed the SLIDES layout while showing media.
+            PresentationPreviewCard(formatHint: "media", pendingMedia: pendingMedia)
                 .padding()
 
             Divider()

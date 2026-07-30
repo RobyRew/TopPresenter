@@ -375,6 +375,13 @@ extension NSImage {
 /// resolution. Underneath, the FRAMING controls drive the live output:
 /// fit/fill, a zoom slider and drag-to-pan, all applied to whatever media is
 /// currently on screen.
+///
+/// The visual preview goes through the SAME card the projector and the right
+/// panel use: the media theme's background, then the media profile's casete in
+/// their stacking order, with this pane's own player inside the live casetă. It
+/// used to be a bare full-bleed surface on a grey plate, which meant the one
+/// place an operator sizes and frames media was the one place that showed
+/// neither the theme nor the casetă the media actually lands in.
 struct MediaDetailPane: View {
     @Environment(LibraryManager.self) private var libraryManager
     @Environment(PresentationManager.self) private var pm
@@ -389,6 +396,12 @@ struct MediaDetailPane: View {
     @State private var scopedURL: URL?
     @State private var panBase: CGSize?
 
+    // Transport state for the audition video — the casetă renders a chromeless
+    // surface (it has to match the projector), so the scrubber lives out here.
+    @State private var previewTime: Double = 0
+    @State private var previewDuration: Double = 0
+    @State private var isScrubbing = false
+
     var body: some View {
         if let item = libraryManager.selectedMediaItem {
             let kind = MediaKind(rawValue: item.mediaType) ?? .image
@@ -396,6 +409,7 @@ struct MediaDetailPane: View {
                 preview(item: item, kind: kind)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
 
+                if kind == .video { videoTransport }
                 if kind == .audio { audioTransport }
 
                 VStack(spacing: 3) {
@@ -427,8 +441,12 @@ struct MediaDetailPane: View {
                 .controlSize(.large)
             }
             .padding(18)
-            // Rebuild the preview whenever the selection changes.
-            .task(id: item.id) { await loadPreview(item: item, kind: kind) }
+            // Rebuild the preview whenever the selection changes; the tracking
+            // loop lives in the same task so cancellation stops it too.
+            .task(id: item.id) {
+                await loadPreview(item: item, kind: kind)
+                await trackPreviewTime(kind: kind)
+            }
             .onDisappear(perform: teardownPreview)
         } else {
             ContentUnavailableView {
@@ -446,39 +464,42 @@ struct MediaDetailPane: View {
     @ViewBuilder
     private func preview(item: MediaItem, kind: MediaKind) -> some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(.black.opacity(0.35))
-
             switch kind {
-            case .video:
-                if let previewPlayer {
-                    VideoPlayer(player: previewPlayer)
-                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                } else {
-                    thumbnailFallback(item: item, kind: kind)
-                }
+            case .video, .image:
+                // The projector's own renderer. `playsVideo` is safe here because
+                // the player handed over is this pane's, never the live one.
+                PresentationPreviewCard(
+                    formatHint: "media",
+                    pendingMedia: .init(
+                        thumbnail: item.thumbnailData.flatMap { NSImage(data: $0) },
+                        kindRaw: item.mediaType,
+                        name: item.name,
+                        url: item.resolvedURL
+                    ),
+                    showsBadges: false,
+                    playsVideo: true,
+                    mediaOverride: .init(
+                        image: kind == .image ? fullImage : nil,
+                        player: kind == .video ? previewPlayer : nil,
+                        url: item.resolvedURL,
+                        kindRaw: item.mediaType
+                    )
+                )
             case .audio:
-                VStack(spacing: 10) {
-                    if let data = item.thumbnailData, let artwork = NSImage(data: data) {
-                        Image(nsImage: artwork)
-                            .resizable()
-                            .scaledToFit()
-                            .frame(maxHeight: 200)
-                            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                    } else {
-                        Image(systemName: "waveform")
-                            .font(.system(size: 54))
-                            .foregroundStyle(.secondary)
-                    }
-                }
-            case .image:
-                if let fullImage {
-                    Image(nsImage: fullImage)
+                // Audio never claims the visual output, so there is no casetă to
+                // render it into — artwork on a plate is the honest preview.
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(.black.opacity(0.35))
+                if let data = item.thumbnailData, let artwork = NSImage(data: data) {
+                    Image(nsImage: artwork)
                         .resizable()
                         .scaledToFit()
-                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .frame(maxHeight: 200)
+                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                 } else {
-                    thumbnailFallback(item: item, kind: kind)
+                    Image(systemName: "waveform")
+                        .font(.system(size: 54))
+                        .foregroundStyle(.secondary)
                 }
             }
         }
@@ -499,19 +520,60 @@ struct MediaDetailPane: View {
         )
     }
 
-    private func thumbnailFallback(item: MediaItem, kind: MediaKind) -> some View {
-        Group {
-            if let data = item.thumbnailData, let image = NSImage(data: data) {
-                Image(nsImage: image)
-                    .resizable()
-                    .scaledToFit()
-                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-            } else {
-                Image(systemName: kind.systemImage)
-                    .font(.system(size: 56))
+    /// Transport for the audition video: play/pause, a scrubber, and the clock.
+    /// `AVPlayerView`'s built-in controls are unavailable now that the frames go
+    /// through the casetă (the projector has no chrome, and the preview has to
+    /// match it), so the transport is drawn here instead.
+    private var videoTransport: some View {
+        VStack(spacing: 6) {
+            Slider(
+                value: Binding(
+                    get: { previewTime },
+                    set: { newValue in
+                        previewTime = newValue
+                        seekPreview(to: newValue)
+                    }
+                ),
+                in: 0...max(previewDuration, 0.1),
+                onEditingChanged: { editing in isScrubbing = editing }
+            )
+            .controlSize(.small)
+            .disabled(previewPlayer == nil || previewDuration <= 0)
+
+            HStack(spacing: 10) {
+                Button {
+                    togglePreviewPlayback()
+                } label: {
+                    Image(systemName: isPreviewPlaying ? "pause.circle.fill" : "play.circle.fill")
+                        .font(.system(size: 26))
+                        .foregroundStyle(appAccent)
+                }
+                .buttonStyle(.plain)
+                .disabled(previewPlayer == nil)
+                .help(String(localized: "Redă local (nu iese pe ecran)", comment: "Tooltip"))
+
+                Text(verbatim: "\(timecode(previewTime)) / \(timecode(previewDuration))")
+                    .font(.caption.monospacedDigit())
                     .foregroundStyle(.secondary)
+
+                Spacer()
+
+                Button {
+                    seekPreview(to: 0)
+                } label: {
+                    Image(systemName: "backward.end.fill")
+                }
+                .controlSize(.small)
+                .disabled(previewPlayer == nil)
+                .help(String(localized: "Înapoi la început", comment: "Tooltip"))
             }
         }
+    }
+
+    private func timecode(_ seconds: Double) -> String {
+        guard seconds.isFinite, seconds >= 0 else { return "0:00" }
+        let total = Int(seconds.rounded())
+        return String(format: "%d:%02d", total / 60, total % 60)
     }
 
     private var audioTransport: some View {
@@ -596,9 +658,33 @@ struct MediaDetailPane: View {
             let player = AVPlayer(url: url)
             player.isMuted = true          // auditioning must stay silent by default
             previewPlayer = player
+            if let duration = try? await AVURLAsset(url: url).load(.duration) {
+                let seconds = CMTimeGetSeconds(duration)
+                previewDuration = seconds.isFinite ? seconds : 0
+            }
         case .audio:
             previewPlayer = AVPlayer(url: url)
         }
+    }
+
+    /// Drives the scrubber for as long as this item is selected. A polling loop
+    /// rather than `addPeriodicTimeObserver`: the observer's callback is
+    /// `@Sendable` and would have to reach back into this view's `@State`, and it
+    /// needs explicit teardown. `.task(id:)` cancels this on its own.
+    /// Skipped while the operator is dragging, so the thumb doesn't fight them.
+    private func trackPreviewTime(kind: MediaKind) async {
+        guard kind == .video else { return }
+        while !Task.isCancelled {
+            try? await Task.sleep(for: .milliseconds(200))
+            guard !isScrubbing, let player = previewPlayer else { continue }
+            let seconds = CMTimeGetSeconds(player.currentTime())
+            if seconds.isFinite { previewTime = seconds }
+        }
+    }
+
+    private func seekPreview(to seconds: Double) {
+        previewPlayer?.seek(to: CMTime(seconds: seconds, preferredTimescale: 600),
+                            toleranceBefore: .zero, toleranceAfter: .zero)
     }
 
     private func togglePreviewPlayback() {
@@ -615,6 +701,9 @@ struct MediaDetailPane: View {
         previewPlayer?.pause()
         previewPlayer = nil
         isPreviewPlaying = false
+        previewTime = 0
+        previewDuration = 0
+        isScrubbing = false
         fullImage = nil
         if let scopedURL {
             scopedURL.stopAccessingSecurityScopedResource()

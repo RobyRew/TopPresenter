@@ -38,6 +38,7 @@ enum TextBoxSection: String, CaseIterable, Identifiable {
         switch (self, key) {
         case (.verseContent, "song"): return String(localized: "Versuri", comment: "Text box name — song lyrics")
         case (.verseContent, "text"): return String(localized: "Conținut Slide", comment: "Text box name — slide body")
+        case (.verseContent, "media"): return String(localized: "Text Media", comment: "Text box name — media body text")
         case (.verseContent, _): return String(localized: "Conținut Verset", comment: "Text box name")
         case (.reference, "song"): return String(localized: "Titlu Cântec", comment: "Text box name — song title")
         case (.reference, "text"): return String(localized: "Titlu Slide", comment: "Text box name — slide title")

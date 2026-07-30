@@ -698,11 +698,17 @@ final class PresentationManager {
 
     /// Which built-in boxes make sense per presenter — Songs has no Bible
     /// translation box, Slides has neither translation nor verse label.
+    ///
+    /// Media offers the same three generic casete as the others. It used to offer
+    /// a caption alone, which made it the odd one out: the source list already
+    /// gives every presenter a common core (main text, title, subtitle) plus the
+    /// generic clock/timer sources, and two thirds of that core had nowhere to
+    /// live here. They ship hidden — see `defaultProfile(for:)`.
     static func relevantSections(for key: String) -> [TextBoxSection] {
         switch key {
         case "song": return [.verseContent, .reference, .subtitle, .chords]
         case "text": return [.verseContent, .reference]
-        case "media": return [.reference]      // an optional caption over the media
+        case "media": return [.verseContent, .reference, .subtitle]
         default: return TextBoxSection.allCases.filter { $0 != .chords }
         }
     }
@@ -4248,10 +4254,16 @@ final class PresentationManager {
 
     /// Resolved text for a built-in section, honoring its source override.
     /// Callers pass the four candidate field values (live, preview, or sample).
+    ///
+    /// `mediaURL`/`mediaKind` fall back to the LIVE values when omitted. A preview
+    /// passes its own so a box bound to „Nume fișier (live)" resolves against the
+    /// media about to be projected, not against what is on the projector now.
     func sectionText(
         _ section: TextBoxSection,
         main: String, reference: String, translation: String, subtitle: String,
-        now: Date = .now, slideNumber: String = "", in key: String? = nil
+        now: Date = .now, slideNumber: String = "",
+        mediaURL: URL? = nil, mediaKind: String = "",
+        in key: String? = nil
     ) -> String {
         let autoValue: String
         switch section {
@@ -4273,7 +4285,8 @@ final class PresentationManager {
             songAuthor: liveContent.songAuthor, songCopyright: liveContent.songCopyright,
             songCCLI: liveContent.songCCLI, songbook: liveContent.songbook,
             songStyle: liveContent.songStyle, songKey: liveContent.songKey, songTempo: liveContent.songTempo,
-            mediaURL: liveContent.mediaURL, mediaKind: liveContent.mediaKind,
+            mediaURL: mediaURL ?? liveContent.mediaURL,
+            mediaKind: mediaKind.isEmpty ? liveContent.mediaKind : mediaKind,
             slideShownAt: slideShownAt
         )
     }

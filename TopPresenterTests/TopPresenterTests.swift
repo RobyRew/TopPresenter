@@ -4086,12 +4086,14 @@ struct RemoteExtractionTests {
         #expect(PresentationManager.profileKeys == ["bible", "song", "text", "media"])
 
         let profile = PresentationManager.LayoutProfile.defaultProfile(for: "media")
-        // Full-screen media IS the content — no built-in text box may cover it
-        // until the operator turns one on.
+        // The media IS the content — no built-in text box may cover it until the
+        // operator turns one on.
         #expect(profile.visibility.values.allSatisfy { $0 == false })
 
-        // Only a caption is offered; verse/translation boxes make no sense here.
-        #expect(PresentationManager.relevantSections(for: "media") == [.reference])
+        // The same three generic casete every presenter gets. Media used to offer
+        // a caption alone, so two thirds of the common source core had nowhere to
+        // live and the presenter behaved unlike every other one.
+        #expect(PresentationManager.relevantSections(for: "media") == [.verseContent, .reference, .subtitle])
     }
 
     @Test func showingMediaSwitchesTheOutputProfile() {
@@ -4679,9 +4681,9 @@ struct RemoteExtractionTests {
     }
 
     @Test func theMediaProfileShipsItsTextBoxesHidden() {
-        // Full-screen media is the content, so every built-in TEXT box starts
-        // hidden — the profile is for overlays. It does carry one media casetă:
-        // the live one, full bleed, which is what the module's media renders into.
+        // The media is the content, so every built-in TEXT box starts hidden —
+        // they are overlays. It does carry one media casetă: the live one, full
+        // bleed, which is what the module's media renders into.
         let profile = PresentationManager.LayoutProfile.defaultProfile(for: "media")
         for section in TextBoxSection.allCases {
             #expect(profile.visibility[section.rawValue] != true,
@@ -4689,7 +4691,7 @@ struct RemoteExtractionTests {
         }
         #expect(profile.mediaBoxes.count == 1)
         #expect(profile.mediaBoxes.first?.sourceRaw == "live")
-        #expect(PresentationManager.relevantSections(for: "media") == [.reference])
+        #expect(PresentationManager.relevantSections(for: "media") == [.verseContent, .reference, .subtitle])
     }
 }
 
@@ -5332,6 +5334,84 @@ struct RemoteExtractionTests {
         // blank when nothing is playing, not show unrelated content.
         #expect(resolve("mediaFile").isEmpty)
         #expect(resolve("mediaKind").isEmpty)
+    }
+}
+
+// MARK: - The media presenter's own casete
+//
+// Every source the media presenter offers was reachable in the editor and dead on
+// the projector: `setMedia` blanked the text fields the common sources read from,
+// and the output refused to draw text boxes at all while media was live. An
+// operator could configure a title, a countdown or a slide timer over a clip, see
+// it in the box list, and never see it on screen.
+@MainActor struct MediaPresenterSourceTests {
+
+    @Test func goingLiveWithMediaCarriesItsTitle() {
+        let pm = makeTestManager()
+        pm.showPresentationWindow()
+        pm.showMedia(kind: "video", url: URL(fileURLWithPath: "/tmp/Worship Loop.MP4"))
+
+        // „Titlu media (live)" reads `reference`. It used to be blanked, so every
+        // box bound to it resolved empty and never mounted.
+        #expect(pm.liveContent.reference == "Worship Loop")
+        #expect(pm.liveContent.contentType == .media)
+    }
+
+    @Test func theTitleCaseteResolvesAgainstTheLiveClip() {
+        let pm = makeTestManager()
+        pm.showPresentationWindow()
+        pm.showMedia(kind: "image", url: URL(fileURLWithPath: "/tmp/Anunț.png"))
+
+        pm.setSourceRaw("reference", for: .reference, in: "media")
+        let text = pm.sectionText(
+            .reference,
+            main: pm.liveContent.mainText, reference: pm.liveContent.reference,
+            translation: "", subtitle: "", in: "media"
+        )
+        #expect(text == "Anunț")
+    }
+
+    @Test func aPreviewResolvesMediaSourcesBeforeTheClipGoesLive() {
+        let pm = makeTestManager()
+        pm.setSourceRaw("mediaName", for: .reference, in: "media")
+
+        // Nothing live: without the override the box would describe whatever is on
+        // the projector, so the panel could never preview what it is about to show.
+        let pending = URL(fileURLWithPath: "/tmp/Intro Bumper.mov")
+        let previewed = pm.sectionText(
+            .reference, main: "", reference: "", translation: "", subtitle: "",
+            mediaURL: pending, mediaKind: "video", in: "media"
+        )
+        #expect(previewed == "Intro Bumper")
+
+        // Omitted, it still falls back to the live values — the output's path.
+        #expect(pm.sectionText(.reference, main: "", reference: "", translation: "", subtitle: "",
+                               in: "media").isEmpty)
+    }
+
+    @Test func theGenericSourcesAllHaveSomewhereToLiveInMedia() {
+        // The common core is main text / title / subtitle. Every one of them needs
+        // a built-in casetă to be bound to, or the presenter is not "like the
+        // others" no matter what the source picker offers.
+        let sections = PresentationManager.relevantSections(for: "media")
+        #expect(sections.contains(.verseContent))
+        #expect(sections.contains(.reference))
+        #expect(sections.contains(.subtitle))
+
+        let sources = PresentationManager.sourceOptions(for: "media").map(\.raw)
+        for generic in ["static", "date", "time", "slideNumber", "countdown", "elapsed", "slideTimer"] {
+            #expect(sources.contains(generic), "media lost the generic '\(generic)' source")
+        }
+        for common in ["mainText", "reference", "subtitle"] {
+            #expect(sources.contains(common), "media lost the common '\(common)' source")
+        }
+    }
+
+    @Test func theMediaProfileStillOptsOutOfBibleOnlyBoxes() {
+        // Widening the list must not hand media a translation-name box: nothing
+        // ever fills it, so it would be a permanently empty casetă in the list.
+        #expect(!PresentationManager.relevantSections(for: "media").contains(.translationName))
+        #expect(!PresentationManager.relevantSections(for: "media").contains(.chords))
     }
 }
 

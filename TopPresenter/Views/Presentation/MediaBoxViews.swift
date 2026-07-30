@@ -105,12 +105,29 @@ struct MediaBoxContent: View {
     @Environment(PresentationManager.self) private var pm
     @Environment(LibraryManager.self) private var libraryManager: LibraryManager?
 
+    /// What a `sourceRaw == "live"` casetă should show INSTEAD of the live output.
+    ///
+    /// The Media tab auditions a clip through its OWN player — never the live
+    /// `VideoPlayerService` — so it needs to hand that player to the casetă. Only
+    /// one `AVPlayerLayer` per `AVPlayer` actually draws, so mirroring the live
+    /// player into a second surface would steal the video off the projector.
+    struct LiveOverride {
+        var image: NSImage? = nil
+        var player: AVPlayer? = nil
+        var url: URL? = nil
+        var kindRaw: String = "image"
+    }
+
     let box: PresentationManager.MediaBox
     let canvasSize: CGSize
     var playsVideo: Bool = false
+    var liveOverride: LiveOverride? = nil
 
     @State private var image: NSImage?
     @State private var resolvedURL: URL?
+    /// First frame of a video this context cannot play (preview card, canvas) —
+    /// what will be projected, rather than a grey rectangle with a file name.
+    @State private var posterFrame: NSImage?
 
     var body: some View {
         let rect = box.frame.rect(in: canvasSize)
@@ -119,6 +136,15 @@ struct MediaBoxContent: View {
         let feather = box.edgeFeather * scale
 
         content
+            .frame(width: rect.width, height: rect.height)
+            // Zoom + pan from the Media panel's framing controls. They only ever
+            // drove the old full-screen layer, so they went dead the moment the
+            // casetă took over the rendering — the sliders were still there,
+            // still said they applied live, and did nothing. Panning is a
+            // fraction of the CASETĂ now, not of the screen, so it means the same
+            // thing whatever size the box is.
+            .scaleEffect(framingZoom)
+            .offset(x: framingPan.width * rect.width, y: framingPan.height * rect.height)
             .frame(width: rect.width, height: rect.height)
             .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
             .mask(
@@ -135,6 +161,32 @@ struct MediaBoxContent: View {
                     image = NSImage(contentsOf: url)
                 }
             }
+            .task(id: posterSource) {
+                guard let url = posterSource, !playsVideo else { return }
+                posterFrame = await MediaThumbnailer.thumbnail(for: url, mediaType: "video")
+            }
+    }
+
+    /// Framing applies to the LIVE casetă only — a decorative logo or a lower
+    /// third is placed by its own frame, and must not move when the operator
+    /// reframes the clip.
+    private var framingZoom: CGFloat {
+        box.sourceRaw == "live" ? pm.mediaZoom : 1
+    }
+
+    private var framingPan: CGSize {
+        guard box.sourceRaw == "live" else { return .zero }
+        return CGSize(width: pm.mediaPanX, height: pm.mediaPanY)
+    }
+
+    /// The video whose first frame should stand in here, if any.
+    private var posterSource: URL? {
+        guard box.sourceRaw == "live", !playsVideo else { return nil }
+        if let liveOverride {
+            return liveOverride.kindRaw == "video" ? liveOverride.url : nil
+        }
+        guard pm.liveContent.isLive, pm.liveContent.mediaKind == "video" else { return nil }
+        return pm.liveContent.mediaURL
     }
 
     @ViewBuilder
@@ -150,28 +202,49 @@ struct MediaBoxContent: View {
 
     @ViewBuilder
     private var liveContent: some View {
-        if let preview = editorPreviewImage {
+        if let liveOverride {
+            overrideContent(liveOverride)
+        } else if let image = pm.liveContent.mediaImage, pm.liveContent.mediaKind == "image" {
+            fitted { Image(nsImage: image) }
+        } else if pm.liveContent.mediaKind != "image", let player = pm.videoService?.player, playsVideo {
+            OutputVideoView(player: player, fills: box.contentModeRaw == "fill")
+        } else if let posterFrame {
+            // A video this surface cannot play: its own first frame, so the preview
+            // shows what will be projected instead of a grey rectangle.
+            fitted { Image(nsImage: posterFrame) }
+        } else if let preview = editorPreviewImage {
             // Nothing live, but something is selected in the Media module: preview
             // it so the casetă can be sized against real content rather than a
             // placeholder. The Bible profile does the same with the selected verse.
-            Image(nsImage: preview)
-                .resizable()
-                .aspectRatio(contentMode: box.contentModeRaw == "fill" ? .fill : .fit)
-        } else if let image = pm.liveContent.mediaImage, pm.liveContent.mediaKind == "image" {
-            Image(nsImage: image)
-                .resizable()
-                .aspectRatio(contentMode: box.contentModeRaw == "fill" ? .fill : .fit)
-        } else if pm.liveContent.mediaKind != "image", let player = pm.videoService?.player, playsVideo {
-            OutputVideoView(player: player, fills: box.contentModeRaw == "fill")
+            fitted { Image(nsImage: preview) }
         } else if let url = pm.liveContent.mediaURL {
-            // Nothing decoded yet, or video that this context does not play (the
-            // editor canvas) — name the file rather than showing an empty hole.
             placeholder(icon: pm.liveContent.mediaKind == "video" ? "film" : "photo",
                         caption: url.lastPathComponent)
         } else {
             placeholder(icon: "play.rectangle",
                         caption: String(localized: "Media în direct", comment: "Live media box placeholder"))
         }
+    }
+
+    @ViewBuilder
+    private func overrideContent(_ override: LiveOverride) -> some View {
+        if let player = override.player, playsVideo, override.kindRaw == "video" {
+            OutputVideoView(player: player, fills: box.contentModeRaw == "fill")
+        } else if let image = override.image {
+            fitted { Image(nsImage: image) }
+        } else if let posterFrame {
+            fitted { Image(nsImage: posterFrame) }
+        } else {
+            placeholder(icon: (MediaKind(rawValue: override.kindRaw) ?? .image).systemImage,
+                        caption: override.url?.lastPathComponent ?? box.fileName)
+        }
+    }
+
+    /// Fit/fill is a per-casetă setting; every image path honours the same one.
+    private func fitted(_ image: () -> Image) -> some View {
+        image()
+            .resizable()
+            .aspectRatio(contentMode: box.contentModeRaw == "fill" ? .fill : .fit)
     }
 
     /// The Media module's current selection, for previewing while editing. Only

@@ -46,6 +46,11 @@ struct PresentationOutputView: View {
             // Profiles saved before the casetă existed keep working through here.
             // Stays mounted during black screen — the overlay covers it — so
             // toggling black doesn't tear down the player view mid-playback.
+            //
+            // It sits ABOVE the box layer, so on such a profile the media covers
+            // any overlay. That is the pre-casetă behaviour preserved verbatim;
+            // z-order becomes the operator's to choose the moment the profile has
+            // its live casetă, which is where every layering decision belongs.
             if pm.liveContent.isLive,
                pm.liveContent.contentType == .media,
                !pm.hasLiveMediaBox(in: pm.outputProfileKey),
@@ -154,9 +159,13 @@ struct PresentationOutputView: View {
         GeometryReader { geo in
             let fontScale = PresentationManager.fontScale(forHeight: geo.size.height)
             let live = pm.liveContent
-            // Text boxes only render with live (non-video) content; "always"
-            // media renders even when idle.
-            let textVisible = live.isLive && live.contentType != .media
+            // Text boxes render with any live content; "always" media renders even
+            // when idle. Media used to be excluded here, which made every source on
+            // a media-profile casetă dead on arrival: you could bind a box to the
+            // clip's title or a countdown, and it would never appear. The media
+            // profile ships its text boxes hidden, so nothing draws over a photo
+            // unless the operator asks for it.
+            let textVisible = live.isLive
 
             ZStack(alignment: .topLeading) {
                 // The LIVE content's profile decides boxes, order and transitions
