@@ -283,6 +283,7 @@ struct BibleSettingsTab: View {
     @AppStorage("showBookCategoryColors") private var showBookCategoryColors: Bool = true
     @AppStorage("showBookCategoryLabels") private var showBookCategoryLabels: Bool = true
     @AppStorage("bibleBooksAbbreviated") private var booksAbbreviated: Bool = false
+    @AppStorage("bibleBooksLargeText") private var booksLargeText: Bool = false
 
     var body: some View {
         Form {
@@ -292,11 +293,21 @@ struct BibleSettingsTab: View {
             }
 
             Section(String(localized: "Grilă cărți", comment: "Settings section")) {
-                Toggle(String(localized: "Nume prescurtate, text mai mare", comment: "Setting label"), isOn: $booksAbbreviated)
-                Text(String(localized: "Butoanele arată „Gen”, „1Împ” în loc de numele întreg, la o dimensiune mult mai lizibilă — mai multe cărți pe ecran, mai puțin derulat. Numele complet rămâne în tooltip.", comment: "Setting hint"))
+                Toggle(String(localized: "Nume prescurtate", comment: "Setting label"), isOn: $booksAbbreviated)
+                Text(String(localized: "Butoanele arată „Gen”, „1Împ” în loc de numele întreg — mai multe cărți pe ecran, mai puțin derulat. Numele complet rămâne în tooltip.", comment: "Setting hint"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
+
+                // Only offered once the names are short: at this size a full
+                // name would mostly render as "Cântarea Cân…".
+                if booksAbbreviated {
+                    Toggle(String(localized: "Text mai mare", comment: "Setting label"), isOn: $booksLargeText)
+                    Text(String(localized: "Prescurtările se scriu mult mai mare, lizibile de la distanță.", comment: "Setting hint"))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
 
             Section(String(localized: "Conținut", comment: "Settings section")) {

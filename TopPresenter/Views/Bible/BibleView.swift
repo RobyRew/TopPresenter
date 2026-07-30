@@ -339,8 +339,16 @@ func projectBibleVerse(_ verse: BibleVerse, libraryManager: LibraryManager,
 struct BibleBooksGridPane: View {
     @Environment(LibraryManager.self) private var libraryManager
     @AppStorage("showBookCategoryColors") private var showBookCategoryColors: Bool = true
-    /// Compact grid: short labels at a larger size. Settings → Biblie.
+    // Two independent choices, both in Settings → Biblie. Shortening the label
+    // and enlarging it are different wants: abbreviations alone fit more books
+    // per row, and the bigger type is what makes them readable at a distance —
+    // bundling them forced one on anyone who wanted the other.
     @AppStorage("bibleBooksAbbreviated") private var abbreviated: Bool = false
+    @AppStorage("bibleBooksLargeText") private var largeTextSetting: Bool = false
+
+    /// Bigger type is an abbreviated-mode option: full names at that size would
+    /// mostly render as "Cântarea Cân…", which is worse than either mode.
+    private var largeText: Bool { abbreviated && largeTextSetting }
 
     var body: some View {
         ScrollView {
@@ -373,12 +381,18 @@ struct BibleBooksGridPane: View {
                 .textCase(.uppercase)
                 .foregroundStyle(.tertiary)
                 .padding(.leading, 2)
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: abbreviated ? 58 : 86), spacing: 4)], spacing: 4) {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: cellMinWidth), spacing: 4)], spacing: 4) {
                 ForEach(books) { book in
                     bookCell(book)
                 }
             }
         }
+    }
+
+    /// Abbreviations pack tighter; bigger type needs some of that room back.
+    private var cellMinWidth: CGFloat {
+        guard abbreviated else { return 86 }
+        return largeText ? 70 : 58
     }
 
     private func bookCell(_ book: BibleBook) -> some View {
@@ -387,15 +401,12 @@ struct BibleBooksGridPane: View {
         return Button {
             selectBookOpeningFirstChapter(book, in: libraryManager)
         } label: {
-            // Abbreviated mode trades the full name for a bigger, denser grid:
-            // the short label fits at a size worth reading across the room, and
-            // the whole canon needs far less scrolling.
             Text(abbreviated ? book.displayAbbreviation : book.name)
-                .font(.system(size: abbreviated ? 15 : 11, weight: abbreviated ? .semibold : .medium))
+                .font(.system(size: largeText ? 17 : 11, weight: abbreviated ? .semibold : .medium))
                 .lineLimit(1)
                 .minimumScaleFactor(0.65)
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, abbreviated ? 8 : 6)
+                .padding(.vertical, largeText ? 9 : 6)
                 .padding(.horizontal, 4)
                 .background(
                     isSelected

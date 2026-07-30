@@ -27,6 +27,9 @@ struct MainControlView: View {
     @State private var showLayoutEditor = false
     @State private var droppedFiles: [PendingImportFile] = []
     @State private var isDragTargeted = false
+    /// Drives our own sidebar toggle. Per window, so one tab hiding its sidebar
+    /// leaves the others alone.
+    @State private var columnVisibility: NavigationSplitViewVisibility = .all
 
     /// Automatic tab title: the section type plus the active selection, e.g.
     /// "Bible - (EDC100) Ediția Dumitru Cornilescu Centenară",
@@ -247,7 +250,7 @@ struct MainControlView: View {
     }
 
     private var mainContent: some View {
-        NavigationSplitView {
+        NavigationSplitView(columnVisibility: $columnVisibility) {
             SidebarView()
         } detail: {
             HSplitView {
@@ -263,10 +266,29 @@ struct MainControlView: View {
             }
         }
         .navigationTitle(autoTabTitle)
+        // SwiftUI's own sidebar button is removed and replaced by ours below.
+        //
+        // A CUSTOMIZABLE toolbar persists every item it contains, including the
+        // automatic ones. So the saved configuration carried
+        // `com.apple.SwiftUI.navigationSplitView.toggleSidebar`, and opening a
+        // new tab inserted it once from that saved list and once automatically:
+        //
+        //   NSInternalInconsistencyException: NSToolbar … already contains an
+        //   item with the identifier …toggleSidebar. Duplicate items … not allowed
+        //
+        // which aborted before the tab could appear — customization and tabs were
+        // mutually exclusive. Owning the item outright means exactly one source
+        // for it, and it lets us pin it in place (see `sidebarToolbarItem`).
+        .toolbar(removing: .sidebarToggle)
         // CUSTOMIZABLE toolbar with a SEPARATE saved layout per module — the id
         // keys the persisted customization, so Bible and Songs (etc.) each keep
         // their own arrangement. Right-click → „Customize Toolbar…" to edit.
-        .toolbar(id: "tp-toolbar-\(appState.selectedSidebarItem.rawValue)") {
+        //
+        // `v2` deliberately abandons the pre-existing saved configurations: they
+        // still name the duplicated identifier, and a stale entry would keep
+        // reproducing the crash on machines that already have one.
+        .toolbar(id: "tp-toolbar-v2-\(appState.selectedSidebarItem.rawValue)") {
+            sidebarToolbarItem
             moduleToolbarItems
             searchToolbarItem
             presentationToolbarItems
@@ -275,6 +297,28 @@ struct MainControlView: View {
         .background(ToolbarDisplayModeConfigurator(
             toolbarID: appState.selectedSidebarItem.rawValue
         ))
+    }
+
+    /// Show/hide the sidebar. Always present, never customizable away.
+    ///
+    /// `.customizationBehavior(.disabled)` keeps it out of the customization
+    /// sheet entirely, so it cannot be dragged off the bar and lost — the way
+    /// back to the sidebar must not itself be hideable.
+    private var sidebarToolbarItem: some CustomizableToolbarContent {
+        ToolbarItem(id: "sidebar.toggle", placement: .navigation) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    columnVisibility = columnVisibility == .detailOnly ? .all : .detailOnly
+                }
+            } label: {
+                Label(String(localized: "Bară laterală", comment: "Toolbar button — show/hide the sidebar"),
+                      systemImage: "sidebar.leading")
+            }
+            .help(columnVisibility == .detailOnly
+                  ? String(localized: "Arată bara laterală", comment: "Tooltip")
+                  : String(localized: "Ascunde bara laterală", comment: "Tooltip"))
+        }
+        .customizationBehavior(.disabled)
     }
 
     // MARK: - Drag & Drop
