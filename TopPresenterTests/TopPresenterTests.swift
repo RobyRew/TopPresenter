@@ -5684,3 +5684,57 @@ struct RemoteExtractionTests {
         #expect(a != b, "12:00 and 00:00 must not render identically")
     }
 }
+
+// MARK: - Slide timer
+@MainActor struct SlideTimerTests {
+
+    @Test func itCountsFromWhenTheContentWentLive() {
+        let shown = Date().addingTimeInterval(-95)
+        let text = PresentationManager.resolveBoxSource(
+            "slideTimer", autoValue: "", staticText: "",
+            main: "", reference: "", translation: "", subtitle: "",
+            slideShownAt: shown
+        )
+        #expect(text == "1:35")
+    }
+
+    @Test func itResetsOnEverySlide() {
+        let pm = makeTestManager()
+        pm.showBibleVerse(text: "one", reference: "Gen 1:1")
+        let first = pm.slideShownAt
+        pm.showBibleVerse(text: "two", reference: "Gen 1:2")
+        // Unlike `elapsed`, which needs a target, this restarts by itself.
+        #expect(pm.slideShownAt > first)
+        pm.clearOutput()
+    }
+
+    @Test func withNothingLiveItReadsZero() {
+        let text = PresentationManager.resolveBoxSource(
+            "slideTimer", autoValue: "", staticText: "",
+            main: "", reference: "", translation: "", subtitle: ""
+        )
+        #expect(text == "0:00")
+    }
+
+    @Test func everyPresenterOffersIt() {
+        for key in PresentationManager.profileKeys {
+            let raws = Set(PresentationManager.sourceOptions(for: key).map(\.raw))
+            #expect(raws.contains("slideTimer"), "\(key) should offer the slide timer")
+        }
+    }
+
+    @Test func itDrivesTheClockLikeAnyOtherSpan() {
+        let pm = makeTestManager()
+        pm.activeProfileKey = "bible"
+        pm.setSectionVisible(true, for: .reference, in: "bible")
+        pm.setSourceRaw("slideTimer", for: .reference, in: "bible")
+        pm.setSourceFormat("", for: .reference, in: "bible")
+        pm.showBibleVerse(text: "x", reference: "y")
+        #expect(pm.clockTickInterval == 1, "seconds are visible, so it ticks every second")
+
+        // Minutes only: no reason to wake the output every second.
+        pm.setSourceFormat("hm", for: .reference, in: "bible")
+        #expect(pm.clockTickInterval == 60)
+        pm.clearOutput()
+    }
+}

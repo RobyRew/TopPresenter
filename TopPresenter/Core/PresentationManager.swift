@@ -1775,7 +1775,8 @@ final class PresentationManager {
                           footnote: String = "", crossReference: String = "", heading: String = "", gloss: String = "", strongs: String = "",
                           songAuthor: String = "", songCopyright: String = "", songCCLI: String = "",
                           songbook: String = "", songStyle: String = "", songKey: String = "", songTempo: String = "",
-                          mediaURL: URL? = nil, mediaKind: String = "") -> String {
+                          mediaURL: URL? = nil, mediaKind: String = "",
+                          slideShownAt: Date? = nil) -> String {
             let value = PresentationManager.resolveBoxSource(
                 sourceRaw, format: sourceFormatRaw, autoValue: text, staticText: text,
                 main: main, reference: reference, translation: translation, subtitle: subtitle,
@@ -1783,14 +1784,15 @@ final class PresentationManager {
                 footnote: footnote, crossReference: crossReference, heading: heading, gloss: gloss, strongs: strongs,
                 songAuthor: songAuthor, songCopyright: songCopyright, songCCLI: songCCLI,
                 songbook: songbook, songStyle: songStyle, songKey: songKey, songTempo: songTempo,
-                mediaURL: mediaURL, mediaKind: mediaKind
+                mediaURL: mediaURL, mediaKind: mediaKind,
+                slideShownAt: slideShownAt
             )
             // Wrap a non-empty live value with the static prefix/suffix.
             guard supportsAffixes, !value.isEmpty, !(prefix.isEmpty && suffix.isEmpty) else { return value }
             return prefix + value + suffix
         }
 
-        func resolvedText(live: LiveContent, now: Date = .now) -> String {
+        func resolvedText(live: LiveContent, now: Date = .now, slideShownAt: Date? = nil) -> String {
             resolvedText(
                 main: live.mainText, reference: live.reference,
                 translation: live.translationName, subtitle: live.subtitle,
@@ -1799,7 +1801,8 @@ final class PresentationManager {
                 heading: live.heading, gloss: live.gloss, strongs: live.strongs,
                 songAuthor: live.songAuthor, songCopyright: live.songCopyright, songCCLI: live.songCCLI,
                 songbook: live.songbook, songStyle: live.songStyle, songKey: live.songKey, songTempo: live.songTempo,
-                mediaURL: live.mediaURL, mediaKind: live.mediaKind
+                mediaURL: live.mediaURL, mediaKind: live.mediaKind,
+                slideShownAt: slideShownAt
             )
         }
 
@@ -2118,7 +2121,8 @@ final class PresentationManager {
         gloss: String = "", strongs: String = "",
         songAuthor: String = "", songCopyright: String = "", songCCLI: String = "",
         songbook: String = "", songStyle: String = "", songKey: String = "", songTempo: String = "",
-        mediaURL: URL? = nil, mediaKind: String = ""
+        mediaURL: URL? = nil, mediaKind: String = "",
+        slideShownAt: Date? = nil
     ) -> String {
         switch raw {
         case "mainText": return main
@@ -2140,6 +2144,12 @@ final class PresentationManager {
         case "static": return staticText
         case "date", "time", "countdown", "elapsed":
             return formattedClock(source: raw, format: format, now: now)
+        case "slideTimer":
+            // Counts from when THIS content went live, so it resets on every
+            // slide rather than needing a target date like `elapsed` does.
+            guard let slideShownAt else { return formattedSpan(0, style: ClockOptions(raw: format).style) }
+            return formattedSpan(now.timeIntervalSince(slideShownAt),
+                                 style: ClockOptions(raw: format).style)
         case "slideNumber": return slideNumber
         case "mediaFile": return mediaURL?.lastPathComponent ?? ""
         case "mediaName": return mediaURL?.deletingPathExtension().lastPathComponent ?? ""
@@ -2202,6 +2212,7 @@ final class PresentationManager {
             ("slideNumber", String(localized: "Număr slide (2 / 7)", comment: "Box source")),
             ("countdown", String(localized: "Cronometru invers", comment: "Box source")),
             ("elapsed", String(localized: "Timp scurs", comment: "Box source")),
+            ("slideTimer", String(localized: "Timp pe slide-ul curent", comment: "Box source")),
         ]
     }
 
@@ -2228,7 +2239,7 @@ final class PresentationManager {
         func consider(source: String, format: String) {
             let options = ClockOptions(raw: format)
             switch source {
-            case "countdown", "elapsed":
+            case "countdown", "elapsed", "slideTimer":
                 // A span that shows seconds has to tick every second; one that
                 // stops at minutes does not, and asking for 1 s there would wake
                 // the whole output sixty times a minute for nothing.
@@ -3586,7 +3597,16 @@ final class PresentationManager {
     /// Marks whether this show is a fresh appearance or a slide-to-slide change.
     private func registerContentChange() {
         contentChangeKind = (liveContent.isLive && !isBlackScreen) ? "change" : "appear"
+        slideShownAt = .now
     }
+
+    /// When the content currently on screen went live. Drives the `slideTimer`
+    /// source: how long the operator has been on this slide.
+    ///
+    /// Not persisted and not observed — a stored property here would invalidate
+    /// every reader on each slide change, and the clock tick already redraws the
+    /// boxes that care.
+    @ObservationIgnored private(set) var slideShownAt: Date = .now
 
     /// Stages a content change so its transition actually renders: if the
     /// output window was hidden (single-screen idle), show it and let it
@@ -4194,7 +4214,8 @@ final class PresentationManager {
             songAuthor: liveContent.songAuthor, songCopyright: liveContent.songCopyright,
             songCCLI: liveContent.songCCLI, songbook: liveContent.songbook,
             songStyle: liveContent.songStyle, songKey: liveContent.songKey, songTempo: liveContent.songTempo,
-            mediaURL: liveContent.mediaURL, mediaKind: liveContent.mediaKind
+            mediaURL: liveContent.mediaURL, mediaKind: liveContent.mediaKind,
+            slideShownAt: slideShownAt
         )
     }
 

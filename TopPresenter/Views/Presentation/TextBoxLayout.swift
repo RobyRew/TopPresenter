@@ -2543,6 +2543,17 @@ struct LayoutEditorSheet: View {
                 }
                 .help(String(localized: "De unde vine textul: scris de tine sau preluat live", comment: "Tooltip"))
 
+                // Custom boxes were missing these entirely: picking a countdown
+                // gave you no way to say WHAT it counts towards, so it sat at 0:00
+                // with nothing to configure.
+                clockOptionsRows(
+                    source: binding.wrappedValue.sourceRaw,
+                    raw: Binding(
+                        get: { binding.wrappedValue.sourceFormatRaw },
+                        set: { binding.wrappedValue.sourceFormatRaw = $0 }
+                    )
+                )
+
                 labeledRow(String(localized: "Afișare:", comment: "Setting label")) {
                     Picker("", selection: Binding(
                         get: { binding.wrappedValue.displayOnRaw },
@@ -3880,7 +3891,10 @@ struct LayoutEditorSheet: View {
     @ViewBuilder
     private func clockOptionsRows(source: String, raw: Binding<String>) -> some View {
         let isSpan = source == "countdown" || source == "elapsed"
-        if source == "date" || source == "time" || isSpan {
+        // The slide timer counts from when the current content went live, so it
+        // takes a format but never a target.
+        let isSlideTimer = source == "slideTimer"
+        if source == "date" || source == "time" || isSpan || isSlideTimer {
             let options = Binding(
                 get: { PresentationManager.ClockOptions(raw: raw.wrappedValue) },
                 set: { raw.wrappedValue = $0.raw }

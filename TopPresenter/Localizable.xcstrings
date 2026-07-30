@@ -10,13 +10,13 @@
             "value": ""
           }
         },
-        "ro": {
+        "es": {
           "stringUnit": {
             "state": "translated",
             "value": ""
           }
         },
-        "es": {
+        "ro": {
           "stringUnit": {
             "state": "translated",
             "value": ""
@@ -33,13 +33,13 @@
             "value": "·"
           }
         },
-        "ro": {
+        "es": {
           "stringUnit": {
             "state": "translated",
             "value": "·"
           }
         },
-        "es": {
+        "ro": {
           "stringUnit": {
             "state": "translated",
             "value": "·"
@@ -56,13 +56,13 @@
             "value": "“%@” → %@ ✓"
           }
         },
-        "ro": {
+        "es": {
           "stringUnit": {
             "state": "translated",
             "value": "„%@” → %@ ✓"
           }
         },
-        "es": {
+        "ro": {
           "stringUnit": {
             "state": "translated",
             "value": "„%@” → %@ ✓"
@@ -92,6 +92,9 @@
           }
         }
       }
+    },
+    "„%@” este în uz": {
+      "comment": "Theme delete refused — title"
     },
     "„%@” există deja (%@, %lld versete). Noul fișier are %lld versete.": {
       "comment": "Duplicate import dialog",
@@ -138,6 +141,12 @@
           }
         }
       }
+    },
+    "„Doar ore : minute” reîmprospătează o dată pe minut în loc de o dată pe secundă": {
+      "comment": "Tooltip"
+    },
+    "„În direct” urmărește modulul Media; „fișier propriu” rămâne fix": {
+      "comment": "Tooltip"
     },
     "„Sistem” urmează culoarea de accent și mărimea iconițelor din Setările macOS. Evidențierea colorează selecțiile (versete, capitole, rezultate).": {
       "comment": "Settings info",
@@ -263,13 +272,13 @@
             "value": "(.%@)"
           }
         },
-        "ro": {
+        "es": {
           "stringUnit": {
             "state": "translated",
             "value": "(.%@)"
           }
         },
-        "es": {
+        "ro": {
           "stringUnit": {
             "state": "translated",
             "value": "(.%@)"
@@ -303,13 +312,13 @@
             "value": "(×N)"
           }
         },
-        "ro": {
+        "es": {
           "stringUnit": {
             "state": "translated",
             "value": "(×N)"
           }
         },
-        "es": {
+        "ro": {
           "stringUnit": {
             "state": "translated",
             "value": "(×N)"
@@ -358,6 +367,9 @@
         }
       }
     },
+    "(copie)": {
+      "comment": "Combined theme name — single source"
+    },
     "‖: :‖": {
       "comment": "",
       "localizations": {
@@ -367,13 +379,13 @@
             "value": "‖: :‖"
           }
         },
-        "ro": {
+        "es": {
           "stringUnit": {
             "state": "translated",
             "value": "‖: :‖"
           }
         },
-        "es": {
+        "ro": {
           "stringUnit": {
             "state": "translated",
             "value": "‖: :‖"
@@ -390,13 +402,13 @@
             "value": "/: :/"
           }
         },
-        "ro": {
+        "es": {
           "stringUnit": {
             "state": "translated",
             "value": "/: :/"
           }
         },
-        "es": {
+        "ro": {
           "stringUnit": {
             "state": "translated",
             "value": "/: :/"
@@ -413,13 +425,13 @@
             "value": "%"
           }
         },
-        "ro": {
+        "es": {
           "stringUnit": {
             "state": "translated",
             "value": "%"
           }
         },
-        "es": {
+        "ro": {
           "stringUnit": {
             "state": "translated",
             "value": "%"
@@ -436,13 +448,13 @@
             "value": "%@ — %@"
           }
         },
-        "ro": {
+        "es": {
           "stringUnit": {
             "state": "translated",
             "value": "%@ — %@"
           }
         },
-        "es": {
+        "ro": {
           "stringUnit": {
             "state": "translated",
             "value": "%@ — %@"
@@ -459,13 +471,13 @@
             "value": "%@ / %@"
           }
         },
-        "ro": {
+        "es": {
           "stringUnit": {
             "state": "translated",
             "value": "%@ / %@"
           }
         },
-        "es": {
+        "ro": {
           "stringUnit": {
             "state": "translated",
             "value": "%@ / %@"
@@ -1507,13 +1519,13 @@
             "value": "|: :|"
           }
         },
-        "ro": {
+        "es": {
           "stringUnit": {
             "state": "translated",
             "value": "|: :|"
           }
         },
-        "es": {
+        "ro": {
           "stringUnit": {
             "state": "translated",
             "value": "|: :|"
@@ -1553,13 +1565,13 @@
             "value": "0.5x"
           }
         },
-        "ro": {
+        "es": {
           "stringUnit": {
             "state": "translated",
             "value": "0.5x"
           }
         },
-        "es": {
+        "ro": {
           "stringUnit": {
             "state": "translated",
             "value": "0.5x"
@@ -1576,13 +1588,13 @@
             "value": "0.75x"
           }
         },
-        "ro": {
+        "es": {
           "stringUnit": {
             "state": "translated",
             "value": "0.75x"
           }
         },
-        "es": {
+        "ro": {
           "stringUnit": {
             "state": "translated",
             "value": "0.75x"
@@ -1599,13 +1611,13 @@
             "value": "1.5x"
           }
         },
-        "ro": {
+        "es": {
           "stringUnit": {
             "state": "translated",
             "value": "1.5x"
           }
         },
-        "es": {
+        "ro": {
           "stringUnit": {
             "state": "translated",
             "value": "1.5x"
@@ -1622,13 +1634,13 @@
             "value": "1.25x"
           }
         },
-        "ro": {
+        "es": {
           "stringUnit": {
             "state": "translated",
             "value": "1.25x"
           }
         },
-        "es": {
+        "ro": {
           "stringUnit": {
             "state": "translated",
             "value": "1.25x"
@@ -1645,13 +1657,13 @@
             "value": "1x"
           }
         },
-        "ro": {
+        "es": {
           "stringUnit": {
             "state": "translated",
             "value": "1x"
           }
         },
-        "es": {
+        "ro": {
           "stringUnit": {
             "state": "translated",
             "value": "1x"
@@ -1668,13 +1680,13 @@
             "value": "2x"
           }
         },
-        "ro": {
+        "es": {
           "stringUnit": {
             "state": "translated",
             "value": "2x"
           }
         },
-        "es": {
+        "ro": {
           "stringUnit": {
             "state": "translated",
             "value": "2x"
@@ -1691,13 +1703,13 @@
             "value": "A-Z"
           }
         },
-        "ro": {
+        "es": {
           "stringUnit": {
             "state": "translated",
             "value": "A-Z"
           }
         },
-        "es": {
+        "ro": {
           "stringUnit": {
             "state": "translated",
             "value": "A-Z"
@@ -3017,16 +3029,16 @@
             "value": "Select a theme to export it"
           }
         },
-        "ro": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Alege o temă pentru a o exporta"
-          }
-        },
         "es": {
           "stringUnit": {
             "state": "translated",
             "value": "Elige un tema para exportarlo"
+          }
+        },
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alege o temă pentru a o exporta"
           }
         }
       }
@@ -3612,6 +3624,9 @@
         }
       }
     },
+    "Apasă pentru a reveni la tema globală": {
+      "comment": "Tooltip"
+    },
     "Apasă tare (Force Touch) pe butonul Clear pentru a executa acțiunea selectată.": {
       "comment": "Settings info",
       "localizations": {
@@ -3767,6 +3782,9 @@
           }
         }
       }
+    },
+    "Arată ce redă modulul Media. Fișierul de mai jos este ignorat.": {
+      "comment": "Inspector hint — live media box"
     },
     "Arată mai multe": {
       "comment": "Palette expand",
@@ -4015,16 +4033,16 @@
             "value": "Hide box"
           }
         },
-        "ro": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ascunde caseta"
-          }
-        },
         "es": {
           "stringUnit": {
             "state": "translated",
             "value": "Ocultar casilla"
+          }
+        },
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ascunde caseta"
           }
         }
       }
@@ -4261,6 +4279,9 @@
           }
         }
       }
+    },
+    "Auto (m:ss / h:mm:ss)": {
+      "comment": "Span format"
     },
     "Auto-fill active — adjusts with font size": {
       "comment": "Tooltip",
@@ -6199,16 +6220,16 @@
             "value": "Box is hidden — click to show it"
           }
         },
-        "ro": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Caseta este ascunsă — apasă pentru a o afișa"
-          }
-        },
         "es": {
           "stringUnit": {
             "state": "translated",
             "value": "La casilla está oculta — pulsa para mostrarla"
+          }
+        },
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Caseta este ascunsă — apasă pentru a o afișa"
           }
         }
       }
@@ -6222,16 +6243,16 @@
             "value": "Missing box (%lld)"
           }
         },
-        "ro": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Casetă lipsă (%lld)"
-          }
-        },
         "es": {
           "stringUnit": {
             "state": "translated",
             "value": "Casilla eliminada (%lld)"
+          }
+        },
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Casetă lipsă (%lld)"
           }
         }
       }
@@ -6355,16 +6376,16 @@
             "value": "Boxes here are overlays"
           }
         },
-        "ro": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Casetele de aici sunt suprapuneri"
-          }
-        },
         "es": {
           "stringUnit": {
             "state": "translated",
             "value": "Las casillas de aquí son superposiciones"
+          }
+        },
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Casetele de aici sunt suprapuneri"
           }
         }
       }
@@ -7551,6 +7572,9 @@
         }
       }
     },
+    "Combină teme: alege ce temă îmbracă fiecare prezentator, apoi creează o temă nouă din ele": {
+      "comment": "Tooltip"
+    },
     "Comma-separated values: Book, Chapter, Verse, Text": {
       "comment": "Export format description",
       "localizations": {
@@ -8186,6 +8210,12 @@
         }
       }
     },
+    "Creează tema combinată (%lld)": {
+      "comment": "Combine action"
+    },
+    "Cronometru invers": {
+      "comment": "Box source"
+    },
     "CSV": {
       "comment": "Export format",
       "localizations": {
@@ -8226,6 +8256,9 @@
           }
         }
       }
+    },
+    "Cu secunde": {
+      "comment": "Time format"
     },
     "Cu ziua săptămânii": {
       "comment": "Date format",
@@ -8479,6 +8512,9 @@
           }
         }
       }
+    },
+    "Cum se scrie data sau ora pe ecran": {
+      "comment": "Tooltip"
     },
     "Cum umple imaginea/videoclipul ecranul de proiecție.": {
       "comment": "Tooltip",
@@ -9695,6 +9731,9 @@
         }
       }
     },
+    "Doar %@": {
+      "comment": "Save theme scope — active presenter only"
+    },
     "Doar afișare — nu modifică acordurile salvate.": {
       "comment": "Display-only note",
       "localizations": {
@@ -9809,6 +9848,12 @@
           }
         }
       }
+    },
+    "Doar minute : secunde": {
+      "comment": "Span format"
+    },
+    "Doar ore : minute": {
+      "comment": "Span format"
     },
     "Doar sens": {
       "comment": "Interlinear mode",
@@ -10979,6 +11024,9 @@
         }
       }
     },
+    "Este tema pentru %@. Schimbă tema acelor prezentatoare înainte de a o șterge.": {
+      "comment": "Theme delete refused — body"
+    },
     "Estompare": {
       "comment": "Transition",
       "localizations": {
@@ -11645,16 +11693,16 @@
             "value": "Export the active theme as a .tptheme package"
           }
         },
-        "ro": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Exportă tema activă ca pachet .tptheme"
-          }
-        },
         "es": {
           "stringUnit": {
             "state": "translated",
             "value": "Exporta el tema activo como paquete .tptheme"
+          }
+        },
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Exportă tema activă ca pachet .tptheme"
           }
         }
       }
@@ -11773,6 +11821,9 @@
           }
         }
       }
+    },
+    "Extensie fișier (live)": {
+      "comment": "Box source — media"
     },
     "Failed to encode data.": {
       "comment": "Export error",
@@ -11948,6 +11999,9 @@
         }
       }
     },
+    "Fără temă proprie — folosește tema globală. Apasă pentru a edita acest prezentator.": {
+      "comment": "Tooltip"
+    },
     "Fără titlu": {
       "comment": "Placeholder",
       "localizations": {
@@ -12016,6 +12070,9 @@
           }
         }
       }
+    },
+    "Fiecare prezentator poate avea acum tema lui. Salvezi întregul amestec sau doar prezentatorul pe care îl editezi?": {
+      "comment": "New theme alert message — per-presenter mode"
     },
     "Fiindcă atât de mult a iubit Dumnezeu lumea, că a dat pe singurul Lui Fiu, pentru ca oricine crede în El să nu piară, ci să aibă viața veșnică.": {
       "comment": "Layout editor sample verse",
@@ -12223,6 +12280,9 @@
           }
         }
       }
+    },
+    "Fișier propriu": {
+      "comment": "Media box source"
     },
     "Fișiere media lipsă din pachet: %@. Fundalurile respective vor fi goale.": {
       "comment": "Import result — skipped assets",
@@ -13055,6 +13115,9 @@
         }
       }
     },
+    "Fus orar:": {
+      "comment": "Setting label"
+    },
     "G": {
       "comment": "Reset-to-global button",
       "localizations": {
@@ -13064,13 +13127,13 @@
             "value": "G"
           }
         },
-        "ro": {
+        "es": {
           "stringUnit": {
             "state": "translated",
             "value": "G"
           }
         },
-        "es": {
+        "ro": {
           "stringUnit": {
             "state": "translated",
             "value": "G"
@@ -13170,6 +13233,9 @@
         }
       }
     },
+    "GIF": {
+      "comment": "Media kind"
+    },
     "Glisare dreapta": {
       "comment": "Transition",
       "localizations": {
@@ -13261,6 +13327,9 @@
           }
         }
       }
+    },
+    "global": {
+      "comment": "Theme assignment — falls back"
     },
     "Global": {
       "comment": "Alignment option\nAuto-fit option\nButton\nFont option\nInspector group\nShadow option\nText transform\nTransition option\nValue label",
@@ -13376,6 +13445,9 @@
           }
         }
       }
+    },
+    "Golește selecția": {
+      "comment": "Combine action"
     },
     "Golește și Ecran Negru": {
       "comment": "Clear menu\nForce touch option",
@@ -13634,13 +13706,13 @@
             "value": "H"
           }
         },
-        "ro": {
+        "es": {
           "stringUnit": {
             "state": "translated",
             "value": "H"
           }
         },
-        "es": {
+        "ro": {
           "stringUnit": {
             "state": "translated",
             "value": "H"
@@ -13874,7 +13946,7 @@
       }
     },
     "Imagine": {
-      "comment": "Media type",
+      "comment": "Media kind\nMedia type",
       "localizations": {
         "en": {
           "stringUnit": {
@@ -16338,6 +16410,9 @@
         }
       }
     },
+    "Local": {
+      "comment": "Time zone — device default"
+    },
     "Loop video": {
       "comment": "Video control tooltip",
       "localizations": {
@@ -16360,6 +16435,9 @@
           }
         }
       }
+    },
+    "Lung": {
+      "comment": "Date format"
     },
     "Lung (11 iunie 2026)": {
       "comment": "Date format",
@@ -16770,6 +16848,9 @@
         }
       }
     },
+    "Media (live)": {
+      "comment": "Default live media box name"
+    },
     "Media (video pe tot ecranul)": {
       "comment": "Settings section",
       "localizations": {
@@ -16857,6 +16938,9 @@
         }
       }
     },
+    "Media în direct": {
+      "comment": "Live media box placeholder\nMedia box source"
+    },
     "Media lipsă din bibliotecă: %@. Importă fișierele în modulul Media pentru rezolvare automată.": {
       "comment": "Import result — missing media",
       "localizations": {
@@ -16889,16 +16973,16 @@
             "value": "Full-screen media"
           }
         },
-        "ro": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Media pe tot ecranul"
-          }
-        },
         "es": {
           "stringUnit": {
             "state": "translated",
             "value": "Media a pantalla completa"
+          }
+        },
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Media pe tot ecranul"
           }
         }
       }
@@ -17247,6 +17331,12 @@
           }
         }
       }
+    },
+    "Momentul din care se măsoară timpul scurs": {
+      "comment": "Tooltip"
+    },
+    "Momentul spre care numără înapoi — la zero rămâne 0:00": {
+      "comment": "Tooltip"
     },
     "Morfologie": {
       "comment": "Annotation row",
@@ -17996,16 +18086,16 @@
             "value": "No active theme to export."
           }
         },
-        "ro": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Nicio temă activă de exportat."
-          }
-        },
         "es": {
           "stringUnit": {
             "state": "translated",
             "value": "No hay tema activo que exportar."
+          }
+        },
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nicio temă activă de exportat."
           }
         }
       }
@@ -18055,6 +18145,9 @@
           }
         }
       }
+    },
+    "Nicio țintă setată — caseta arată 0:00.": {
+      "comment": "Inspector hint"
     },
     "Nicio versiune": {
       "comment": "Empty",
@@ -18976,6 +19069,12 @@
         }
       }
     },
+    "Nume fără extensie (live)": {
+      "comment": "Box source — media"
+    },
+    "Nume fișier (live)": {
+      "comment": "Box source — media"
+    },
     "Nume folder (gol = Nesortate)": {
       "comment": "Text field placeholder",
       "localizations": {
@@ -19724,6 +19823,9 @@
           }
         }
       }
+    },
+    "Ore : minute": {
+      "comment": "Time format"
     },
     "Original": {
       "comment": "Version",
@@ -21386,16 +21488,16 @@
             "value": "Re-add a deleted built-in box — its layout is kept"
           }
         },
-        "ro": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Readaugă o casetă integrată ștearsă — layoutul ei se păstrează"
-          }
-        },
         "es": {
           "stringUnit": {
             "state": "translated",
             "value": "Vuelve a añadir una casilla integrada eliminada — se conserva su diseño"
+          }
+        },
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Readaugă o casetă integrată ștearsă — layoutul ei se păstrează"
           }
         }
       }
@@ -23237,6 +23339,9 @@
           }
         }
       }
+    },
+    "Scurt": {
+      "comment": "Date format"
     },
     "Scurt (11.06.2026)": {
       "comment": "Date format",
@@ -26001,19 +26106,25 @@
             "value": "Theme “%@” was exported to %@."
           }
         },
-        "ro": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tema „%@” a fost exportată în %@."
-          }
-        },
         "es": {
           "stringUnit": {
             "state": "translated",
             "value": "El tema «%@» se exportó a %@."
           }
+        },
+        "ro": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tema „%@” a fost exportată în %@."
+          }
         }
       }
+    },
+    "Temă combinată": {
+      "comment": "Default name for a combined theme"
+    },
+    "Temă combinată creată: „%@”.": {
+      "comment": "Combine result"
     },
     "Temă fără nume": {
       "comment": "Default theme name",
@@ -26129,6 +26240,12 @@
           }
         }
       }
+    },
+    "Teme per prezentator: oprit — o singură temă pentru toți": {
+      "comment": "Tooltip"
+    },
+    "Teme per prezentator: PORNIT — fiecare prezentator își ține tema lui": {
+      "comment": "Tooltip"
     },
     "Teme: salvează și comută între layout-uri complete (casete, stiluri, fundal, media)": {
       "comment": "Tooltip",
@@ -26567,6 +26684,15 @@
         }
       }
     },
+    "Timp scurs": {
+      "comment": "Box source"
+    },
+    "Țintă:": {
+      "comment": "Setting label"
+    },
+    "Tip media (live)": {
+      "comment": "Box source — media"
+    },
     "Tip: Most shortcuts are also available from the menu bar.": {
       "comment": "Shortcut tip",
       "localizations": {
@@ -26998,6 +27124,9 @@
           }
         }
       }
+    },
+    "Toate prezentatoarele": {
+      "comment": "Save theme scope"
     },
     "Toate setările de proiecție...": {
       "comment": "Button",
@@ -28308,6 +28437,9 @@
         }
       }
     },
+    "Util pentru un ceas al altui oraș pe ecran": {
+      "comment": "Tooltip"
+    },
     "Verde": {
       "comment": "Accent option",
       "localizations": {
@@ -28815,7 +28947,7 @@
       }
     },
     "Video": {
-      "comment": "Media kind filter\nMedia type",
+      "comment": "Media kind\nMedia kind filter\nMedia type",
       "localizations": {
         "de": {
           "stringUnit": {
@@ -28979,13 +29111,13 @@
             "value": "W"
           }
         },
-        "ro": {
+        "es": {
           "stringUnit": {
             "state": "translated",
             "value": "W"
           }
         },
-        "es": {
+        "ro": {
           "stringUnit": {
             "state": "translated",
             "value": "W"
@@ -29025,13 +29157,13 @@
             "value": "X"
           }
         },
-        "ro": {
+        "es": {
           "stringUnit": {
             "state": "translated",
             "value": "X"
           }
         },
-        "es": {
+        "ro": {
           "stringUnit": {
             "state": "translated",
             "value": "X"
@@ -29048,13 +29180,13 @@
             "value": "Y"
           }
         },
-        "ro": {
+        "es": {
           "stringUnit": {
             "state": "translated",
             "value": "Y"
           }
         },
-        "es": {
+        "ro": {
           "stringUnit": {
             "state": "translated",
             "value": "Y"
