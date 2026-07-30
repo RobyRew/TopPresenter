@@ -5420,3 +5420,157 @@ struct RemoteExtractionTests {
         #expect(live != nil, "the live casetă must survive export/import")
     }
 }
+
+// MARK: - Dynamic casetes: clock, countdown, elapsed (G2)
+//
+// Configuration rides in the box's EXISTING sourceFormat slot rather than new
+// LayoutProfile fields — that slot exists to configure a source, and it already
+// flows through themes, export/import and undo, so a countdown survives all of
+// that with no schema change.
+@MainActor struct ClockOptionsTests {
+
+    typealias Options = PresentationManager.ClockOptions
+
+    @Test func theEncodingRoundTrips() {
+        let target = ISO8601DateFormatter().date(from: "2026-12-25T10:30:00Z")!
+        let original = Options(style: "hms", timeZoneID: "Europe/Madrid", target: target)
+        let decoded = Options(raw: original.raw)
+        #expect(decoded == original)
+    }
+
+    @Test func aBareStyleStillParses() {
+        // Every format string written before this existed is just a style, and has
+        // to keep meaning exactly what it meant.
+        #expect(Options(raw: "hms").style == "hms")
+        #expect(Options(raw: "hms").timeZoneID.isEmpty)
+        #expect(Options(raw: "hms").target == nil)
+        #expect(Options(raw: "").style.isEmpty)
+    }
+
+    @Test func unknownSegmentsAreIgnoredRatherThanBreaking() {
+        // So a theme written by a newer build degrades to its style here instead
+        // of failing to parse.
+        let o = Options(raw: "hms|tz=UTC|somethingNew=42")
+        #expect(o.style == "hms")
+        #expect(o.timeZoneID == "UTC")
+    }
+
+    @Test func anUnknownTimeZoneFallsBackToTheCurrentOne() {
+        #expect(Options(raw: "hm|tz=Not/AZone").timeZone == .current)
+    }
+
+    @Test func theClockHonoursItsTimeZone() {
+        let noon = ISO8601DateFormatter().date(from: "2026-06-15T12:00:00Z")!
+        let utc = PresentationManager.formattedClock(source: "time", format: "hm|tz=UTC", now: noon)
+        let tokyo = PresentationManager.formattedClock(source: "time", format: "hm|tz=Asia/Tokyo", now: noon)
+        #expect(utc != tokyo, "a zone must actually change the reading")
+        #expect(utc.contains("12"))
+        #expect(tokyo.contains("21"))
+    }
+
+    @Test func countdownCountsTowardsItsTarget() {
+        // A whole second: the encoding is second-precision on purpose — a
+        // countdown has no use for milliseconds — so a fractional `now` would
+        // shift the difference by that fraction.
+        let now = ISO8601DateFormatter().date(from: "2026-06-15T12:00:00Z")!
+        let raw = Options(style: "", timeZoneID: "", target: now.addingTimeInterval(3661)).raw
+        #expect(PresentationManager.formattedClock(source: "countdown", format: raw, now: now) == "1:01:01")
+
+        let soon = Options(style: "", timeZoneID: "", target: now.addingTimeInterval(65)).raw
+        #expect(PresentationManager.formattedClock(source: "countdown", format: soon, now: now) == "1:05")
+    }
+
+    @Test func aPassedTargetClampsToZeroRatherThanGoingNegative() {
+        let now = ISO8601DateFormatter().date(from: "2026-06-15T12:00:00Z")!
+        let raw = Options(style: "", timeZoneID: "", target: now.addingTimeInterval(-90)).raw
+        // "-1:30" on a projector is worse than "0:00".
+        #expect(PresentationManager.formattedClock(source: "countdown", format: raw, now: now) == "0:00")
+    }
+
+    @Test func elapsedCountsAwayFromItsTarget() {
+        let now = ISO8601DateFormatter().date(from: "2026-06-15T12:00:00Z")!
+        let raw = Options(style: "", timeZoneID: "", target: now.addingTimeInterval(-125)).raw
+        #expect(PresentationManager.formattedClock(source: "elapsed", format: raw, now: now) == "2:05")
+    }
+
+    @Test func anUnconfiguredCountdownReadsAsZero() {
+        // Not a stale or absurd number: an unconfigured box should read "not
+        // started", not "wrong".
+        #expect(PresentationManager.formattedClock(source: "countdown", format: "", now: Date()) == "0:00")
+    }
+
+    @Test func spanStylesKeepAStableWidth() {
+        #expect(PresentationManager.formattedSpan(59, style: "") == "0:59")
+        #expect(PresentationManager.formattedSpan(3600, style: "") == "1:00:00")
+        #expect(PresentationManager.formattedSpan(3661, style: "mmss") == "61:01")
+        #expect(PresentationManager.formattedSpan(3661, style: "hm") == "1:01")
+    }
+
+    @Test func everyPresenterOffersTheNewSources() {
+        for key in PresentationManager.profileKeys {
+            let raws = Set(PresentationManager.sourceOptions(for: key).map(\.raw))
+            #expect(raws.contains("countdown"), "\(key) should offer a countdown")
+            #expect(raws.contains("elapsed"), "\(key) should offer elapsed time")
+        }
+    }
+}
+
+// MARK: - Clock refresh cadence
+//
+// Decision (c): tick only when a time-based casetă actually exists, and only as
+// fast as that casetă needs.
+@MainActor struct ClockTickTests {
+
+    private func useReference(_ pm: PresentationManager, source: String, format: String) {
+        pm.activeProfileKey = "bible"
+        pm.setSectionVisible(true, for: .reference, in: "bible")
+        pm.setSourceRaw(source, for: .reference, in: "bible")
+        pm.setSourceFormat(format, for: .reference, in: "bible")
+        pm.showBibleVerse(text: "x", reference: "y")
+    }
+
+    @Test func noTimeBoxMeansNoTicking() {
+        let pm = makeTestManager()
+        useReference(pm, source: "static", format: "")
+        #expect(pm.clockTickInterval == nil, "nothing to refresh for")
+        pm.clearOutput()
+    }
+
+    @Test func minutePrecisionTicksEveryMinute() {
+        let pm = makeTestManager()
+        useReference(pm, source: "time", format: "hm")
+        #expect(pm.clockTickInterval == 60)
+        pm.clearOutput()
+    }
+
+    @Test func secondsForceTheFastTick() {
+        let pm = makeTestManager()
+        useReference(pm, source: "time", format: "hms")
+        #expect(pm.clockTickInterval == 1)
+        pm.clearOutput()
+    }
+
+    @Test func aCountdownTicksEverySecond() {
+        let pm = makeTestManager()
+        useReference(pm, source: "countdown", format: "")
+        #expect(pm.clockTickInterval == 1)
+        pm.clearOutput()
+    }
+
+    @Test func aCountdownShowingOnlyMinutesDoesNot() {
+        let pm = makeTestManager()
+        useReference(pm, source: "countdown", format: "hm")
+        // Asking for 1 s here would wake the whole output sixty times a minute to
+        // redraw a number that cannot have changed.
+        #expect(pm.clockTickInterval == 60)
+        pm.clearOutput()
+    }
+
+    @Test func aHiddenTimeBoxDoesNotKeepTheClockRunning() {
+        let pm = makeTestManager()
+        useReference(pm, source: "time", format: "hms")
+        pm.setSectionVisible(false, for: .reference, in: "bible")
+        #expect(pm.clockTickInterval == nil)
+        pm.clearOutput()
+    }
+}

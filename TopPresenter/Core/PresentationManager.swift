@@ -2003,23 +2003,96 @@ final class PresentationManager {
 
     /// Formats the date/time sources. Date formats: "" (long) | "short" | "weekday".
     /// Time formats: "" (HH:MM) | "hms" (HH:MM:SS).
+    /// Configuration for a time-based casetă: which preset, which time zone, and
+    /// for a countdown, what it counts towards.
+    ///
+    /// Encoded into the box's EXISTING `sourceFormat` slot rather than new fields
+    /// on `LayoutProfile`. That slot exists precisely to configure a source, and it
+    /// already flows through themes, export/import and undo — so a countdown
+    /// survives all of that with no schema change. The encoding is
+    /// `style|tz=<identifier>|target=<ISO8601>`, and unknown segments are ignored,
+    /// so an older build reads a newer string as just its style. The target is
+    /// second-precision — a countdown has no use for milliseconds — so a round
+    /// trip drops any fraction.
+    struct ClockOptions: Equatable {
+        var style: String = ""
+        var timeZoneID: String = ""
+        var target: Date? = nil
+
+        init(style: String = "", timeZoneID: String = "", target: Date? = nil) {
+            self.style = style
+            self.timeZoneID = timeZoneID
+            self.target = target
+        }
+
+        init(raw: String) {
+            let parts = raw.split(separator: "|", omittingEmptySubsequences: false).map(String.init)
+            style = parts.first ?? ""
+            for part in parts.dropFirst() {
+                if part.hasPrefix("tz=") {
+                    timeZoneID = String(part.dropFirst(3))
+                } else if part.hasPrefix("target=") {
+                    target = ISO8601DateFormatter().date(from: String(part.dropFirst(7)))
+                }
+            }
+        }
+
+        var raw: String {
+            var out = [style]
+            if !timeZoneID.isEmpty { out.append("tz=" + timeZoneID) }
+            if let target { out.append("target=" + ISO8601DateFormatter().string(from: target)) }
+            return out.joined(separator: "|")
+        }
+
+        var timeZone: TimeZone { TimeZone(identifier: timeZoneID) ?? .current }
+        /// True when the display changes every second rather than every minute.
+        var needsSeconds: Bool { style == "hms" }
+    }
+
+    /// Renders a countdown/elapsed span. Always the same width family so the text
+    /// does not jitter as digits change: h:mm:ss above an hour, m:ss below.
+    static func formattedSpan(_ seconds: TimeInterval, style: String) -> String {
+        let clamped = max(0, Int(seconds.rounded()))
+        let h = clamped / 3600, m = (clamped % 3600) / 60, sec = clamped % 60
+        switch style {
+        case "mmss": return String(format: "%02d:%02d", h * 60 + m, sec)
+        case "hm":   return String(format: "%d:%02d", h, m)
+        default:     return h > 0 ? String(format: "%d:%02d:%02d", h, m, sec)
+                                  : String(format: "%d:%02d", m, sec)
+        }
+    }
+
     static func formattedClock(source: String, format: String, now: Date) -> String {
+        let options = ClockOptions(raw: format)
         switch source {
         case "date":
-            switch format {
-            case "short": return now.formatted(date: .numeric, time: .omitted)
-            case "weekday": return now.formatted(.dateTime.weekday(.wide).day().month(.wide).year())
-            default: return now.formatted(date: .long, time: .omitted)
+            switch options.style {
+            case "short":
+                var s = Date.FormatStyle(date: .numeric, time: .omitted)
+                s.timeZone = options.timeZone
+                return now.formatted(s)
+            case "weekday":
+                var s = Date.FormatStyle().weekday(.wide).day().month(.wide).year()
+                s.timeZone = options.timeZone
+                return now.formatted(s)
+            default:
+                var s = Date.FormatStyle(date: .long, time: .omitted)
+                s.timeZone = options.timeZone
+                return now.formatted(s)
             }
         case "time":
-            switch format {
-            case "hms":
-                return now.formatted(
-                    .dateTime.hour(.twoDigits(amPM: .omitted)).minute(.twoDigits).second(.twoDigits)
-                )
-            default:
-                return now.formatted(.dateTime.hour(.twoDigits(amPM: .omitted)).minute(.twoDigits))
-            }
+            var s = Date.FormatStyle().hour(.twoDigits(amPM: .omitted)).minute(.twoDigits)
+            if options.style == "hms" { s = s.second(.twoDigits) }
+            s.timeZone = options.timeZone
+            return now.formatted(s)
+        case "countdown":
+            // No target set yet: show zero rather than a stale or absurd number,
+            // so an unconfigured box reads as "not started" instead of wrong.
+            guard let target = options.target else { return formattedSpan(0, style: options.style) }
+            return formattedSpan(target.timeIntervalSince(now), style: options.style)
+        case "elapsed":
+            guard let target = options.target else { return formattedSpan(0, style: options.style) }
+            return formattedSpan(now.timeIntervalSince(target), style: options.style)
         default:
             return ""
         }
@@ -2054,7 +2127,8 @@ final class PresentationManager {
         case "songKey": return songKey
         case "songTempo": return songTempo
         case "static": return staticText
-        case "date", "time": return formattedClock(source: raw, format: format, now: now)
+        case "date", "time", "countdown", "elapsed":
+            return formattedClock(source: raw, format: format, now: now)
         case "slideNumber": return slideNumber
         case "mediaFile": return mediaURL?.lastPathComponent ?? ""
         case "mediaName": return mediaURL?.deletingPathExtension().lastPathComponent ?? ""
@@ -2115,6 +2189,8 @@ final class PresentationManager {
             ("date", String(localized: "Data curentă", comment: "Box source")),
             ("time", String(localized: "Ora curentă", comment: "Box source")),
             ("slideNumber", String(localized: "Număr slide (2 / 7)", comment: "Box source")),
+            ("countdown", String(localized: "Cronometru invers", comment: "Box source")),
+            ("elapsed", String(localized: "Timp scurs", comment: "Box source")),
         ]
     }
 
@@ -2139,8 +2215,22 @@ final class PresentationManager {
         let key = outputProfileKey
         var interval: TimeInterval? = nil
         func consider(source: String, format: String) {
-            if source == "time" && format == "hms" { interval = 1 }
-            else if (source == "time" || source == "date") && interval == nil { interval = 60 }
+            let options = ClockOptions(raw: format)
+            switch source {
+            case "countdown", "elapsed":
+                // A span that shows seconds has to tick every second; one that
+                // stops at minutes does not, and asking for 1 s there would wake
+                // the whole output sixty times a minute for nothing.
+                if options.style == "hm" { if interval == nil { interval = 60 } }
+                else { interval = 1 }
+            case "time":
+                if options.needsSeconds { interval = 1 }
+                else if interval == nil { interval = 60 }
+            case "date":
+                if interval == nil { interval = 60 }
+            default:
+                break
+            }
         }
         for section in Self.relevantSections(for: key) where isSectionVisible(section, in: key) {
             consider(source: sourceRaw(for: section, in: key), format: sourceFormat(for: section, in: key))

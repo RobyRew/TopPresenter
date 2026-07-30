@@ -2415,6 +2415,16 @@ struct LayoutEditorSheet: View {
                 }
                 .help(String(localized: "De unde vine conținutul casetei — Implicit = câmpul ei natural", comment: "Tooltip"))
 
+                // Only for the time-based sources, so the group does not grow four
+                // rows nobody needs on a verse box.
+                clockOptionsRows(
+                    source: pm.sourceRaw(for: section),
+                    raw: Binding(
+                        get: { pm.sourceFormat(for: section) },
+                        set: { pm.setSourceFormat($0, for: section) }
+                    )
+                )
+
                 labeledRow(String(localized: "Afișare:", comment: "Setting label")) {
                     Picker("", selection: Binding(
                         get: { pm.displayScope(for: section) },
@@ -3835,6 +3845,87 @@ struct LayoutEditorSheet: View {
     }
 
     // MARK: Shared inspector helpers
+
+    /// Format, time zone and — for a countdown — what it counts towards.
+    ///
+    /// All three ride in the box's existing `sourceFormat` string (see
+    /// `PresentationManager.ClockOptions`), so a configured countdown travels with
+    /// the theme, exports, imports and undoes with no schema of its own.
+    @ViewBuilder
+    private func clockOptionsRows(source: String, raw: Binding<String>) -> some View {
+        let isSpan = source == "countdown" || source == "elapsed"
+        if source == "date" || source == "time" || isSpan {
+            let options = Binding(
+                get: { PresentationManager.ClockOptions(raw: raw.wrappedValue) },
+                set: { raw.wrappedValue = $0.raw }
+            )
+
+            labeledRow(String(localized: "Format:", comment: "Setting label")) {
+                Picker("", selection: Binding(
+                    get: { options.wrappedValue.style },
+                    set: { options.wrappedValue.style = $0 }
+                )) {
+                    if source == "date" {
+                        Text(String(localized: "Lung", comment: "Date format")).tag("")
+                        Text(String(localized: "Scurt", comment: "Date format")).tag("short")
+                        Text(String(localized: "Cu ziua săptămânii", comment: "Date format")).tag("weekday")
+                    } else if source == "time" {
+                        Text(String(localized: "Ore : minute", comment: "Time format")).tag("")
+                        Text(String(localized: "Cu secunde", comment: "Time format")).tag("hms")
+                    } else {
+                        Text(String(localized: "Auto (m:ss / h:mm:ss)", comment: "Span format")).tag("")
+                        Text(String(localized: "Doar minute : secunde", comment: "Span format")).tag("mmss")
+                        Text(String(localized: "Doar ore : minute", comment: "Span format")).tag("hm")
+                    }
+                }
+                .labelsHidden()
+                .controlSize(.small)
+            }
+            .help(isSpan
+                  ? String(localized: "„Doar ore : minute” reîmprospătează o dată pe minut în loc de o dată pe secundă", comment: "Tooltip")
+                  : String(localized: "Cum se scrie data sau ora pe ecran", comment: "Tooltip"))
+
+            labeledRow(String(localized: "Fus orar:", comment: "Setting label")) {
+                Picker("", selection: Binding(
+                    get: { options.wrappedValue.timeZoneID },
+                    set: { options.wrappedValue.timeZoneID = $0 }
+                )) {
+                    Text(String(localized: "Local", comment: "Time zone — device default")).tag("")
+                    Divider()
+                    ForEach(TimeZone.knownTimeZoneIdentifiers, id: \.self) { id in
+                        Text(id).tag(id)
+                    }
+                }
+                .labelsHidden()
+                .controlSize(.small)
+            }
+            .help(String(localized: "Util pentru un ceas al altui oraș pe ecran", comment: "Tooltip"))
+
+            if isSpan {
+                labeledRow(String(localized: "Țintă:", comment: "Setting label")) {
+                    DatePicker(
+                        "",
+                        selection: Binding(
+                            get: { options.wrappedValue.target ?? Date() },
+                            set: { options.wrappedValue.target = $0 }
+                        ),
+                        displayedComponents: [.date, .hourAndMinute]
+                    )
+                    .labelsHidden()
+                    .controlSize(.small)
+                }
+                .help(source == "countdown"
+                      ? String(localized: "Momentul spre care numără înapoi — la zero rămâne 0:00", comment: "Tooltip")
+                      : String(localized: "Momentul din care se măsoară timpul scurs", comment: "Tooltip"))
+
+                if options.wrappedValue.target == nil {
+                    Text(String(localized: "Nicio țintă setată — caseta arată 0:00.", comment: "Inspector hint"))
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
+            }
+        }
+    }
 
     @ViewBuilder
     private func labeledRow<Content: View>(_ label: String, @ViewBuilder content: () -> Content) -> some View {
