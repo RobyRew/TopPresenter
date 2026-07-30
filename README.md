@@ -237,16 +237,16 @@ reads the preferred language once at launch.
 
 <!-- i18n-coverage:start -->
 
-**1085 translatable strings.** Regenerated on every commit — do not edit by hand.
+**1095 translatable strings.** Regenerated on every commit — do not edit by hand.
 
 | | Language | Progress | Done |
 |---|---|---|---|
 | 🇬🇧 | **English** (`en`) | `████████████████████████` 100% | ✅ |
 | 🇷🇴 | **Română** (`ro`) | `████████████████████████` 100% | ✅ |
 | 🇪🇸 | **Español** (`es`) | `████████████████████████` 100% | ✅ |
-| 🇫🇷 | **Français** (`fr`) | `████░░░░░░░░░░░░░░░░░░░░` 17% | 185/1085 |
-| 🇩🇪 | **Deutsch** (`de`) | `████░░░░░░░░░░░░░░░░░░░░` 17% | 185/1085 |
-| 🇷🇺 | **Русский** (`ru`) | `████░░░░░░░░░░░░░░░░░░░░` 17% | 185/1085 |
+| 🇫🇷 | **Français** (`fr`) | `████░░░░░░░░░░░░░░░░░░░░` 16% | 185/1095 |
+| 🇩🇪 | **Deutsch** (`de`) | `████░░░░░░░░░░░░░░░░░░░░` 16% | 185/1095 |
+| 🇷🇺 | **Русский** (`ru`) | `████░░░░░░░░░░░░░░░░░░░░` 16% | 185/1095 |
 
 <!-- i18n-coverage:end -->
 
