@@ -5269,3 +5269,65 @@ struct RemoteExtractionTests {
         #expect(pm.combineThemes(picks: ["nope": UUID()]) == nil, "unknown profile key")
     }
 }
+
+// MARK: - Media sources
+//
+// Media used to fall through to `default` in sourceOptions and offer the Bible's
+// entire list — verse text, Strong's numbers, cross-references — none of which a
+// media caption can ever resolve.
+@MainActor struct MediaSourceTests {
+
+    @Test func mediaNoLongerOffersBibleSources() {
+        let raws = Set(PresentationManager.sourceOptions(for: "media").map(\.raw))
+        for bibleOnly in ["mainText", "translation", "strongs", "crossReference", "gloss", "heading"] {
+            #expect(!raws.contains(bibleOnly), "media must not offer '\(bibleOnly)'")
+        }
+    }
+
+    @Test func mediaOffersItsOwnAndTheGenericOnes() {
+        let raws = Set(PresentationManager.sourceOptions(for: "media").map(\.raw))
+        for own in ["mediaFile", "mediaName", "mediaKind", "mediaExtension"] {
+            #expect(raws.contains(own), "media should offer '\(own)'")
+        }
+        for generic in ["static", "date", "time", "slideNumber"] {
+            #expect(raws.contains(generic), "every presenter keeps '\(generic)'")
+        }
+    }
+
+    @Test func theOtherPresentersAreUnchanged() {
+        let bible = Set(PresentationManager.sourceOptions(for: "bible").map(\.raw))
+        #expect(bible.contains("mainText") && bible.contains("strongs"))
+        #expect(!bible.contains("mediaFile"), "media sources stay out of Bible")
+
+        let song = Set(PresentationManager.sourceOptions(for: "song").map(\.raw))
+        #expect(song.contains("songKey") && !song.contains("translation"))
+    }
+
+    @Test func mediaSourcesResolveFromTheLiveFile() {
+        let url = URL(fileURLWithPath: "/tmp/Worship Loop.MP4")
+        func resolve(_ raw: String) -> String {
+            PresentationManager.resolveBoxSource(
+                raw, autoValue: "", staticText: "",
+                main: "", reference: "", translation: "", subtitle: "",
+                mediaURL: url, mediaKind: "video"
+            )
+        }
+        #expect(resolve("mediaFile") == "Worship Loop.MP4")
+        #expect(resolve("mediaName") == "Worship Loop")
+        #expect(resolve("mediaExtension") == "MP4")
+        #expect(resolve("mediaKind") == "Video")
+    }
+
+    @Test func mediaSourcesAreEmptyWithNothingLiveRatherThanWrong() {
+        func resolve(_ raw: String) -> String {
+            PresentationManager.resolveBoxSource(
+                raw, autoValue: "fallback", staticText: "",
+                main: "", reference: "", translation: "", subtitle: ""
+            )
+        }
+        // Empty, not the auto fallback: a caption bound to the file name must go
+        // blank when nothing is playing, not show unrelated content.
+        #expect(resolve("mediaFile").isEmpty)
+        #expect(resolve("mediaKind").isEmpty)
+    }
+}

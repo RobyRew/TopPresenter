@@ -1764,14 +1764,16 @@ final class PresentationManager {
         func resolvedText(main: String, reference: String, translation: String, subtitle: String, now: Date = .now, slideNumber: String = "",
                           footnote: String = "", crossReference: String = "", heading: String = "", gloss: String = "", strongs: String = "",
                           songAuthor: String = "", songCopyright: String = "", songCCLI: String = "",
-                          songbook: String = "", songStyle: String = "", songKey: String = "", songTempo: String = "") -> String {
+                          songbook: String = "", songStyle: String = "", songKey: String = "", songTempo: String = "",
+                          mediaURL: URL? = nil, mediaKind: String = "") -> String {
             let value = PresentationManager.resolveBoxSource(
                 sourceRaw, format: sourceFormatRaw, autoValue: text, staticText: text,
                 main: main, reference: reference, translation: translation, subtitle: subtitle,
                 now: now, slideNumber: slideNumber,
                 footnote: footnote, crossReference: crossReference, heading: heading, gloss: gloss, strongs: strongs,
                 songAuthor: songAuthor, songCopyright: songCopyright, songCCLI: songCCLI,
-                songbook: songbook, songStyle: songStyle, songKey: songKey, songTempo: songTempo
+                songbook: songbook, songStyle: songStyle, songKey: songKey, songTempo: songTempo,
+                mediaURL: mediaURL, mediaKind: mediaKind
             )
             // Wrap a non-empty live value with the static prefix/suffix.
             guard supportsAffixes, !value.isEmpty, !(prefix.isEmpty && suffix.isEmpty) else { return value }
@@ -1786,7 +1788,8 @@ final class PresentationManager {
                 footnote: live.footnote, crossReference: live.crossReference,
                 heading: live.heading, gloss: live.gloss, strongs: live.strongs,
                 songAuthor: live.songAuthor, songCopyright: live.songCopyright, songCCLI: live.songCCLI,
-                songbook: live.songbook, songStyle: live.songStyle, songKey: live.songKey, songTempo: live.songTempo
+                songbook: live.songbook, songStyle: live.songStyle, songKey: live.songKey, songTempo: live.songTempo,
+                mediaURL: live.mediaURL, mediaKind: live.mediaKind
             )
         }
 
@@ -2011,7 +2014,8 @@ final class PresentationManager {
         footnote: String = "", crossReference: String = "", heading: String = "",
         gloss: String = "", strongs: String = "",
         songAuthor: String = "", songCopyright: String = "", songCCLI: String = "",
-        songbook: String = "", songStyle: String = "", songKey: String = "", songTempo: String = ""
+        songbook: String = "", songStyle: String = "", songKey: String = "", songTempo: String = "",
+        mediaURL: URL? = nil, mediaKind: String = ""
     ) -> String {
         switch raw {
         case "mainText": return main
@@ -2033,6 +2037,10 @@ final class PresentationManager {
         case "static": return staticText
         case "date", "time": return formattedClock(source: raw, format: format, now: now)
         case "slideNumber": return slideNumber
+        case "mediaFile": return mediaURL?.lastPathComponent ?? ""
+        case "mediaName": return mediaURL?.deletingPathExtension().lastPathComponent ?? ""
+        case "mediaExtension": return mediaURL?.pathExtension.uppercased() ?? ""
+        case "mediaKind": return mediaKindLabel(mediaKind)
         default: return autoValue // "auto"
         }
     }
@@ -2060,6 +2068,16 @@ final class PresentationManager {
                 ("mainText", String(localized: "Conținut slide (live)", comment: "Box source")),
                 ("reference", String(localized: "Titlu slide (live)", comment: "Box source")),
             ]
+        case "media":
+            // Media used to fall through to `default` and offer the Bible's whole
+            // list — verse text, Strong's numbers, cross-references — none of which
+            // a media caption can ever resolve.
+            live = [
+                ("mediaFile", String(localized: "Nume fișier (live)", comment: "Box source — media")),
+                ("mediaName", String(localized: "Nume fără extensie (live)", comment: "Box source — media")),
+                ("mediaKind", String(localized: "Tip media (live)", comment: "Box source — media")),
+                ("mediaExtension", String(localized: "Extensie fișier (live)", comment: "Box source — media")),
+            ]
         default:
             live = [
                 ("mainText", String(localized: "Text verset (live)", comment: "Box source")),
@@ -2079,6 +2097,15 @@ final class PresentationManager {
             ("time", String(localized: "Ora curentă", comment: "Box source")),
             ("slideNumber", String(localized: "Număr slide (2 / 7)", comment: "Box source")),
         ]
+    }
+
+    static func mediaKindLabel(_ raw: String) -> String {
+        switch raw {
+        case "image": return String(localized: "Imagine", comment: "Media kind")
+        case "gif": return String(localized: "GIF", comment: "Media kind")
+        case "video": return String(localized: "Video", comment: "Media kind")
+        default: return ""
+        }
     }
 
     static func sourceOptionLabel(_ raw: String, for key: String = "bible") -> String {
@@ -4006,7 +4033,8 @@ final class PresentationManager {
             now: now, slideNumber: slideNumber,
             songAuthor: liveContent.songAuthor, songCopyright: liveContent.songCopyright,
             songCCLI: liveContent.songCCLI, songbook: liveContent.songbook,
-            songStyle: liveContent.songStyle, songKey: liveContent.songKey, songTempo: liveContent.songTempo
+            songStyle: liveContent.songStyle, songKey: liveContent.songKey, songTempo: liveContent.songTempo,
+            mediaURL: liveContent.mediaURL, mediaKind: liveContent.mediaKind
         )
     }
 
