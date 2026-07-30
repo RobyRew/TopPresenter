@@ -5278,9 +5278,11 @@ struct RemoteExtractionTests {
 // media caption can ever resolve.
 @MainActor struct MediaSourceTests {
 
-    @Test func mediaNoLongerOffersBibleSources() {
+    @Test func mediaNoLongerOffersBibleOnlySources() {
         let raws = Set(PresentationManager.sourceOptions(for: "media").map(\.raw))
-        for bibleOnly in ["mainText", "translation", "strongs", "crossReference", "gloss", "heading"] {
+        // mainText/reference/subtitle are COMMON now — every presenter carries
+        // them. What must stay out is what only a Bible can supply.
+        for bibleOnly in ["translation", "strongs", "crossReference", "gloss", "heading"] {
             #expect(!raws.contains(bibleOnly), "media must not offer '\(bibleOnly)'")
         }
     }
@@ -5298,7 +5300,7 @@ struct RemoteExtractionTests {
     @Test func theOtherPresentersAreUnchanged() {
         let bible = Set(PresentationManager.sourceOptions(for: "bible").map(\.raw))
         #expect(bible.contains("mainText") && bible.contains("strongs"))
-        #expect(!bible.contains("mediaFile"), "media sources stay out of Bible")
+        #expect(!bible.contains("mediaFile"), "media specifics stay out of Bible")
 
         let song = Set(PresentationManager.sourceOptions(for: "song").map(\.raw))
         #expect(song.contains("songKey") && !song.contains("translation"))
@@ -5736,5 +5738,145 @@ struct RemoteExtractionTests {
         pm.setSourceFormat("hm", for: .reference, in: "bible")
         #expect(pm.clockTickInterval == 60)
         pm.clearOutput()
+    }
+}
+
+// MARK: - The common source core
+//
+// A casetă used to behave differently depending on which presenter you happened
+// to be editing: four disjoint source lists, so a media caption could not show
+// the main text and a slide could not show a subtitle, for no reason the operator
+// could see. The choices are shared now; only the LABELS follow the presenter.
+@MainActor struct CommonSourceCoreTests {
+
+    @Test func everyPresenterCarriesTheSameCore() {
+        for key in PresentationManager.profileKeys {
+            let raws = Set(PresentationManager.sourceOptions(for: key).map(\.raw))
+            for core in ["mainText", "reference", "subtitle"] {
+                #expect(raws.contains(core), "\(key) is missing the common '\(core)'")
+            }
+        }
+    }
+
+    @Test func everyPresenterCarriesTheSameGenerics() {
+        let generic = Set(PresentationManager.genericSourceOptions().map(\.raw))
+        #expect(generic == ["static", "date", "time", "slideNumber",
+                            "countdown", "elapsed", "slideTimer"])
+        for key in PresentationManager.profileKeys {
+            let raws = Set(PresentationManager.sourceOptions(for: key).map(\.raw))
+            #expect(generic.isSubset(of: raws), "\(key) is missing a generic source")
+        }
+    }
+
+    @Test func theLabelsStillFollowThePresenter() {
+        func label(_ key: String, _ raw: String) -> String? {
+            PresentationManager.sourceOptions(for: key).first { $0.raw == raw }?.label
+        }
+        // Same field, different meaning: the choice is shared, the wording is not.
+        #expect(label("song", "mainText") != label("bible", "mainText"))
+        #expect(label("text", "reference") != label("bible", "reference"))
+    }
+
+    @Test func specificsStayWithTheirPresenter() {
+        func raws(_ key: String) -> Set<String> {
+            Set(PresentationManager.sourceOptions(for: key).map(\.raw))
+        }
+        #expect(raws("song").contains("ccli") && !raws("bible").contains("ccli"))
+        #expect(raws("bible").contains("strongs") && !raws("song").contains("strongs"))
+        #expect(raws("media").contains("mediaFile") && !raws("text").contains("mediaFile"))
+    }
+
+    @Test func nothingIsListedTwice() {
+        for key in PresentationManager.profileKeys {
+            let all = PresentationManager.sourceOptions(for: key).map(\.raw)
+            #expect(all.count == Set(all).count, "\(key) lists a source twice")
+        }
+    }
+
+    @Test func everyOfferedSourceResolves() {
+        // A source in the menu that resolves to nothing would be a dead choice.
+        for key in PresentationManager.profileKeys {
+            for option in PresentationManager.sourceOptions(for: key) where option.raw != "static" {
+                let value = PresentationManager.resolveBoxSource(
+                    option.raw, autoValue: "AUTO", staticText: "STATIC",
+                    main: "M", reference: "R", translation: "T", subtitle: "S",
+                    slideNumber: "1 / 2",
+                    footnote: "F", crossReference: "X", heading: "H",
+                    gloss: "G", strongs: "N",
+                    songAuthor: "A", songCopyright: "C", songCCLI: "CC",
+                    songbook: "B", songStyle: "ST", songKey: "K", songTempo: "TE",
+                    mediaURL: URL(fileURLWithPath: "/tmp/a.mp4"), mediaKind: "video",
+                    slideShownAt: Date()
+                )
+                #expect(!value.isEmpty, "'\(option.raw)' in \(key) resolved to nothing")
+            }
+        }
+    }
+}
+
+// MARK: - Seeding the live media casetă into an existing profile
+@MainActor struct LiveMediaMigrationTests {
+
+    @Test func anOldProfileWithoutTheCaseteGetsOne() throws {
+        let store = makeTestDefaults()
+        // A media profile as it looked before the casetă existed.
+        var old = PresentationManager.LayoutProfile.defaultProfile(for: "media")
+        old.mediaBoxes = []
+        old.boxOrder = []
+        let blob = try JSONEncoder().encode(["media": old])
+        store.set(blob, forKey: "pm_layoutProfiles")
+
+        let pm = makeTestManager(store)
+
+        // Without this the output kept falling back to the hard-coded full-screen
+        // layer, which is exactly what the casetă replaces.
+        #expect(pm.hasLiveMediaBox(in: "media"))
+        let live = try #require(pm.profile("media").mediaBoxes.first { $0.sourceRaw == "live" })
+        #expect(live.frame.width == 1 && live.frame.height == 1)
+        #expect(pm.orderedBoxTokens(in: "media").first == PresentationManager.mediaToken(live.id))
+    }
+
+    @Test func itRunsOnceSoADeliberateDeleteSticks() throws {
+        let store = makeTestDefaults()
+        var old = PresentationManager.LayoutProfile.defaultProfile(for: "media")
+        old.mediaBoxes = []
+        store.set(try JSONEncoder().encode(["media": old]), forKey: "pm_layoutProfiles")
+
+        let first = makeTestManager(store)
+        let live = try #require(first.profile("media").mediaBoxes.first { $0.sourceRaw == "live" })
+        first.removeMediaBox(id: live.id, in: "media")
+        first.persistProfilesNow()
+
+        // Relaunch: it must NOT come back, or removing it would be impossible.
+        let second = makeTestManager(store)
+        #expect(!second.hasLiveMediaBox(in: "media"))
+    }
+
+    @Test func aProfileThatAlreadyHasOneIsLeftAlone() throws {
+        let store = makeTestDefaults()
+        let seeded = PresentationManager.LayoutProfile.defaultProfile(for: "media")
+        store.set(try JSONEncoder().encode(["media": seeded]), forKey: "pm_layoutProfiles")
+
+        let pm = makeTestManager(store)
+        #expect(pm.profile("media").mediaBoxes.filter { $0.sourceRaw == "live" }.count == 1,
+                "must not end up with two")
+    }
+
+    @Test func existingOverlaysStayOnTop() throws {
+        let store = makeTestDefaults()
+        var old = PresentationManager.LayoutProfile.defaultProfile(for: "media")
+        old.mediaBoxes = []
+        var logo = PresentationManager.CustomTextBox()
+        logo.text = "logo"
+        old.customTextBoxes = [logo]
+        old.boxOrder = ["custom:" + logo.id.uuidString]
+        store.set(try JSONEncoder().encode(["media": old]), forKey: "pm_layoutProfiles")
+
+        let pm = makeTestManager(store)
+        let order = pm.orderedBoxTokens(in: "media")
+        let liveIdx = try #require(order.firstIndex { $0.hasPrefix("media:") })
+        let logoIdx = try #require(order.firstIndex(of: "custom:" + logo.id.uuidString))
+        // Earlier in the list = further back, so the media must sit behind.
+        #expect(liveIdx < logoIdx)
     }
 }

@@ -2161,14 +2161,54 @@ final class PresentationManager {
 
     /// The source choices a presenter offers, with PER-PRESENTER labels —
     /// Songs pull from lyrics/title/strofă, Slides from content/title, etc.
+    /// The source list for a presenter: a COMMON CORE every presenter offers,
+    /// then that presenter's own extras.
+    ///
+    /// It used to be four disjoint lists, so a media caption could not show the
+    /// main text, and a slide could not show a subtitle — a casetă behaved
+    /// differently depending on which presenter you happened to be editing, for no
+    /// reason the operator could see. The labels still follow the edited presenter
+    /// ("Versuri" in Songs, "Text verset" in Bible) because the same field means
+    /// different things there; the CHOICES no longer do.
     static func sourceOptions(for key: String) -> [(raw: String, label: String)] {
-        var live: [(String, String)]
+        commonSourceOptions(for: key) + presenterSourceOptions(for: key) + genericSourceOptions()
+    }
+
+    /// Live fields every presenter carries, labelled in that presenter's language.
+    static func commonSourceOptions(for key: String) -> [(raw: String, label: String)] {
         switch key {
         case "song":
-            live = [
+            return [
                 ("mainText", String(localized: "Versuri (live)", comment: "Box source")),
                 ("reference", String(localized: "Titlu cântec (live)", comment: "Box source")),
                 ("subtitle", String(localized: "Etichetă strofă (live)", comment: "Box source")),
+            ]
+        case "text":
+            return [
+                ("mainText", String(localized: "Conținut slide (live)", comment: "Box source")),
+                ("reference", String(localized: "Titlu slide (live)", comment: "Box source")),
+                ("subtitle", String(localized: "Subtitlu slide (live)", comment: "Box source")),
+            ]
+        case "media":
+            return [
+                ("mainText", String(localized: "Text principal (live)", comment: "Box source")),
+                ("reference", String(localized: "Titlu media (live)", comment: "Box source")),
+                ("subtitle", String(localized: "Subtitlu (live)", comment: "Box source")),
+            ]
+        default:
+            return [
+                ("mainText", String(localized: "Text verset (live)", comment: "Box source")),
+                ("reference", String(localized: "Referință (live)", comment: "Box source")),
+                ("subtitle", String(localized: "Subtitlu (live)", comment: "Box source")),
+            ]
+        }
+    }
+
+    /// What only this presenter can supply.
+    static func presenterSourceOptions(for key: String) -> [(raw: String, label: String)] {
+        switch key {
+        case "song":
+            return [
                 ("author", String(localized: "Autor (live)", comment: "Box source")),
                 ("copyright", String(localized: "Copyright (live)", comment: "Box source")),
                 ("ccli", String(localized: "Număr CCLI (live)", comment: "Box source")),
@@ -2178,26 +2218,17 @@ final class PresentationManager {
                 ("songTempo", String(localized: "Tempo (live)", comment: "Box source")),
             ]
         case "text":
-            live = [
-                ("mainText", String(localized: "Conținut slide (live)", comment: "Box source")),
-                ("reference", String(localized: "Titlu slide (live)", comment: "Box source")),
-            ]
+            return []
         case "media":
-            // Media used to fall through to `default` and offer the Bible's whole
-            // list — verse text, Strong's numbers, cross-references — none of which
-            // a media caption can ever resolve.
-            live = [
+            return [
                 ("mediaFile", String(localized: "Nume fișier (live)", comment: "Box source — media")),
                 ("mediaName", String(localized: "Nume fără extensie (live)", comment: "Box source — media")),
                 ("mediaKind", String(localized: "Tip media (live)", comment: "Box source — media")),
                 ("mediaExtension", String(localized: "Extensie fișier (live)", comment: "Box source — media")),
             ]
         default:
-            live = [
-                ("mainText", String(localized: "Text verset (live)", comment: "Box source")),
-                ("reference", String(localized: "Referință (live)", comment: "Box source")),
+            return [
                 ("translation", String(localized: "Traducere (live)", comment: "Box source")),
-                ("subtitle", String(localized: "Subtitlu (live)", comment: "Box source")),
                 ("heading", String(localized: "Titlu secțiune (live)", comment: "Box source")),
                 ("footnote", String(localized: "Notă de subsol (live)", comment: "Box source")),
                 ("crossReference", String(localized: "Referințe încrucișate (live)", comment: "Box source")),
@@ -2205,7 +2236,11 @@ final class PresentationManager {
                 ("strongs", String(localized: "Numere Strong (live)", comment: "Box source")),
             ]
         }
-        return live + [
+    }
+
+    /// Identical everywhere: nothing here depends on what is being presented.
+    static func genericSourceOptions() -> [(raw: String, label: String)] {
+        [
             ("static", String(localized: "Text static", comment: "Box source")),
             ("date", String(localized: "Data curentă", comment: "Box source")),
             ("time", String(localized: "Ora curentă", comment: "Box source")),
@@ -3465,6 +3500,30 @@ final class PresentationManager {
             }
             self.profiles = migrated
         }
+        // One-time: give an EXISTING media profile the live casetă.
+        //
+        // New installs get it from defaultProfile, but a profile saved before the
+        // casetă existed has no media box, so the output still fell back to the
+        // hard-coded full-screen layer — which is precisely the thing the casetă
+        // replaces, and why media could not be resized or given corner radius,
+        // feather or opacity. Flagged so deleting the casetă on purpose sticks
+        // instead of it reappearing on every launch.
+        if !d.bool(forKey: "pm_didSeedLiveMediaBox") {
+            d.set(true, forKey: "pm_didSeedLiveMediaBox")
+            if var media = self.profiles["media"],
+               !media.mediaBoxes.contains(where: { $0.sourceRaw == "live" }) {
+                var live = MediaBox()
+                live.name = String(localized: "Media (live)", comment: "Default live media box name")
+                live.sourceRaw = "live"
+                live.frame = TextBoxFrame(x: 0, y: 0, width: 1, height: 1)
+                live.contentModeRaw = "fit"
+                media.mediaBoxes.insert(live, at: 0)
+                // Behind everything else, so existing overlays stay on top.
+                media.boxOrder.insert("media:" + live.id.uuidString, at: 0)
+                self.profiles["media"] = media
+            }
+        }
+
         // Restore background image — security-scoped bookmark first (required in the
         // sandbox after relaunch), raw path as fallback for pre-bookmark installs.
         if let bookmark = d.data(forKey: Self.backgroundBookmarkKey) {
