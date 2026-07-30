@@ -1397,6 +1397,10 @@ struct LayoutEditorSheet: View {
     /// Temporary, for the timing line in `inspector`: which tabs have been built
     /// at least once this session.
     @State private var builtTabs: Set<EditorTab> = []
+    /// Temporary bisect: 0 = render every inspector group, N = skip group N.
+    /// Advances on each switch INTO the Text tab, so clicking Text repeatedly
+    /// walks the whole tab and the time that drops names the culprit.
+    @State private var perfSkipGroup = 0
     #endif
     /// Mirrors the output's interlinear master switch so the canvas preview matches.
     @AppStorage("interlinearLiveEnabled") private var interlinearLiveEnabled = true
@@ -1845,9 +1849,14 @@ struct LayoutEditorSheet: View {
             EditorPerfClock.reset()
             let seen = builtTabs.contains(new)
             builtTabs.insert(new)
+            let skipped = perfSkipGroup
             DispatchQueue.main.async {
                 let ms = Int(Date.now.timeIntervalSince(started) * 1000)
-                print("[TopPresenter] tab -> \(new.rawValue) \(seen ? "(seen before)" : "(FIRST BUILD)"): \(ms) ms")
+                let what = skipped == 0 ? "all groups" : "SKIPPING group \(skipped)"
+                print("[TopPresenter] tab -> \(new.rawValue) [\(what)] \(seen ? "" : "(first) ")\(ms) ms")
+                // Advance the bisect only when leaving Text, so the next visit
+                // renders a different subset.
+                if new == .text { perfSkipGroup = (skipped + 1) % 6 }
             }
         }
         #endif
@@ -2941,6 +2950,7 @@ struct LayoutEditorSheet: View {
         let pmBinding = Bindable(pm)
 
         LazyVStack(alignment: .leading, spacing: 10) {
+            if perfSkipGroup != 1 {   // DEBUG bisect: group1@L2944
             GroupBox {
                 LazyVStack(alignment: .leading, spacing: 8) {
                     labeledRow(String(localized: "Font:", comment: "Setting label")) {
@@ -3096,12 +3106,14 @@ struct LayoutEditorSheet: View {
                     .font(.caption.bold())
             }
             .perfMark("group1@L2944")
+            }
 
             // Red-letter, interlinear and multi-verse all style the VERSE text and
             // nothing else, so they belong to the verse cassette — same rule the
             // multi-verse group already followed. Showing them while a title or
             // reference box was selected implied they applied to that box.
             if pm.activeProfileKey == "bible", selection == BoxIdentity.section(.verseContent) {
+                if perfSkipGroup != 2 {   // DEBUG bisect: group2@L3104
                 GroupBox {
                     LazyVStack(alignment: .leading, spacing: 8) {
                         Toggle(isOn: pmBinding.wocStyleEnabled) {
@@ -3138,8 +3150,10 @@ struct LayoutEditorSheet: View {
                         .font(.caption.bold())
                 }
                 .perfMark("group2@L3104")
+                }
 
                 // Interlinear — stacked word columns (original + gloss + Strong's + morph).
+                if perfSkipGroup != 3 {   // DEBUG bisect: group3@L3141
                 GroupBox {
                     LazyVStack(alignment: .leading, spacing: 8) {
                         labeledRow(String(localized: "Mod:", comment: "Setting label")) {
@@ -3194,10 +3208,12 @@ struct LayoutEditorSheet: View {
                         .font(.caption.bold())
                 }
                 .perfMark("group3@L3141")
+                }
 
                 // Multi-verse — how several selected verses render together.
                 // Stored in the theme (exports/imports with it).
                 do {
+                    if perfSkipGroup != 4 {   // DEBUG bisect: group4@L3198
                     GroupBox {
                         LazyVStack(alignment: .leading, spacing: 8) {
                             labeledRow(String(localized: "Aranjare:", comment: "Setting label")) {
@@ -3236,13 +3252,16 @@ struct LayoutEditorSheet: View {
                             .font(.caption.bold())
                     }
                     .perfMark("group4@L3198")
+                    }
                 }
             }
 
             // Per-box text style — select a box on the canvas, customize here.
             if let selection {
+                if perfSkipGroup != 5 {   // DEBUG bisect: selectedBoxStyleGroup
                 selectedBoxStyleGroup(selection)
                     .perfMark("selectedBoxStyleGroup")
+                }
             } else {
                 Text(String(localized: "Selectează o casetă pe canvas pentru a-i personaliza textul.", comment: "Inspector hint"))
                     .font(.caption2)
