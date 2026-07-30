@@ -5916,7 +5916,7 @@ struct RemoteExtractionTests {
         #expect(pm.orderedBoxTokens(in: "media").first == PresentationManager.mediaToken(live.id))
     }
 
-    @Test func itRunsOnceSoADeliberateDeleteSticks() throws {
+    @Test func aDeliberateDeleteSticksAcrossRelaunch() throws {
         let store = makeTestDefaults()
         var old = PresentationManager.LayoutProfile.defaultProfile(for: "media")
         old.mediaBoxes = []
@@ -5925,11 +5925,29 @@ struct RemoteExtractionTests {
         let first = makeTestManager(store)
         let live = try #require(first.profile("media").mediaBoxes.first { $0.sourceRaw == "live" })
         first.removeMediaBox(id: live.id, in: "media")
+        #expect(first.profile("media").liveMediaRemoved, "the delete must be recorded, not inferred")
         first.persistProfilesNow()
 
         // Relaunch: it must NOT come back, or removing it would be impossible.
+        // The intent lives on the PROFILE now — a one-shot UserDefaults flag could
+        // only say "seeding already happened", which is a different claim, and it
+        // left a theme that predates the casetă unable to ever get one.
         let second = makeTestManager(store)
         #expect(!second.hasLiveMediaBox(in: "media"))
+    }
+
+    @Test func addingItBackClearsTheDelete() throws {
+        let pm = makeTestManager()
+        let live = try #require(pm.profile("media").mediaBoxes.first { $0.sourceRaw == "live" })
+        pm.removeMediaBox(id: live.id, in: "media")
+        #expect(pm.canAddLiveMediaBox(in: "media"))
+
+        let added = try #require(pm.addLiveMediaBox(in: "media"))
+        #expect(pm.hasLiveMediaBox(in: "media"))
+        #expect(!pm.profile("media").liveMediaRemoved, "asking for it back is consent")
+        #expect(pm.orderedBoxTokens(in: "media").contains(PresentationManager.mediaToken(added.id)))
+        // Twice would give the module two surfaces fighting over one clip.
+        #expect(pm.addLiveMediaBox(in: "media") == nil)
     }
 
     @Test func aProfileThatAlreadyHasOneIsLeftAlone() throws {
@@ -5958,5 +5976,42 @@ struct RemoteExtractionTests {
         let logoIdx = try #require(order.firstIndex(of: "custom:" + logo.id.uuidString))
         // Earlier in the list = further back, so the media must sit behind.
         #expect(liveIdx < logoIdx)
+    }
+
+    // The failure the operator actually hit: the box list showed four text casete
+    // and no media at all, with no way to get one back. Seeding was a one-shot
+    // launch migration, so anything that REPLACED the media profile afterwards —
+    // applying a theme, importing one, copying another presenter's layout — left
+    // the presenter unable to show media, permanently.
+
+    @Test func applyingAThemeThatPredatesTheCaseteStillLeavesOne() throws {
+        let pm = makeTestManager()
+        // A theme saved before the casetă existed: its media profile has none.
+        let theme = pm.saveCurrentAsTheme(named: "Legacy")
+        let idx = try #require(pm.themes.firstIndex { $0.id == theme.id })
+        pm.themes[idx].payload.profiles["media"]?.mediaBoxes = []
+        pm.themes[idx].payload.profiles["media"]?.boxOrder = []
+
+        pm.applyTheme(id: theme.id)
+        #expect(pm.hasLiveMediaBox(in: "media"), "the media presenter must never end up unable to show media")
+    }
+
+    @Test func copyingAnotherPresentersLayoutKeepsTheMediaCasete() {
+        let pm = makeTestManager()
+        // Bible has no live casetă, and copyProfile replaces the target wholesale.
+        pm.copyProfile(from: "bible", to: "media")
+        #expect(pm.hasLiveMediaBox(in: "media"))
+    }
+
+    @Test func healingRespectsADeliberateDeleteEvenAcrossAThemeApply() throws {
+        let pm = makeTestManager()
+        let live = try #require(pm.profile("media").mediaBoxes.first { $0.sourceRaw == "live" })
+        pm.removeMediaBox(id: live.id, in: "media")
+
+        // The intent rides along in the saved profile, so re-applying the theme
+        // the operator saved WITHOUT the casetă must not hand it back.
+        let theme = pm.saveCurrentAsTheme(named: "NoLiveOnPurpose")
+        pm.applyTheme(id: theme.id)
+        #expect(!pm.hasLiveMediaBox(in: "media"))
     }
 }

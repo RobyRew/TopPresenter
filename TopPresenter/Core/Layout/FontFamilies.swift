@@ -14,7 +14,12 @@ import CoreText
 /// Core Text rather than `NSFontManager` on purpose: `CTFontManagerCopy…` is
 /// thread-safe, so `warm()` can pay the cost off the main thread before anyone
 /// needs the list.
-enum FontFamilies {
+///
+/// `nonisolated` because the project infers `@MainActor` by default, and a
+/// main-actor `cached` is exactly what `warm()` must NOT touch — reading it from
+/// a background queue was the whole point. It is a `let` of a `Sendable` array
+/// behind Swift's run-once initialisation, so it needs no isolation of its own.
+nonisolated enum FontFamilies {
 
     /// `static let` gives us Swift's thread-safe run-once initialisation, so the
     /// enumeration happens exactly once no matter who asks first.

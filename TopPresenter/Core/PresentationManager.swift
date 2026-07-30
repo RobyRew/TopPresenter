@@ -606,6 +606,15 @@ final class PresentationManager {
         /// at all". Their frames/styles are deliberately KEPT, so restoring a
         /// section from the add menu brings its layout back rather than resetting it.
         var removedSections: [String] = []
+        /// Whether the operator deleted the LIVE media casetă from this profile.
+        ///
+        /// The casetă is re-seeded whenever a profile turns up without one — a
+        /// theme saved before it existed carries a media profile that simply has
+        /// no way to render the module's media, and applying such a theme used to
+        /// leave the presenter permanently broken with no way back. Healing has to
+        /// be able to tell "this theme predates the feature" from "I deleted it on
+        /// purpose", and only the profile itself can say which.
+        var liveMediaRemoved: Bool = false
 
         init() {}
 
@@ -633,6 +642,7 @@ final class PresentationManager {
             boxTransitionOverrides = try c.decodeIfPresent([String: BoxTransition].self, forKey: .boxTransitionOverrides) ?? [:]
             boxColors = try c.decodeIfPresent([String: String].self, forKey: .boxColors) ?? [:]
             removedSections = try c.decodeIfPresent([String].self, forKey: .removedSections) ?? []
+            liveMediaRemoved = try c.decodeIfPresent(Bool.self, forKey: .liveMediaRemoved) ?? false
         }
 
         /// Sensible starting layout per presenter.
@@ -668,13 +678,9 @@ final class PresentationManager {
                 // hard-coded full-screen layer: full bleed to start, and from there
                 // movable, resizable, reorderable, hideable and transitionable like
                 // any other box.
-                var live = MediaBox()
-                live.name = String(localized: "Media (live)", comment: "Default live media box name")
-                live.sourceRaw = "live"
-                live.frame = TextBoxFrame(x: 0, y: 0, width: 1, height: 1)
-                live.contentModeRaw = "fit"
+                let live = makeLiveMediaBox()
                 p.mediaBoxes = [live]
-                p.boxOrder = ["media:" + live.id.uuidString]
+                p.boxOrder = [mediaToken(live.id)]
 
                 // Every built-in text box still ships hidden so a photo or video is
                 // never covered by default; the profile is for overlays.
@@ -998,6 +1004,10 @@ final class PresentationManager {
                 p.visibility[raw] = defaults.visibility[raw]
             }
         }
+        // The snapshot came from a presenter that has no live casetă, so copying
+        // Bible's layout onto Media used to silently remove the only box that can
+        // show the module's media.
+        if target == "media" { ensureLiveMediaBox() }
     }
 
     /// The profile that was last presented — after Hide/Clear/ESC the exit
@@ -1958,7 +1968,14 @@ final class PresentationManager {
     }
 
     func removeMediaBox(id: UUID, in key: String? = nil) {
-        mutateProfile(key) { $0.mediaBoxes.removeAll { $0.id == id } }
+        mutateProfile(key) { p in
+            // Deleting the LIVE casetă is a decision, not an accident: record it so
+            // `ensureLiveMediaBox` cannot hand it back on the next theme apply.
+            if p.mediaBoxes.first(where: { $0.id == id })?.sourceRaw == "live" {
+                p.liveMediaRemoved = true
+            }
+            p.mediaBoxes.removeAll { $0.id == id }
+        }
     }
 
     func mediaBox(id: UUID, in key: String? = nil) -> MediaBox? {
@@ -2423,6 +2440,64 @@ final class PresentationManager {
         }
     }
 
+    /// The casetă the Media module's content renders into: full bleed, fit.
+    static func makeLiveMediaBox() -> MediaBox {
+        var live = MediaBox()
+        live.name = String(localized: "Media (live)", comment: "Default live media box name")
+        live.sourceRaw = "live"
+        live.frame = TextBoxFrame(x: 0, y: 0, width: 1, height: 1)
+        live.contentModeRaw = "fit"
+        return live
+    }
+
+    /// Gives the media profile its live casetă back if it has none.
+    ///
+    /// Every wholesale replacement of a profile goes through here: applying a
+    /// theme, importing one, undo/redo, copying another presenter's layout. A
+    /// theme saved before the casetă existed carries a media profile with no way
+    /// to render the module's media at all — applying it left the presenter with
+    /// nothing but overlays and no route back, because the launch migration is
+    /// one-shot and had already spent its flag.
+    ///
+    /// It does NOT fight the operator: deleting the casetă records the intent on
+    /// the profile (`liveMediaRemoved`), which travels with the theme, so a
+    /// deliberate delete survives every apply.
+    @discardableResult
+    func ensureLiveMediaBox(in key: String = "media") -> Bool {
+        guard var p = profiles[key] else { return false }
+        guard !p.liveMediaRemoved,
+              !p.mediaBoxes.contains(where: { $0.sourceRaw == "live" }) else { return false }
+        let live = Self.makeLiveMediaBox()
+        p.mediaBoxes.insert(live, at: 0)
+        // At the BACK of the stack, so any overlay the theme carries stays on top.
+        p.boxOrder.insert(Self.mediaToken(live.id), at: 0)
+        profiles[key] = p
+        invalidateProfile(key)
+        return true
+    }
+
+    /// Adds the live casetă on request, clearing a previous deliberate delete.
+    @discardableResult
+    func addLiveMediaBox(in key: String? = nil) -> MediaBox? {
+        let k = resolvedKey(key)
+        guard !profile(k).mediaBoxes.contains(where: { $0.sourceRaw == "live" }) else { return nil }
+        let live = Self.makeLiveMediaBox()
+        mutateProfile(k) { p in
+            p.liveMediaRemoved = false
+            p.mediaBoxes.insert(live, at: 0)
+            p.boxOrder.insert(Self.mediaToken(live.id), at: 0)
+        }
+        return live
+    }
+
+    /// Whether this profile could take a live casetă but has none — drives the
+    /// "add it back" affordance in the editor.
+    func canAddLiveMediaBox(in key: String? = nil) -> Bool {
+        !readStructure(in: key) { p in
+            p.mediaBoxes.contains { $0.sourceRaw == "live" }
+        }
+    }
+
     // MARK: - Removing and restoring built-in sections
 
     /// Deletes a built-in section from this presenter.
@@ -2655,6 +2730,7 @@ final class PresentationManager {
         guard let incoming = theme.payload.profiles[k] else { return }
         registerLayoutUndo()
         profiles[k] = incoming
+        if k == "media" { ensureLiveMediaBox() }
         invalidateAllProfiles()
         themeAssignments[k] = id
         loadContentBackgroundImages()
@@ -3135,6 +3211,9 @@ final class PresentationManager {
         }
         if !p.profiles.isEmpty {
             profiles = p.profiles
+            // A theme authored before the live casetă existed carries a media
+            // profile that cannot render the module's media at all.
+            ensureLiveMediaBox()
             // Wholesale replacement — undo/redo, applying a theme, importing a
             // .tptheme. Every box in every profile may have moved.
             invalidateAllProfiles()
@@ -3506,29 +3585,21 @@ final class PresentationManager {
             }
             self.profiles = migrated
         }
-        // One-time: give an EXISTING media profile the live casetă.
+        // Give an EXISTING media profile the live casetă.
         //
         // New installs get it from defaultProfile, but a profile saved before the
         // casetă existed has no media box, so the output still fell back to the
         // hard-coded full-screen layer — which is precisely the thing the casetă
         // replaces, and why media could not be resized or given corner radius,
-        // feather or opacity. Flagged so deleting the casetă on purpose sticks
-        // instead of it reappearing on every launch.
-        if !d.bool(forKey: "pm_didSeedLiveMediaBox") {
-            d.set(true, forKey: "pm_didSeedLiveMediaBox")
-            if var media = self.profiles["media"],
-               !media.mediaBoxes.contains(where: { $0.sourceRaw == "live" }) {
-                var live = MediaBox()
-                live.name = String(localized: "Media (live)", comment: "Default live media box name")
-                live.sourceRaw = "live"
-                live.frame = TextBoxFrame(x: 0, y: 0, width: 1, height: 1)
-                live.contentModeRaw = "fit"
-                media.mediaBoxes.insert(live, at: 0)
-                // Behind everything else, so existing overlays stay on top.
-                media.boxOrder.insert("media:" + live.id.uuidString, at: 0)
-                self.profiles["media"] = media
-            }
-        }
+        // feather or opacity.
+        //
+        // This used to be one-shot, guarded by a UserDefaults flag. That was the
+        // wrong guard: applying a theme saved before the feature — the shipped
+        // "Default" among them — replaces the whole profile, and with the flag
+        // already spent the casetă never came back. `liveMediaRemoved` on the
+        // profile is the right place for the intent, so the check can run freely.
+        d.removeObject(forKey: "pm_didSeedLiveMediaBox")
+        ensureLiveMediaBox()
 
         // Restore background image — security-scoped bookmark first (required in the
         // sandbox after relaunch), raw path as fallback for pre-bookmark installs.

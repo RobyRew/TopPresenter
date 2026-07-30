@@ -1958,7 +1958,9 @@ struct LayoutEditorSheet: View {
         }
     }
 
-    @ViewBuilder
+    // No @ViewBuilder: the body is a single `return`, which disables the builder
+    // anyway — Swift diagnoses the pair. The bindings above the return are plain
+    // local constants, so nothing here needs building.
     private func sampleContent(size: CGSize) -> some View {
         let targetScale = pm.targetFontScale
         let canvasScale = size.width / max(metrics.points.width, 1)
@@ -2077,6 +2079,21 @@ struct LayoutEditorSheet: View {
                     // Asks WHERE the media comes from instead of always opening a
                     // file panel: most of the time it is already in the library.
                     Menu {
+                        // The live casetă is the one that shows whatever the Media
+                        // module projects. It ships with the media profile, but a
+                        // theme saved before it existed does not carry it, and it
+                        // can be deleted — so there has to be a way back.
+                        if pm.canAddLiveMediaBox() {
+                            Section(String(localized: "Media în direct", comment: "Add media menu section — live")) {
+                                Button(String(localized: "Casetă pentru media modulului", comment: "Add media menu — live box")) {
+                                    if let box = pm.addLiveMediaBox() {
+                                        selection = .media(box.id)
+                                        activeTab = .layout
+                                    }
+                                }
+                            }
+                            Divider()
+                        }
                         if mediaLibrary.isEmpty {
                             Text(String(localized: "Biblioteca Media este goală", comment: "Add media menu — empty library"))
                         } else {
