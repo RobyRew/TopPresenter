@@ -252,6 +252,11 @@ struct MainControlView: View {
     private var mainContent: some View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
             SidebarView()
+                // Applied to the SIDEBAR COLUMN's content, which is where the
+                // automatic toggle is generated. On the split view itself it did
+                // nothing, so both buttons showed: SwiftUI's in the sidebar's own
+                // title area and ours in the main bar.
+                .toolbar(removing: .sidebarToggle)
         } detail: {
             HSplitView {
                 // Main content area
@@ -266,7 +271,8 @@ struct MainControlView: View {
             }
         }
         .navigationTitle(autoTabTitle)
-        // SwiftUI's own sidebar button is removed and replaced by ours below.
+        // SwiftUI's own sidebar button is removed on the sidebar column above and
+        // replaced by ours below.
         //
         // A CUSTOMIZABLE toolbar persists every item it contains, including the
         // automatic ones. So the saved configuration carried
@@ -279,7 +285,7 @@ struct MainControlView: View {
         // which aborted before the tab could appear — customization and tabs were
         // mutually exclusive. Owning the item outright means exactly one source
         // for it, and it lets us pin it in place (see `sidebarToolbarItem`).
-        .toolbar(removing: .sidebarToggle)
+        //
         // CUSTOMIZABLE toolbar with a SEPARATE saved layout per module — the id
         // keys the persisted customization, so Bible and Songs (etc.) each keep
         // their own arrangement. Right-click → „Customize Toolbar…" to edit.
