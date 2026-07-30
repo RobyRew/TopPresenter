@@ -13,6 +13,14 @@ report English at ~70% and mislead every contributor who looks at the table.
 
 Exit code 1 with --check when README.md is out of date, so CI can catch a
 commit that forgot to regenerate it.
+
+Exit code 1 — in EITHER mode — when the base language is incomplete. English is
+the development region (`CFBundleDevelopmentRegion`) and the catalog's
+`sourceLanguage`, so every other language falls back to it. A key with no
+English entry falls past English to the raw key text, which in this codebase is
+written in Romanian: a German user reading Romanian is the symptom, an empty
+`en` slot is the cause. This was a percentage in a table that nobody had to act
+on, and 53 strings accumulated behind it. It is a failure now.
 """
 
 from __future__ import annotations
@@ -43,6 +51,10 @@ LANGUAGES = [
 
 BAR_WIDTH = 24
 
+# The development region every other language falls back to. Not a preference:
+# it is CFBundleDevelopmentRegion and the catalog's sourceLanguage.
+BASE_LANGUAGE = "en"
+
 
 def translatable(key: str) -> bool:
     """Keys with no words are the same in every language.
@@ -53,6 +65,19 @@ def translatable(key: str) -> bool:
     """
     stripped = re.sub(r"%(?:lld|@|%)", "", key)
     return bool(re.search(r"[^\W\d_]{2,}", stripped, re.UNICODE))
+
+
+def untranslated(code: str) -> list[str]:
+    """Translatable keys with no usable entry for `code`."""
+    data = json.loads(CATALOG.read_text(encoding="utf-8"))
+    missing = []
+    for key, entry in (data.get("strings") or {}).items():
+        if not translatable(key):
+            continue
+        unit = ((entry.get("localizations") or {}).get(code) or {}).get("stringUnit") or {}
+        if unit.get("state") != "translated" or not unit.get("value"):
+            missing.append(key)
+    return missing
 
 
 def coverage() -> tuple[dict[str, int], int]:
@@ -112,14 +137,28 @@ def main() -> int:
     _, tail = rest.split(END, 1)
     updated = head + block + tail
 
-    if updated == text:
-        return 0
-    if args.check:
+    stale = updated != text
+    if stale and not args.check:
+        README.write_text(updated, encoding="utf-8")
+        print("i18n: README.md coverage table updated")
+
+    # The base language is a correctness gate, not a statistic: an empty `en`
+    # slot means EVERY language falls through to the raw key text.
+    gaps = untranslated(BASE_LANGUAGE)
+    if gaps:
+        print(f"i18n: {len(gaps)} string(s) have no {BASE_LANGUAGE} translation. "
+              f"{BASE_LANGUAGE} is the base language every other one falls back to, "
+              f"so these show as raw key text in every locale:", file=sys.stderr)
+        for key in gaps[:20]:
+            print(f"  - {key}", file=sys.stderr)
+        if len(gaps) > 20:
+            print(f"  … and {len(gaps) - 20} more", file=sys.stderr)
+        return 1
+
+    if stale and args.check:
         print("i18n: README.md coverage table is stale — run scripts/i18n_coverage.py",
               file=sys.stderr)
         return 1
-    README.write_text(updated, encoding="utf-8")
-    print("i18n: README.md coverage table updated")
     return 0
 
 
