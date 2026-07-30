@@ -4679,15 +4679,16 @@ struct RemoteExtractionTests {
     }
 
     @Test func theMediaProfileShipsItsTextBoxesHidden() {
-        // Why the media canvas was blank: full-screen media is the content, so every
-        // built-in box starts hidden and the profile carries no media boxes. The
-        // editor draws MediaProfileStandIn so overlays have something to sit on.
+        // Full-screen media is the content, so every built-in TEXT box starts
+        // hidden — the profile is for overlays. It does carry one media casetă:
+        // the live one, full bleed, which is what the module's media renders into.
         let profile = PresentationManager.LayoutProfile.defaultProfile(for: "media")
         for section in TextBoxSection.allCases {
             #expect(profile.visibility[section.rawValue] != true,
                     "\(section.rawValue) should start hidden in the media profile")
         }
-        #expect(profile.mediaBoxes.isEmpty)
+        #expect(profile.mediaBoxes.count == 1)
+        #expect(profile.mediaBoxes.first?.sourceRaw == "live")
         #expect(PresentationManager.relevantSections(for: "media") == [.reference])
     }
 }
@@ -5329,5 +5330,93 @@ struct RemoteExtractionTests {
         // blank when nothing is playing, not show unrelated content.
         #expect(resolve("mediaFile").isEmpty)
         #expect(resolve("mediaKind").isEmpty)
+    }
+}
+
+// MARK: - Live media as a casetă
+//
+// Full-screen media used to be two hard-coded layers in the output that bypassed
+// the box system, so it could not be moved, resized, reordered, hidden or given a
+// transition. It is an ordinary media casetă now, shipped full-bleed.
+@MainActor struct LiveMediaBoxTests {
+
+    @Test func theMediaProfileShipsAFullBleedLiveBox() {
+        let profile = PresentationManager.LayoutProfile.defaultProfile(for: "media")
+        let live = profile.mediaBoxes.first { $0.sourceRaw == "live" }
+        let box = try? #require(live)
+        #expect(box != nil, "media should ship a live casetă")
+        #expect(box?.frame.x == 0 && box?.frame.y == 0)
+        #expect(box?.frame.width == 1 && box?.frame.height == 1, "full bleed to start")
+        #expect(profile.boxOrder.contains("media:" + (box?.id.uuidString ?? "")))
+    }
+
+    @Test func itIsAnOrdinaryCaseteInEveryWay() throws {
+        let pm = makeTestManager()
+        let box = try #require(pm.profile("media").mediaBoxes.first { $0.sourceRaw == "live" })
+        let token = PresentationManager.mediaToken(box.id)
+
+        // Listed, so it appears in the casete list and on the canvas.
+        #expect(pm.orderedBoxTokens(in: "media").contains(token))
+
+        // Movable and resizable like anything else.
+        var moved = box
+        moved.frame = PresentationManager.TextBoxFrame(x: 0.1, y: 0.1, width: 0.5, height: 0.4)
+        pm.updateMediaBox(moved, in: "media")
+        #expect(pm.mediaBox(id: box.id, in: "media")?.frame.width == 0.5)
+
+        // Hideable, and colourable — both keyed by the same token as any box.
+        pm.setBoxColorHex("#123456", forToken: token, in: "media")
+        #expect(pm.boxColorHex(forToken: token, in: "media") == "#123456")
+    }
+
+    @Test func theOutputsHardCodedLayerStandsDownForIt() {
+        let pm = makeTestManager()
+        // Media has the casetă, so the old full-screen layer must not also draw.
+        #expect(pm.hasLiveMediaBox(in: "media"))
+        // Bible has none, so nothing changes for it.
+        #expect(!pm.hasLiveMediaBox(in: "bible"))
+    }
+
+    @Test func hidingTheCaseteHandsRenderingBackToTheOldPath() throws {
+        let pm = makeTestManager()
+        var box = try #require(pm.profile("media").mediaBoxes.first { $0.sourceRaw == "live" })
+        box.isVisible = false
+        pm.updateMediaBox(box, in: "media")
+
+        // Otherwise hiding the casetă would black out the projector rather than
+        // falling back — the operator would have no way to recover mid-service.
+        #expect(!pm.hasLiveMediaBox(in: "media"))
+    }
+
+    @Test func aProfileSavedBeforeTheCaseteExistedStillRenders() {
+        let pm = makeTestManager()
+        pm.mutateProfile("media") { $0.mediaBoxes = [] }
+        // No casetă → the hard-coded layer stays in charge, so old themes and old
+        // saved profiles do not go blank.
+        #expect(!pm.hasLiveMediaBox(in: "media"))
+    }
+
+    @Test func aFileBackedBoxIsUnaffected() {
+        let pm = makeTestManager()
+        var file = PresentationManager.MediaBox()
+        file.fileName = "logo.png"
+        #expect(file.sourceRaw == "file", "existing boxes keep their own file")
+        pm.mutateProfile("bible") { $0.mediaBoxes = [file] }
+        #expect(!pm.hasLiveMediaBox(in: "bible"))
+    }
+
+    @Test func theLiveBoxSurvivesAThemeRoundTrip() throws {
+        let source = makeTestManager()
+        _ = source.saveCurrentAsTheme(named: "WithLive")
+        let saved = try #require(source.themes.first(where: { $0.name == "WithLive" }))
+        let package = FileManager.default.temporaryDirectory
+            .appendingPathComponent("tp-live-\(UUID().uuidString).tptheme")
+        defer { try? FileManager.default.removeItem(at: package) }
+        try source.exportTheme(id: saved.id, to: package)
+
+        let target = makeTestManager()
+        let imported = try target.importTheme(from: package)
+        let live = imported.payload.profiles["media"]?.mediaBoxes.first { $0.sourceRaw == "live" }
+        #expect(live != nil, "the live casetă must survive export/import")
     }
 }

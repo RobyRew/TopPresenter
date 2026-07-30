@@ -41,10 +41,14 @@ struct PresentationOutputView: View {
             }
 
             // Full-screen video layer (Media module → Play Video).
+            // ONLY when the live profile has no live media casetă — the casetă is
+            // the new home for this, and rendering both would double the video.
+            // Profiles saved before the casetă existed keep working through here.
             // Stays mounted during black screen — the overlay covers it — so
             // toggling black doesn't tear down the player view mid-playback.
             if pm.liveContent.isLive,
                pm.liveContent.contentType == .media,
+               !pm.hasLiveMediaBox(in: pm.outputProfileKey),
                pm.liveContent.mediaKind != "image",
                let player = videoService.player {
                 GeometryReader { geo in
@@ -64,6 +68,7 @@ struct PresentationOutputView: View {
             // scope; honors the same fit/fill preference as video.
             if pm.liveContent.isLive,
                pm.liveContent.contentType == .media,
+               !pm.hasLiveMediaBox(in: pm.outputProfileKey),
                pm.liveContent.mediaKind == "image",
                let image = pm.liveContent.mediaImage {
                 GeometryReader { geo in

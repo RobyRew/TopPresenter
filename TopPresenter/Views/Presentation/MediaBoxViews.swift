@@ -102,6 +102,8 @@ enum MediaThumbnailer {
 /// One media box: resolves the file, renders it inside its fixed frame with
 /// corner radius, edge feather (soft border fade), and opacity applied.
 struct MediaBoxContent: View {
+    @Environment(PresentationManager.self) private var pm
+
     let box: PresentationManager.MediaBox
     let canvasSize: CGSize
     var playsVideo: Bool = false
@@ -136,6 +138,36 @@ struct MediaBoxContent: View {
 
     @ViewBuilder
     private var content: some View {
+        // A "live" box shows whatever the Media module is playing, so the same
+        // casetă serves every clip instead of being bound to one bookmarked file.
+        if box.sourceRaw == "live" {
+            liveContent
+        } else {
+            fileContent
+        }
+    }
+
+    @ViewBuilder
+    private var liveContent: some View {
+        if let image = pm.liveContent.mediaImage, pm.liveContent.mediaKind == "image" {
+            Image(nsImage: image)
+                .resizable()
+                .aspectRatio(contentMode: box.contentModeRaw == "fill" ? .fill : .fit)
+        } else if pm.liveContent.mediaKind != "image", let player = pm.videoService?.player, playsVideo {
+            OutputVideoView(player: player, fills: box.contentModeRaw == "fill")
+        } else if let url = pm.liveContent.mediaURL {
+            // Nothing decoded yet, or video that this context does not play (the
+            // editor canvas) — name the file rather than showing an empty hole.
+            placeholder(icon: pm.liveContent.mediaKind == "video" ? "film" : "photo",
+                        caption: url.lastPathComponent)
+        } else {
+            placeholder(icon: "play.rectangle",
+                        caption: String(localized: "Media în direct", comment: "Live media box placeholder"))
+        }
+    }
+
+    @ViewBuilder
+    private var fileContent: some View {
         switch box.mediaTypeRaw {
         case "gif":
             if let url = resolvedURL {
@@ -167,14 +199,14 @@ struct MediaBoxContent: View {
     }
 
     @ViewBuilder
-    private func placeholder(icon: String) -> some View {
+    private func placeholder(icon: String, caption: String? = nil) -> some View {
         ZStack {
             Rectangle().fill(.black.opacity(0.5))
             VStack(spacing: 4) {
                 Image(systemName: icon)
                     .font(.title3)
                     .foregroundStyle(.white.opacity(0.7))
-                Text(box.fileName)
+                Text(caption ?? box.fileName)
                     .font(.system(size: 9))
                     .foregroundStyle(.white.opacity(0.6))
                     .lineLimit(1)

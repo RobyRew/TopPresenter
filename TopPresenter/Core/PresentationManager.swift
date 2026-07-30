@@ -664,10 +664,20 @@ final class PresentationManager {
                     TextBoxSection.subtitle.rawValue: false,
                 ]
             case "media":
-                // Full-screen media IS the content: every built-in text box ships
-                // hidden so a photo or video is never covered by default. The
-                // profile exists for overlays — a logo, a clock, a watermark —
-                // which the operator adds as custom or media boxes.
+                // The module's media arrives in a real casetă rather than as a
+                // hard-coded full-screen layer: full bleed to start, and from there
+                // movable, resizable, reorderable, hideable and transitionable like
+                // any other box.
+                var live = MediaBox()
+                live.name = String(localized: "Media (live)", comment: "Default live media box name")
+                live.sourceRaw = "live"
+                live.frame = TextBoxFrame(x: 0, y: 0, width: 1, height: 1)
+                live.contentModeRaw = "fit"
+                p.mediaBoxes = [live]
+                p.boxOrder = ["media:" + live.id.uuidString]
+
+                // Every built-in text box still ships hidden so a photo or video is
+                // never covered by default; the profile is for overlays.
                 p.visibility = [
                     TextBoxSection.verseContent.rawValue: false,
                     TextBoxSection.reference.rawValue: false,
@@ -1858,6 +1868,14 @@ final class PresentationManager {
         /// Edge feather (soft border fade) in points at 1080p reference height.
         var edgeFeather: Double = 0
         var contentModeRaw: String = "fit"   // fit | fill
+        /// "file" = this box's own bookmarked file (the original behaviour).
+        /// "live" = whatever the Media module is showing right now.
+        ///
+        /// The live variant is what turns full-screen media into an ordinary
+        /// casetă: it used to be two hard-coded layers in the output that bypassed
+        /// the box system entirely, so it could not be moved, resized, reordered,
+        /// given a transition or hidden like everything else.
+        var sourceRaw: String = "file"
         /// When to show: "always" | "bible" | "song" | "text"
         var showOnRaw: String = "always"
         /// Slide scope: "all" | "first" | "last".
@@ -1879,6 +1897,7 @@ final class PresentationManager {
             cornerRadius = try c.decodeIfPresent(Double.self, forKey: .cornerRadius) ?? 0
             edgeFeather = try c.decodeIfPresent(Double.self, forKey: .edgeFeather) ?? 0
             contentModeRaw = try c.decodeIfPresent(String.self, forKey: .contentModeRaw) ?? "fit"
+            sourceRaw = try c.decodeIfPresent(String.self, forKey: .sourceRaw) ?? "file"
             showOnRaw = try c.decodeIfPresent(String.self, forKey: .showOnRaw) ?? "always"
             displayOnRaw = try c.decodeIfPresent(String.self, forKey: .displayOnRaw) ?? "all"
             isVisible = try c.decodeIfPresent(Bool.self, forKey: .isVisible) ?? true
@@ -2238,6 +2257,17 @@ final class PresentationManager {
         ordered.insert(token, at: to)
         let next = ordered
         mutateProfile(key) { $0.boxOrder = next }
+    }
+
+    /// Whether this presenter routes the module's media through a casetă.
+    ///
+    /// The output's hard-coded full-screen layers defer to it, so both never draw
+    /// at once — and a profile saved before the casetă existed still renders
+    /// through the old path instead of going blank.
+    func hasLiveMediaBox(in key: String? = nil) -> Bool {
+        readStructure(in: key) { p in
+            p.mediaBoxes.contains { $0.sourceRaw == "live" && $0.isVisible }
+        }
     }
 
     // MARK: - Removing and restoring built-in sections
@@ -3282,8 +3312,19 @@ final class PresentationManager {
                 legacyBackgrounds = configs
             }
             for key in Self.profileKeys {
-                var p = legacy
-                p.visibility = LayoutProfile.defaultProfile(for: key).visibility
+                // Start from the presenter's OWN defaults and lay the legacy state
+                // over the top. It used to be the other way round — a bare
+                // LayoutProfile with only `visibility` copied from the defaults —
+                // which meant anything a default profile provides beyond visibility
+                // was silently dropped on a first run. Media's full-bleed live
+                // casetă is exactly that, so a fresh install got a media presenter
+                // with no media box at all.
+                var p = LayoutProfile.defaultProfile(for: key)
+                if !legacy.frames.isEmpty { p.frames = legacy.frames }
+                if !legacy.styles.isEmpty { p.styles = legacy.styles }
+                if !legacy.customTextBoxes.isEmpty { p.customTextBoxes = legacy.customTextBoxes }
+                if !legacy.mediaBoxes.isEmpty { p.mediaBoxes += legacy.mediaBoxes }
+                if !legacy.boxOrder.isEmpty { p.boxOrder = legacy.boxOrder + p.boxOrder }
                 if let visible = d.object(forKey: "pm_verseBoxVisible") as? Bool {
                     p.visibility[TextBoxSection.verseContent.rawValue] = visible
                 }
