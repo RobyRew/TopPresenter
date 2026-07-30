@@ -4483,3 +4483,65 @@ struct RemoteExtractionTests {
         #expect(!FontFamilies.all.isEmpty)
     }
 }
+
+// MARK: - Slider snapping
+//
+// `Slider(value:in:step:)` renders an NSSlider with one tick mark PER STEP, and
+// that dominated the Theme Editor: eight sliders cost ~2400 ms with `step:` and
+// ~60 ms with the value snapped in the binding instead. A `0...1 step: 0.01`
+// slider asks AppKit for a hundred tick marks. These lock the replacement's
+// behaviour, since the whole point is that it snaps exactly like `step:` did.
+@MainActor struct SnappedBindingTests {
+
+    private final class Box: @unchecked Sendable { var v: Double; init(_ x: Double) { v = x } }
+
+    private func binding(_ box: Box) -> Binding<Double> {
+        Binding(get: { box.v }, set: { box.v = $0 })
+    }
+
+    @Test func itRoundsToTheNearestMultiple() {
+        let box = Box(0)
+        let b = binding(box).snapped(2)
+
+        b.wrappedValue = 31.4
+        #expect(box.v == 32)
+        b.wrappedValue = 30.9
+        #expect(box.v == 30)
+        b.wrappedValue = 61
+        #expect(box.v == 62)
+    }
+
+    @Test func itHandlesFractionalStepsAndNegatives() {
+        let box = Box(0)
+        #expect(binding(box).snapped(0.5).wrappedValue == 0)
+
+        binding(box).snapped(0.5).wrappedValue = -1.7
+        #expect(box.v == -1.5)
+
+        // The per-box styles use -1 as the "inherit" sentinel; snapping must not
+        // drift it, or a customised box would silently stop inheriting.
+        binding(box).snapped(0.1).wrappedValue = -1.0
+        #expect(box.v == -1.0)
+    }
+
+    @Test func aZeroStepIsAPassthroughRatherThanADivideByZero() {
+        let box = Box(0)
+        binding(box).snapped(0).wrappedValue = 3.7
+        #expect(box.v == 3.7)
+    }
+
+    @Test func anUnchangedValueIsNotWrittenBack() {
+        // These bindings sit on properties that persist in didSet, so a redundant
+        // write is a redundant UserDefaults hit on every drag frame.
+        let box = Box(10)
+        var writes = 0
+        let counting = Binding<Double>(get: { box.v }, set: { box.v = $0; writes += 1 })
+
+        counting.snapped(2).wrappedValue = 10.4   // snaps to 10, already 10
+        #expect(writes == 0)
+
+        counting.snapped(2).wrappedValue = 11.4   // snaps to 12
+        #expect(writes == 1)
+        #expect(box.v == 12)
+    }
+}

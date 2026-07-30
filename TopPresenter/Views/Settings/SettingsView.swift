@@ -139,7 +139,7 @@ struct InterfaceSettingsTab: View {
                 }
                 if sidebarRowSizeRaw == "custom" {
                     HStack(spacing: 10) {
-                        Slider(value: $sidebarCustomSize, in: 11...20, step: 1) {
+                        Slider(value: $sidebarCustomSize.snapped(1), in: 11...20) {
                             Text(String(localized: "Mărime", comment: "Setting label"))
                         } minimumValueLabel: {
                             Image(systemName: "textformat.size.smaller")

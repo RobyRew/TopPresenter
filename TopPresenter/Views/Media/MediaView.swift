@@ -549,7 +549,7 @@ struct MediaDetailPane: View {
                 Image(systemName: "minus.magnifyingglass")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                Slider(value: $pmBinding.mediaZoom, in: 1...3, step: 0.05)
+                Slider(value: $pmBinding.mediaZoom.snapped(0.05), in: 1...3)
                 Image(systemName: "plus.magnifyingglass")
                     .font(.caption)
                     .foregroundStyle(.secondary)

@@ -516,28 +516,6 @@ func boxSourceDescription(for identity: BoxIdentity, pm: PresentationManager) ->
 // MARK: - Edit Overlay (drag + resize directly on a canvas)
 
 
-#if DEBUG
-/// Temporary. Attributes the Text tab's cost to individual inspector groups:
-/// `inspector` resets the clock on a tab switch, each group reports when it
-/// finished appearing, and the GAPS between consecutive marks are the cost of
-/// whatever sits between them.
-@MainActor
-enum EditorPerfClock {
-    static var startedAt = Date.now
-    static func reset() { startedAt = .now }
-    static func mark(_ name: String) {
-        let ms = Int(Date.now.timeIntervalSince(startedAt) * 1000)
-        print("[TopPresenter]     +\(ms) ms  \(name)")
-    }
-}
-
-extension View {
-    func perfMark(_ name: String) -> some View {
-        onAppear { EditorPerfClock.mark(name) }
-    }
-}
-#endif
-
 /// Overlay that draws every fixed box (built-in, custom text, media) and lets
 /// the user move and resize them by direct manipulation, with right-click menus.
 struct TextBoxEditOverlay: View {
@@ -1393,15 +1371,6 @@ struct LayoutEditorSheet: View {
 
     @State private var selection: BoxIdentity? = .section(.verseContent)
     @State private var activeTab: EditorTab = .layout
-    #if DEBUG
-    /// Temporary, for the timing line in `inspector`: which tabs have been built
-    /// at least once this session.
-    @State private var builtTabs: Set<EditorTab> = []
-    /// Temporary bisect: 0 = render every inspector group, N = skip group N.
-    /// Advances on each switch INTO the Text tab, so clicking Text repeatedly
-    /// walks the whole tab and the time that drops names the culprit.
-    @State private var perfSkipGroup = 0
-    #endif
     /// Mirrors the output's interlinear master switch so the canvas preview matches.
     @AppStorage("interlinearLiveEnabled") private var interlinearLiveEnabled = true
     /// Quick-align toggle memory: pressing the same action again restores the
@@ -1841,54 +1810,10 @@ struct LayoutEditorSheet: View {
                 tabContent(activeTab)
             }
         }
-        #if DEBUG
-        // Temporary: report what a real switch costs, so the revert can be
-        // confirmed from the console rather than assumed.
-        .onChange(of: activeTab) { _, new in
-            let started = Date.now
-            EditorPerfClock.reset()
-            let seen = builtTabs.contains(new)
-            builtTabs.insert(new)
-            let skipped = perfSkipGroup
-            DispatchQueue.main.async {
-                let ms = Int(Date.now.timeIntervalSince(started) * 1000)
-                let what = skipped == 0 ? "all groups" : "SKIPPING group \(skipped)"
-                print("[TopPresenter] tab -> \(new.rawValue) [\(what)] \(seen ? "" : "(first) ")\(ms) ms")
-                // Advance the bisect only when leaving Text, so the next visit
-                // renders a different subset.
-                if new == .text { perfSkipGroup = (skipped + 1) % 6 }
-            }
-        }
-        #endif
     }
 
     @ViewBuilder
     private func tabContent(_ tab: EditorTab) -> some View {
-        #if DEBUG
-        // Temporary. Splits the ~850 ms first build of the Text tab into the two
-        // things it could be: BUILD = evaluating this project's view bodies and
-        // the computed properties they read; the remainder (total switch minus
-        // BUILD) = AppKit instantiating and laying out the controls.
-        timedTabBody(tab)
-        #else
-        rawTabContent(tab)
-        #endif
-    }
-
-    #if DEBUG
-    @ViewBuilder
-    private func timedTabBody(_ tab: EditorTab) -> some View {
-        let started = Date.now
-        let content = rawTabContent(tab)
-        let ms = Date.now.timeIntervalSince(started) * 1000
-        // Only the interesting ones — this runs for every mounted tab per render.
-        let _ = ms > 40 ? print("[TopPresenter]   \(tab.rawValue) BUILD: \(Int(ms)) ms") : ()
-        content
-    }
-    #endif
-
-    @ViewBuilder
-    private func rawTabContent(_ tab: EditorTab) -> some View {
         switch tab {
         case .layout: layoutTab
         case .text: textTab
@@ -2522,9 +2447,7 @@ struct LayoutEditorSheet: View {
                             value: Binding(
                                 get: { style.wrappedValue.fontSize },
                                 set: { style.wrappedValue.fontSize = $0 }
-                            ),
-                            in: 8...200, step: 2
-                        )
+                            ).snapped(2), in: 8...200)
                         .controlSize(.small)
                         Text("\(Int(style.wrappedValue.fontSize)) pt")
                             .font(.caption.monospacedDigit())
@@ -2598,13 +2521,10 @@ struct LayoutEditorSheet: View {
                     .help(String(localized: "Alinierea verticală în casetă — Global = setarea generală", comment: "Tooltip"))
 
                     labeledRow(String(localized: "Opacitate:", comment: "Setting label")) {
-                        Slider(
-                            value: Binding(
+                        Slider(value: Binding(
                                 get: { style.wrappedValue.opacity },
                                 set: { style.wrappedValue.opacity = $0 }
-                            ),
-                            in: 0...1, step: 0.01
-                        )
+                            ).snapped(0.01), in: 0...1)
                         .controlSize(.small)
                         Text("\(Int((style.wrappedValue.opacity * 100).rounded()))%")
                             .font(.caption.monospacedDigit())
@@ -2612,13 +2532,10 @@ struct LayoutEditorSheet: View {
                     }
 
                     labeledRow(String(localized: "Spațiere:", comment: "Setting label")) {
-                        Slider(
-                            value: Binding(
+                        Slider(value: Binding(
                                 get: { style.wrappedValue.lineSpacing },
                                 set: { style.wrappedValue.lineSpacing = $0 }
-                            ),
-                            in: -1...5, step: 0.1
-                        )
+                            ).snapped(0.1), in: -1...5)
                         .controlSize(.small)
                         Text(style.wrappedValue.lineSpacing >= 0 ? String(format: "%.1f", style.wrappedValue.lineSpacing) : String(localized: "Global", comment: "Value label"))
                             .font(.caption.monospacedDigit())
@@ -2627,13 +2544,10 @@ struct LayoutEditorSheet: View {
                     .help(String(localized: "Spațierea dintre rânduri — Global = setarea generală", comment: "Tooltip"))
 
                     labeledRow(String(localized: "Litere:", comment: "Setting label")) {
-                        Slider(
-                            value: Binding(
+                        Slider(value: Binding(
                                 get: { style.wrappedValue.tracking ?? pm.letterTracking },
                                 set: { style.wrappedValue.tracking = $0 }
-                            ),
-                            in: -2...30, step: 0.5
-                        )
+                            ).snapped(0.5), in: -2...30)
                         .controlSize(.small)
                         Text(style.wrappedValue.tracking != nil
                              ? String(format: "%.1f", style.wrappedValue.tracking!)
@@ -2666,13 +2580,10 @@ struct LayoutEditorSheet: View {
                     .help(String(localized: "Transformarea textului acestei casete — Global = setarea generală a prezentatorului", comment: "Tooltip"))
 
                     labeledRow(String(localized: "Padding:", comment: "Setting label")) {
-                        Slider(
-                            value: Binding(
+                        Slider(value: Binding(
                                 get: { style.wrappedValue.padding },
                                 set: { style.wrappedValue.padding = $0 }
-                            ),
-                            in: -1...300, step: 1
-                        )
+                            ).snapped(1), in: -1...300)
                         .controlSize(.small)
                         Text(style.wrappedValue.padding >= 0 ? "\(Int(style.wrappedValue.padding))" : String(localized: "Global", comment: "Value label"))
                             .font(.caption.monospacedDigit())
@@ -2709,13 +2620,10 @@ struct LayoutEditorSheet: View {
                             .labelsHidden()
                             .controlSize(.small)
                             .help(String(localized: "Culoarea umbrei acestei casete — opacitatea ei dă intensitatea", comment: "Tooltip"))
-                            Slider(
-                                value: Binding(
+                            Slider(value: Binding(
                                     get: { style.wrappedValue.shadowRadius >= 0 ? style.wrappedValue.shadowRadius : pm.shadowRadius },
                                     set: { style.wrappedValue.shadowRadius = $0 }
-                                ),
-                                in: 0...50, step: 0.5
-                            )
+                                ).snapped(0.5), in: 0...50)
                             .controlSize(.small)
                             Text(String(format: "%.0f", style.wrappedValue.shadowRadius >= 0 ? style.wrappedValue.shadowRadius : pm.shadowRadius))
                                 .font(.caption.monospacedDigit())
@@ -2815,13 +2723,10 @@ struct LayoutEditorSheet: View {
                 .help(String(localized: "Încadrează = totul vizibil • Umple = acoperă caseta", comment: "Tooltip"))
 
                 labeledRow(String(localized: "Opacitate:", comment: "Setting label")) {
-                    Slider(
-                        value: Binding(
+                    Slider(value: Binding(
                             get: { binding.wrappedValue.opacity },
                             set: { binding.wrappedValue.opacity = $0 }
-                        ),
-                        in: 0.05...1.0, step: 0.05
-                    )
+                        ).snapped(0.05), in: 0.05...1.0)
                     .controlSize(.small)
                     Text("\(Int(binding.wrappedValue.opacity * 100))%")
                         .font(.caption.monospacedDigit())
@@ -2829,13 +2734,10 @@ struct LayoutEditorSheet: View {
                 }
 
                 labeledRow(String(localized: "Colțuri:", comment: "Setting label")) {
-                    Slider(
-                        value: Binding(
+                    Slider(value: Binding(
                             get: { binding.wrappedValue.cornerRadius },
                             set: { binding.wrappedValue.cornerRadius = $0 }
-                        ),
-                        in: 0...80, step: 2
-                    )
+                        ).snapped(2), in: 0...80)
                     .controlSize(.small)
                     Text("\(Int(binding.wrappedValue.cornerRadius))")
                         .font(.caption.monospacedDigit())
@@ -2844,13 +2746,10 @@ struct LayoutEditorSheet: View {
                 .help(String(localized: "Rotunjirea colțurilor", comment: "Tooltip"))
 
                 labeledRow(String(localized: "Estompare:", comment: "Setting label")) {
-                    Slider(
-                        value: Binding(
+                    Slider(value: Binding(
                             get: { binding.wrappedValue.edgeFeather },
                             set: { binding.wrappedValue.edgeFeather = $0 }
-                        ),
-                        in: 0...60, step: 2
-                    )
+                        ).snapped(2), in: 0...60)
                     .controlSize(.small)
                     Text("\(Int(binding.wrappedValue.edgeFeather))")
                         .font(.caption.monospacedDigit())
@@ -2950,7 +2849,6 @@ struct LayoutEditorSheet: View {
         let pmBinding = Bindable(pm)
 
         LazyVStack(alignment: .leading, spacing: 10) {
-            if perfSkipGroup != 1 {   // DEBUG bisect: group1@L2944
             GroupBox {
                 LazyVStack(alignment: .leading, spacing: 8) {
                     labeledRow(String(localized: "Font:", comment: "Setting label")) {
@@ -2962,11 +2860,7 @@ struct LayoutEditorSheet: View {
                     .help(String(localized: "Fontul de bază pentru tot textul", comment: "Tooltip"))
 
                     labeledRow(String(localized: "Mărime:", comment: "Setting label")) {
-                        Slider(
-                            value: pmBinding.fontSize,
-                            in: PresentationDefaults.minFontSize...PresentationDefaults.maxFontSize,
-                            step: 2
-                        )
+                        Slider(value: pmBinding.fontSize.snapped(2), in: PresentationDefaults.minFontSize...PresentationDefaults.maxFontSize)
                         .controlSize(.small)
                         Text("\(Int(pm.fontSize)) pt")
                             .font(.caption.monospacedDigit())
@@ -3019,7 +2913,7 @@ struct LayoutEditorSheet: View {
                     .help(String(localized: "Alinierea verticală implicită în interiorul casetelor", comment: "Tooltip"))
 
                     labeledRow(String(localized: "Opacitate:", comment: "Setting label")) {
-                        Slider(value: pmBinding.globalTextOpacity, in: 0...1, step: 0.01)
+                        Slider(value: pmBinding.globalTextOpacity.snapped(0.01), in: 0...1)
                             .controlSize(.small)
                         Text("\(Int((pm.globalTextOpacity * 100).rounded()))%")
                             .font(.caption.monospacedDigit())
@@ -3028,7 +2922,7 @@ struct LayoutEditorSheet: View {
                     .help(String(localized: "Opacitatea de bază a textului — se combină cu opacitatea fiecărei casete", comment: "Tooltip"))
 
                     labeledRow(String(localized: "Spațiere:", comment: "Setting label")) {
-                        Slider(value: pmBinding.lineSpacing, in: 0...5, step: 0.1)
+                        Slider(value: pmBinding.lineSpacing.snapped(0.1), in: 0...5)
                             .controlSize(.small)
                         Text(String(format: "%.1f", pm.lineSpacing))
                             .font(.caption.monospacedDigit())
@@ -3037,7 +2931,7 @@ struct LayoutEditorSheet: View {
                     .help(String(localized: "Spațiul dintre rânduri", comment: "Tooltip"))
 
                     labeledRow(String(localized: "Litere:", comment: "Setting label")) {
-                        Slider(value: pmBinding.letterTracking, in: -2...30, step: 0.5)
+                        Slider(value: pmBinding.letterTracking.snapped(0.5), in: -2...30)
                             .controlSize(.small)
                         Text(String(format: "%.1f", pm.letterTracking))
                             .font(.caption.monospacedDigit())
@@ -3064,7 +2958,7 @@ struct LayoutEditorSheet: View {
                     .help(String(localized: "Transformarea implicită a textului pentru TOATE casetele acestui prezentator — personalizabilă per casetă mai jos", comment: "Tooltip"))
 
                     labeledRow(String(localized: "Padding:", comment: "Setting label")) {
-                        Slider(value: pmBinding.padding, in: 0...300, step: 5)
+                        Slider(value: pmBinding.padding.snapped(5), in: 0...300)
                             .controlSize(.small)
                         Text("\(Int(pm.padding))")
                             .font(.caption.monospacedDigit())
@@ -3084,7 +2978,7 @@ struct LayoutEditorSheet: View {
                             .labelsHidden()
                             .controlSize(.small)
                             .help(String(localized: "Culoarea umbrei — opacitatea ei dă intensitatea", comment: "Tooltip"))
-                            Slider(value: pmBinding.shadowRadius, in: 0...50, step: 0.5)
+                            Slider(value: pmBinding.shadowRadius.snapped(0.5), in: 0...50)
                                 .controlSize(.small)
                             Text(String(format: "%.0f", pm.shadowRadius))
                                 .font(.caption.monospacedDigit())
@@ -3105,15 +2999,12 @@ struct LayoutEditorSheet: View {
                 Label(String(localized: "Text Global", comment: "Inspector group"), systemImage: "textformat")
                     .font(.caption.bold())
             }
-            .perfMark("group1@L2944")
-            }
 
             // Red-letter, interlinear and multi-verse all style the VERSE text and
             // nothing else, so they belong to the verse cassette — same rule the
             // multi-verse group already followed. Showing them while a title or
             // reference box was selected implied they applied to that box.
             if pm.activeProfileKey == "bible", selection == BoxIdentity.section(.verseContent) {
-                if perfSkipGroup != 2 {   // DEBUG bisect: group2@L3104
                 GroupBox {
                     LazyVStack(alignment: .leading, spacing: 8) {
                         Toggle(isOn: pmBinding.wocStyleEnabled) {
@@ -3149,11 +3040,8 @@ struct LayoutEditorSheet: View {
                     Label(String(localized: "Cuvintele lui Isus", comment: "Inspector group"), systemImage: "quote.bubble")
                         .font(.caption.bold())
                 }
-                .perfMark("group2@L3104")
-                }
 
                 // Interlinear — stacked word columns (original + gloss + Strong's + morph).
-                if perfSkipGroup != 3 {   // DEBUG bisect: group3@L3141
                 GroupBox {
                     LazyVStack(alignment: .leading, spacing: 8) {
                         labeledRow(String(localized: "Mod:", comment: "Setting label")) {
@@ -3207,13 +3095,10 @@ struct LayoutEditorSheet: View {
                     Label(String(localized: "Interliniar", comment: "Inspector group"), systemImage: "text.word.spacing")
                         .font(.caption.bold())
                 }
-                .perfMark("group3@L3141")
-                }
 
                 // Multi-verse — how several selected verses render together.
                 // Stored in the theme (exports/imports with it).
                 do {
-                    if perfSkipGroup != 4 {   // DEBUG bisect: group4@L3198
                     GroupBox {
                         LazyVStack(alignment: .leading, spacing: 8) {
                             labeledRow(String(localized: "Aranjare:", comment: "Setting label")) {
@@ -3251,17 +3136,12 @@ struct LayoutEditorSheet: View {
                         Label(String(localized: "Multi-verset", comment: "Inspector group"), systemImage: "text.justify.leading")
                             .font(.caption.bold())
                     }
-                    .perfMark("group4@L3198")
-                    }
                 }
             }
 
             // Per-box text style — select a box on the canvas, customize here.
             if let selection {
-                if perfSkipGroup != 5 {   // DEBUG bisect: selectedBoxStyleGroup
                 selectedBoxStyleGroup(selection)
-                    .perfMark("selectedBoxStyleGroup")
-                }
             } else {
                 Text(String(localized: "Selectează o casetă pe canvas pentru a-i personaliza textul.", comment: "Inspector hint"))
                     .font(.caption2)
@@ -3810,9 +3690,7 @@ struct BoxFrameFields: View {
                         frame[keyPath: keyPath] = newValue / 100
                         pm.setBoxFrame(frame, for: identity)
                     }
-                ),
-                in: 0...100, step: 1
-            )
+                ).snapped(1), in: 0...100)
             .labelsHidden()
             .controlSize(.small)
             Text("%")
