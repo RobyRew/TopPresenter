@@ -493,6 +493,25 @@ struct FontFamilyPicker: NSViewRepresentable {
     }
 }
 
+/// Deletes a theme, or explains why it will not.
+///
+/// `deleteTheme` refuses while a presenter is pinned to the theme — otherwise that
+/// presenter would lose its look with nothing to say what happened. Every call site
+/// ignored the returned blockers, so the click did nothing at all and looked broken.
+@MainActor
+func deleteThemeReportingRefusal(_ pm: PresentationManager, id: UUID, name: String) {
+    let blockers = pm.deleteTheme(id: id)
+    guard !blockers.isEmpty else { return }
+    let who = blockers.map { PresentationManager.contentKeyLabel($0) }.joined(separator: ", ")
+    let alert = NSAlert()
+    alert.messageText = String(localized: "„\(name)” este în uz", comment: "Theme delete refused — title")
+    alert.informativeText = String(
+        localized: "Este tema pentru \(who). Schimbă tema acelor prezentatoare înainte de a o șterge.",
+        comment: "Theme delete refused — body")
+    alert.alertStyle = .warning
+    alert.runModal()
+}
+
 /// Where the box pulls its content from — shown in the inspector and context menu.
 func boxSourceDescription(for identity: BoxIdentity, pm: PresentationManager) -> String {
     switch identity {
@@ -925,7 +944,7 @@ struct ThemeMenuControl: View {
                 }
 
                 Button(role: .destructive) {
-                    pm.deleteTheme(id: activeID)
+                    deleteThemeReportingRefusal(pm, id: activeID, name: activeName)
                 } label: {
                     Label(String(localized: "Șterge tema", comment: "Themes menu"), systemImage: "trash")
                 }
@@ -979,6 +998,8 @@ struct ThemeGalleryView: View {
     @State private var renameThemeID: UUID?
     @State private var renameText = ""
     @State private var importResultMessage: String?
+    /// Profile key → chosen source theme, while assembling a combined theme.
+    @State private var combinePicks: [String: UUID] = [:]
     /// Click-drag panning state (mouse users don't have trackpad side-scroll).
     @State private var scrollPosition = ScrollPosition(x: 0)
     @State private var scrollOffsetX: CGFloat = 0
@@ -1021,6 +1042,70 @@ struct ThemeGalleryView: View {
                       ? String(localized: "Alege o temă pentru a o exporta", comment: "Tooltip")
                       : String(localized: "Exportă tema activă ca pachet .tptheme", comment: "Tooltip"))
 
+                // Per-presenter themes. Off, one theme dresses everyone (the old
+                // behaviour); on, each presenter resolves its own and anything
+                // unassigned still falls back to the global one.
+                Button {
+                    pm.usesPerPresenterThemes.toggle()
+                } label: {
+                    Image(systemName: pm.usesPerPresenterThemes
+                          ? "square.split.2x2.fill" : "square.split.2x2")
+                        .font(.caption)
+                        .foregroundStyle(pm.usesPerPresenterThemes ? Color.accentColor : Color.secondary)
+                }
+                .buttonStyle(.borderless)
+                .help(pm.usesPerPresenterThemes
+                      ? String(localized: "Teme per prezentator: PORNIT — fiecare prezentator își ține tema lui", comment: "Tooltip")
+                      : String(localized: "Teme per prezentator: oprit — o singură temă pentru toți", comment: "Tooltip"))
+
+                // Combine: take Bible's look from one theme, Songs' from another.
+                // The result is an ORDINARY theme — copied, not linked — so editing
+                // a source afterwards leaves it alone.
+                Menu {
+                    ForEach(PresentationManager.profileKeys, id: \.self) { key in
+                        Menu(PresentationManager.contentKeyLabel(key)) {
+                            ForEach(pm.themes) { theme in
+                                Button {
+                                    combinePicks[key] = theme.id
+                                } label: {
+                                    if combinePicks[key] == theme.id {
+                                        Label(theme.name, systemImage: "checkmark")
+                                    } else {
+                                        Text(theme.name)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    if !combinePicks.isEmpty {
+                        Divider()
+                        Button {
+                            if let made = pm.combineThemes(picks: combinePicks) {
+                                importResultMessage = String(
+                                    localized: "Temă combinată creată: „\(made.name)”.",
+                                    comment: "Combine result")
+                            }
+                            combinePicks = [:]
+                        } label: {
+                            Label(String(localized: "Creează tema combinată (\(combinePicks.count))", comment: "Combine action"),
+                                  systemImage: "wand.and.stars")
+                        }
+                        Button(String(localized: "Golește selecția", comment: "Combine action")) {
+                            combinePicks = [:]
+                        }
+                    }
+                } label: {
+                    Image(systemName: combinePicks.isEmpty ? "rectangle.on.rectangle" : "rectangle.on.rectangle.badge.gearshape")
+                        .font(.caption)
+                        .foregroundStyle(combinePicks.isEmpty ? Color.secondary : Color.accentColor)
+                }
+                .menuStyle(.borderlessButton)
+                .menuIndicator(.hidden)
+                .frame(width: 22)
+                .disabled(pm.themes.count < 2)
+                .help(String(localized: "Combină teme: alege ce temă îmbracă fiecare prezentator, apoi creează o temă nouă din ele", comment: "Tooltip"))
+
+
                 Button {
                     newThemeName = ""
                     showNewThemeAlert = true
@@ -1032,6 +1117,43 @@ struct ThemeGalleryView: View {
                 .help(String(localized: "Salvează aspectul curent ca temă nouă", comment: "Tooltip"))
             }
             .padding(.horizontal, 12)
+
+            // Who is wearing what. Only while the mode is on, so the gallery stays
+            // as simple as it was for anyone not using it.
+            if pm.usesPerPresenterThemes {
+                HStack(spacing: 8) {
+                    ForEach(PresentationManager.profileKeys, id: \.self) { key in
+                        let assigned = pm.themeAssignments[key]
+                        let name = assigned.flatMap { id in pm.themes.first { $0.id == id }?.name }
+                        Button {
+                            // Assigning is done by applying while that presenter is
+                            // active; this clears the pin back to the global theme.
+                            pm.activeProfileKey = key
+                            if assigned != nil { pm.clearThemeAssignment(for: key) }
+                        } label: {
+                            VStack(spacing: 1) {
+                                Text(PresentationManager.contentKeyLabel(key))
+                                    .font(.caption2.bold())
+                                Text(name ?? String(localized: "global", comment: "Theme assignment — falls back"))
+                                    .font(.system(size: 9))
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 3)
+                            .background(
+                                pm.activeProfileKey == key ? appHighlight.opacity(0.18) : Color.clear,
+                                in: RoundedRectangle(cornerRadius: 4)
+                            )
+                        }
+                        .buttonStyle(.plain)
+                        .help(assigned == nil
+                              ? String(localized: "Fără temă proprie — folosește tema globală. Apasă pentru a edita acest prezentator.", comment: "Tooltip")
+                              : String(localized: "Apasă pentru a reveni la tema globală", comment: "Tooltip"))
+                    }
+                }
+                .padding(.horizontal, 2)
+            }
 
             if visibleThemes.isEmpty {
                 Text(String(localized: "Nicio temă încă — importă pachete .tptheme cu ⤓ sau salvează aspectul curent cu +.", comment: "Theme gallery empty state"))
@@ -1371,7 +1493,7 @@ private struct ThemeCard: View {
             }
 
             Button(role: .destructive) {
-                pm.deleteTheme(id: theme.id)
+                deleteThemeReportingRefusal(pm, id: theme.id, name: theme.name)
             } label: {
                 Label(String(localized: "Șterge", comment: "Context menu"), systemImage: "trash")
             }
@@ -2757,20 +2879,48 @@ struct LayoutEditorSheet: View {
                     .controlSize(.small)
                 }
 
-                HStack(spacing: 6) {
-                    Image(systemName: boxIcon(for: .media(box.id), pm: pm))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Text(box.fileName)
-                        .font(.caption2)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                    Spacer()
-                    Button(String(localized: "Înlocuiește…", comment: "Replace media button")) {
-                        replaceMediaFile(boxID: box.id)
+                // Which media this casetă shows. "Live" follows the Media module,
+                // so one casetă serves every clip; "file" pins it to one file, for
+                // a logo or a watermark that must never change.
+                labeledRow(String(localized: "Sursă:", comment: "Setting label")) {
+                    Picker("", selection: Binding(
+                        get: { pm.mediaBox(id: box.id)?.sourceRaw ?? "file" },
+                        set: { raw in
+                            guard var b = pm.mediaBox(id: box.id) else { return }
+                            b.sourceRaw = raw
+                            pm.updateMediaBox(b)
+                        }
+                    )) {
+                        Text(String(localized: "Media în direct", comment: "Media box source")).tag("live")
+                        Text(String(localized: "Fișier propriu", comment: "Media box source")).tag("file")
                     }
-                    .controlSize(.mini)
-                    .help(String(localized: "Alege alt fișier pentru această casetă", comment: "Tooltip"))
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .controlSize(.small)
+                }
+                .help(String(localized: "„În direct” urmărește modulul Media; „fișier propriu” rămâne fix", comment: "Tooltip"))
+
+                if (pm.mediaBox(id: box.id)?.sourceRaw ?? "file") == "live" {
+                    Text(String(localized: "Arată ce redă modulul Media. Fișierul de mai jos este ignorat.",
+                                comment: "Inspector hint — live media box"))
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                } else {
+                    HStack(spacing: 6) {
+                        Image(systemName: boxIcon(for: .media(box.id), pm: pm))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Text(box.fileName)
+                            .font(.caption2)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                        Spacer()
+                        Button(String(localized: "Înlocuiește…", comment: "Replace media button")) {
+                            replaceMediaFile(boxID: box.id)
+                        }
+                        .controlSize(.mini)
+                        .help(String(localized: "Alege alt fișier pentru această casetă", comment: "Tooltip"))
+                    }
                 }
             }
         } label: {
