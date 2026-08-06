@@ -74,24 +74,10 @@ struct MediaView: View {
         // the segmented filter into "…e Foto Video Audio".
         VStack(spacing: 8) {
             HStack(spacing: 8) {
-                HStack(spacing: 4) {
-                    Image(systemName: "magnifyingglass")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    TextField(String(localized: "Caută media…", comment: "Media search placeholder"),
-                              text: queryBinding)
-                        .textFieldStyle(.plain)
-                    if !libraryManager.mediaLibraryQuery.isEmpty {
-                        Button { libraryManager.mediaLibraryQuery = "" } label: {
-                            Image(systemName: "xmark.circle.fill").font(.caption)
-                        }
-                        .buttonStyle(.borderless)
-                        .foregroundStyle(.tertiary)
-                    }
-                }
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(.quaternary.opacity(0.5), in: Capsule())
+                LibrarySearchField(
+                    text: queryBinding,
+                    placeholder: String(localized: "Caută media…", comment: "Media search placeholder")
+                )
 
                 Button { importMedia() } label: {
                     Label(String(localized: "Adaugă", comment: "Add media button"), systemImage: "plus")

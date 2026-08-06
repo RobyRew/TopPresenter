@@ -3388,6 +3388,52 @@ struct SessionArchiveTests {
 
 // MARK: - MediaLibrary Tests (kind classification + shared filter/stepping)
 
+// MARK: - Custom slide search
+//
+// The one library list that had no search at all. It searches more than the
+// title because a slide is often "Untitled" until someone names it, and the
+// thing the operator remembers is the text on it.
+
+@MainActor struct CustomSlideSearchTests {
+
+    private func slides() -> [PresentationSlide] {
+        [
+            PresentationSlide(title: "Anunțuri", content: "Vă așteptăm duminică"),
+            PresentationSlide(title: "Untitled", content: "Bine ați venit!", subtitle: "Intro"),
+            PresentationSlide(title: "Verset", content: "{bible:Ioan 3:16}"),
+        ]
+    }
+
+    @Test func anEmptyQueryKeepsEverythingInOrder() {
+        let all = slides()
+        #expect(CustomSlideLibrary.filter(all, query: "").map(\.id) == all.map(\.id))
+        // Whitespace is not a search — trimming keeps a stray space from
+        // emptying the list.
+        #expect(CustomSlideLibrary.filter(all, query: "   ").map(\.id) == all.map(\.id))
+    }
+
+    @Test func itMatchesWithoutDiacritics() {
+        // The operator's keyboard layout may have no ț — typing "anunturi" must
+        // still find „Anunțuri", or the search is worse than scrolling.
+        let all = slides()
+        #expect(CustomSlideLibrary.filter(all, query: "anunturi").map(\.title) == ["Anunțuri"])
+        #expect(CustomSlideLibrary.filter(all, query: "ANUNȚURI").map(\.title) == ["Anunțuri"])
+    }
+
+    @Test func itSearchesBodyAndSubtitleNotJustTheTitle() {
+        let all = slides()
+        // "Untitled" is findable only by what it says.
+        #expect(CustomSlideLibrary.filter(all, query: "bine ați venit").map(\.title) == ["Untitled"])
+        #expect(CustomSlideLibrary.filter(all, query: "intro").map(\.title) == ["Untitled"])
+        // A dynamic slide is recognised by the token it carries.
+        #expect(CustomSlideLibrary.filter(all, query: "bible:").map(\.title) == ["Verset"])
+    }
+
+    @Test func noMatchIsEmptyRatherThanEverything() {
+        #expect(CustomSlideLibrary.filter(slides(), query: "zzzz").isEmpty)
+    }
+}
+
 @MainActor struct MediaLibraryTests {
     @Test func classifiesByExtension() {
         #expect(MediaKind.classify(extension: "JPG") == .image)

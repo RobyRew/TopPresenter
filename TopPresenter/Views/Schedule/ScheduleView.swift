@@ -554,28 +554,13 @@ struct ScheduleContentPicker: View {
     // MARK: Pieces
 
     private var searchField: some View {
-        HStack(spacing: 6) {
-            Image(systemName: kind == "bible" ? "book.fill" : "magnifyingglass")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            TextField(
-                kind == "bible"
-                    ? String(localized: "Referință: Ioan 3:16-18, Psalmi 23…", comment: "Composer bible placeholder")
-                    : String(localized: "Caută în bibliotecă…", comment: "Composer search placeholder"),
-                text: $query
-            )
-            .textFieldStyle(.plain)
-            if !query.isEmpty {
-                Button { query = "" } label: {
-                    Image(systemName: "xmark.circle.fill").font(.caption)
-                }
-                .buttonStyle(.borderless)
-                .foregroundStyle(.tertiary)
-            }
-        }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 5)
-        .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+        LibrarySearchField(
+            text: $query,
+            placeholder: kind == "bible"
+                ? String(localized: "Referință: Ioan 3:16-18, Psalmi 23…", comment: "Composer bible placeholder")
+                : String(localized: "Caută în bibliotecă…", comment: "Composer search placeholder"),
+            icon: kind == "bible" ? "book.fill" : "magnifyingglass"
+        )
     }
 
     private struct PickerEntry: Identifiable {

@@ -235,17 +235,10 @@ struct SongListPanel: View {
 
     private var toolbar: some View {
         VStack(spacing: 6) {
-            HStack(spacing: 6) {
-                Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-                TextField(String(localized: "Caută cântece…", comment: "Search"), text: queryBinding)
-                    .textFieldStyle(.plain)
-                if !query.isEmpty {
-                    Button { libraryManager.songLibraryQuery = "" } label: { Image(systemName: "xmark.circle.fill") }
-                        .buttonStyle(.plain).foregroundStyle(.secondary)
-                }
-            }
-            .padding(6)
-            .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
+            LibrarySearchField(
+                text: queryBinding,
+                placeholder: String(localized: "Caută cântece…", comment: "Search")
+            )
 
             HStack(spacing: 6) {
                 Picker("", selection: $collectionFilter) {

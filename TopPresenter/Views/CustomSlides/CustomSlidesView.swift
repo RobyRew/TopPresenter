@@ -31,6 +31,11 @@ struct CustomSlidesView: View {
     @State private var isPresenting = false
     /// Set by the context menu; raises the delete confirmation.
     @State private var slideToDelete: PresentationSlide?
+    @State private var slideQuery = ""
+
+    private var filteredSlides: [PresentationSlide] {
+        CustomSlideLibrary.filter(slides, query: slideQuery)
+    }
 
     var body: some View {
         ResizableSplit(storageKey: "split_custom", minLeading: 220, maxFraction: 0.5) {
@@ -82,11 +87,22 @@ struct CustomSlidesView: View {
                 .controlSize(.small)
             }
             .padding(.horizontal)
-            .padding(.vertical, 8)
+            .padding(.top, 8)
+            .padding(.bottom, 6)
+
+            // The one library list with no search at all. It scales with the
+            // service like the others do, and scrolling a long list to find
+            // "Anunțuri" was the only way to reach it.
+            LibrarySearchField(
+                text: $slideQuery,
+                placeholder: String(localized: "Caută slide-uri…", comment: "Custom slides search placeholder")
+            )
+            .padding(.horizontal, 10)
+            .padding(.bottom, 8)
 
             Divider()
 
-            List(slides, selection: Binding(
+            List(filteredSlides, selection: Binding(
                 get: { selectedSlide?.id },
                 set: { newID in
                     if let id = newID, let slide = slides.first(where: { $0.id == id }) {
