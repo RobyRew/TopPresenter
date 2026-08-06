@@ -3897,6 +3897,47 @@
         }
       }
     },
+    "Aplicație" : {
+      "comment" : "Settings group",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "App"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Application"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aplicación"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Application"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aplicație"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Приложение"
+          }
+        }
+      }
+    },
     "Aranjare:" : {
       "comment" : "Setting label",
       "localizations" : {
@@ -3957,6 +3998,47 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Arată acordurile pe ecran"
+          }
+        }
+      }
+    },
+    "Arată bara laterală" : {
+      "comment" : "Tooltip",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Seitenleiste einblenden"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show the sidebar"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mostrar la barra lateral"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Afficher la barre latérale"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Arată bara laterală"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Показать боковую панель"
           }
         }
       }
@@ -4218,6 +4300,47 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Скрыть"
+          }
+        }
+      }
+    },
+    "Ascunde bara laterală" : {
+      "comment" : "Tooltip",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Seitenleiste ausblenden"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hide the sidebar"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ocultar la barra lateral"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Masquer la barre latérale"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ascunde bara laterală"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Скрыть боковую панель"
           }
         }
       }
@@ -4830,7 +4953,7 @@
       }
     },
     "Avansat" : {
-      "comment" : "Settings tab",
+      "comment" : "Settings group\nSettings tab",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -4866,6 +4989,47 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Дополнительно"
+          }
+        }
+      }
+    },
+    "Bară laterală" : {
+      "comment" : "Toolbar button — show/hide the sidebar",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Seitenleiste"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sidebar"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Barra lateral"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Barre latérale"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bară laterală"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Боковая панель"
           }
         }
       }
@@ -5747,6 +5911,47 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Полужирный"
+          }
+        }
+      }
+    },
+    "Butoanele arată „Gen”, „1Împ” în loc de numele întreg — mai multe cărți pe ecran, mai puțin derulat. Numele complet rămâne în tooltip." : {
+      "comment" : "Setting hint",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Schaltflächen zeigen „Gen“, „1Kön“ statt des vollen Namens — mehr Bücher auf dem Bildschirm, weniger Scrollen. Der volle Name bleibt im Tooltip."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Buttons show “Gen”, “1Kgs” instead of the full name — more books on screen, less scrolling. The full name stays in the tooltip."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los botones muestran «Gén», «1Re» en lugar del nombre completo: más libros en pantalla y menos desplazamiento. El nombre completo se mantiene en el tooltip."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les boutons affichent « Gen », « 1Rois » au lieu du nom complet — plus de livres à l’écran, moins de défilement. Le nom complet reste dans l’infobulle."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Butoanele arată „Gen”, „1Împ” în loc de numele întreg — mai multe cărți pe ecran, mai puțin derulat. Numele complet rămâne în tooltip."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Кнопки показывают «Быт», «1Цар» вместо полного названия — больше книг на экране, меньше прокрутки. Полное название остаётся в подсказке."
           }
         }
       }
@@ -8065,7 +8270,7 @@
       }
     },
     "Conținut" : {
-      "comment" : "Inspector group\nSettings section",
+      "comment" : "Inspector group\nSettings group\nSettings section",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -14319,6 +14524,47 @@
         }
       }
     },
+    "Grilă cărți" : {
+      "comment" : "Settings section",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bücherraster"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Book grid"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cuadrícula de libros"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Grille des livres"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Grilă cărți"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сетка книг"
+          }
+        }
+      }
+    },
     "H" : {
       "comment" : "Box size field",
       "localizations" : {
@@ -15475,6 +15721,47 @@
         }
       }
     },
+    "Încadrarea (Încadrează / Umple / zoom) se află sub previzualizarea din fila Media." : {
+      "comment" : "Hint pointing at the framing controls",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Bildeinpassung (Einpassen / Ausfüllen / Zoom) liegt unter der Vorschau im Media-Tab."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Framing (Fit / Fill / zoom) lives under the preview in the Media tab."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El encuadre (Encajar / Rellenar / zoom) está bajo la vista previa en la pestaña Media."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le cadrage (Ajuster / Remplir / zoom) se trouve sous l’aperçu dans l’onglet Média."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Încadrarea (Încadrează / Umple / zoom) se află sub previzualizarea din fila Media."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Кадрирование («Вписать» / «Заполнить» / масштаб) находится под предпросмотром на вкладке «Медиа»."
+          }
+        }
+      }
+    },
     "Încadrarea se aplică live pe ecranul de proiecție." : {
       "comment" : "Framing hint",
       "localizations" : {
@@ -15499,7 +15786,7 @@
       }
     },
     "Încadrează" : {
-      "comment" : "Content mode\nMedia fill — fit\nMedia fit",
+      "comment" : "Content mode\nMedia fit",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -15540,6 +15827,47 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Încadrează = totul vizibil • Umple = acoperă caseta"
+          }
+        }
+      }
+    },
+    "Încadrează arată tot fișierul; Umple acoperă caseta și taie surplusul. Zoom-ul de mai jos se aplică peste această alegere." : {
+      "comment" : "Tooltip — fit/fill",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "„Einpassen“ zeigt die ganze Datei; „Ausfüllen“ deckt die Kassette ab und schneidet den Rest weg. Der Zoom darunter wirkt zusätzlich zu dieser Wahl."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fit shows the whole file; Fill covers the casetă and crops the rest. The zoom below applies on top of that choice."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Encajar muestra el archivo entero; Rellenar cubre la casilla y recorta el resto. El zoom de abajo se aplica sobre esa elección."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ajuster montre tout le fichier ; Remplir couvre la cassette et rogne le reste. Le zoom ci-dessous s’applique par-dessus ce choix."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Încadrează arată tot fișierul; Umple acoperă caseta și taie surplusul. Zoom-ul de mai jos se aplică peste această alegere."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "«Вписать» показывает файл целиком; «Заполнить» закрывает кассету и обрезает лишнее. Масштаб ниже применяется поверх этого выбора."
           }
         }
       }
@@ -19941,6 +20269,47 @@
         }
       }
     },
+    "Nume prescurtate" : {
+      "comment" : "Setting label",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kurznamen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abbreviated names"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nombres abreviados"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Noms abrégés"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nume prescurtate"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сокращённые названия"
+          }
+        }
+      }
+    },
     "Nume prezentator" : {
       "comment" : "Field",
       "localizations" : {
@@ -21572,6 +21941,47 @@
         }
       }
     },
+    "Prescurtările se scriu mult mai mare, lizibile de la distanță." : {
+      "comment" : "Setting hint",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Kurznamen werden deutlich größer gesetzt, aus der Entfernung lesbar."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The abbreviations are set much larger, readable from a distance."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Las abreviaturas se muestran mucho más grandes, legibles desde lejos."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les abréviations sont bien plus grandes, lisibles de loin."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Prescurtările se scriu mult mai mare, lizibile de la distanță."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сокращения отображаются гораздо крупнее, читаемы издалека."
+          }
+        }
+      }
+    },
     "Presentation" : {
       "comment" : "Menu title\nShortcut section",
       "localizations" : {
@@ -21904,6 +22314,7 @@
     },
     "Prezintă" : {
       "comment" : "Button",
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -27481,6 +27892,47 @@
         }
       }
     },
+    "Text mai mare" : {
+      "comment" : "Setting label",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Größerer Text"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bigger text"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Texto más grande"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Texte plus grand"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Text mai mare"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Крупный текст"
+          }
+        }
+      }
+    },
     "Text Media" : {
       "comment" : "Text box name — media body text",
       "localizations" : {
@@ -29343,7 +29795,7 @@
       }
     },
     "Umple" : {
-      "comment" : "Content mode\nMedia fill\nMedia fill — fill",
+      "comment" : "Content mode\nMedia fill",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -30519,457 +30971,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Zoom −"
-          }
-        }
-      }
-    },
-    "Grilă cărți" : {
-      "comment" : "Settings section",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Bücherraster"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Book grid"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Cuadrícula de libros"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Grille des livres"
-          }
-        },
-        "ro" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Grilă cărți"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Сетка книг"
-          }
-        }
-      }
-    },
-    "Bară laterală" : {
-      "comment" : "Toolbar button — show/hide the sidebar",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Seitenleiste"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Sidebar"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Barra lateral"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Barre latérale"
-          }
-        },
-        "ro" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Bară laterală"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Боковая панель"
-          }
-        }
-      }
-    },
-    "Arată bara laterală" : {
-      "comment" : "Tooltip",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Seitenleiste einblenden"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Show the sidebar"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Mostrar la barra lateral"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Afficher la barre latérale"
-          }
-        },
-        "ro" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Arată bara laterală"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Показать боковую панель"
-          }
-        }
-      }
-    },
-    "Ascunde bara laterală" : {
-      "comment" : "Tooltip",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Seitenleiste ausblenden"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Hide the sidebar"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ocultar la barra lateral"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Masquer la barre latérale"
-          }
-        },
-        "ro" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ascunde bara laterală"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Скрыть боковую панель"
-          }
-        }
-      }
-    },
-    "Nume prescurtate" : {
-      "comment" : "Setting label",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Kurznamen"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Abbreviated names"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Nombres abreviados"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Noms abrégés"
-          }
-        },
-        "ro" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Nume prescurtate"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Сокращённые названия"
-          }
-        }
-      }
-    },
-    "Text mai mare" : {
-      "comment" : "Setting label",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Größerer Text"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Bigger text"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Texto más grande"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Texte plus grand"
-          }
-        },
-        "ro" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Text mai mare"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Крупный текст"
-          }
-        }
-      }
-    },
-    "Butoanele arată „Gen”, „1Împ” în loc de numele întreg — mai multe cărți pe ecran, mai puțin derulat. Numele complet rămâne în tooltip." : {
-      "comment" : "Setting hint",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Die Schaltflächen zeigen „Gen“, „1Kön“ statt des vollen Namens — mehr Bücher auf dem Bildschirm, weniger Scrollen. Der volle Name bleibt im Tooltip."
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Buttons show “Gen”, “1Kgs” instead of the full name — more books on screen, less scrolling. The full name stays in the tooltip."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Los botones muestran «Gén», «1Re» en lugar del nombre completo: más libros en pantalla y menos desplazamiento. El nombre completo se mantiene en el tooltip."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Les boutons affichent « Gen », « 1Rois » au lieu du nom complet — plus de livres à l’écran, moins de défilement. Le nom complet reste dans l’infobulle."
-          }
-        },
-        "ro" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Butoanele arată „Gen”, „1Împ” în loc de numele întreg — mai multe cărți pe ecran, mai puțin derulat. Numele complet rămâne în tooltip."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Кнопки показывают «Быт», «1Цар» вместо полного названия — больше книг на экране, меньше прокрутки. Полное название остаётся в подсказке."
-          }
-        }
-      }
-    },
-    "Prescurtările se scriu mult mai mare, lizibile de la distanță." : {
-      "comment" : "Setting hint",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Die Kurznamen werden deutlich größer gesetzt, aus der Entfernung lesbar."
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The abbreviations are set much larger, readable from a distance."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Las abreviaturas se muestran mucho más grandes, legibles desde lejos."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Les abréviations sont bien plus grandes, lisibles de loin."
-          }
-        },
-        "ro" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Prescurtările se scriu mult mai mare, lizibile de la distanță."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Сокращения отображаются гораздо крупнее, читаемы издалека."
-          }
-        }
-      }
-    },
-    "Aplicație" : {
-      "comment" : "Settings group",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "App"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Application"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Aplicación"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Application"
-          }
-        },
-        "ro" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Aplicație"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Приложение"
-          }
-        }
-      }
-    },
-    "Încadrează arată tot fișierul; Umple acoperă caseta și taie surplusul. Zoom-ul de mai jos se aplică peste această alegere." : {
-      "comment" : "Tooltip — fit/fill",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "„Einpassen“ zeigt die ganze Datei; „Ausfüllen“ deckt die Kassette ab und schneidet den Rest weg. Der Zoom darunter wirkt zusätzlich zu dieser Wahl."
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Fit shows the whole file; Fill covers the casetă and crops the rest. The zoom below applies on top of that choice."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Encajar muestra el archivo entero; Rellenar cubre la casilla y recorta el resto. El zoom de abajo se aplica sobre esa elección."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ajuster montre tout le fichier ; Remplir couvre la cassette et rogne le reste. Le zoom ci-dessous s’applique par-dessus ce choix."
-          }
-        },
-        "ro" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Încadrează arată tot fișierul; Umple acoperă caseta și taie surplusul. Zoom-ul de mai jos se aplică peste această alegere."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "«Вписать» показывает файл целиком; «Заполнить» закрывает кассету и обрезает лишнее. Масштаб ниже применяется поверх этого выбора."
-          }
-        }
-      }
-    },
-    "Încadrarea (Încadrează / Umple / zoom) se află sub previzualizarea din fila Media." : {
-      "comment" : "Hint pointing at the framing controls",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Die Bildeinpassung (Einpassen / Ausfüllen / Zoom) liegt unter der Vorschau im Media-Tab."
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Framing (Fit / Fill / zoom) lives under the preview in the Media tab."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "El encuadre (Encajar / Rellenar / zoom) está bajo la vista previa en la pestaña Media."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Le cadrage (Ajuster / Remplir / zoom) se trouve sous l’aperçu dans l’onglet Média."
-          }
-        },
-        "ro" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Încadrarea (Încadrează / Umple / zoom) se află sub previzualizarea din fila Media."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Кадрирование («Вписать» / «Заполнить» / масштаб) находится под предпросмотром на вкладке «Медиа»."
           }
         }
       }

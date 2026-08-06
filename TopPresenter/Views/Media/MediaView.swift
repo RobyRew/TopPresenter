@@ -197,7 +197,12 @@ struct MediaView: View {
             .padding(12)
         }
         // Enter projects the selected item — present-first, like the song list.
+        // The grid has to be focusable to receive that key, but AppKit then draws
+        // a focus ring around the WHOLE scroll view, which read as a border on the
+        // media container and competed with the ring marking the selected tile.
+        // The Bible grid and the editor canvas suppress it the same way.
         .focusable()
+        .focusEffectDisabled()
         .onKeyPress(.return) {
             guard let item = libraryManager.selectedMediaItem else { return .ignored }
             present(item)
@@ -289,9 +294,16 @@ struct MediaCard: View {
 
     var body: some View {
         VStack(spacing: 6) {
-            thumbnail
+            // `Color.clear` is what carries the 16:10, NOT the artwork.
+            //
+            // Sizing the ZStack itself left the resizable image free to drive the
+            // height — a portrait clip made a taller tile than a landscape one,
+            // so rows stayed ragged. A flexible spacer takes the aspect ratio,
+            // the artwork rides along in an overlay (which never affects layout)
+            // and gets cropped. Every tile is then identical by construction.
+            Color.clear
                 .aspectRatio(16.0 / 10.0, contentMode: .fit)
-                .frame(maxWidth: .infinity)
+                .overlay { thumbnail }
                 .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                 .overlay(alignment: .bottomTrailing) { durationBadge }
                 .overlay(alignment: .topLeading) { kindBadge }
@@ -324,12 +336,14 @@ struct MediaCard: View {
     private var thumbnail: some View {
         ZStack {
             if let data = item.thumbnailData, let image = NSImage(data: data) {
-                // Fill + clip: a portrait photo and a landscape video occupy the
-                // same rectangle, so the grid reads as a grid.
+                // scaledToFill inside a FIXED overlay: the artwork covers the
+                // 16:10 rectangle and the excess is cropped by the caller's
+                // clipShape, so a portrait photo and a landscape video occupy
+                // the same tile.
                 Color.black.opacity(0.35)
                 Image(nsImage: image)
                     .resizable()
-                    .aspectRatio(contentMode: .fill)
+                    .scaledToFill()
             } else {
                 LinearGradient(colors: [kind.placeholderTint.opacity(0.34),
                                         kind.placeholderTint.opacity(0.14)],
