@@ -101,17 +101,60 @@ struct MediaView: View {
                 .help(String(localized: "Importă imagini, audio sau video", comment: "Tooltip"))
             }
 
-            Picker("", selection: $kindFilterRaw) {
-                Text(String(localized: "Toate", comment: "Media kind filter — all")).tag("all")
+            // Filter chips rather than a segmented control: the segments were
+            // equal-width regardless of label, so "Toate" and "Audio" got the
+            // same slab and the row read as a stray form control dropped into
+            // the view. Chips size to their text, carry the count that makes
+            // them worth clicking, and use the app accent like every other
+            // selected thing in the window.
+            HStack(spacing: 6) {
+                kindChip(rawValue: "all",
+                         label: String(localized: "Toate", comment: "Media kind filter — all"),
+                         icon: "square.grid.2x2",
+                         count: mediaItems.count)
                 ForEach(MediaKind.allCases) { kind in
-                    Text(kind.filterLabel).tag(kind.rawValue)
+                    kindChip(rawValue: kind.rawValue,
+                             label: kind.filterLabel,
+                             icon: kind.systemImage,
+                             count: mediaItems.filter { $0.mediaType == kind.rawValue }.count)
                 }
+                Spacer(minLength: 0)
             }
-            .pickerStyle(.segmented)
-            .labelsHidden()
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
+    }
+
+    private func kindChip(rawValue: String, label: String, icon: String, count: Int) -> some View {
+        let isActive = kindFilterRaw == rawValue
+        return Button {
+            kindFilterRaw = rawValue
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: icon)
+                    .font(.system(size: 9, weight: .semibold))
+                Text(label)
+                    .font(.system(size: 11, weight: isActive ? .semibold : .regular))
+                if count > 0 {
+                    Text("\(count)")
+                        .font(.system(size: 9, weight: .medium).monospacedDigit())
+                        .opacity(0.65)
+                }
+            }
+            .lineLimit(1)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(
+                isActive ? AnyShapeStyle(appHighlight) : AnyShapeStyle(.quaternary.opacity(0.5)),
+                in: Capsule()
+            )
+            .foregroundStyle(isActive ? AnyShapeStyle(.white) : AnyShapeStyle(.secondary))
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        // An empty kind still filters — it is how you confirm there is nothing
+        // of that kind — but it should not invite the click.
+        .opacity(count == 0 && !isActive ? 0.45 : 1)
     }
 
     private var emptyState: some View {
@@ -223,6 +266,17 @@ struct MediaView: View {
 
 // MARK: - Media Card (rich grid cell)
 
+/// One tile in the media grid.
+///
+/// Every tile is the SAME height. It used to be `lineLimit(2)` over a name that
+/// might occupy one line or two, and a LazyVGrid row is as tall as its tallest
+/// cell — so a single two-line filename stretched the whole row, every other
+/// tile in it gained a band of empty background, and the selection fill painted
+/// that band. Selecting one clip looked like selecting the row.
+///
+/// So the caption reserves two lines whether it needs them or not, and the
+/// thumbnail is a fixed 16:10 crop. Uniform tiles, no dead space, and selection
+/// can be a ring on the artwork instead of a slab behind it.
 struct MediaCard: View {
     let item: MediaItem
     let isSelected: Bool
@@ -230,83 +284,94 @@ struct MediaCard: View {
 
     private var kind: MediaKind { MediaKind(rawValue: item.mediaType) ?? .image }
 
-    var body: some View {
-        VStack(spacing: 0) {
-            ZStack {
-                if let data = item.thumbnailData, let image = NSImage(data: data) {
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(.black.opacity(0.3))
-                    Image(nsImage: image)
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                } else {
-                    // No thumbnail: a soft per-kind gradient with a BIG glyph —
-                    // not the flat grey square with a tiny icon.
-                    LinearGradient(colors: [kind.placeholderTint.opacity(0.34),
-                                            kind.placeholderTint.opacity(0.14)],
-                                   startPoint: .topLeading, endPoint: .bottomTrailing)
-                    Image(systemName: kind.systemImage)
-                        .font(.system(size: 30, weight: .medium))
-                        .foregroundStyle(kind.placeholderTint.opacity(0.9))
-                }
+    /// Two lines of `.caption` plus its leading. Reserved, never measured.
+    private let captionHeight: CGFloat = 30
 
-                // Video gets a subtle play affordance over the thumbnail.
-                if kind == .video, item.thumbnailData != nil {
-                    Image(systemName: "play.circle.fill")
-                        .font(.title2)
-                        .foregroundStyle(.white.opacity(isHovered ? 0.95 : 0.7))
-                        .shadow(radius: 3)
+    var body: some View {
+        VStack(spacing: 6) {
+            thumbnail
+                .aspectRatio(16.0 / 10.0, contentMode: .fit)
+                .frame(maxWidth: .infinity)
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .overlay(alignment: .bottomTrailing) { durationBadge }
+                .overlay(alignment: .topLeading) { kindBadge }
+                .overlay {
+                    // Selection reads on the ARTWORK — the thing you picked —
+                    // rather than as a panel behind the tile.
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .strokeBorder(isSelected ? appHighlight : .clear, lineWidth: 2.5)
                 }
-            }
-            .aspectRatio(16.0 / 10.0, contentMode: .fit)
-            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .overlay(alignment: .bottomTrailing) {
-                if let badge = item.durationBadge {
-                    Text(badge)
-                        .font(.system(size: 9, weight: .semibold).monospacedDigit())
-                        .padding(.horizontal, 5).padding(.vertical, 2)
-                        .background(.black.opacity(0.65), in: Capsule())
-                        .foregroundStyle(.white)
-                        .padding(5)
-                }
-            }
-            .overlay(alignment: .topLeading) {
-                // The kind chip only earns its place over a REAL thumbnail —
-                // the placeholder already IS the kind glyph.
-                if item.thumbnailData != nil {
-                    Image(systemName: kind.systemImage)
-                        .font(.system(size: 9, weight: .semibold))
-                        .padding(4)
-                        .background(.black.opacity(0.55), in: Circle())
-                        .foregroundStyle(.white)
-                        .padding(5)
-                }
-            }
-            .padding(4)
+                .shadow(color: .black.opacity(isHovered ? 0.22 : 0.10), radius: isHovered ? 7 : 3, y: 2)
 
             Text(item.name)
                 .font(.caption)
                 .lineLimit(2)
                 .multilineTextAlignment(.center)
                 .truncationMode(.middle)
-                .frame(maxWidth: .infinity)
-                .padding(.horizontal, 6)
-                .padding(.bottom, 6)
-                .padding(.top, 2)
+                .foregroundStyle(isSelected ? AnyShapeStyle(appHighlight) : AnyShapeStyle(.secondary))
+                .frame(maxWidth: .infinity, minHeight: captionHeight, alignment: .top)
+                .padding(.horizontal, 2)
         }
+        .padding(6)
         .background(
-            isSelected ? AnyShapeStyle(appHighlight.opacity(0.16))
-                : isHovered ? AnyShapeStyle(.quaternary.opacity(0.6))
-                : AnyShapeStyle(Color.secondary.opacity(0.07)),
-            in: RoundedRectangle(cornerRadius: 14, style: .continuous)
+            isHovered && !isSelected ? AnyShapeStyle(.quaternary.opacity(0.45)) : AnyShapeStyle(Color.clear),
+            in: RoundedRectangle(cornerRadius: 12, style: .continuous)
         )
-        .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .strokeBorder(isSelected ? appHighlight : Color.clear, lineWidth: 2)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .shadow(color: .black.opacity(isHovered ? 0.18 : 0), radius: 6, y: 3)
+        .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+
+    @ViewBuilder
+    private var thumbnail: some View {
+        ZStack {
+            if let data = item.thumbnailData, let image = NSImage(data: data) {
+                // Fill + clip: a portrait photo and a landscape video occupy the
+                // same rectangle, so the grid reads as a grid.
+                Color.black.opacity(0.35)
+                Image(nsImage: image)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+            } else {
+                LinearGradient(colors: [kind.placeholderTint.opacity(0.34),
+                                        kind.placeholderTint.opacity(0.14)],
+                               startPoint: .topLeading, endPoint: .bottomTrailing)
+                Image(systemName: kind.systemImage)
+                    .font(.system(size: 26, weight: .medium))
+                    .foregroundStyle(kind.placeholderTint.opacity(0.9))
+            }
+
+            if kind == .video, item.thumbnailData != nil {
+                Image(systemName: "play.circle.fill")
+                    .font(.title2)
+                    .foregroundStyle(.white.opacity(isHovered ? 0.95 : 0.75))
+                    .shadow(radius: 3)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var durationBadge: some View {
+        if let badge = item.durationBadge {
+            Text(badge)
+                .font(.system(size: 9, weight: .semibold).monospacedDigit())
+                .padding(.horizontal, 5).padding(.vertical, 2)
+                .background(.black.opacity(0.65), in: Capsule())
+                .foregroundStyle(.white)
+                .padding(5)
+        }
+    }
+
+    @ViewBuilder
+    private var kindBadge: some View {
+        // The chip only earns its place over a REAL thumbnail — the placeholder
+        // already IS the kind glyph.
+        if item.thumbnailData != nil {
+            Image(systemName: kind.systemImage)
+                .font(.system(size: 9, weight: .semibold))
+                .padding(4)
+                .background(.black.opacity(0.55), in: Circle())
+                .foregroundStyle(.white)
+                .padding(5)
+        }
     }
 }
 
@@ -401,6 +466,12 @@ struct MediaDetailPane: View {
     @State private var previewTime: Double = 0
     @State private var previewDuration: Double = 0
     @State private var isScrubbing = false
+    /// The video the scrub frames come from. The URL and not a stored
+    /// `AVAssetImageGenerator`: the generator is not `Sendable`, and one held in
+    /// view state cannot be handed to the async extraction without Swift 6
+    /// flagging it. Built fresh per extraction, uniquely owned, exactly like
+    /// `MediaThumbnailer` does.
+    @State private var frameSourceURL: URL?
 
     var body: some View {
         if let item = libraryManager.selectedMediaItem {
@@ -429,23 +500,18 @@ struct MediaDetailPane: View {
 
                 if kind != .audio { framingControls }
 
-                Button {
-                    // A fresh present starts from a clean frame.
-                    pm.resetMediaFraming()
-                    MediaPresenter.present(item, pm: pm, video: videoPlayerService, audio: audioPlayerManager)
-                } label: {
-                    Label(String(localized: "Prezintă", comment: "Button"), systemImage: "play.fill")
-                        .frame(minWidth: 130)
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
+                // No „Prezintă" button here. Every other module presents from the
+                // right panel, and this pane had its own next to the panel's
+                // „Proiectează" — two prominent buttons, a step apart, doing the
+                // same thing. Framing stays here because it is spatial and needs
+                // the big preview; presenting belongs where presenting always is.
             }
             .padding(18)
             // Rebuild the preview whenever the selection changes; the tracking
             // loop lives in the same task so cancellation stops it too.
             .task(id: item.id) {
                 await loadPreview(item: item, kind: kind)
-                await trackPreviewTime(kind: kind)
+                await trackPreviewTime(item: item, kind: kind)
             }
             .onDisappear(perform: teardownPreview)
         } else {
@@ -600,12 +666,15 @@ struct MediaDetailPane: View {
     private var framingControls: some View {
         @Bindable var pmBinding = pm
         return VStack(spacing: 8) {
-            Picker("", selection: $pmBinding.fullscreenVideoFillRaw) {
+            // Bound to the casetă that actually renders the media, not to the
+            // legacy full-screen flag it used to write to.
+            Picker("", selection: $pmBinding.liveMediaFillRaw) {
                 Text(String(localized: "Încadrează", comment: "Media fit")).tag("fit")
                 Text(String(localized: "Umple", comment: "Media fill")).tag("fill")
             }
             .pickerStyle(.segmented)
             .labelsHidden()
+            .help(String(localized: "Încadrează arată tot fișierul; Umple acoperă caseta și taie surplusul. Zoom-ul de mai jos se aplică peste această alegere.", comment: "Tooltip — fit/fill"))
 
             HStack(spacing: 8) {
                 Image(systemName: "minus.magnifyingglass")
@@ -658,28 +727,65 @@ struct MediaDetailPane: View {
             let player = AVPlayer(url: url)
             player.isMuted = true          // auditioning must stay silent by default
             previewPlayer = player
-            if let duration = try? await AVURLAsset(url: url).load(.duration) {
+            let asset = AVURLAsset(url: url)
+            if let duration = try? await asset.load(.duration) {
                 let seconds = CMTimeGetSeconds(duration)
                 previewDuration = seconds.isFinite ? seconds : 0
             }
+            frameSourceURL = url
+            await refreshScrubFrame(at: 0)
         case .audio:
             previewPlayer = AVPlayer(url: url)
         }
     }
 
-    /// Drives the scrubber for as long as this item is selected. A polling loop
-    /// rather than `addPeriodicTimeObserver`: the observer's callback is
-    /// `@Sendable` and would have to reach back into this view's `@State`, and it
-    /// needs explicit teardown. `.task(id:)` cancels this on its own.
-    /// Skipped while the operator is dragging, so the thumb doesn't fight them.
-    private func trackPreviewTime(kind: MediaKind) async {
+    /// Drives the scrubber for as long as this item is selected, and keeps the
+    /// right panel's preview on the same frame.
+    ///
+    /// A polling loop rather than `addPeriodicTimeObserver`: the observer's
+    /// callback is `@Sendable` and would have to reach back into this view's
+    /// `@State`, and it needs explicit teardown. `.task(id:)` cancels this on its
+    /// own. The scrubber itself is skipped while the operator is dragging, so the
+    /// thumb doesn't fight them — the PREVIEW still follows, which is the whole
+    /// point of dragging.
+    private func trackPreviewTime(item: MediaItem, kind: MediaKind) async {
         guard kind == .video else { return }
+        var lastFrameAt: Double = -1
         while !Task.isCancelled {
             try? await Task.sleep(for: .milliseconds(200))
-            guard !isScrubbing, let player = previewPlayer else { continue }
+            guard let player = previewPlayer else { continue }
             let seconds = CMTimeGetSeconds(player.currentTime())
-            if seconds.isFinite { previewTime = seconds }
+            guard seconds.isFinite else { continue }
+            if !isScrubbing { previewTime = seconds }
+
+            // Frame extraction is far too costly per tick. Refresh only when the
+            // position has actually moved by something the eye would notice.
+            let target = isScrubbing ? previewTime : seconds
+            if abs(target - lastFrameAt) >= 0.4 {
+                lastFrameAt = target
+                await refreshScrubFrame(at: target)
+            }
         }
+    }
+
+    /// One still at `seconds`, handed to the panel through LibraryManager.
+    ///
+    /// Generous tolerance on purpose: an exact frame means decoding from the
+    /// preceding keyframe, which is an order of magnitude slower and buys
+    /// nothing at preview size.
+    private func refreshScrubFrame(at seconds: Double) async {
+        guard let url = frameSourceURL else { return }
+        let generator = AVAssetImageGenerator(asset: AVURLAsset(url: url))
+        generator.appliesPreferredTrackTransform = true
+        generator.maximumSize = CGSize(width: 640, height: 400)
+        // Snap to the nearest available frame instead of decoding forward from a
+        // keyframe — at preview size the difference is invisible, the cost is not.
+        generator.requestedTimeToleranceBefore = CMTime(seconds: 0.5, preferredTimescale: 600)
+        generator.requestedTimeToleranceAfter = CMTime(seconds: 0.5, preferredTimescale: 600)
+
+        let time = CMTime(seconds: seconds, preferredTimescale: 600)
+        guard let cg = try? await generator.image(at: time).image else { return }
+        libraryManager.mediaScrubFrame = NSImage(cgImage: cg, size: .zero)
     }
 
     private func seekPreview(to seconds: Double) {
@@ -704,6 +810,10 @@ struct MediaDetailPane: View {
         previewTime = 0
         previewDuration = 0
         isScrubbing = false
+        frameSourceURL = nil
+        // Leaving the last frame behind would have the panel previewing a clip
+        // that is no longer selected.
+        libraryManager.mediaScrubFrame = nil
         fullImage = nil
         if let scopedURL {
             scopedURL.stopAccessingSecurityScopedResource()

@@ -1636,19 +1636,14 @@ struct StyleQuickSettings: View {
             .controlSize(.small)
             .help(String(localized: "Videoclipurile proiectate reiau de la capăt automat.", comment: "Tooltip"))
 
-        HStack {
-            Text(String(localized: "Umplere:", comment: "Setting label — fullscreen media fill"))
-                .font(.caption)
-                .settingsRowLabel()
-            Picker("", selection: $pmBinding.fullscreenVideoFillRaw) {
-                Text(String(localized: "Încadrează", comment: "Media fill — fit")).tag("fit")
-                Text(String(localized: "Umple", comment: "Media fill — fill")).tag("fill")
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .controlSize(.small)
-        }
-        .help(String(localized: "Cum umple imaginea/videoclipul ecranul de proiecție.", comment: "Tooltip"))
+        // Fit/fill lives with the framing controls under the big preview in the
+        // Media tab, next to the zoom it combines with. A second copy here — a
+        // panel away from the picture it affects, and out of sight of the zoom —
+        // was one of two places to change the same thing.
+        Text(String(localized: "Încadrarea (Încadrează / Umple / zoom) se află sub previzualizarea din fila Media.", comment: "Hint pointing at the framing controls"))
+            .font(.caption2)
+            .foregroundStyle(.tertiary)
+            .fixedSize(horizontal: false, vertical: true)
     }
 
     // MARK: - Ieșire Section (output screen, compact)

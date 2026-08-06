@@ -539,6 +539,34 @@ final class PresentationManager {
         mediaPanY = 0
     }
 
+    /// Fit/fill for the media the operator is framing — THE one the UI drives.
+    ///
+    /// `fullscreenVideoFillRaw` stopped meaning anything the moment the live
+    /// casetă took over rendering: the casetă fits its own content with
+    /// `contentModeRaw`, so the Media panel's Încadrează/Umple picker was writing
+    /// to a property nothing on screen read any more. Together with a zoom slider
+    /// that DID work, that is what made the two controls look unrelated.
+    ///
+    /// Reading and writing both keeps the legacy full-screen path (a profile with
+    /// no casetă) in step, so the control means the same thing either way.
+    var liveMediaFillRaw: String {
+        get {
+            // `profile(_:)` and not a raw `profiles` read: the coarse accessor is
+            // the one that registers an observation dependency, so a picker bound
+            // here actually redraws when the casetă changes.
+            guard let box = profile("media").mediaBoxes.first(where: { $0.sourceRaw == "live" })
+            else { return fullscreenVideoFillRaw }
+            return box.contentModeRaw
+        }
+        set {
+            fullscreenVideoFillRaw = newValue
+            guard var box = profile("media").mediaBoxes.first(where: { $0.sourceRaw == "live" }),
+                  box.contentModeRaw != newValue else { return }
+            box.contentModeRaw = newValue
+            updateMediaBox(box, in: "media")
+        }
+    }
+
     /// Per-box transition override: OFF = the box follows the profile's
     /// transitions; ON = its own effects, delay (stagger) and duration.
     struct BoxTransition: Codable, Equatable {

@@ -31,7 +31,11 @@ struct MediaPreviewPanel: View {
 
     private var pendingMedia: PresentationPreviewCard.PendingMedia? {
         guard let item = selectedItem else { return nil }
-        let thumb = item.thumbnailData.flatMap { NSImage(data: $0) }
+        // The frame under the audition scrubber wins over the stored thumbnail,
+        // so the preview follows the video instead of sitting on frame zero
+        // while the operator scrubs through the clip in the main view.
+        let thumb = libraryManager.mediaScrubFrame
+            ?? item.thumbnailData.flatMap { NSImage(data: $0) }
         return .init(thumbnail: thumb, kindRaw: item.mediaType, name: item.name,
                      url: item.resolvedURL)
     }

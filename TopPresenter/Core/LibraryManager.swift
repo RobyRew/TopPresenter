@@ -61,6 +61,15 @@ final class LibraryManager {
     /// Media grid search — on the manager so the panel steps the SAME filtered
     /// ordering the grid shows (mirrors songLibraryQuery).
     var mediaLibraryQuery: String = ""
+    /// The frame under the audition scrubber, for the right panel's preview.
+    ///
+    /// The panel cannot simply show the audition player: only the most recently
+    /// created `AVPlayerLayer` for a given `AVPlayer` actually draws, so a second
+    /// surface would blank the one the operator is scrubbing. A still generated
+    /// at the scrub position is the honest way to keep the preview in step —
+    /// otherwise it sits on the poster frame while the video moves underneath it.
+    /// Nil whenever there is nothing auditioning.
+    var mediaScrubFrame: NSImage?
 
     // MARK: - Schedule State
     /// The session highlighted in the Schedule view — drives the tab title.

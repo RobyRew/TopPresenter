@@ -22,41 +22,49 @@ struct SettingsContentView: View {
     private struct SettingsTab: Identifiable {
         let id: String
         let label: String
+        let icon: String
     }
 
-    private var tabs: [SettingsTab] {
-        var out: [SettingsTab] = [
-            .init(id: "interface", label: String(localized: "Interfață", comment: "Settings tab")),
-            .init(id: "bible", label: String(localized: "Biblie", comment: "Settings tab")),
-            .init(id: "importExport", label: String(localized: "Import / Export", comment: "Settings tab")),
-            .init(id: "projection", label: String(localized: "Proiecție", comment: "Settings tab")),
-            .init(id: "updates", label: String(localized: "Actualizări", comment: "Settings tab")),
+    /// Sidebar groups. A flat segmented row gave every section the same weight
+    /// and the same width regardless of name, and it ran out of room as sections
+    /// were added — grouping says which settings belong to the app itself and
+    /// which are the operator's own preferences.
+    private struct SettingsGroup: Identifiable {
+        let id: String
+        let title: String
+        let tabs: [SettingsTab]
+    }
+
+    private var groups: [SettingsGroup] {
+        var out: [SettingsGroup] = [
+            .init(id: "app", title: String(localized: "Aplicație", comment: "Settings group"), tabs: [
+                .init(id: "interface", label: String(localized: "Interfață", comment: "Settings tab"), icon: "paintbrush"),
+                .init(id: "projection", label: String(localized: "Proiecție", comment: "Settings tab"), icon: "tv"),
+                .init(id: "updates", label: String(localized: "Actualizări", comment: "Settings tab"), icon: "arrow.triangle.2.circlepath"),
+            ]),
+            .init(id: "content", title: String(localized: "Conținut", comment: "Settings group"), tabs: [
+                .init(id: "bible", label: String(localized: "Biblie", comment: "Settings tab"), icon: "book.closed"),
+                .init(id: "importExport", label: String(localized: "Import / Export", comment: "Settings tab"), icon: "square.and.arrow.down"),
+            ]),
         ]
         if advancedUnlocked {
-            out.append(.init(id: "advanced", label: String(localized: "Avansat", comment: "Settings tab")))
+            out.append(.init(id: "adv", title: String(localized: "Avansat", comment: "Settings group"), tabs: [
+                .init(id: "advanced", label: String(localized: "Avansat", comment: "Settings tab"), icon: "wrench.and.screwdriver"),
+            ]))
         }
         return out
     }
 
+    private var activeTab: SettingsTab? {
+        groups.flatMap(\.tabs).first { $0.id == tab }
+    }
+
     var body: some View {
-        VStack(spacing: 0) {
-            header
+        HStack(spacing: 0) {
+            sidebar
+                .frame(width: 200)
             Divider()
-            ScrollView {
-                Group {
-                    switch tab {
-                    case "bible": BibleSettingsTab()
-                    case "importExport": ImportExportSettingsTab()
-                    case "projection": ProjectionSettingsTab()
-                    case "updates": UpdatesSettingsTab()
-                    case "advanced" where advancedUnlocked: AdvancedSettingsTab()
-                    default: InterfaceSettingsTab()
-                    }
-                }
-                .frame(maxWidth: 680)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 8)
-            }
+            content
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onChange(of: advancedUnlocked) { _, unlocked in
@@ -74,25 +82,97 @@ struct SettingsContentView: View {
         appState.settingsTabRequest = nil
     }
 
-    private var header: some View {
-        HStack(spacing: 12) {
-            Image(systemName: "gearshape").font(.title2).foregroundStyle(appAccent)
-            VStack(alignment: .leading, spacing: 1) {
-                Text(String(localized: "Setări", comment: "Settings title")).font(.headline)
-                Text(String(localized: "Preferințele aplicației", comment: "Settings subtitle"))
-                    .font(.caption).foregroundStyle(.secondary)
-            }
+    // MARK: Sidebar
 
-            Picker("", selection: $tab) {
-                ForEach(tabs) { t in
-                    Text(t.label).tag(t.id)
+    private var sidebar: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(spacing: 8) {
+                    Image(systemName: "gearshape").font(.title3).foregroundStyle(appAccent)
+                    Text(String(localized: "Setări", comment: "Settings title")).font(.headline)
                 }
-            }
-            .pickerStyle(.segmented).labelsHidden().fixedSize()
+                .padding(.horizontal, 10)
+                .padding(.top, 12)
 
-            Spacer()
+                ForEach(groups) { group in
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(group.title)
+                            .font(.system(size: 10, weight: .semibold))
+                            .textCase(.uppercase)
+                            .tracking(0.4)
+                            .foregroundStyle(.tertiary)
+                            .padding(.horizontal, 12)
+                            .padding(.bottom, 2)
+                        ForEach(group.tabs) { t in
+                            sidebarRow(t)
+                        }
+                    }
+                }
+                Spacer(minLength: 8)
+            }
+            .padding(.horizontal, 6)
+            .padding(.bottom, 10)
         }
-        .padding(12)
+        .background(.quaternary.opacity(0.28))
+    }
+
+    private func sidebarRow(_ t: SettingsTab) -> some View {
+        let isActive = tab == t.id
+        return Button {
+            tab = t.id
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: t.icon)
+                    .font(.system(size: 12))
+                    .frame(width: 18)
+                    .foregroundStyle(isActive ? AnyShapeStyle(.white) : AnyShapeStyle(.secondary))
+                Text(t.label)
+                    .font(.system(size: 12, weight: isActive ? .semibold : .regular))
+                    .foregroundStyle(isActive ? AnyShapeStyle(.white) : AnyShapeStyle(.primary))
+                Spacer(minLength: 0)
+            }
+            .lineLimit(1)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+            .background(
+                isActive ? AnyShapeStyle(appHighlight) : AnyShapeStyle(Color.clear),
+                in: RoundedRectangle(cornerRadius: 6, style: .continuous)
+            )
+            .contentShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: Content
+
+    private var content: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                if let activeTab {
+                    Text(activeTab.label)
+                        .font(.title2.weight(.semibold))
+                        .padding(.horizontal, 20)
+                        .padding(.top, 18)
+                        .padding(.bottom, 4)
+                }
+
+                Group {
+                    switch tab {
+                    case "bible": BibleSettingsTab()
+                    case "importExport": ImportExportSettingsTab()
+                    case "projection": ProjectionSettingsTab()
+                    case "updates": UpdatesSettingsTab()
+                    case "advanced" where advancedUnlocked: AdvancedSettingsTab()
+                    default: InterfaceSettingsTab()
+                    }
+                }
+                // Grouped form style: section headings over inset rows, which is
+                // the shape every modern macOS settings pane has.
+                .formStyle(.grouped)
+                .frame(maxWidth: 680, alignment: .leading)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
     }
 }
 

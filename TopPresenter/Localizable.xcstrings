@@ -6649,30 +6649,6 @@
         }
       }
     },
-    "Casetele de aici sunt suprapuneri" : {
-      "comment" : "Theme editor canvas hint — media profile boxes are overlays",
-      "extractionState" : "stale",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Boxes here are overlays"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Las casillas de aquí son superposiciones"
-          }
-        },
-        "ro" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Casetele de aici sunt suprapuneri"
-          }
-        }
-      }
-    },
     "Casetele media nu au setări de text." : {
       "comment" : "Inspector hint",
       "localizations" : {
@@ -8895,29 +8871,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Cum se scrie data sau ora pe ecran"
-          }
-        }
-      }
-    },
-    "Cum umple imaginea/videoclipul ecranul de proiecție." : {
-      "comment" : "Tooltip",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "How the image/video fills the projection screen."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Cómo llena la imagen o el vídeo la pantalla de proyección."
-          }
-        },
-        "ro" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Cum umple imaginea/videoclipul ecranul de proiecție."
           }
         }
       }
@@ -17777,30 +17730,6 @@
         }
       }
     },
-    "Media pe tot ecranul" : {
-      "comment" : "Theme editor canvas stand-in for the media profile",
-      "extractionState" : "stale",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Full-screen media"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Media a pantalla completa"
-          }
-        },
-        "ro" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Media pe tot ecranul"
-          }
-        }
-      }
-    },
     "Media următoare" : {
       "comment" : "Tooltip",
       "localizations" : {
@@ -21593,29 +21522,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Preferințe"
-          }
-        }
-      }
-    },
-    "Preferințele aplicației" : {
-      "comment" : "Settings subtitle",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Application preferences"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Preferencias de la aplicación"
-          }
-        },
-        "ro" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Preferințele aplicației"
           }
         }
       }
@@ -29459,29 +29365,6 @@
         }
       }
     },
-    "Umplere:" : {
-      "comment" : "Setting label — fullscreen media fill",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Fill:"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Llenado:"
-          }
-        },
-        "ro" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Umplere:"
-          }
-        }
-      }
-    },
     "Un moment de ecran negru în sesiune (rugăciune, tranziție)." : {
       "comment" : "Composer blank hint",
       "localizations" : {
@@ -30964,6 +30847,129 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Сокращения отображаются гораздо крупнее, читаемы издалека."
+          }
+        }
+      }
+    },
+    "Aplicație" : {
+      "comment" : "Settings group",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "App"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Application"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aplicación"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Application"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aplicație"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Приложение"
+          }
+        }
+      }
+    },
+    "Încadrează arată tot fișierul; Umple acoperă caseta și taie surplusul. Zoom-ul de mai jos se aplică peste această alegere." : {
+      "comment" : "Tooltip — fit/fill",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "„Einpassen“ zeigt die ganze Datei; „Ausfüllen“ deckt die Kassette ab und schneidet den Rest weg. Der Zoom darunter wirkt zusätzlich zu dieser Wahl."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fit shows the whole file; Fill covers the casetă and crops the rest. The zoom below applies on top of that choice."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Encajar muestra el archivo entero; Rellenar cubre la casilla y recorta el resto. El zoom de abajo se aplica sobre esa elección."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ajuster montre tout le fichier ; Remplir couvre la cassette et rogne le reste. Le zoom ci-dessous s’applique par-dessus ce choix."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Încadrează arată tot fișierul; Umple acoperă caseta și taie surplusul. Zoom-ul de mai jos se aplică peste această alegere."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "«Вписать» показывает файл целиком; «Заполнить» закрывает кассету и обрезает лишнее. Масштаб ниже применяется поверх этого выбора."
+          }
+        }
+      }
+    },
+    "Încadrarea (Încadrează / Umple / zoom) se află sub previzualizarea din fila Media." : {
+      "comment" : "Hint pointing at the framing controls",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Bildeinpassung (Einpassen / Ausfüllen / Zoom) liegt unter der Vorschau im Media-Tab."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Framing (Fit / Fill / zoom) lives under the preview in the Media tab."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El encuadre (Encajar / Rellenar / zoom) está bajo la vista previa en la pestaña Media."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le cadrage (Ajuster / Remplir / zoom) se trouve sous l’aperçu dans l’onglet Média."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Încadrarea (Încadrează / Umple / zoom) se află sub previzualizarea din fila Media."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Кадрирование («Вписать» / «Заполнить» / масштаб) находится под предпросмотром на вкладке «Медиа»."
           }
         }
       }

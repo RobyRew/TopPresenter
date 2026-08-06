@@ -250,8 +250,11 @@ struct MediaBoxContent: View {
     /// The Media module's current selection, for previewing while editing. Only
     /// when nothing is live — what is on the projector always wins.
     private var editorPreviewImage: NSImage? {
-        guard !pm.liveContent.isLive,
-              let item = libraryManager?.selectedMediaItem,
+        guard !pm.liveContent.isLive else { return nil }
+        // A clip being auditioned reports the frame under its scrubber, so this
+        // casetă tracks the video instead of showing frame zero throughout.
+        if let scrubbed = libraryManager?.mediaScrubFrame { return scrubbed }
+        guard let item = libraryManager?.selectedMediaItem,
               let url = item.resolvedURL else { return nil }
         let accessing = url.startAccessingSecurityScopedResource()
         defer { if accessing { url.stopAccessingSecurityScopedResource() } }
