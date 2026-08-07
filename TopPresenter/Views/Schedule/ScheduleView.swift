@@ -26,73 +26,136 @@ struct ScheduleView: View {
     @State private var archiveResultMessage: String?
     /// Set by the context menu; raises the delete confirmation.
     @State private var scheduleToDelete: ServiceSchedule?
+    @State private var scheduleQuery = ""
+    @AppStorage("scheduleViewMode") private var viewModeRaw: String = LibraryViewMode.list.rawValue
+
+    private var viewMode: Binding<LibraryViewMode> {
+        Binding(get: { LibraryViewMode(rawValue: viewModeRaw) ?? .list },
+                set: { viewModeRaw = $0.rawValue })
+    }
+
+    /// Name and notes both match — a session is often remembered by what is in
+    /// it ("botez") rather than by whatever it was titled.
+    private var filteredSchedules: [ServiceSchedule] {
+        let q = scheduleQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !q.isEmpty else { return schedules }
+        return schedules.filter { s in
+            [s.name, s.notes].contains { field in
+                field.range(of: q, options: [.caseInsensitive, .diacriticInsensitive]) != nil
+            }
+        }
+    }
+
+    private func selectSchedule(_ schedule: ServiceSchedule?) {
+        selectedSchedule = schedule
+        // Mirror into the per-window manager — drives the tab title and the
+        // right panel (no notification round-trip).
+        libraryManager.selectedSchedule = schedule
+    }
+
+    @ViewBuilder
+    private func scheduleMenu(_ schedule: ServiceSchedule) -> some View {
+        Button {
+            exportSession(schedule)
+        } label: {
+            Label(String(localized: "Exportă sesiunea…", comment: "Context menu"),
+                  systemImage: "square.and.arrow.up")
+        }
+        Divider()
+        Button(String(localized: "Delete", comment: "Context menu"), role: .destructive) {
+            scheduleToDelete = schedule
+        }
+    }
+
+    private var schedulesList: some View {
+        List(filteredSchedules, selection: Binding(
+            get: { selectedSchedule?.id },
+            set: { newID in
+                if let id = newID { selectSchedule(schedules.first { $0.id == id }) }
+            }
+        )) { schedule in
+            VStack(alignment: .leading, spacing: 2) {
+                Text(schedule.name)
+                    .font(.body.weight(.medium))
+                    .lineLimit(1)
+                HStack(spacing: 5) {
+                    Text(schedule.date, style: .date)
+                    Text(verbatim: "\u{00B7}")
+                    Text(String(localized: "\(schedule.items.count) elemente", comment: "Session row item count"))
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
+            .padding(.vertical, 2)
+            .tag(schedule.id)
+            .contextMenu { scheduleMenu(schedule) }
+        }
+        .listStyle(.plain)
+    }
+
+    private var schedulesGrid: some View {
+        ScrollView {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 150, maximum: 240), spacing: 10)], spacing: 10) {
+                ForEach(filteredSchedules) { schedule in
+                    let isSelected = selectedSchedule?.id == schedule.id
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(schedule.name)
+                            .font(.system(size: 12, weight: .semibold))
+                            .lineLimit(2)
+                        Spacer(minLength: 0)
+                        Text(schedule.date, style: .date)
+                            .font(.system(size: 10))
+                            .foregroundStyle(.secondary)
+                        Text(String(localized: "\(schedule.items.count) elemente", comment: "Session row item count"))
+                            .font(.system(size: 10))
+                            .foregroundStyle(.tertiary)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(8)
+                    .frame(height: 88, alignment: .topLeading)
+                    .background(.quaternary.opacity(0.35),
+                                in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .strokeBorder(isSelected ? appHighlight : .clear, lineWidth: 2)
+                    }
+                    .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .onTapGesture { selectSchedule(schedule) }
+                    .contextMenu { scheduleMenu(schedule) }
+                }
+            }
+            .padding(12)
+        }
+    }
 
     var body: some View {
         ResizableSplit(storageKey: "split_schedule", minLeading: 240, maxFraction: 0.45) {
             // Schedule list (left third)
             VStack(spacing: 0) {
-                HStack {
-                    Text(String(localized: "Schedules", comment: "Section title"))
-                        .font(.headline)
-                    Spacer()
-                    Button {
+                LibraryHeader(
+                    query: $scheduleQuery,
+                    placeholder: String(localized: "Caută sesiuni…", comment: "Schedule search placeholder"),
+                    viewMode: viewMode,
+                    count: String(localized: "\(filteredSchedules.count) sesiuni", comment: "Schedule count")
+                ) {
+                    LibraryHeaderButton(systemImage: "square.and.arrow.down",
+                                        help: String(localized: "Importă sesiuni (.tpschedule)", comment: "Tooltip")) {
                         importSessions()
-                    } label: {
-                        Image(systemName: "square.and.arrow.down")
                     }
-                    .controlSize(.small)
-                    .help(String(localized: "Importă sesiuni (.tpschedule)", comment: "Tooltip"))
-                    Button {
+                    LibraryHeaderButton(systemImage: "plus",
+                                        help: String(localized: "Sesiune nouă", comment: "Tooltip"),
+                                        prominent: true) {
                         showNewScheduleSheet = true
-                    } label: {
-                        Image(systemName: "plus")
                     }
-                    .controlSize(.small)
                 }
-                .padding(.horizontal)
-                .padding(.vertical, 8)
 
                 Divider()
 
-                List(schedules, selection: Binding(
-                    get: { selectedSchedule?.id },
-                    set: { newID in
-                        if let id = newID {
-                            selectedSchedule = schedules.first { $0.id == id }
-                            // Mirror into the per-window manager — drives the tab
-                            // title and the right panel (no notification round-trip).
-                            libraryManager.selectedSchedule = selectedSchedule
-                        }
-                    }
-                )) { schedule in
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(schedule.name)
-                            .font(.body.weight(.medium))
-                            .lineLimit(1)
-                        HStack(spacing: 5) {
-                            Text(schedule.date, style: .date)
-                            Text(verbatim: "\u{00B7}")
-                            Text(String(localized: "\(schedule.items.count) elemente", comment: "Session row item count"))
-                        }
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    }
-                    .padding(.vertical, 2)
-                    .tag(schedule.id)
-                    .contextMenu {
-                        Button {
-                            exportSession(schedule)
-                        } label: {
-                            Label(String(localized: "Exportă sesiunea…", comment: "Context menu"),
-                                  systemImage: "square.and.arrow.up")
-                        }
-                        Divider()
-                        Button(String(localized: "Delete", comment: "Context menu"), role: .destructive) {
-                            scheduleToDelete = schedule
-                        }
-                    }
+                if viewMode.wrappedValue == .grid {
+                    schedulesGrid
+                } else {
+                    schedulesList
                 }
-                .listStyle(.plain)
             }
         } trailing: {
             // Session detail (right two-thirds): running order + composer

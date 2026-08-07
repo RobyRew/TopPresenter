@@ -32,9 +32,18 @@ struct CustomSlidesView: View {
     /// Set by the context menu; raises the delete confirmation.
     @State private var slideToDelete: PresentationSlide?
     @State private var slideQuery = ""
+    @AppStorage("customSlidesViewMode") private var viewModeRaw: String = LibraryViewMode.list.rawValue
+    @AppStorage("customSlidesOnlyDynamic") private var onlyDynamic: Bool = false
+
+    private var viewMode: Binding<LibraryViewMode> {
+        Binding(get: { LibraryViewMode(rawValue: viewModeRaw) ?? .list },
+                set: { viewModeRaw = $0.rawValue })
+    }
 
     private var filteredSlides: [PresentationSlide] {
-        CustomSlideLibrary.filter(slides, query: slideQuery)
+        let matched = CustomSlideLibrary.filter(slides, query: slideQuery)
+        guard onlyDynamic else { return matched }
+        return matched.filter { Self.tokenCount(of: $0) > 0 }
     }
 
     var body: some View {
@@ -75,77 +84,135 @@ struct CustomSlidesView: View {
 
     private var slidesList: some View {
         VStack(spacing: 0) {
-            HStack {
-                Text(String(localized: "Slides", comment: "Section title"))
-                    .font(.headline)
-                Spacer()
-                Button {
-                    addSlide()
-                } label: {
-                    Image(systemName: "plus")
-                }
-                .controlSize(.small)
+            LibraryHeader(
+                query: $slideQuery,
+                placeholder: String(localized: "Caută slide-uri…", comment: "Custom slides search placeholder"),
+                viewMode: viewMode,
+                count: String(localized: "\(filteredSlides.count) slide-uri", comment: "Slide count")
+            ) {
+                LibraryHeaderButton(systemImage: "plus",
+                                    help: String(localized: "Slide nou", comment: "Tooltip"),
+                                    prominent: true) { addSlide() }
+            } filters: {
+                LibraryChip(label: String(localized: "Toate", comment: "Slide filter — all"),
+                            icon: "rectangle.stack",
+                            count: slides.count,
+                            isActive: !onlyDynamic,
+                            isEmpty: slides.isEmpty) { onlyDynamic = false }
+                LibraryChip(label: String(localized: "Dinamice", comment: "Slide filter — dynamic only"),
+                            icon: "bolt.fill",
+                            count: slides.filter { Self.tokenCount(of: $0) > 0 }.count,
+                            isActive: onlyDynamic,
+                            isEmpty: !slides.contains { Self.tokenCount(of: $0) > 0 }) { onlyDynamic = true }
             }
-            .padding(.horizontal)
-            .padding(.top, 8)
-            .padding(.bottom, 6)
-
-            // The one library list with no search at all. It scales with the
-            // service like the others do, and scrolling a long list to find
-            // "Anunțuri" was the only way to reach it.
-            LibrarySearchField(
-                text: $slideQuery,
-                placeholder: String(localized: "Caută slide-uri…", comment: "Custom slides search placeholder")
-            )
-            .padding(.horizontal, 10)
-            .padding(.bottom, 8)
 
             Divider()
 
-            List(filteredSlides, selection: Binding(
-                get: { selectedSlide?.id },
-                set: { newID in
-                    if let id = newID, let slide = slides.first(where: { $0.id == id }) {
-                        selectSlide(slide)
-                    }
-                }
-            )) { slide in
-                HStack(spacing: 8) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(slide.title.isEmpty ? String(localized: "Untitled", comment: "Placeholder") : slide.title)
-                            .font(.body)
-                            .lineLimit(1)
-                        Text(slide.content)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(2)
-                    }
-                    Spacer(minLength: 4)
-                    let tokens = SlideTemplate.tokenCount(slide.title)
-                        + SlideTemplate.tokenCount(slide.subtitle)
-                        + SlideTemplate.tokenCount(slide.content)
-                    if tokens > 0 {
-                        Label("\(tokens)", systemImage: "bolt.fill")
-                            .font(.caption2.weight(.semibold))
-                            .foregroundStyle(appAccent)
-                            .labelStyle(.titleAndIcon)
-                            .padding(.horizontal, 5).padding(.vertical, 2)
-                            .background(appAccent.opacity(0.12), in: Capsule())
-                            .help(String(localized: "Slide dinamic — \(tokens) surse de date", comment: "Dynamic slide badge"))
-                    }
-                }
-                .tag(slide.id)
-                .contextMenu {
-                    Button(String(localized: "Show on Screen", comment: "Context menu")) {
-                        presentSlide(title: slide.title, content: slide.content)
-                    }
-                    Divider()
-                    Button(String(localized: "Delete", comment: "Context menu"), role: .destructive) {
-                        slideToDelete = slide
-                    }
+            if viewMode.wrappedValue == .grid {
+                slidesGrid
+            } else {
+                slidesPlainList
+            }
+        }
+    }
+
+    /// Tokens across every field — what makes a slide "dynamic".
+    static func tokenCount(of slide: PresentationSlide) -> Int {
+        SlideTemplate.tokenCount(slide.title)
+            + SlideTemplate.tokenCount(slide.subtitle)
+            + SlideTemplate.tokenCount(slide.content)
+    }
+
+    private var slidesPlainList: some View {
+        List(filteredSlides, selection: Binding(
+            get: { selectedSlide?.id },
+            set: { newID in
+                if let id = newID, let slide = slides.first(where: { $0.id == id }) {
+                    selectSlide(slide)
                 }
             }
-            .listStyle(.plain)
+        )) { slide in
+            HStack(spacing: 8) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(slide.title.isEmpty ? String(localized: "Untitled", comment: "Placeholder") : slide.title)
+                        .font(.body)
+                        .lineLimit(1)
+                    Text(slide.content)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
+                Spacer(minLength: 4)
+                let tokens = Self.tokenCount(of: slide)
+                if tokens > 0 {
+                    dynamicBadge(tokens)
+                }
+            }
+            .tag(slide.id)
+            .contextMenu { slideMenu(slide) }
+        }
+        .listStyle(.plain)
+    }
+
+    private var slidesGrid: some View {
+        ScrollView {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 150, maximum: 240), spacing: 10)], spacing: 10) {
+                ForEach(filteredSlides) { slide in
+                    let isSelected = selectedSlide?.id == slide.id
+                    VStack(alignment: .leading, spacing: 5) {
+                        // A slide's identity is its TEXT, so the tile previews
+                        // the text rather than showing an icon that would be the
+                        // same on every card.
+                        Text(slide.title.isEmpty ? String(localized: "Untitled", comment: "Placeholder") : slide.title)
+                            .font(.system(size: 12, weight: .semibold))
+                            .lineLimit(1)
+                        Text(slide.content)
+                            .font(.system(size: 10))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(3)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        Spacer(minLength: 0)
+                        HStack {
+                            Spacer(minLength: 0)
+                            let tokens = Self.tokenCount(of: slide)
+                            if tokens > 0 { dynamicBadge(tokens) }
+                        }
+                    }
+                    .padding(8)
+                    .frame(height: 96, alignment: .topLeading)
+                    .background(.quaternary.opacity(0.35),
+                                in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .strokeBorder(isSelected ? appHighlight : .clear, lineWidth: 2)
+                    }
+                    .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .onTapGesture { selectSlide(slide) }
+                    .contextMenu { slideMenu(slide) }
+                }
+            }
+            .padding(12)
+        }
+    }
+
+    private func dynamicBadge(_ tokens: Int) -> some View {
+        Label("\(tokens)", systemImage: "bolt.fill")
+            .font(.caption2.weight(.semibold))
+            .foregroundStyle(appAccent)
+            .labelStyle(.titleAndIcon)
+            .padding(.horizontal, 5).padding(.vertical, 2)
+            .background(appAccent.opacity(0.12), in: Capsule())
+            .help(String(localized: "Slide dinamic — \(tokens) surse de date", comment: "Dynamic slide badge"))
+    }
+
+    @ViewBuilder
+    private func slideMenu(_ slide: PresentationSlide) -> some View {
+        Button(String(localized: "Show on Screen", comment: "Context menu")) {
+            presentSlide(title: slide.title, content: slide.content)
+        }
+        Divider()
+        Button(String(localized: "Delete", comment: "Context menu"), role: .destructive) {
+            slideToDelete = slide
         }
     }
 

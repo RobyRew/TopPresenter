@@ -29,6 +29,12 @@ struct MediaView: View {
 
     /// Kind filter — same storage key the old toolbar filter used ("all" | kind raw).
     @AppStorage("mediaTypeFilter") private var kindFilterRaw: String = "all"
+    @AppStorage("mediaViewMode") private var viewModeRaw: String = LibraryViewMode.grid.rawValue
+
+    private var viewMode: Binding<LibraryViewMode> {
+        Binding(get: { LibraryViewMode(rawValue: viewModeRaw) ?? .grid },
+                set: { viewModeRaw = $0.rawValue })
+    }
     /// Grid cell under the pointer (hover chrome).
     @State private var hoveredItemID: UUID?
     /// Set by the context menu; raises the delete confirmation.
@@ -51,8 +57,10 @@ struct MediaView: View {
                 Divider()
                 if filteredItems.isEmpty {
                     emptyState
-                } else {
+                } else if viewMode.wrappedValue == .grid {
                     grid
+                } else {
+                    list
                 }
             }
         } trailing: {
@@ -70,77 +78,30 @@ struct MediaView: View {
     // MARK: - Header (type tabs + search + add)
 
     private var header: some View {
-        // Two rows — at a third of the window the old single row truncated
-        // the segmented filter into "…e Foto Video Audio".
-        VStack(spacing: 8) {
-            HStack(spacing: 8) {
-                LibrarySearchField(
-                    text: queryBinding,
-                    placeholder: String(localized: "Caută media…", comment: "Media search placeholder")
-                )
-
-                Button { importMedia() } label: {
-                    Label(String(localized: "Adaugă", comment: "Add media button"), systemImage: "plus")
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.small)
-                .help(String(localized: "Importă imagini, audio sau video", comment: "Tooltip"))
-            }
-
-            // Filter chips rather than a segmented control: the segments were
-            // equal-width regardless of label, so "Toate" and "Audio" got the
-            // same slab and the row read as a stray form control dropped into
-            // the view. Chips size to their text, carry the count that makes
-            // them worth clicking, and use the app accent like every other
-            // selected thing in the window.
-            HStack(spacing: 6) {
-                kindChip(rawValue: "all",
-                         label: String(localized: "Toate", comment: "Media kind filter — all"),
-                         icon: "square.grid.2x2",
-                         count: mediaItems.count)
-                ForEach(MediaKind.allCases) { kind in
-                    kindChip(rawValue: kind.rawValue,
-                             label: kind.filterLabel,
-                             icon: kind.systemImage,
-                             count: mediaItems.filter { $0.mediaType == kind.rawValue }.count)
-                }
-                Spacer(minLength: 0)
+        LibraryHeader(
+            query: queryBinding,
+            placeholder: String(localized: "Caută media…", comment: "Media search placeholder"),
+            viewMode: viewMode,
+            count: String(localized: "\(filteredItems.count) media", comment: "Media count")
+        ) {
+            LibraryHeaderButton(systemImage: "plus",
+                                help: String(localized: "Importă imagini, audio sau video", comment: "Tooltip"),
+                                prominent: true) { importMedia() }
+        } filters: {
+            LibraryChip(label: String(localized: "Toate", comment: "Media kind filter — all"),
+                        icon: "square.grid.2x2",
+                        count: mediaItems.count,
+                        isActive: kindFilterRaw == "all",
+                        isEmpty: mediaItems.isEmpty) { kindFilterRaw = "all" }
+            ForEach(MediaKind.allCases) { kind in
+                let n = mediaItems.filter { $0.mediaType == kind.rawValue }.count
+                LibraryChip(label: kind.filterLabel,
+                            icon: kind.systemImage,
+                            count: n,
+                            isActive: kindFilterRaw == kind.rawValue,
+                            isEmpty: n == 0) { kindFilterRaw = kind.rawValue }
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-    }
-
-    private func kindChip(rawValue: String, label: String, icon: String, count: Int) -> some View {
-        let isActive = kindFilterRaw == rawValue
-        return Button {
-            kindFilterRaw = rawValue
-        } label: {
-            HStack(spacing: 4) {
-                Image(systemName: icon)
-                    .font(.system(size: 9, weight: .semibold))
-                Text(label)
-                    .font(.system(size: 11, weight: isActive ? .semibold : .regular))
-                if count > 0 {
-                    Text("\(count)")
-                        .font(.system(size: 9, weight: .medium).monospacedDigit())
-                        .opacity(0.65)
-                }
-            }
-            .lineLimit(1)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(
-                isActive ? AnyShapeStyle(appHighlight) : AnyShapeStyle(.quaternary.opacity(0.5)),
-                in: Capsule()
-            )
-            .foregroundStyle(isActive ? AnyShapeStyle(.white) : AnyShapeStyle(.secondary))
-            .contentShape(Capsule())
-        }
-        .buttonStyle(.plain)
-        // An empty kind still filters — it is how you confirm there is nothing
-        // of that kind — but it should not invite the click.
-        .opacity(count == 0 && !isActive ? 0.45 : 1)
     }
 
     private var emptyState: some View {
@@ -187,6 +148,37 @@ struct MediaView: View {
         // a focus ring around the WHOLE scroll view, which read as a border on the
         // media container and competed with the ring marking the selected tile.
         // The Bible grid and the editor canvas suppress it the same way.
+        .focusable()
+        .focusEffectDisabled()
+        .onKeyPress(.return) {
+            guard let item = libraryManager.selectedMediaItem else { return .ignored }
+            present(item)
+            return .handled
+        }
+    }
+
+    // MARK: - List
+    //
+    // The grid is right for choosing a picture; the list is right for a long
+    // library where the FILE NAME is what you are scanning for, and it fits
+    // roughly three times as many rows in the same column.
+    private var list: some View {
+        List(filteredItems, selection: Binding(
+            get: { libraryManager.selectedMediaItem?.id },
+            set: { newID in
+                if let id = newID, let item = filteredItems.first(where: { $0.id == id }) {
+                    libraryManager.selectedMediaItem = item
+                }
+            }
+        )) { item in
+            MediaListRow(item: item)
+                .tag(item.id)
+                .contentShape(Rectangle())
+                .onTapGesture(count: 2) { present(item) }
+                .onTapGesture { libraryManager.selectedMediaItem = item }
+                .contextMenu { itemMenu(item) }
+        }
+        .listStyle(.inset)
         .focusable()
         .focusEffectDisabled()
         .onKeyPress(.return) {
@@ -268,6 +260,51 @@ struct MediaView: View {
 /// So the caption reserves two lines whether it needs them or not, and the
 /// thumbnail is a fixed 16:10 crop. Uniform tiles, no dead space, and selection
 /// can be a ring on the artwork instead of a slab behind it.
+/// One row of the media list — a small fixed thumbnail, the name, and the facts
+/// the grid puts on badges.
+struct MediaListRow: View {
+    let item: MediaItem
+
+    private var kind: MediaKind { MediaKind(rawValue: item.mediaType) ?? .image }
+
+    var body: some View {
+        HStack(spacing: 9) {
+            Color.clear
+                .frame(width: 44, height: 28)
+                .overlay {
+                    if let data = item.thumbnailData, let image = NSImage(data: data) {
+                        Image(nsImage: image).resizable().scaledToFill()
+                    } else {
+                        ZStack {
+                            kind.placeholderTint.opacity(0.22)
+                            Image(systemName: kind.systemImage)
+                                .font(.system(size: 11))
+                                .foregroundStyle(kind.placeholderTint)
+                        }
+                    }
+                }
+                .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+
+            Text(item.name)
+                .font(.system(size: 12))
+                .lineLimit(1)
+                .truncationMode(.middle)
+
+            Spacer(minLength: 6)
+
+            if let badge = item.durationBadge {
+                Text(badge)
+                    .font(.system(size: 10).monospacedDigit())
+                    .foregroundStyle(.tertiary)
+            }
+            Image(systemName: kind.systemImage)
+                .font(.system(size: 9))
+                .foregroundStyle(.tertiary)
+        }
+        .padding(.vertical, 2)
+    }
+}
+
 struct MediaCard: View {
     let item: MediaItem
     let isSelected: Bool

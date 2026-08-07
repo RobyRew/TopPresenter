@@ -152,7 +152,24 @@ struct SongListPanel: View {
     private var queryBinding: Binding<String> {
         Binding(get: { libraryManager.songLibraryQuery }, set: { libraryManager.songLibraryQuery = $0 })
     }
-    @State private var isGrid = false
+    @AppStorage("songsViewMode") private var viewModeRaw: String = LibraryViewMode.list.rawValue
+
+    private var viewMode: Binding<LibraryViewMode> {
+        Binding(get: { LibraryViewMode(rawValue: viewModeRaw) ?? .list },
+                set: { viewModeRaw = $0.rawValue })
+    }
+    private var isGrid: Bool { viewMode.wrappedValue == .grid }
+
+    private var hasExtraFilters: Bool {
+        onlyVerified || onlyWithMedia || !languageFilter.isEmpty
+    }
+
+    private var activeCollectionName: String {
+        guard let id = collectionFilter,
+              let col = collections.first(where: { $0.id == id })
+        else { return String(localized: "Toate", comment: "All collections") }
+        return col.name
+    }
     @State private var sortKey: SongSortKey = .title
     @State private var languageFilter = ""        // "" = all
     @State private var collectionFilter: UUID?    // nil = all
@@ -234,70 +251,66 @@ struct SongListPanel: View {
     }
 
     private var toolbar: some View {
-        VStack(spacing: 6) {
-            LibrarySearchField(
-                text: queryBinding,
-                placeholder: String(localized: "Caută cântece…", comment: "Search")
-            )
-
-            HStack(spacing: 6) {
-                Picker("", selection: $collectionFilter) {
-                    Text(String(localized: "Toate", comment: "All collections")).tag(UUID?.none)
-                    ForEach(collections) { col in
-                        Text(col.name).tag(UUID?.some(col.id))
+        LibraryHeader(
+            query: queryBinding,
+            placeholder: String(localized: "Caută cântece…", comment: "Search"),
+            viewMode: viewMode,
+            count: String(localized: "\(filtered.count) cântece", comment: "Count")
+        ) {
+            // The filter menu is an ACTION, not a filter chip: it opens a sheet
+            // of switches rather than toggling one thing.
+            Menu {
+                if !availableLanguages.isEmpty {
+                    Picker(String(localized: "Limbă", comment: "Language"), selection: $languageFilter) {
+                        Text(String(localized: "Toate", comment: "All")).tag("")
+                        ForEach(availableLanguages, id: \.self) { Text($0.uppercased()).tag($0) }
                     }
                 }
-                .labelsHidden()
-                .frame(maxWidth: 140)
-
-                Spacer()
-
-                Menu {
-                    if !availableLanguages.isEmpty {
-                        Picker(String(localized: "Limbă", comment: "Language"), selection: $languageFilter) {
-                            Text(String(localized: "Toate", comment: "All")).tag("")
-                            ForEach(availableLanguages, id: \.self) { Text($0.uppercased()).tag($0) }
-                        }
-                    }
-                    Toggle(String(localized: "Doar cu media", comment: "Filter"), isOn: $onlyWithMedia)
-                    Toggle(String(localized: "Doar verificate", comment: "Filter — verified only"), isOn: $onlyVerified)
-                } label: {
-                    Image(systemName: onlyVerified || onlyWithMedia || !languageFilter.isEmpty
-                          ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
-                }
-                .menuStyle(.borderlessButton).fixedSize()
-
-                Button { isGrid.toggle() } label: {
-                    Image(systemName: isGrid ? "list.bullet" : "square.grid.2x2")
-                }
-                .buttonStyle(.borderless)
-                .help(isGrid ? String(localized: "Listă", comment: "View") : String(localized: "Grilă", comment: "View"))
+                Toggle(String(localized: "Doar cu media", comment: "Filter"), isOn: $onlyWithMedia)
+                Toggle(String(localized: "Doar verificate", comment: "Filter — verified only"), isOn: $onlyVerified)
+            } label: {
+                Image(systemName: hasExtraFilters
+                      ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
+                    .font(.system(size: 12, weight: .semibold))
+                    .frame(width: 24, height: 24)
+                    .background(
+                        hasExtraFilters ? AnyShapeStyle(appHighlight) : AnyShapeStyle(.quaternary.opacity(0.5)),
+                        in: Circle()
+                    )
+                    .foregroundStyle(hasExtraFilters ? AnyShapeStyle(.white) : AnyShapeStyle(.secondary))
+                    .contentShape(Circle())
             }
-
-            // Sort header chips — quick A-Z / Artist / Carte / Limbă / Recente.
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 6) {
-                    ForEach(SongSortKey.allCases) { key in
-                        let on = sortKey == key
-                        Button { sortKey = key } label: {
-                            Label(key.label, systemImage: key.systemImage)
-                                .labelStyle(.titleAndIcon).font(.caption2.weight(on ? .semibold : .regular))
-                                .padding(.horizontal, 8).padding(.vertical, 3)
-                                .background(on ? AnyShapeStyle(appAccent.opacity(0.2)) : AnyShapeStyle(.quaternary), in: Capsule())
-                                .foregroundStyle(on ? appAccent : .secondary)
-                        }
-                        .buttonStyle(.plain)
-                    }
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .fixedSize()
+            .help(String(localized: "Filtre suplimentare", comment: "Tooltip"))
+        } filters: {
+            // The collection selector was a stock `Picker` — the only unstyled
+            // AppKit control in a row of custom chips, which is exactly why it
+            // looked pasted in. Same chip as its neighbours, with a caret to say
+            // it opens rather than toggles.
+            Menu {
+                Button(String(localized: "Toate", comment: "All collections")) { collectionFilter = nil }
+                Divider()
+                ForEach(collections) { col in
+                    Button(col.name) { collectionFilter = col.id }
                 }
+            } label: {
+                LibraryChipLabel(label: activeCollectionName,
+                                 icon: "books.vertical",
+                                 isActive: collectionFilter != nil,
+                                 showsChevron: true)
             }
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .fixedSize()
 
-            HStack {
-                Text(String(localized: "\(filtered.count) cântece", comment: "Count"))
-                    .font(.caption2).foregroundStyle(.secondary)
-                Spacer()
+            ForEach(SongSortKey.allCases) { key in
+                LibraryChip(label: key.label,
+                            icon: key.systemImage,
+                            isActive: sortKey == key) { sortKey = key }
             }
         }
-        .padding(8)
     }
 
     /// Sentinel group key for the session pins — \u{0} can never collide with an
