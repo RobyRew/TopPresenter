@@ -6201,6 +6201,29 @@ enum PersistedFieldNames {
     }
 }
 
+/// Field names of a plain value type, and which of them are still at default.
+///
+/// The SwiftData models get their field list from `schemaMetadata`; the payload
+/// structs that travel inside those files (`SessionItemPayload`, `ThemePayload`,
+/// `LayoutProfile`) have no such macro, so they are reflected instead.
+nonisolated enum ReflectedFields {
+    static func names<T>(of value: T) -> Set<String> {
+        Set(Mirror(reflecting: value).children.compactMap(\.label))
+    }
+
+    /// Fields that look untouched. Conservative on purpose: calling a set field
+    /// unset is a loud failure someone fixes in a minute, while the opposite
+    /// would quietly bless a vacuous fixture — which is the whole failure mode
+    /// this exists to catch.
+    static func unset<T>(in value: T) -> Set<String> {
+        let defaults: Set<String> = ["", "0", "false", "[]", "{}", "nil", "Optional(\"\")", "[:]"]
+        return Set(Mirror(reflecting: value).children.compactMap { child in
+            guard let label = child.label else { return nil }
+            return defaults.contains(String(describing: child.value)) ? label : nil
+        })
+    }
+}
+
 /// Fails naming any field left at its type's default value.
 ///
 /// Guards the fixtures, not the code. A fixture that stops being exhaustive
@@ -6211,18 +6234,33 @@ func assertFullyPopulated<T>(
     exempt: Set<String> = [],
     sourceLocation: SourceLocation = #_sourceLocation
 ) {
-    var unset: [String] = []
-    for child in Mirror(reflecting: value).children {
-        guard let label = child.label, !exempt.contains(label) else { continue }
-        let described = String(describing: child.value)
-        if described == "" || described == "0" || described == "false"
-            || described == "[]" || described == "{}" || described == "nil"
-            || described == "Optional(\"\")" || described == "[:]" {
-            unset.append(label)
-        }
-    }
+    let unset = ReflectedFields.unset(in: value).subtracting(exempt)
     #expect(unset.isEmpty,
             "fixture leaves \(unset.sorted()) at default — tests built on it would pass vacuously",
+            sourceLocation: sourceLocation)
+}
+
+/// Fails unless the given values, taken TOGETHER, touch every field of `blueprint`.
+///
+/// For fixtures where no single value can be exhaustive: a session item is
+/// either a Bible reference or a song or a media clip, so all twelve payload
+/// fields are only reachable across a set of items. Without this, adding a
+/// thirteenth field would leave every session test passing.
+@MainActor
+func assertCollectivelyPopulated<Element, Blueprint>(
+    _ values: [Element],
+    covering blueprint: Blueprint,
+    exempt: Set<String> = [],
+    label: String,
+    sourceLocation: SourceLocation = #_sourceLocation
+) {
+    let everyField = ReflectedFields.names(of: blueprint).subtracting(exempt)
+    let touched = values.reduce(into: Set<String>()) { acc, value in
+        acc.formUnion(ReflectedFields.names(of: value).subtracting(ReflectedFields.unset(in: value)))
+    }
+    let never = everyField.subtracting(touched)
+    #expect(never.isEmpty,
+            "no \(label) in the fixture sets \(never.sorted()) — those fields are carried by nothing and proved by nothing",
             sourceLocation: sourceLocation)
 }
 
@@ -6360,6 +6398,23 @@ struct SongSnapshot: Equatable {
             exempt: BibleVerseSnapshot.exemptFields,
             relationships: BibleVerseSnapshot.relationshipFields,
             carriedBy: "ExportService.exportToTopPresenterJSON and TopPresenterBibleImporter")
+    }
+
+    @Test func serviceScheduleSnapshotAccountsForEveryStoredField() {
+        assertFieldCoverage(
+            ServiceSchedule.self, snapshot: "ServiceScheduleSnapshot",
+            covered: ServiceScheduleSnapshot.coveredFields,
+            exempt: ServiceScheduleSnapshot.exemptFields,
+            carriedBy: "SessionArchive and SessionArchiveService")
+    }
+
+    @Test func scheduleItemSnapshotAccountsForEveryStoredField() {
+        assertFieldCoverage(
+            ScheduleItem.self, snapshot: "ScheduleItemSnapshot",
+            covered: ScheduleItemSnapshot.coveredFields,
+            exempt: ScheduleItemSnapshot.exemptFields,
+            relationships: ScheduleItemSnapshot.relationshipFields,
+            carriedBy: "SessionArchive.Item and SessionArchiveService")
     }
 }
 
@@ -6860,5 +6915,231 @@ struct BibleVerseSnapshot: Equatable {
         let modules = try target.fetch(FetchDescriptor<BibleModule>())
         #expect(modules.count == 1,
                 "the same file imported twice produced \(modules.map(\.name)) — identical content must be skipped, not duplicated")
+    }
+}
+
+// MARK: - Session round trip (.tpschedule)
+//
+// `exportImportRoundTripPreservesEverything` does not preserve everything, and
+// never claimed to in code: it asserts five fields across three item kinds and
+// never builds a song or media item at all. A session's whole job is to survive
+// leaving one library and arriving at another, so what it drops on the way is
+// the one thing worth pinning down.
+
+/// A `ScheduleItem`'s exportable state. The payload is compared as a decoded
+/// struct, not as `payloadJSON`: both sides re-encode it, and comparing the
+/// strings would turn a key-order difference into a phantom data loss.
+@MainActor struct ScheduleItemSnapshot: Equatable {
+    var title = "", itemType = "", content = "", subtitle = ""
+    var order = 0
+    var payload = SessionItemPayload()
+
+    /// The blueprint `assertCollectivelyPopulated` reflects over.
+    init() {}
+
+    init(_ i: ScheduleItem) {
+        title = i.title; itemType = i.itemType; content = i.content
+        subtitle = i.subtitle; order = i.order
+        payload = SessionService.payload(for: i)
+    }
+
+    static let coveredFields: Set<String> = [
+        "title", "itemType", "content", "subtitle", "order", "payloadJSON",
+    ]
+    static let exemptFields: [String: String] = [
+        "id": "regenerated on import; a session item's identity is its order within its session",
+        "referenceID": "documented dead field (PresentationModels.swift:213) — kept only so old stores still open",
+    ]
+    static let relationshipFields: Set<String> = ["schedule"]
+}
+
+@MainActor struct ServiceScheduleSnapshot: Equatable {
+    var name = "", notes = ""
+    var date = Date.distantPast
+    var items: [ScheduleItemSnapshot] = []
+
+    init(_ s: ServiceSchedule) {
+        name = s.name; notes = s.notes; date = s.date
+        items = s.sortedItems.map(ScheduleItemSnapshot.init)
+    }
+
+    static let coveredFields: Set<String> = ["name", "notes", "date", "items"]
+    static let exemptFields: [String: String] = [
+        "id": "regenerated on import; identity comes from the sessionID header field added in Phase 3",
+    ]
+}
+
+@MainActor struct SessionRoundTripTests {
+
+    private func makeContext() throws -> ModelContext {
+        let container = try ModelContainer(
+            for: Schema(versionedSchema: SchemaV2.self),
+            configurations: [ModelConfiguration(isStoredInMemoryOnly: true)]
+        )
+        return ModelContext(container)
+    }
+
+    /// A session holding one of every item kind, built through `SessionService`
+    /// rather than by hand — a fixture that writes payloads directly would test
+    /// the archive against itself and skip the code that fills them in.
+    ///
+    /// The date is a whole second on purpose: `dateISO` is written by
+    /// `ISO8601DateFormatter`, which has no sub-second precision, so a `.now`
+    /// fixture would fail on milliseconds and say nothing about the format.
+    private func fullyPopulatedSession(in ctx: ModelContext) -> ServiceSchedule {
+        let date = ISO8601DateFormatter().date(from: "2026-08-09T08:30:00Z") ?? .now
+        let schedule = ServiceSchedule(name: "Duminică dimineața", date: date, notes: "Cu botez")
+        ctx.insert(schedule)
+
+        SessionService.append(.bible(translation: "EDC100", bookNumber: 43, bookName: "Ioan",
+                                     chapter: 3, verseStart: 16, verseEnd: 17,
+                                     displayReference: "Ioan 3:16-17", snapshotText: "Fiindcă atât de mult…"),
+                              to: schedule, context: ctx)
+
+        // A song item, which nothing has ever round-tripped.
+        let song = Song(title: "Mare ești Tu", author: "Anon", ccliNumber: "7104200")
+        ctx.insert(song)
+        let version = SongVersion(name: "Clasică", order: 0, language: "ro", key: "G")
+        version.song = song
+        ctx.insert(version)
+        // The version needs a section: a version with no sections does not
+        // survive an export/rebuild at all, and a test about version IDENTITY
+        // would then be failing for the unrelated reason that it vanished.
+        let section = SongSection(sectionKey: "v1", type: "verse", label: "Strofa 1", order: 0, lines: [
+            SongLine(text: "Mare ești Tu", chords: [], translations: [:])
+        ])
+        section.version = version
+        ctx.insert(section)
+        SessionService.append(.song(song, version: version), to: schedule, context: ctx)
+
+        let media = MediaItem(name: "intro.mp4", filePath: "/a/intro.mp4", mediaType: "video")
+        ctx.insert(media)
+        SessionService.append(.media(media), to: schedule, context: ctx)
+
+        SessionService.append(.text(title: "Anunțuri", content: "Program de vară"), to: schedule, context: ctx)
+        SessionService.append(.blank, to: schedule, context: ctx)
+        return schedule
+    }
+
+    /// Import into a library that already holds the same media, so the media
+    /// re-link succeeds and the comparison is about the format rather than about
+    /// a deliberately unresolvable reference.
+    private func roundTrip(_ schedule: ServiceSchedule) throws -> ServiceSchedule {
+        let data = try SessionArchiveService.export(schedule)
+        let dest = try makeContext()
+        for item in schedule.sortedItems where item.itemType == "media" {
+            let payload = SessionService.payload(for: item)
+            let local = MediaItem(name: payload.mediaName, filePath: "/b/\(payload.mediaName)",
+                                  mediaType: item.subtitle.lowercased())
+            dest.insert(local)
+        }
+        try dest.save()
+        return try SessionArchiveService.importSession(data, context: dest).schedule
+    }
+
+    @Test func theFixtureExercisesEveryItemKindAndEveryPayloadField() throws {
+        let ctx = try makeContext()
+        let items = ServiceScheduleSnapshot(fullyPopulatedSession(in: ctx)).items
+
+        #expect(Set(items.map(\.itemType)) == ["bible", "song", "media", "text", "blank"],
+                "a kind with no fixture item is a kind with no coverage")
+
+        // No single item can be exhaustive — a Bible reference has no songKey —
+        // so the twelve payload fields are only reachable across the whole set.
+        assertCollectivelyPopulated(items.map(\.payload), covering: SessionItemPayload(),
+                                    label: "session item payload")
+        assertCollectivelyPopulated(items, covering: ScheduleItemSnapshot(),
+                                    exempt: ["payload"], label: "session item")
+    }
+
+    @Test func everySessionFieldSurvivesTheArchive() throws {
+        let ctx = try makeContext()
+        let schedule = fullyPopulatedSession(in: ctx)
+        var before = ServiceScheduleSnapshot(schedule)
+
+        let imported = try roundTrip(schedule)
+
+        // The media item is deliberately re-linked to the destination library's
+        // own copy, so its id legitimately changes; the NAME is what has to
+        // survive, and it is what the re-link matched on.
+        for index in before.items.indices where before.items[index].itemType == "media" {
+            before.items[index].payload.mediaID = ""
+        }
+        var after = ServiceScheduleSnapshot(imported)
+        for index in after.items.indices where after.items[index].itemType == "media" {
+            after.items[index].payload.mediaID = ""
+        }
+
+        #expect(after == before)
+    }
+
+    /// The song payload specifically — four fields, none of them ever asserted
+    /// before, and the two that matter (`songKey`, `versionID`) are what makes a
+    /// shared running order point at the right arrangement on arrival.
+    @Test func theSongItemArrivesWithItsStableReferenceIntact() throws {
+        let ctx = try makeContext()
+        let schedule = fullyPopulatedSession(in: ctx)
+        let sent = try #require(schedule.sortedItems.first { $0.itemType == "song" })
+        let sentPayload = SessionService.payload(for: sent)
+
+        let imported = try roundTrip(schedule)
+        let arrived = try #require(imported.sortedItems.first { $0.itemType == "song" })
+        let payload = SessionService.payload(for: arrived)
+
+        #expect(payload.songKey == sentPayload.songKey)
+        #expect(payload.songTitle == "Mare ești Tu")
+        #expect(payload.versionID == sentPayload.versionID)
+        #expect(payload.versionName == "Clasică")
+        #expect(arrived.subtitle == "Anon · Clasică", "the display snapshot is what shows when the song is not in the destination library")
+    }
+
+    /// G4 — plan §4.4. `SessionArchive.swift:135` inserts unconditionally, with
+    /// no identity check of any kind, so a `.tpschedule` opened twice is simply
+    /// there twice.
+    @Test(.disabled("red until Phase 3 — sessionID + DuplicateResolver; today the insert is unconditional"))
+    func importingTheSameSessionTwiceIsANoOp() throws {
+        let ctx = try makeContext()
+        let data = try SessionArchiveService.export(fullyPopulatedSession(in: ctx))
+
+        let dest = try makeContext()
+        _ = try SessionArchiveService.importSession(data, context: dest)
+        _ = try SessionArchiveService.importSession(data, context: dest)
+
+        let sessions = try dest.fetch(FetchDescriptor<ServiceSchedule>())
+        #expect(sessions.count == 1,
+                "the same session imported twice produced \(sessions.count) copies")
+    }
+
+    /// E5, seen from the session side. `ImportService.applyResult` rebuilds a
+    /// song's versions with fresh UUIDs, so every session that pointed at one is
+    /// left pointing at nothing — including sessions in this same library, since
+    /// the song editor's Cancel path runs exactly this code.
+    ///
+    /// Today the `versionName` fallback (`SessionService.swift:184`) hides it,
+    /// which is why it has gone unnoticed: rename an arrangement after sharing a
+    /// running order and the reference is simply gone.
+    @Test(.disabled("red until Phase 1 (E5) — applyResult rebuilds versions with new UUIDs"))
+    func aSessionsVersionReferenceSurvivesReimportingTheSong() throws {
+        let ctx = try makeContext()
+        let schedule = fullyPopulatedSession(in: ctx)
+        let item = try #require(schedule.sortedItems.first { $0.itemType == "song" })
+        let payload = SessionService.payload(for: item)
+        let song = try #require(ctx.fetch(FetchDescriptor<Song>()).first)
+        #expect(song.versions.contains { $0.id.uuidString == payload.versionID })
+
+        // Exactly what pressing Cancel in the song editor does. The save matters:
+        // before it, the deleted versions are still sitting in the relationship
+        // array and the reference looks intact when it is already gone.
+        let json = try ExportService.exportSongToTopPresenterJSON(song)
+        let result = try #require(TopPresenterSongImporter.result(fromJSON: json))
+        ImportService.applyResult(result, to: song, modelContext: ctx)
+        try ctx.save()
+
+        #expect(song.versions.count == 1, "the arrangement should have been rebuilt, not multiplied")
+        #expect(song.versions.contains { $0.id.uuidString == payload.versionID }, """
+            the session points at version \(payload.versionID), which no longer exists. \
+            Only the versionName fallback still resolves it, and that fails the \
+            moment an arrangement is renamed.
+            """)
     }
 }
