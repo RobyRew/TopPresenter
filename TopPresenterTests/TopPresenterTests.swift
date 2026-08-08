@@ -4809,6 +4809,56 @@ struct RemoteExtractionTests {
     }
 }
 
+/// What a presenter LOOKS like, read off the manager rather than off a payload.
+///
+/// Deliberately a second, independent listing of the same fields
+/// `captureThemePayload` reads. That duplication is the point: comparing two
+/// payloads only proves the file survived the trip, while comparing two managers
+/// proves capture and apply are BOTH complete. A field that capture writes and
+/// apply forgets is invisible to the first and caught by the second.
+@MainActor struct ThemeLookSnapshot: Equatable {
+    var fontSize = 0.0, fontName = "", textColorHex = "", textAlignmentRaw = ""
+    var lineSpacing = 0.0, padding = 0.0
+    var shadowEnabled = false, shadowRadius = 0.0, shadowColorHex = ""
+    var letterTracking = 0.0
+    var wocStyleEnabled = false, wocColorHex = ""
+    var autoFitVerseFont = false
+    var globalWeightRaw = "", globalVAlignRaw = "", globalTextOpacity = 0.0
+    var backgroundEnabled = false, backgroundStaysOnHide = false
+    var backgroundColorHex = "", backgroundOpacity = 0.0
+    var useBackgroundImage = false, backgroundMediaTypeRaw = ""
+    var profiles: [String: PresentationManager.LayoutProfile] = [:]
+
+    init(_ pm: PresentationManager) {
+        fontSize = pm.fontSize; fontName = pm.fontName
+        textColorHex = pm.textColorHex
+        textAlignmentRaw = "\(pm.textAlignment)"
+        lineSpacing = pm.lineSpacing; padding = pm.padding
+        shadowEnabled = pm.shadowEnabled; shadowRadius = pm.shadowRadius
+        shadowColorHex = pm.shadowColorHex
+        letterTracking = pm.letterTracking
+        wocStyleEnabled = pm.wocStyleEnabled; wocColorHex = pm.wocColorHex
+        autoFitVerseFont = pm.autoFitVerseFont
+        globalWeightRaw = pm.globalWeightRaw; globalVAlignRaw = pm.globalVAlignRaw
+        globalTextOpacity = pm.globalTextOpacity
+        backgroundEnabled = pm.backgroundEnabled
+        backgroundStaysOnHide = pm.backgroundStaysOnHide
+        backgroundColorHex = pm.backgroundColorHex
+        backgroundOpacity = pm.backgroundOpacity
+        useBackgroundImage = pm.useBackgroundImage
+        backgroundMediaTypeRaw = pm.backgroundMediaTypeRaw
+        // Bookmarks legitimately differ: export strips them and import rebuilds
+        // them against the copied files, so a bookmark comparison would fail on
+        // a difference that is the format working correctly.
+        profiles = pm.profiles.mapValues { profile in
+            var stripped = profile
+            stripped.background.imageBookmark = nil
+            for index in stripped.mediaBoxes.indices { stripped.mediaBoxes[index].bookmarkData = nil }
+            return stripped
+        }
+    }
+}
+
 // MARK: - Theme export / import round trip
 //
 // "Exports fully and imports fully" is a claim that has to be demonstrated, not
@@ -4820,6 +4870,37 @@ struct RemoteExtractionTests {
     private func tempPackage() -> URL {
         FileManager.default.temporaryDirectory
             .appendingPathComponent("tp-roundtrip-\(UUID().uuidString).tptheme")
+    }
+
+    /// Every payload-level global set away from its default.
+    ///
+    /// `decorate` only ever touched the per-presenter profiles, which left all
+    /// twenty-four globals sitting at their defaults on BOTH sides of the
+    /// comparison — the payload test passed them for free. `assertFullyCustomized`
+    /// in `theFixtureLeavesNothingAtItsDefault` now keeps this honest.
+    private func decorateGlobals(_ pm: PresentationManager) {
+        pm.fontSize = 96
+        pm.fontName = "Georgia"
+        pm.textColorHex = "FFEEDD"
+        pm.textAlignment = .leading
+        pm.lineSpacing = 14
+        pm.padding = 72
+        pm.shadowEnabled = false
+        pm.shadowRadius = 9
+        pm.shadowColorHex = "112233"
+        pm.letterTracking = 1.5
+        pm.wocStyleEnabled = false
+        pm.wocColorHex = "CC2200"
+        pm.autoFitVerseFont = true
+        pm.globalWeightRaw = "bold"
+        pm.globalVAlignRaw = "top"
+        pm.globalTextOpacity = 0.85
+        pm.backgroundEnabled = true
+        pm.backgroundStaysOnHide = false
+        pm.backgroundColorHex = "0A0B0C"
+        pm.backgroundOpacity = 0.55   // NOT 0.7 — that is PresentationDefaults.backgroundOpacity
+        pm.useBackgroundImage = true
+        pm.backgroundMediaTypeRaw = "video"
     }
 
     /// Marks every profile distinctly so a cross-profile mix-up cannot pass.
@@ -4860,6 +4941,32 @@ struct RemoteExtractionTests {
                 p.boxOrder = ["media:" + media.id.uuidString,
                               "section:" + TextBoxSection.reference.rawValue,
                               "custom:" + custom.id.uuidString]
+
+                // The remaining LayoutProfile fields, which nothing set before.
+                p.visibility[TextBoxSection.subtitle.rawValue] = false
+                var style = PresentationManager.BoxTextStyle()
+                style.isCustomized = true
+                style.fontSize = 30 + Double(i)
+                p.styles[TextBoxSection.verseContent.rawValue] = style
+                p.sourceFormats[TextBoxSection.reference.rawValue] = "short"
+                p.transitionDurationOverride = 0.7
+                p.transitionChangeDuration = 0.25 + Double(i) / 10.0
+                p.transitionOutDuration = 0.9
+                var boxTransition = PresentationManager.BoxTransition()
+                boxTransition.isCustomized = true
+                boxTransition.inRaw = "slideUp"
+                boxTransition.changeRaw = "fade"
+                boxTransition.outRaw = "fall"
+                boxTransition.delay = 0.2
+                boxTransition.duration = 0.6
+                p.boxTransitionOverrides["section:" + TextBoxSection.reference.rawValue] = boxTransition
+                p.removedSections = [TextBoxSection.chords.rawValue]
+                // Deliberately removed, which is the ONLY thing that stops
+                // `ensureLiveMediaBox` re-seeding the casetă when the theme is
+                // applied. Without it the media profile legitimately gains a box
+                // on apply and the comparison would be about healing, not about
+                // whether the flag itself survived.
+                p.liveMediaRemoved = true
             }
         }
     }
@@ -4917,6 +5024,82 @@ struct RemoteExtractionTests {
             #expect(ma.frame == mb.frame)
             #expect(ma.opacity == mb.opacity)
         }
+    }
+
+    /// What a theme actually promises: the presenter ends up LOOKING the same on
+    /// the other machine.
+    ///
+    /// `theWholePayloadIsPreserved` stops one step short of that — it compares
+    /// the saved payload with the imported payload and never applies either, so
+    /// `applyPayload` is not under test at all. A field that `captureThemePayload`
+    /// writes and `applyPayload` forgets to read back passes it every time.
+    /// Going manager → capture → export → import → apply → manager closes both
+    /// halves at once.
+    @Test func applyingAnImportedThemeRestoresTheManagerItCameFrom() throws {
+        let source = makeTestManager()
+        decorateGlobals(source)
+        decorate(source)
+        _ = source.saveCurrentAsTheme(named: "Exact")
+        let saved = try #require(source.themes.first(where: { $0.name == "Exact" }))
+        let before = ThemeLookSnapshot(source)
+
+        let package = tempPackage()
+        defer { try? FileManager.default.removeItem(at: package) }
+        try source.exportTheme(id: saved.id, to: package)
+
+        let target = makeTestManager()
+        let imported = try target.importTheme(from: package)
+        target.applyTheme(id: imported.id)
+
+        #expect(ThemeLookSnapshot(target) == before)
+    }
+
+    /// G3 — the fixture itself. Without this, the two tests above keep passing as
+    /// `ThemePayload` and `LayoutProfile` grow fields nobody decorates.
+    @Test func theFixtureLeavesNothingAtItsDefault() throws {
+        let pm = makeTestManager()
+        decorateGlobals(pm)
+        decorate(pm)
+        _ = pm.saveCurrentAsTheme(named: "Fixture")
+        let payload = try #require(pm.themes.first(where: { $0.name == "Fixture" })).payload
+
+        assertFullyCustomized(
+            payload, comparedTo: PresentationManager.ThemePayload(),
+            // The bookmark is UserDefaults state, not a look; the theme tests
+            // deliberately reference no image, and `importReportsAssetsItCouldNotFind`
+            // covers the asset path.
+            exempt: ["backgroundImageBookmark"],
+            label: "ThemePayload")
+
+        for key in PresentationManager.profileKeys {
+            let profile = try #require(payload.profiles[key], "profile \(key)")
+            assertFullyCustomized(
+                profile, comparedTo: PresentationManager.LayoutProfile(),
+                label: "LayoutProfile[\(key)]")
+        }
+    }
+
+    /// G4 — plan §4.4. `importTheme` has no identity check at all, so the same
+    /// package opened twice is two themes. §4.2 settles what it should do: the
+    /// payload already carries a stable theme `id`, so same id means Replace —
+    /// re-importing a package IS updating it.
+    @Test(.disabled("red until Phase 3 — DuplicateResolver; importTheme never checks identity"))
+    func importingTheSameThemeTwiceIsANoOp() throws {
+        let source = makeTestManager()
+        decorate(source)
+        _ = source.saveCurrentAsTheme(named: "Galaxie")
+        let saved = try #require(source.themes.first(where: { $0.name == "Galaxie" }))
+        let package = tempPackage()
+        defer { try? FileManager.default.removeItem(at: package) }
+        try source.exportTheme(id: saved.id, to: package)
+
+        let target = makeTestManager()
+        let baseline = target.themes.count
+        _ = try target.importTheme(from: package)
+        _ = try target.importTheme(from: package)
+
+        #expect(target.themes.count == baseline + 1,
+                "the same package imported twice produced \(target.themes.map(\.name).suffix(3))")
     }
 
     @Test func theWholePayloadIsPreserved() throws {
@@ -6222,6 +6405,24 @@ nonisolated enum ReflectedFields {
             return defaults.contains(String(describing: child.value)) ? label : nil
         })
     }
+
+    /// Fields still holding exactly what a freshly-constructed value holds.
+    ///
+    /// Strictly stronger than `unset`, and the only one that works on types with
+    /// non-empty defaults: `LayoutProfile.transitionInDuration` defaults to -1
+    /// and `ThemePayload.globalTextOpacity` to 1.0, so no amount of looking for
+    /// empties and zeroes would ever notice a fixture that never touched them.
+    static func unchanged<T>(in value: T, from blueprint: T) -> Set<String> {
+        let base = Dictionary(
+            Mirror(reflecting: blueprint).children.compactMap { child in
+                child.label.map { ($0, String(describing: child.value)) }
+            },
+            uniquingKeysWith: { a, _ in a })
+        return Set(Mirror(reflecting: value).children.compactMap { child in
+            guard let label = child.label, let original = base[label] else { return nil }
+            return String(describing: child.value) == original ? label : nil
+        })
+    }
 }
 
 /// Fails naming any field left at its type's default value.
@@ -6238,6 +6439,26 @@ func assertFullyPopulated<T>(
     #expect(unset.isEmpty,
             "fixture leaves \(unset.sorted()) at default — tests built on it would pass vacuously",
             sourceLocation: sourceLocation)
+}
+
+/// Fails naming any field that still holds what a fresh value holds.
+///
+/// The version to reach for on types whose defaults are not empty — a theme
+/// payload full of `1.0`s and `-1`s looks thoroughly populated to
+/// `assertFullyPopulated` and proves nothing.
+@MainActor
+func assertFullyCustomized<T>(
+    _ value: T,
+    comparedTo blueprint: T,
+    exempt: Set<String> = [],
+    label: String,
+    sourceLocation: SourceLocation = #_sourceLocation
+) {
+    let untouched = ReflectedFields.unchanged(in: value, from: blueprint).subtracting(exempt)
+    #expect(untouched.isEmpty, """
+        the \(label) fixture leaves \(untouched.sorted()) at their default values, \
+        so every test built on it passes those fields for free.
+        """, sourceLocation: sourceLocation)
 }
 
 /// Fails unless the given values, taken TOGETHER, touch every field of `blueprint`.
