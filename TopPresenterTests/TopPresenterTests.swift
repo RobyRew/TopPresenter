@@ -6226,6 +6226,46 @@ func assertFullyPopulated<T>(
             sourceLocation: sourceLocation)
 }
 
+/// The three-way coverage contract for one model, in one place.
+///
+/// All three directions are needed. *Missing* catches a field added to the model
+/// and forgotten everywhere else. *Stale* catches a snapshot still listing a
+/// field the model renamed or dropped — without it, the missing-check keeps
+/// passing while the snapshot describes a model that no longer exists. And an
+/// exemption is a claim that losing a field is CORRECT, so it has to name a real
+/// field and carry a reason someone can argue with.
+@MainActor
+func assertFieldCoverage<T: PersistentModel>(
+    _ type: T.Type,
+    snapshot: String,
+    covered: Set<String>,
+    exempt: [String: String],
+    relationships: Set<String> = [],
+    carriedBy: String,
+    sourceLocation: SourceLocation = #_sourceLocation
+) {
+    let model = PersistedFieldNames.of(type)
+
+    let missing = model.subtracting(covered).subtracting(exempt.keys).subtracting(relationships)
+    #expect(missing.isEmpty, """
+        \(type) gained \(missing.sorted()). Add each to \(snapshot) and to \(carriedBy) \
+        — or list it in \(snapshot).exemptFields with the reason losing it is correct.
+        """, sourceLocation: sourceLocation)
+
+    let stale = covered.union(relationships).subtracting(model)
+    #expect(stale.isEmpty, "\(snapshot) still lists \(stale.sorted()), which \(type) no longer has",
+            sourceLocation: sourceLocation)
+
+    for (field, reason) in exempt.sorted(by: { $0.key < $1.key }) {
+        #expect(model.contains(field),
+                "\(snapshot) exempts '\(field)', a field \(type) does not have",
+                sourceLocation: sourceLocation)
+        #expect(reason.count > 20,
+                "the exemption for '\(type).\(field)' needs a real reason, not '\(reason)'",
+                sourceLocation: sourceLocation)
+    }
+}
+
 /// A `Song`'s exportable state, for whole-object comparison across a round trip.
 ///
 /// Equatable so a failure names the differing field rather than saying "not
@@ -6278,33 +6318,48 @@ struct SongSnapshot: Equatable {
 
 @MainActor struct ModelFieldCoverageTests {
 
-    @Test func songSnapshotCoversEveryStoredField() {
-        let model = PersistedFieldNames.of(Song.self)
-        let accounted = SongSnapshot.coveredFields
-            .union(SongSnapshot.exemptFields.keys)
-            .union(SongSnapshot.relationshipFields)
-        let missing = model.subtracting(accounted)
-        #expect(missing.isEmpty, """
-            Song gained \(missing.sorted()). Add each to SongSnapshot AND to \
-            ExportService.songDictV2 AND to TopPresenterSongImporter — or list it \
-            in SongSnapshot.exemptFields with the reason losing it is correct.
-            """)
+    @Test func songSnapshotAccountsForEveryStoredField() {
+        assertFieldCoverage(
+            Song.self, snapshot: "SongSnapshot",
+            covered: SongSnapshot.coveredFields,
+            exempt: SongSnapshot.exemptFields,
+            relationships: SongSnapshot.relationshipFields,
+            carriedBy: "ExportService.songDictV2 and TopPresenterSongImporter")
     }
 
-    @Test func theSnapshotDoesNotClaimFieldsTheModelLost() {
-        // The other direction: a field renamed or deleted on the model leaves a
-        // stale entry here, and the coverage test above would still pass.
-        let model = PersistedFieldNames.of(Song.self)
-        let stale = SongSnapshot.coveredFields.subtracting(model)
-        #expect(stale.isEmpty, "SongSnapshot lists \(stale.sorted()), which Song no longer has")
+    @Test func bibleModuleSnapshotAccountsForEveryStoredField() {
+        assertFieldCoverage(
+            BibleModule.self, snapshot: "BibleModuleSnapshot",
+            covered: BibleModuleSnapshot.coveredFields,
+            exempt: BibleModuleSnapshot.exemptFields,
+            carriedBy: "ExportService.exportToTopPresenterJSON and TopPresenterBibleImporter")
     }
 
-    @Test func everyExemptionIsRealAndExplained() {
-        let model = PersistedFieldNames.of(Song.self)
-        for (field, reason) in SongSnapshot.exemptFields {
-            #expect(model.contains(field), "exemption for '\(field)' names a field Song does not have")
-            #expect(reason.count > 20, "exemption for '\(field)' needs a real reason, not '\(reason)'")
-        }
+    @Test func bibleBookSnapshotAccountsForEveryStoredField() {
+        assertFieldCoverage(
+            BibleBook.self, snapshot: "BibleBookSnapshot",
+            covered: BibleBookSnapshot.coveredFields,
+            exempt: BibleBookSnapshot.exemptFields,
+            relationships: BibleBookSnapshot.relationshipFields,
+            carriedBy: "ExportService.exportToTopPresenterJSON and TopPresenterBibleImporter")
+    }
+
+    @Test func bibleChapterSnapshotAccountsForEveryStoredField() {
+        assertFieldCoverage(
+            BibleChapter.self, snapshot: "BibleChapterSnapshot",
+            covered: BibleChapterSnapshot.coveredFields,
+            exempt: BibleChapterSnapshot.exemptFields,
+            relationships: BibleChapterSnapshot.relationshipFields,
+            carriedBy: "ExportService.exportToTopPresenterJSON and TopPresenterBibleImporter")
+    }
+
+    @Test func bibleVerseSnapshotAccountsForEveryStoredField() {
+        assertFieldCoverage(
+            BibleVerse.self, snapshot: "BibleVerseSnapshot",
+            covered: BibleVerseSnapshot.coveredFields,
+            exempt: BibleVerseSnapshot.exemptFields,
+            relationships: BibleVerseSnapshot.relationshipFields,
+            carriedBy: "ExportService.exportToTopPresenterJSON and TopPresenterBibleImporter")
     }
 }
 
@@ -6445,5 +6500,365 @@ struct SongSnapshot: Equatable {
         ImportService.applyResult(result, to: song, modelContext: ctx)
 
         #expect(SongSnapshot(song) == before, "Cancel must be a no-op")
+    }
+}
+
+// MARK: - Bible round trip (GOAT)
+//
+// The native Bible format had ZERO round-trip coverage: every existing Bible
+// test either parses a foreign format or hand-builds a small JSON literal, so
+// nothing ever asserted that what `ExportService` writes is what
+// `TopPresenterBibleImporter` reads back. That is the format shipping 70
+// translations in `bibles-1`.
+
+/// `_extensions` compared as a decoded dictionary.
+///
+/// The two sides re-serialize through different code paths (`JSONSerialization`
+/// on export, `JSONSerialization` again on import, neither with sorted keys), so
+/// comparing the raw strings would fail on key order rather than on content.
+nonisolated enum ExtensionPayload {
+    static func decoded(_ json: String?) -> [String: String] {
+        guard let json, let data = json.data(using: .utf8),
+              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else { return [:] }
+        return obj.compactMapValues { $0 as? String }
+    }
+}
+
+/// A whole `BibleModule` tree, for comparison across a round trip.
+///
+/// Nested rather than flat: a book that loses its introduction and a verse that
+/// loses its gloss are both losses *of the module*, and one comparison finds
+/// either — naming the level it happened at.
+struct BibleModuleSnapshot: Equatable {
+    var name = "", abbreviation = "", language = "", sourceFormat = ""
+    var moduleDescription = "", versification = "", canon = ""
+    var nameLocal = "", languageName = "", copyright = "", aboutText = "", textSource = ""
+    var year = 0, direction = ""
+    var hasWordsOfChrist = false, hasStrongs = false, incomplete = false
+    var extensions: [String: String] = [:]
+    var books: [BibleBookSnapshot] = []
+
+    init(_ m: BibleModule) {
+        name = m.name; abbreviation = m.abbreviation; language = m.language
+        sourceFormat = m.sourceFormat; moduleDescription = m.moduleDescription
+        versification = m.versification ?? ""; canon = m.canon ?? ""
+        nameLocal = m.nameLocal; languageName = m.languageName
+        copyright = m.copyright; aboutText = m.aboutText; textSource = m.textSource
+        year = m.year ?? 0; direction = m.direction
+        hasWordsOfChrist = m.hasWordsOfChrist; hasStrongs = m.hasStrongs
+        incomplete = m.incomplete
+        extensions = ExtensionPayload.decoded(m.extensionsJSON)
+        books = m.books.sorted { $0.bookNumber < $1.bookNumber }.map(BibleBookSnapshot.init)
+    }
+
+    static let coveredFields: Set<String> = [
+        "name", "abbreviation", "language", "sourceFormat", "moduleDescription",
+        "versification", "canon", "nameLocal", "languageName", "copyright",
+        "aboutText", "textSource", "year", "direction", "hasWordsOfChrist",
+        "hasStrongs", "incomplete", "extensionsJSON", "books",
+    ]
+
+    static let exemptFields: [String: String] = [
+        "id": "regenerated on import; identity is re-established by the duplicate resolver (plan §4.2)",
+        "importDate": "means 'when THIS library imported it' — adopting the exporter's date would be a lie",
+    ]
+}
+
+struct BibleBookSnapshot: Equatable {
+    var name = "", bookNumber = 0, testament = ""
+    var nameEnglish = "", abbreviation = "", abbreviationEnglish = ""
+    var expectedChapters = 0, introduction = ""
+    var extensions: [String: String] = [:]
+    var chapters: [BibleChapterSnapshot] = []
+
+    init(_ b: BibleBook) {
+        name = b.name; bookNumber = b.bookNumber; testament = b.testament
+        nameEnglish = b.nameEnglish; abbreviation = b.abbreviation
+        abbreviationEnglish = b.abbreviationEnglish
+        expectedChapters = b.expectedChapters; introduction = b.introduction
+        extensions = ExtensionPayload.decoded(b.extensionsJSON)
+        chapters = b.sortedChapters.map(BibleChapterSnapshot.init)
+    }
+
+    static let coveredFields: Set<String> = [
+        "name", "bookNumber", "testament", "nameEnglish", "abbreviation",
+        "abbreviationEnglish", "expectedChapters", "introduction",
+        "extensionsJSON", "chapters",
+    ]
+    static let exemptFields: [String: String] = [
+        "id": "regenerated on import; a book's identity is its number within its module",
+    ]
+    /// Parent back-reference — structure, not content.
+    static let relationshipFields: Set<String> = ["module"]
+}
+
+struct BibleChapterSnapshot: Equatable {
+    var chapterNumber = 0
+    var headings: [BibleHeading] = []
+    var extensions: [String: String] = [:]
+    var verses: [BibleVerseSnapshot] = []
+
+    init(_ c: BibleChapter) {
+        chapterNumber = c.chapterNumber
+        headings = c.headings
+        extensions = ExtensionPayload.decoded(c.extensionsJSON)
+        verses = c.sortedVerses.map(BibleVerseSnapshot.init)
+    }
+
+    static let coveredFields: Set<String> = [
+        "chapterNumber", "headingsJSON", "extensionsJSON", "verses",
+    ]
+    static let exemptFields: [String: String] = [
+        "id": "regenerated on import; a chapter's identity is its number within its book",
+    ]
+    static let relationshipFields: Set<String> = ["book"]
+}
+
+struct BibleVerseSnapshot: Equatable {
+    var verseNumber = 0, text = ""
+    var runs: [VerseRun] = []
+    var footnotes: [BibleFootnote] = []
+    var crossReferences: [BibleCrossRef] = []
+    var hasWordsOfChrist = false
+    var gloss = ""
+    var extensions: [String: String] = [:]
+
+    init(_ v: BibleVerse) {
+        verseNumber = v.verseNumber; text = v.text
+        runs = v.runs; footnotes = v.footnotes; crossReferences = v.crossReferences
+        hasWordsOfChrist = v.hasWordsOfChrist; gloss = v.gloss
+        extensions = ExtensionPayload.decoded(v.extensionsJSON)
+    }
+
+    static let coveredFields: Set<String> = [
+        "verseNumber", "text", "runsJSON", "footnotesJSON", "crossRefsJSON",
+        "hasWordsOfChrist", "gloss", "extensionsJSON",
+    ]
+    static let exemptFields: [String: String] = [
+        "id": "regenerated on import; a verse's identity is its number within its chapter",
+    ]
+    static let relationshipFields: Set<String> = ["chapter"]
+}
+
+@MainActor struct BibleRoundTripTests {
+
+    private func makeContext() throws -> ModelContext {
+        let container = try ModelContainer(
+            for: BibleModule.self, BibleBook.self, BibleChapter.self, BibleVerse.self,
+            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
+        )
+        return ModelContext(container)
+    }
+
+    /// A module whose every value the importer cannot re-derive from anything
+    /// else in the file.
+    ///
+    /// It is deliberately NOT a plausible Bible. A plausible one would let
+    /// several fields pass by reconstruction rather than by preservation:
+    ///
+    /// - `testament` is `"DC"` on book **46**, where the importer's fallback
+    ///   (`bookNumber <= 39 ? "OT" : "NT"`) would say `"NT"`
+    /// - `hasWordsOfChrist` is true on a verse whose runs contain **no** `woc`
+    ///   run, because the importer ORs the flag with `runs.contains { woc }`
+    /// - `moduleDescription` differs from `copyright`, which the importer falls
+    ///   back to when `description` is absent
+    /// - `name`, `nameLocal` and `abbreviation` all differ, because the module
+    ///   name falls back through all three
+    /// - `direction` is `"rtl"`, since `"ltr"` is what the importer defaults to
+    ///   and the exporter skips — a `"ltr"` fixture proves nothing about it
+    /// - `sourceFormat` is `"osis"`, not `"topPresenter"`: this module came from
+    ///   somewhere else, and where it came from is part of what has to survive
+    /// - heading `beforeVerse`/`level` are 2, not the decoder's defaults of 1
+    /// - footnote `marker` is non-empty and cross-ref `label` is non-nil, both
+    ///   of which the decoders happily default
+    private func fullyPopulatedModule(in ctx: ModelContext) -> BibleModule {
+        let module = BibleModule(
+            name: "Biblia Ortodoxă Sinodală",
+            abbreviation: "BOS",
+            language: "ro",
+            sourceFormat: "osis",
+            moduleDescription: "Ediția sinodală, cu deuterocanonice",
+            versification: "lxx",
+            canon: "orthodox",
+            nameLocal: "Sfânta Scriptură",
+            languageName: "Română",
+            copyright: "© 1988 Institutul Biblic",
+            aboutText: "CUVÂNT ÎNAINTE — despre această ediție.",
+            textSource: "Ediția tipărită 1988",
+            year: 1988,
+            direction: "rtl",
+            hasWordsOfChrist: true,
+            hasStrongs: true,
+            incomplete: true,
+            extensionsJSON: #"{"tpModuleNote":"extensii la nivel de modul"}"#
+        )
+        ctx.insert(module)
+
+        let book = BibleBook(
+            name: "Înțelepciunea lui Solomon",
+            bookNumber: 46,
+            testament: "DC",
+            nameEnglish: "Wisdom of Solomon",
+            abbreviation: "Înț",
+            abbreviationEnglish: "Wis",
+            expectedChapters: 19,
+            introduction: "Introducere la cartea Înțelepciunii.",
+            extensionsJSON: #"{"tpBookNote":"extensii la nivel de carte"}"#
+        )
+        book.module = module
+
+        let chapter = BibleChapter(
+            chapterNumber: 3,
+            headingsJSON: BibleRichData.encode([
+                BibleHeading(beforeVerse: 2, level: 2, text: "Soarta celor drepți")
+            ]),
+            extensionsJSON: #"{"tpChapterNote":"extensii la nivel de capitol"}"#
+        )
+        chapter.book = book
+
+        // Verse 1 carries every rich field at once — and its runs are `add`,
+        // never `woc`, so the words-of-Christ flag has to survive on its own.
+        let v1 = BibleVerse(
+            verseNumber: 1,
+            text: "Sufletele drepților sunt în mâna lui Dumnezeu.",
+            runsJSON: BibleRichData.encode([
+                VerseRun(text: "Sufletele drepților", kind: "add",
+                         strong: "H5315", morph: "N-NSF", gloss: "souls-of-the-righteous"),
+                VerseRun(text: " sunt în mâna lui Dumnezeu.", kind: "plain")
+            ]),
+            footnotesJSON: BibleRichData.encode([
+                BibleFootnote(marker: "a", text: "Sau: în puterea lui Dumnezeu.")
+            ]),
+            crossRefsJSON: BibleRichData.encode([
+                BibleCrossRef(label: "cf.", targets: ["Deut 33:3", "Ioan 10:28"])
+            ]),
+            hasWordsOfChrist: true,
+            gloss: "the souls of the righteous are in God's hand",
+            extensionsJSON: #"{"tpVerseNote":"extensii la nivel de verset"}"#
+        )
+        v1.chapter = chapter
+
+        // Verse 2 is deliberately narrow: it exists to exercise a `woc` run and
+        // verse ordering. `theFixtureIsExhaustive` checks verse 1 only.
+        let v2 = BibleVerse(
+            verseNumber: 2,
+            text: "Eu sunt lumina lumii.",
+            runsJSON: BibleRichData.encode([VerseRun(text: "Eu sunt lumina lumii.", kind: "woc")]),
+            hasWordsOfChrist: true
+        )
+        v2.chapter = chapter
+
+        return module
+    }
+
+    /// Round trip through a real file, into a SEPARATE store.
+    ///
+    /// A separate store matters: re-importing into the same one hits the
+    /// same-abbreviation duplicate path, and `.keepBoth` would rename the module
+    /// to "… (2)" — a rename that has nothing to do with format integrity would
+    /// show up as a name loss and obscure the real ones.
+    private func roundTrip(_ module: BibleModule) async throws -> BibleModule {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("rt_bible_\(UUID().uuidString).tpbible")
+        try await ExportService.exportBible(module: module, format: .topPresenter, to: url)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let fresh = try makeContext()
+        return try await ImportService.importBible(
+            fileURL: url, format: .topPresenter, modelContext: fresh, resolution: .keepBoth)
+    }
+
+    @Test func theFixtureIsExhaustive() throws {
+        let ctx = try makeContext()
+        let snapshot = BibleModuleSnapshot(fullyPopulatedModule(in: ctx))
+        assertFullyPopulated(snapshot)
+        let book = try #require(snapshot.books.first)
+        assertFullyPopulated(book)
+        let chapter = try #require(book.chapters.first)
+        assertFullyPopulated(chapter)
+        let verse = try #require(chapter.verses.first)
+        assertFullyPopulated(verse)
+    }
+
+    @Test(.disabled("red until Phase 1 (E1, E2) — module _extensions and sourceFormat are lost"))
+    func everyFieldSurvivesAGoatRoundTrip() async throws {
+        let ctx = try makeContext()
+        let module = fullyPopulatedModule(in: ctx)
+        let before = BibleModuleSnapshot(module)
+
+        let rebuilt = try await roundTrip(module)
+
+        #expect(BibleModuleSnapshot(rebuilt) == before)
+    }
+
+    /// E1 — the asymmetry is one level deep and invisible from either side alone:
+    /// `ExportService.swift:155` writes `translationDict["_extensions"]`, and
+    /// `TopPresenterBibleImporter.swift:176` reads `json["_extensions"]` from the
+    /// ROOT. Book, chapter and verse extensions round-trip correctly, which is
+    /// exactly why nobody noticed the module's do not.
+    @Test(.disabled("red until Phase 1 (E1) — written under `translation`, read from the root"))
+    func moduleExtensionsSurviveWhileTheOtherThreeLevelsAlreadyDo() async throws {
+        let ctx = try makeContext()
+        let rebuilt = try await roundTrip(fullyPopulatedModule(in: ctx))
+        let snapshot = BibleModuleSnapshot(rebuilt)
+
+        // The control: these three prove the mechanism works and isolate the bug
+        // to the module level rather than to `_extensions` in general.
+        let book = try #require(snapshot.books.first)
+        let chapter = try #require(book.chapters.first)
+        let verse = try #require(chapter.verses.first)
+        #expect(book.extensions["tpBookNote"] == "extensii la nivel de carte")
+        #expect(chapter.extensions["tpChapterNote"] == "extensii la nivel de capitol")
+        #expect(verse.extensions["tpVerseNote"] == "extensii la nivel de verset")
+
+        #expect(snapshot.extensions["tpModuleNote"] == "extensii la nivel de modul",
+                "module _extensions lost — written under `translation`, read from the root")
+    }
+
+    /// E2 — `importBible` hardcodes `sourceFormat: format.rawValue`, so every
+    /// module that passes through an export becomes "topPresenter" and forgets
+    /// it was ever OSIS, Zefania or MySword. The exporter never writes the field
+    /// at all, so there is nothing for the importer to preserve either.
+    @Test(.disabled("red until Phase 1 (E2) — sourceFormat overwritten with the IMPORTING format"))
+    func theOriginalSourceFormatSurvives() async throws {
+        let ctx = try makeContext()
+        let rebuilt = try await roundTrip(fullyPopulatedModule(in: ctx))
+
+        #expect(rebuilt.sourceFormat == "osis",
+                "sourceFormat became '\(rebuilt.sourceFormat)' — the module's provenance was overwritten by the format it happened to be re-imported from")
+    }
+
+    /// E3 — `TopPresenterBibleImporter.swift:118` parses `poetryIndent` into
+    /// `BibleImportVerse`, `ImportService` never reads it back out, and no model
+    /// has anywhere to put it. Parsed, carried one layer, dropped. This asserts
+    /// the field exists before asserting any value survives it.
+    @Test(.disabled("red until Phase 1 (E3) — BibleVerse has no poetryIndent"))
+    func poetryIndentHasSomewhereToLand() {
+        #expect(PersistedFieldNames.of(BibleVerse.self).contains("poetryIndent"), """
+            BibleImportVerse.poetryIndent is parsed from every TopPresenter Bible \
+            and then discarded, because BibleVerse has no field for it.
+            """)
+    }
+
+    /// G4 — the guarantee named in plan §4.4: importing the same file twice with
+    /// default policies is a no-op. Today the default is `.keepBoth`, so the
+    /// second import silently creates "Biblia Ortodoxă Sinodală (2)".
+    @Test(.disabled("red until Phase 3 — DuplicateResolver; the default is .keepBoth, so this doubles"))
+    func importingTheSameFileTwiceIsANoOp() async throws {
+        let source = try makeContext()
+        let module = fullyPopulatedModule(in: source)
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("idem_bible_\(UUID().uuidString).tpbible")
+        try await ExportService.exportBible(module: module, format: .topPresenter, to: url)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let target = try makeContext()
+        _ = try await ImportService.importBible(fileURL: url, format: .topPresenter, modelContext: target)
+        _ = try await ImportService.importBible(fileURL: url, format: .topPresenter, modelContext: target)
+
+        let modules = try target.fetch(FetchDescriptor<BibleModule>())
+        #expect(modules.count == 1,
+                "the same file imported twice produced \(modules.map(\.name)) — identical content must be skipped, not duplicated")
     }
 }

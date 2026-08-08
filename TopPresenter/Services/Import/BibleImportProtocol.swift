@@ -46,7 +46,7 @@ nonisolated struct VerseRun: Codable, Equatable {
 }
 
 /// A pericope/section heading shown before a verse.
-struct BibleHeading: Codable, Equatable {
+nonisolated struct BibleHeading: Codable, Equatable {
     var beforeVerse: Int
     var level: Int = 1
     var text: String
@@ -57,7 +57,7 @@ nonisolated struct BibleFootnote: Codable, Equatable {
     var text: String
 }
 
-struct BibleCrossRef: Codable, Equatable {
+nonisolated struct BibleCrossRef: Codable, Equatable {
     var label: String? = nil
     var targets: [String] = []
 }
