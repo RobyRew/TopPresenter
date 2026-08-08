@@ -24,6 +24,21 @@ enum DroppedFileCategory: Sendable {
         case .unknown: return "Unknown"
         }
     }
+
+    /// Which library this lands in — the bridge between the drop classifier and
+    /// `ImportCatalog`, so a caller can ask for one kind without re-deriving
+    /// what "a Bible file" means.
+    ///
+    /// nonisolated because the classification chain runs off-main; the enum's
+    /// other members are UI-facing and stay on the main actor.
+    nonisolated var kind: ImportKind? {
+        switch self {
+        case .bible: return .bible
+        case .song: return .song
+        case .media: return .media
+        case .unknown: return nil
+        }
+    }
 }
 
 /// A pending file identified by drag & drop, ready for batch import.
@@ -61,50 +76,16 @@ enum ImportFileStatus: Equatable, Sendable {
     }
 }
 
-/// Known media file extensions — nonisolated: immutable Sendable constants read by
-/// the background classification chain (the default MainActor isolation would
-/// otherwise actor-bind them).
-private enum MediaExtensions {
-    nonisolated static let image = Set(["jpg", "jpeg", "png", "gif", "bmp", "tiff", "tif", "heic", "heif", "webp", "svg", "ico"])
-    nonisolated static let audio = Set(["mp3", "wav", "aac", "m4a", "flac", "aiff", "aif", "ogg", "wma", "opus"])
-    nonisolated static let video = Set(["mp4", "mov", "avi", "mkv", "m4v", "wmv", "webm", "mpg", "mpeg", "flv"])
-    nonisolated static let all = image.union(audio).union(video)
-}
-
 /// Service that classifies dropped files and performs batch imports.
 final class DragDropImportHandler {
 
-    /// Bible + Song file extensions, lowercased. Used to pre-filter the folder
-    /// walk so we never open/read files we can't use here — e.g. multi-GB `.LRF`
-    /// drone footage (or any video/image) sitting in a Documents tree, which
-    /// would otherwise beach-ball the app and spam AppleFSCompression. Media is
-    /// intentionally excluded: this walk feeds the Bible/Song import flow.
-    nonisolated static let bibleSongExtensions: Set<String> = {
-        var exts = Set<String>()
-        for fmt in SupportedBibleFormat.allCases { exts.formUnion(fmt.fileExtensions.map { $0.lowercased() }) }
-        for fmt in SupportedSongFormat.allCases { exts.formUnion(fmt.fileExtensions.map { $0.lowercased() }) }
-        return exts
-    }()
-
-    /// True when a file's extension is a Bible/Song type we can import. Folders
-    /// are handled separately (recursed / treated as a USFM Bible).
-    /// The whole classification chain below is `nonisolated`: pure file inspection
-    /// that runs on a background task (Task.detached) so a big folder walk never
-    /// blocks the UI — with the project's default MainActor isolation it would
-    /// otherwise be actor-bound (Swift 6 error).
-    nonisolated static func isImportableFile(_ url: URL) -> Bool {
-        bibleSongExtensions.contains(url.pathExtension.lowercased())
-    }
-
-    /// UTTypes for the Bible + Song import panels, so the open panel greys out
-    /// everything else. Folders stay selectable (`canChooseDirectories`), so a
-    /// USFM folder or a tree of `.json` Bibles can still be picked.
-    static var bibleSongContentTypes: [UTType] {
-        var exts = Set<String>()
-        for fmt in SupportedBibleFormat.allCases { exts.formUnion(fmt.fileExtensions.map { $0.lowercased() }) }
-        for fmt in SupportedSongFormat.allCases { exts.formUnion(fmt.fileExtensions.map { $0.lowercased() }) }
-        return exts.compactMap { UTType(filenameExtension: $0) }
-    }
+    /// UTTypes for an import panel, so it greys out what we cannot read.
+    /// Folders stay selectable (`canChooseDirectories`), so a USFM folder or a
+    /// tree of Bibles can still be picked.
+    ///
+    /// Derived from `ImportCatalog` — this used to be a third hand-rolled copy
+    /// of the extension list, next to the folder walk's and the classifier's.
+    static var bibleSongContentTypes: [UTType] { ImportCatalog.contentTypes(for: [.bible, .song]) }
 
     /// Classify a single file URL into a category.
     nonisolated static func classify(_ url: URL) -> DroppedFileCategory {
@@ -115,15 +96,9 @@ final class DragDropImportHandler {
             return .song(.powerPoint)
         }
 
-        // Check media files by extension
-        if MediaExtensions.image.contains(ext) {
-            return .media("image")
-        }
-        if MediaExtensions.audio.contains(ext) {
-            return .media("audio")
-        }
-        if MediaExtensions.video.contains(ext) {
-            return .media("video")
+        // Media, from the ONE media list.
+        if let kind = MediaKind.classify(extension: ext) {
+            return .media(kind.rawValue)
         }
 
         // Try Bible format detection (reads file content)
@@ -158,54 +133,23 @@ final class DragDropImportHandler {
         urls.map { PendingImportFile(url: $0, category: classify($0)) }
     }
 
-    /// Expand a mixed selection of files and folders into individual importable
-    /// sources, recursing through subfolders. Semantics:
-    ///   • a file → itself
-    ///   • a folder of per-book `.usfm`/`.sfm` files → kept whole (that IS one
-    ///     USFM Bible), not split
-    ///   • any other folder (e.g. a language folder of `.json` Bibles, or a tree
-    ///     of them) → recursed; every contained file/USFM-folder is collected
-    /// Hidden files and macOS junk (.DS_Store) are skipped. Deduplicated, sorted.
-    nonisolated static func expandToImportableFiles(_ urls: [URL]) -> [URL] {
-        let fm = FileManager.default
-        var out: [URL] = []
-        var seen = Set<String>()
-        func add(_ u: URL) { let p = u.standardizedFileURL.path; if seen.insert(p).inserted { out.append(u) } }
-        func walk(_ url: URL, depth: Int) {
-            // Selected folder = 0; recurse through at most TWO subfolder levels —
-            // files INSIDE the 2nd subfolder (depth 3) still import; deeper is ignored.
-            guard depth <= 3 else { return }
-            var isDir: ObjCBool = false
-            guard fm.fileExists(atPath: url.path, isDirectory: &isDir) else { return }
-            if !isDir.boolValue {
-                if url.lastPathComponent.hasPrefix(".") { return }
-                // Only collect files we can actually import. This is what keeps a
-                // huge Documents tree (drone footage, archives, …) from being read.
-                guard isImportableFile(url) else { return }
-                add(url); return
-            }
-            // A USFM Bible is a folder of per-book files → one source, kept whole.
-            if ImportService.detectBibleFormat(fileURL: url) == .usfm { add(url); return }
-            // Don't descend past the 2nd subfolder level.
-            guard depth < 3 else { return }
-            // Otherwise recurse into the folder's children.
-            let children = (try? fm.contentsOfDirectory(
-                at: url, includingPropertiesForKeys: [.isDirectoryKey],
-                options: [.skipsHiddenFiles])) ?? []
-            for child in children.sorted(by: { $0.lastPathComponent.localizedStandardCompare($1.lastPathComponent) == .orderedAscending }) {
-                walk(child, depth: depth + 1)
-            }
-        }
-        for u in urls { walk(u, depth: 0) }
-        return out
-    }
-
     /// Expand + classify a mixed file/folder selection, keeping only the ones we
     /// can actually import (drops `.unknown`).
-    nonisolated static func classifyExpanded(_ urls: [URL]) -> [PendingImportFile] {
-        classify(expandToImportableFiles(urls)).filter {
-            if case .unknown = $0.category { return false }
-            return true
+    ///
+    /// The expansion itself lives in `ImportScanner` now: it sees every kind we
+    /// support rather than Bibles and songs only, probes extensionless files,
+    /// and reports when it stopped early instead of going quiet.
+    /// `keeping` narrows the result to the kinds the CALLER can act on. The
+    /// scan itself always sees everything — that is the fix — but the Bible
+    /// tab's picker still hands back Bibles and songs, not the photos that
+    /// happened to be sitting in the same folder.
+    nonisolated static func classifyExpanded(
+        _ urls: [URL],
+        keeping kinds: Set<ImportKind> = Set(ImportKind.allCases)
+    ) -> [PendingImportFile] {
+        classify(ImportScanner.scan(urls).files).filter {
+            guard let kind = $0.category.kind else { return false }
+            return kinds.contains(kind)
         }
     }
 

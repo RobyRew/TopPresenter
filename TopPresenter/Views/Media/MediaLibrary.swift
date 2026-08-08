@@ -11,10 +11,33 @@
 import Foundation
 
 /// Extensible media taxonomy — raw values match `MediaItem.mediaType` in the DB.
-enum MediaKind: String, CaseIterable, Identifiable {
+///
+/// THE media list. There used to be a second one in `DragDropImportHandler`
+/// that did not agree with this: it knew `svg`, `ico` and `flv` and this did
+/// not, so an `.flv` was a video to the drop handler and an image here. Which
+/// list you happened to ask decided what a file was.
+nonisolated enum MediaKind: String, CaseIterable, Identifiable, Sendable {
     case image, video, audio
 
     var id: String { rawValue }
+
+    /// The extensions this kind owns. `flv` is deliberately absent: AVPlayer
+    /// cannot play it, so importing one produces a library item that never
+    /// works. `svg` and `ico` are images the old media list already accepted.
+    var fileExtensions: Set<String> {
+        switch self {
+        case .image: return ["jpg", "jpeg", "png", "gif", "bmp", "tiff", "tif",
+                             "heic", "heif", "webp", "svg", "ico"]
+        case .audio: return ["mp3", "wav", "aac", "m4a", "flac", "aiff", "aif",
+                             "ogg", "wma", "opus"]
+        case .video: return ["mp4", "mov", "avi", "mkv", "m4v", "wmv", "webm",
+                             "mpg", "mpeg"]
+        }
+    }
+
+    static let allExtensions: Set<String> = allCases.reduce(into: Set<String>()) {
+        $0.formUnion($1.fileExtensions)
+    }
 
     /// Segmented-filter label (Toate is handled by the caller's "all" token).
     var filterLabel: String {
@@ -34,15 +57,15 @@ enum MediaKind: String, CaseIterable, Identifiable {
     }
 
     /// File-extension classification — the single rule the importer uses.
-    static func classify(extension ext: String) -> MediaKind {
+    ///
+    /// Optional, and that is the point. It used to answer `.image` for anything
+    /// it did not recognise, which was harmless while only a media picker asked
+    /// — the panel had already filtered to media. Now that the folder walk
+    /// recurses whole trees, a permissive answer would file every `.docx` and
+    /// `.zip` it met as a photo. "Not media" has to be sayable.
+    static func classify(extension ext: String) -> MediaKind? {
         let e = ext.lowercased()
-        let imageExts: Set<String> = ["jpg", "jpeg", "png", "gif", "bmp", "tiff", "tif", "heic", "heif", "webp"]
-        let audioExts: Set<String> = ["mp3", "wav", "aac", "m4a", "flac", "aiff", "aif", "ogg", "wma", "opus"]
-        let videoExts: Set<String> = ["mp4", "mov", "avi", "mkv", "m4v", "wmv", "webm", "mpg", "mpeg"]
-        if audioExts.contains(e) { return .audio }
-        if videoExts.contains(e) { return .video }
-        if imageExts.contains(e) { return .image }
-        return .image   // permissive fallback, matching the old importer
+        return allCases.first { $0.fileExtensions.contains(e) }
     }
 }
 

@@ -77,7 +77,9 @@ struct SessionArchive: Codable {
 // MARK: - Export / Import service
 
 enum SessionArchiveService {
-    static let fileExtension = "tpschedule"
+    /// nonisolated: an immutable constant that `ImportCatalog` derives its
+    /// session entry from, so the extension is written down exactly once.
+    nonisolated static let fileExtension = "tpschedule"
 
     /// Serialize a session (pretty + sorted keys, like the GOAT exports).
     static func export(_ schedule: ServiceSchedule) throws -> Data {

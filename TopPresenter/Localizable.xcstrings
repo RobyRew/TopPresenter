@@ -31338,6 +31338,489 @@
           }
         }
       }
+    },
+    "Bibles" : {
+      "comment" : "Import kind",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bibles"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Biblias"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Biblii"
+          }
+        }
+      }
+    },
+    "Slides" : {
+      "comment" : "Import kind",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Slides"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diapositivas"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Slide-uri"
+          }
+        }
+      }
+    },
+    "TopPresenter Session" : {
+      "comment" : "Format name",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "TopPresenter Session"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sesión de TopPresenter"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sesiune TopPresenter"
+          }
+        }
+      }
+    },
+    "A service running order, with stable references into the library." : {
+      "comment" : "Format description",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A service running order, with stable references into the library."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El orden de un servicio, con referencias estables a la biblioteca."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ordinea unui serviciu, cu referințe stabile către bibliotecă."
+          }
+        }
+      }
+    },
+    "TopPresenter Theme" : {
+      "comment" : "Format name",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "TopPresenter Theme"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tema de TopPresenter"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Temă TopPresenter"
+          }
+        }
+      }
+    },
+    "The complete presentation look, with backgrounds embedded in the package." : {
+      "comment" : "Format description",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The complete presentation look, with backgrounds embedded in the package."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El aspecto completo de la presentación, con los fondos incluidos en el paquete."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aspectul complet al prezentării, cu fundalurile incluse în pachet."
+          }
+        }
+      }
+    },
+    "TopPresenter Slides" : {
+      "comment" : "Format name",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "TopPresenter Slides"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diapositivas de TopPresenter"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Slide-uri TopPresenter"
+          }
+        }
+      }
+    },
+    "Custom slides." : {
+      "comment" : "Format description",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Custom slides."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diapositivas personalizadas."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Slide-uri personalizate."
+          }
+        }
+      }
+    },
+    "The native format, with every arrangement, chord and translation." : {
+      "comment" : "Format description",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The native format, with every arrangement, chord and translation."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El formato nativo, con todos los arreglos, acordes y traducciones."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Formatul nativ, cu toate aranjamentele, acordurile și traducerile."
+          }
+        }
+      }
+    },
+    "OpenSong — including files with no extension." : {
+      "comment" : "Format description",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenSong — including files with no extension."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenSong — incluidos los archivos sin extensión."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenSong — inclusiv fișiere fără extensie."
+          }
+        }
+      }
+    },
+    "OpenLyrics XML." : {
+      "comment" : "Format description",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenLyrics XML."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenLyrics XML."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenLyrics XML."
+          }
+        }
+      }
+    },
+    "ChordPro, with chords inline in the text." : {
+      "comment" : "Format description",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ChordPro, with chords inline in the text."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ChordPro, con los acordes dentro del texto."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ChordPro, cu acorduri în text."
+          }
+        }
+      }
+    },
+    "Plain text, with verses separated by blank lines." : {
+      "comment" : "Format description",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Plain text, with verses separated by blank lines."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Texto simple, con las estrofas separadas por líneas en blanco."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Text simplu, cu strofele separate prin linii goale."
+          }
+        }
+      }
+    },
+    "PowerPoint — each slide's text becomes a verse." : {
+      "comment" : "Format description",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PowerPoint — each slide's text becomes a verse."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PowerPoint — el texto de cada diapositiva se convierte en una estrofa."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PowerPoint — textul fiecărui slide devine o strofă."
+          }
+        }
+      }
+    },
+    "Background images and graphics." : {
+      "comment" : "Format description",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Background images and graphics."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Imágenes de fondo y gráficos."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Imagini de fundal și grafice."
+          }
+        }
+      }
+    },
+    "Video clips." : {
+      "comment" : "Format description",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Video clips."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Clips de vídeo."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Clipuri video."
+          }
+        }
+      }
+    },
+    "Audio files." : {
+      "comment" : "Format description",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Audio files."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Archivos de audio."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fișiere audio."
+          }
+        }
+      }
+    },
+    "Some subfolders are deeper than %lld levels and were not scanned." : {
+      "comment" : "Import scan truncation",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Some subfolders are deeper than %lld levels and were not scanned."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Algunas subcarpetas superan los %lld niveles y no se han recorrido."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unele subdosare sunt mai adânci de %lld niveluri și nu au fost parcurse."
+          }
+        }
+      }
+    },
+    "More than %lld files were found; the rest were skipped." : {
+      "comment" : "Import scan truncation",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "More than %lld files were found; the rest were skipped."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Se han encontrado más de %lld archivos; el resto se ha omitido."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "S-au găsit peste %lld fișiere; restul au fost ignorate."
+          }
+        }
+      }
+    },
+    "More than %lld entries were examined; the scan stopped there." : {
+      "comment" : "Import scan truncation",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "More than %lld entries were examined; the scan stopped there."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Se han examinado más de %lld elementos; la búsqueda se ha detenido."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "S-au parcurs peste %lld elemente; căutarea s-a oprit."
+          }
+        }
+      }
+    },
+    "The scan was cancelled." : {
+      "comment" : "Import scan truncation",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The scan was cancelled."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La búsqueda se ha cancelado."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Căutarea a fost anulată."
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

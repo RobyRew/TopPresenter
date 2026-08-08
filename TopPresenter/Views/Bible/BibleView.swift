@@ -1272,7 +1272,7 @@ struct BibleImportSheet: View {
         panel.prompt = String(localized: "Import", comment: "Open panel button")
 
         guard panel.runModal() == .OK else { return }
-        let pending = DragDropImportHandler.classifyExpanded(panel.urls)
+        let pending = DragDropImportHandler.classifyExpanded(panel.urls, keeping: [.bible, .song])
         guard !pending.isEmpty else {
             appState.showError(
                 String(localized: "Nothing to import", comment: "Alert title"),
@@ -1356,8 +1356,9 @@ struct BibleImportSheet: View {
     ///
     /// The recursive scan runs on a background task: a Documents-sized tree would
     /// otherwise block the main thread (the spinning-rainbow beach ball) while it
-    /// walks thousands of entries. The extension filter in `expandToImportableFiles`
-    /// means we never open unrelated files (drone footage, archives, …).
+    /// walks thousands of entries. `ImportScanner`'s extension filter means we
+    /// never open unrelated files (drone footage, archives, …), and its budget
+    /// means a tree too big to finish says so instead of going quiet.
     private func handleSelectedURLs(_ urls: [URL]) {
         guard !urls.isEmpty else { return }
         isScanning = true
@@ -1366,7 +1367,7 @@ struct BibleImportSheet: View {
             // (Task.detached) so the UI stays live; only the small Sendable results
             // come back to the main actor below.
             let expanded = await Task.detached(priority: .userInitiated) {
-                DragDropImportHandler.expandToImportableFiles(urls)
+                ImportScanner.scan(urls).files
             }.value
 
             // A single Bible file → inline single-import flow (with format override).

@@ -1,0 +1,186 @@
+//
+//  ImportScanner.swift
+//  TopPresenter
+//
+//  Turns whatever was dropped or picked — files, folders, folders of folders —
+//  into the list of things we can actually import.
+//
+//  It replaces `DragDropImportHandler.expandToImportableFiles`, which had three
+//  defects that all looked identical to the operator: the drop simply did
+//  nothing, and nothing said why.
+//
+//    · it filtered on Bible/Song extensions only, so a folder of photos yielded
+//      nothing at all
+//    · it required an extension, so a folder of OpenSong files yielded nothing —
+//      even though dropping one of those files DIRECTLY imports it fine
+//    · it stopped at three levels, which any real songbook tree exceeds
+//      (Cântări/Tineret/2026/Vara/… is four before a single file)
+//
+//  The depth cap was there for a good reason: a Documents tree full of multi-GB
+//  drone footage would beach-ball the app. That protection is real and is kept —
+//  but it comes from the EXTENSION FILTER, which never opens a file it cannot
+//  use, not from refusing to look. What replaces the cap is a budget that says
+//  when it stopped, so "there is more down there" is something the operator gets
+//  told rather than something they have to guess.
+//
+
+import Foundation
+
+nonisolated enum ImportScanner {
+
+    /// Limits on how much of the filesystem one scan will look at.
+    struct Budget: Sendable {
+        /// The selected folder is depth 0. Eight covers every plausible library
+        /// tree while still refusing to walk a whole home directory.
+        var maxDepth = 8
+        /// Enough for a full songbook collection; past this, the operator is
+        /// almost certainly pointing at the wrong folder.
+        var maxCandidates = 5_000
+        /// Entries LOOKED AT, importable or not. This is the one that stops a
+        /// node_modules or a Photos library, where the file count dwarfs
+        /// anything we would keep.
+        var maxVisitedEntries = 200_000
+
+        static let `default` = Budget()
+    }
+
+    /// Why a scan stopped early. Always surfaced — a silent truncation is how
+    /// "I dropped the folder and half of it is missing" happens.
+    enum Truncation: Sendable, Equatable {
+        case depth(Int)
+        case candidates(Int)
+        case entries(Int)
+        case cancelled
+
+        var message: String {
+            switch self {
+            case .depth(let limit):
+                return String(localized: "Some subfolders are deeper than \(limit) levels and were not scanned.",
+                              comment: "Import scan truncation")
+            case .candidates(let limit):
+                return String(localized: "More than \(limit) files were found; the rest were skipped.",
+                              comment: "Import scan truncation")
+            case .entries(let limit):
+                return String(localized: "More than \(limit) entries were examined; the scan stopped there.",
+                              comment: "Import scan truncation")
+            case .cancelled:
+                return String(localized: "The scan was cancelled.", comment: "Import scan truncation")
+            }
+        }
+    }
+
+    struct Result: Sendable {
+        var files: [URL] = []
+        /// Everything hit, in the order hit. Usually empty.
+        var truncations: [Truncation] = []
+        /// Entries examined — for the progress line on a big drop.
+        var visitedEntries = 0
+
+        var wasTruncated: Bool { !truncations.isEmpty }
+    }
+
+    /// Expand a selection into importable sources.
+    ///
+    /// Pure file inspection and safe to run off-main; `isCancelled` is consulted
+    /// every 256 entries so a huge tree stays interruptible.
+    static func scan(
+        _ urls: [URL],
+        budget: Budget = .default,
+        isCancelled: () -> Bool = { false }
+    ) -> Result {
+        let fm = FileManager.default
+        var result = Result()
+        var seen = Set<String>()
+        var stopped = false
+
+        func note(_ truncation: Truncation) {
+            if !result.truncations.contains(truncation) { result.truncations.append(truncation) }
+        }
+
+        func add(_ url: URL) {
+            guard result.files.count < budget.maxCandidates else {
+                note(.candidates(budget.maxCandidates))
+                stopped = true
+                return
+            }
+            if seen.insert(url.standardizedFileURL.path).inserted { result.files.append(url) }
+        }
+
+        /// True when a file with no extension is worth keeping. This is the only
+        /// place the scanner opens anything, and `detectSongFormat` reads a
+        /// mapped 2 KB prefix rather than the file, so an extensionless 4 GB
+        /// blob costs the same as an empty one.
+        func extensionlessFileIsImportable(_ url: URL) -> Bool {
+            ImportService.detectSongFormat(fileURL: url) != nil
+                || ImportService.detectBibleFormat(fileURL: url) != nil
+        }
+
+        func walk(_ url: URL, depth: Int) {
+            guard !stopped else { return }
+
+            result.visitedEntries += 1
+            if result.visitedEntries % 256 == 0, isCancelled() {
+                note(.cancelled)
+                stopped = true
+                return
+            }
+            guard result.visitedEntries <= budget.maxVisitedEntries else {
+                note(.entries(budget.maxVisitedEntries))
+                stopped = true
+                return
+            }
+
+            var isDirectory: ObjCBool = false
+            guard fm.fileExists(atPath: url.path, isDirectory: &isDirectory) else { return }
+
+            if !isDirectory.boolValue {
+                guard !url.lastPathComponent.hasPrefix(".") else { return }
+                switch ImportCatalog.candidacy(of: url) {
+                case .accept: add(url)
+                case .probe: if extensionlessFileIsImportable(url) { add(url) }
+                case .reject: return
+                }
+                return
+            }
+
+            // Some folders ARE the document: a `.tptheme` package, a USFM book
+            // set. Walking into them would import their parts as loose files.
+            if ImportCatalog.directoryExtensions.contains(url.pathExtension.lowercased()) {
+                add(url); return
+            }
+            if ImportService.detectBibleFormat(fileURL: url) == .usfm { add(url); return }
+
+            guard depth < budget.maxDepth else {
+                note(.depth(budget.maxDepth))
+                return
+            }
+
+            let children = (try? fm.contentsOfDirectory(
+                at: url, includingPropertiesForKeys: [.isDirectoryKey],
+                options: [.skipsHiddenFiles])) ?? []
+            for child in children.sorted(by: {
+                $0.lastPathComponent.localizedStandardCompare($1.lastPathComponent) == .orderedAscending
+            }) {
+                walk(child, depth: depth + 1)
+            }
+        }
+
+        for url in urls { walk(url, depth: 0) }
+        return result
+    }
+
+    /// Open the security scopes for `roots`, run `body`, and close them again —
+    /// whatever happens.
+    ///
+    /// Every scope opened has to be closed. The code this replaced opened one
+    /// per dropped root and closed none, with a comment claiming they were
+    /// "kept open until the function ends" and nothing that ever ended them.
+    static func withScopedRoots<T>(_ roots: [URL], _ body: () throws -> T) rethrows -> T {
+        var opened: [URL] = []
+        for root in roots where root.startAccessingSecurityScopedResource() {
+            opened.append(root)
+        }
+        defer { for root in opened { root.stopAccessingSecurityScopedResource() } }
+        return try body()
+    }
+}

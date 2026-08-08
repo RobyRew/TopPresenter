@@ -221,7 +221,10 @@ struct MediaView: View {
         guard panel.runModal() == .OK else { return }
 
         for url in panel.urls {
-            let kind = MediaKind.classify(extension: url.pathExtension)
+            // The panel already filters to media types, so an unrecognised
+            // extension here means a file we have no player for. Skipping it
+            // beats importing a library item that can never render.
+            guard let kind = MediaKind.classify(extension: url.pathExtension) else { continue }
             let item = MediaItem(name: url.lastPathComponent, filePath: url.path, mediaType: kind.rawValue)
             modelContext.insert(item)
             item.createBookmark(from: url)

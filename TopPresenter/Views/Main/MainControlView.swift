@@ -405,17 +405,19 @@ struct MainControlView: View {
             let urls = collected.withLock { $0 }
             guard !urls.isEmpty else { return }
             Task {
-                // EXPAND folders first (max 2 subfolder levels, USFM kept whole) —
-                // dropping one or MORE folders now works exactly like the picker.
-                // Direct FILES keep their old classification (incl. media/unknown).
-                // The walk runs off the main actor so a big tree never beach-balls.
+                // EXPAND folders first (USFM sets and .tptheme packages kept
+                // whole) — dropping one or MORE folders works exactly like the
+                // picker. Direct FILES keep their own classification, including
+                // media and unknown, so a single dropped file is never filtered
+                // out by the scanner's rules. The walk runs off the main actor
+                // so a big tree never beach-balls.
                 let classified = await Task.detached(priority: .userInitiated) {
                     let fm = FileManager.default
                     var expanded: [URL] = []
                     for url in urls {
                         var isDir: ObjCBool = false
                         if fm.fileExists(atPath: url.path, isDirectory: &isDir), isDir.boolValue {
-                            expanded.append(contentsOf: DragDropImportHandler.expandToImportableFiles([url]))
+                            expanded.append(contentsOf: ImportScanner.scan([url]).files)
                         } else {
                             expanded.append(url)
                         }

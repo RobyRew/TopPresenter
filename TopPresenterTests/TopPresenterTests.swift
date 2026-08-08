@@ -300,20 +300,53 @@ import SwiftData
         try writeBible(lang1.appendingPathComponent("B.json"))
         try writeBible(lang2deep.appendingPathComponent("C.json"))     // nested subfolder
         try "not a bible".data(using: .utf8)!.write(to: root.appendingPathComponent("readme.txt"))
-        // Beyond the 2-subfolder limit -> must be IGNORED.
-        let tooDeep = root.appendingPathComponent("English/extra/way")
-        try fm.createDirectory(at: tooDeep, withIntermediateDirectories: true)
-        try writeBible(tooDeep.appendingPathComponent("D.json"))
+        // Four levels down. This used to be silently ignored: the walk stopped
+        // at three, which any real library tree exceeds. It is found now, and
+        // what stops a runaway scan is the budget — which SAYS that it stopped.
+        let deeper = root.appendingPathComponent("English/extra/way")
+        try fm.createDirectory(at: deeper, withIntermediateDirectories: true)
+        try writeBible(deeper.appendingPathComponent("D.json"))
 
-        // Picking the ROOT folder finds Bibles up to 2 subfolder levels deep,
-        // ignoring junk and anything deeper.
-        let expanded = DragDropImportHandler.expandToImportableFiles([root])
-        #expect(expanded.filter { $0.pathExtension == "json" }.count == 3)
-        #expect(!expanded.contains { $0.lastPathComponent == "D.json" })
+        let scan = ImportScanner.scan([root])
+        #expect(scan.files.filter { $0.pathExtension == "json" }.count == 4)
+        #expect(scan.files.contains { $0.lastPathComponent == "D.json" })
+        #expect(!scan.wasTruncated, "nothing here comes close to the budget")
 
         let pending = DragDropImportHandler.classifyExpanded([root])
         let bibles = pending.filter { if case .bible = $0.category { return true }; return false }
-        #expect(bibles.count == 3)
+        #expect(bibles.count == 4)
+    }
+
+    /// The budget replaces the depth cap, and the difference that matters is
+    /// that it reports itself. A scan that quietly returns half a folder is how
+    /// "I imported it and songs are missing" happens.
+    @Test func exceedingTheDepthBudgetIsReportedRatherThanSilent() throws {
+        let fm = FileManager.default
+        let root = fm.temporaryDirectory.appendingPathComponent("tp_deep_\(UUID().uuidString)")
+        let deep = root.appendingPathComponent(Array(repeating: "n", count: 10).joined(separator: "/"))
+        try fm.createDirectory(at: deep, withIntermediateDirectories: true)
+        try writeBible(deep.appendingPathComponent("TooDeep.json"))
+        defer { try? fm.removeItem(at: root) }
+
+        let scan = ImportScanner.scan([root])
+        #expect(scan.files.isEmpty)
+        #expect(scan.truncations.contains(.depth(8)))
+        #expect(scan.truncations.first?.message.isEmpty == false,
+                "the truncation has to be sayable to the operator, not just detectable")
+    }
+
+    @Test func theCandidateBudgetStopsAndSaysSo() throws {
+        let fm = FileManager.default
+        let root = fm.temporaryDirectory.appendingPathComponent("tp_many_\(UUID().uuidString)")
+        try fm.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? fm.removeItem(at: root) }
+        for index in 0..<25 { try writeBible(root.appendingPathComponent("b\(index).json")) }
+
+        var budget = ImportScanner.Budget.default
+        budget.maxCandidates = 10
+        let scan = ImportScanner.scan([root], budget: budget)
+        #expect(scan.files.count == 10)
+        #expect(scan.truncations.contains(.candidates(10)))
     }
 }
 
@@ -3442,7 +3475,9 @@ struct SessionArchiveTests {
         #expect(MediaKind.classify(extension: "MOV") == .video)
         #expect(MediaKind.classify(extension: "mp3") == .audio)
         #expect(MediaKind.classify(extension: "flac") == .audio)
-        #expect(MediaKind.classify(extension: "xyz") == .image)   // permissive fallback
+        #expect(MediaKind.classify(extension: "xyz") == nil)      // "not media" is sayable now
+        #expect(MediaKind.classify(extension: "svg") == .image)   // was known to one list only
+        #expect(MediaKind.classify(extension: "flv") == nil)      // AVPlayer cannot play it
     }
 
     @Test @MainActor func filterByKindAndQueryPreservesOrder() {
@@ -7625,7 +7660,7 @@ struct PresentationSlideSnapshot: Equatable {
     /// beach-balling the app, which is a real risk. So the fix is not "drop the
     /// filter" but "widen it to every kind we can import", which still never
     /// opens a file it cannot use.
-    @Test(.disabled("red until Phase 2 — ImportScanner filters on ImportCatalog, not on bible/song only"))
+    @Test
     func aFolderOfPhotosYieldsItsPhotos() throws {
         let root = try makeTree([
             "poze/fundal.jpg": "not really a jpeg",
@@ -7634,7 +7669,7 @@ struct PresentationSlideSnapshot: Equatable {
         ])
         defer { try? FileManager.default.removeItem(at: root) }
 
-        let found = DragDropImportHandler.expandToImportableFiles([root])
+        let found = ImportScanner.scan([root]).files
         #expect(found.count == 3,
                 "a folder of photos yielded \(found.map(\.lastPathComponent)) — dropping it does nothing at all")
     }
@@ -7643,7 +7678,7 @@ struct PresentationSlideSnapshot: Equatable {
     /// though `SongImportProtocol.swift:34-48` explicitly accepts extensionless
     /// files when handed them directly. Drop the file: it imports. Drop the
     /// folder containing it: nothing happens.
-    @Test(.disabled("red until Phase 2 — ImportScanner probes extensionless files"))
+    @Test
     func aFolderOfExtensionlessOpenSongFilesYieldsThem() throws {
         let root = try makeTree([
             "cantari/MareEstiTu": Self.openSongXML,
@@ -7651,7 +7686,7 @@ struct PresentationSlideSnapshot: Equatable {
         ])
         defer { try? FileManager.default.removeItem(at: root) }
 
-        let found = DragDropImportHandler.expandToImportableFiles([root])
+        let found = ImportScanner.scan([root]).files
         #expect(found.count == 2,
                 "extensionless OpenSong files were skipped by the folder walk, though dropping one directly imports it")
     }
@@ -7661,14 +7696,14 @@ struct PresentationSlideSnapshot: Equatable {
     /// exists as beach-ball protection, which the extension filter already
     /// provides; Phase 2 replaces it with a budget that REPORTS truncation
     /// instead of silently stopping.
-    @Test(.disabled("red until Phase 2 — maxDepth 8 + a reported budget replaces the silent depth-3 cap"))
+    @Test
     func theWalkReachesPastTheThirdLevel() throws {
         let root = try makeTree([
             "Cantari/Tineret/2026/Vara/cantec.chordpro": "{title: Mare ești Tu}\nMare ești Tu",
         ])
         defer { try? FileManager.default.removeItem(at: root) }
 
-        let found = DragDropImportHandler.expandToImportableFiles([root])
+        let found = ImportScanner.scan([root]).files
         #expect(found.count == 1,
                 "a file four folders deep is invisible to the walk, and nothing tells the operator it was skipped")
     }
@@ -7680,7 +7715,7 @@ struct PresentationSlideSnapshot: Equatable {
     /// `MediaKind.classify` knows none of them and answers `.image` for all
     /// three via its fallback — so an `.flv` classified as video by one is an
     /// image to the other. Plan §6.A collapses them into `MediaKind`.
-    @Test(.disabled("red until Phase 2 — one media list, on MediaKind"))
+    @Test
     func bothMediaListsAgreeOnEveryExtension() throws {
         let root = try makeTree([
             "a.svg": "<svg/>", "b.ico": "icon", "c.flv": "flash", "d.mp4": "video", "e.jpg": "photo",
@@ -7690,8 +7725,8 @@ struct PresentationSlideSnapshot: Equatable {
         for url in try FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: nil) {
             guard case let .media(kindRaw) = DragDropImportHandler.classify(url) else { continue }
             let kind = MediaKind.classify(extension: url.pathExtension)
-            #expect(kind.rawValue == kindRaw,
-                    "\(url.lastPathComponent): the drop handler says \(kindRaw), MediaKind says \(kind.rawValue)")
+            #expect(kind?.rawValue == kindRaw,
+                    "\(url.lastPathComponent): the drop handler says \(kindRaw), MediaKind says \(kind?.rawValue ?? "not media")")
         }
     }
 
@@ -7699,9 +7734,92 @@ struct PresentationSlideSnapshot: Equatable {
     /// for anything it does not recognise. Harmless while only a media picker
     /// calls it; the moment the folder walk recurses (Phase 2) it would turn a
     /// stray `.docx` into a media item.
-    @Test(.disabled("red until Phase 2 — MediaKind.classify becomes optional"))
+    @Test
     func anUnknownExtensionIsNotSilentlyAnImage() {
         #expect(MediaKind.classify(extension: "docx") != .image,
                 "an unrecognised extension answers .image, so recursing a folder would import documents as photos")
+    }
+}
+
+// MARK: - The format registry
+//
+// `ImportCatalog` is only worth having if it cannot drift from the enums it
+// describes. These check that it is genuinely derived rather than a fourth
+// hand-maintained list that happens to agree today.
+
+@MainActor struct ImportCatalogTests {
+
+    @Test func everyFormatEnumIsRepresented() {
+        let bible = Set(ImportCatalog.all.filter { $0.kind == .bible }.map(\.displayName))
+        for format in SupportedBibleFormat.allCases {
+            #expect(bible.contains(format.displayName), "\(format) is missing from the catalog")
+        }
+        let song = Set(ImportCatalog.all.filter { $0.kind == .song }.map(\.displayName))
+        for format in SupportedSongFormat.allCases {
+            #expect(song.contains(format.displayName), "\(format) is missing from the catalog")
+        }
+        let media = Set(ImportCatalog.all.filter { $0.kind == .media }.map(\.displayName))
+        for kind in MediaKind.allCases {
+            #expect(media.contains(kind.filterLabel), "\(kind) is missing from the catalog")
+        }
+    }
+
+    /// The regression that started all of this: media extensions were absent
+    /// from the walk's filter, so a folder of photos yielded nothing.
+    @Test func mediaExtensionsAreImportable() {
+        for ext in ["jpg", "png", "heic", "svg", "mp4", "mov", "mp3", "wav"] {
+            #expect(ImportCatalog.importableExtensions.contains(ext), "\(ext) is not importable")
+        }
+        #expect(!ImportCatalog.importableExtensions.contains("flv"),
+                "flv is listed as importable, but AVPlayer cannot play it")
+    }
+
+    @Test func candidacyOpensOnlyWhatItMust() {
+        func candidacy(_ name: String) -> ImportCatalog.Candidacy {
+            ImportCatalog.candidacy(of: URL(fileURLWithPath: "/tmp/\(name)"))
+        }
+        #expect(candidacy("biblia.tpbible") == .reject)   // Phase 6 adds the extension
+        #expect(candidacy("biblia.json") == .accept)
+        #expect(candidacy("fundal.jpg") == .accept)
+        #expect(candidacy("raport.docx") == .reject)      // never opened
+        #expect(candidacy("MareEstiTu") == .probe)        // extensionless OpenSong
+    }
+
+    /// `.xml` and `.txt` are genuinely ambiguous — four formats claim `.xml`
+    /// across two libraries — so the catalog answers with a SET and leaves the
+    /// decision to a content probe. A single-answer lookup would have to guess.
+    @Test func ambiguousExtensionsReportEveryPossibility() {
+        let xml = ImportCatalog.possibleKinds(for: URL(fileURLWithPath: "/tmp/a.xml"))
+        #expect(xml == [.bible, .song])
+        let txt = ImportCatalog.possibleKinds(for: URL(fileURLWithPath: "/tmp/a.txt"))
+        #expect(txt == [.bible, .song])
+        let jpg = ImportCatalog.possibleKinds(for: URL(fileURLWithPath: "/tmp/a.jpg"))
+        #expect(jpg == [.media])
+    }
+
+    /// Directory sources are documents, not folders to walk into.
+    @Test func packageAndFolderFormatsAreMarked() {
+        #expect(ImportCatalog.directoryExtensions.contains("tptheme"))
+        let usfm = ImportCatalog.all.first { $0.id == "bible.usfm" }
+        #expect(usfm?.isDirectorySource == true)
+    }
+
+    /// Custom Slides are described but not yet wired. When Phase 6 lands the
+    /// format, this test is what says so out loud.
+    @Test func customSlidesAreListedButNotYetImportable() {
+        let slides = ImportCatalog.all.first { $0.kind == .slides }
+        #expect(slides != nil, "the catalog should describe the whole app, not only the finished parts")
+        #expect(slides?.canImport == false)
+        #expect(slides?.canExport == false)
+        #expect(!ImportCatalog.importableExtensions.contains("tpslides"))
+    }
+
+    /// An open panel scoped to one library must not offer another's files.
+    @Test func panelTypesCanBeScopedToOneLibrary() {
+        let bibleOnly = ImportCatalog.contentTypes(for: [.bible])
+            .compactMap(\.preferredFilenameExtension)
+        #expect(!bibleOnly.contains("jpg"))
+        #expect(ImportCatalog.contentTypes(for: [.media])
+            .compactMap(\.preferredFilenameExtension).contains("mp4"))
     }
 }
