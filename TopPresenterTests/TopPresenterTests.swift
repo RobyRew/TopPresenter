@@ -6169,3 +6169,281 @@ struct RemoteExtractionTests {
         #expect(!pm.hasLiveMediaBox(in: "media"))
     }
 }
+
+// MARK: - Round-trip guards
+//
+// Two mechanisms, and BOTH are needed. A round-trip test alone can be satisfied
+// by never updating the snapshot; a coverage test alone proves a field is listed
+// but not that its value survives. Together they form a ratchet: add a field to
+// a model and the coverage test fails by name; add it to the snapshot and the
+// round-trip test fails until the exporter and importer carry it.
+//
+// The third leg is fixture completeness — a fixture that leaves fields at their
+// defaults makes every round-trip test using it pass for free, which is exactly
+// how `theWholePayloadIsPreserved` passed while ~15 theme fields went unchecked.
+
+/// Every persisted property name of a SwiftData model.
+///
+/// `schemaMetadata` is synthesised by the `@Model` macro, so a newly added `var`
+/// appears here with no hand-maintained list to forget. `PropertyMetadata.name`
+/// is not an accessible member in this SDK, so it is read via `Mirror` over the
+/// metadata value — verified stable: `PropertyMetadata(name:keypath:defaultValue:metadata:)`.
+enum PersistedFieldNames {
+    static func of<T: PersistentModel>(_ type: T.Type) -> Set<String> {
+        Set(type.schemaMetadata.compactMap { property -> String? in
+            guard let name = Mirror(reflecting: property).children
+                .first(where: { $0.label == "name" })
+                .map({ "\($0.value)" }) else { return nil }
+            // `#Index<Song>(…)` shows up in schemaMetadata as a pseudo-property.
+            // It is a database index, not a field anything could export.
+            return name.hasPrefix("SwiftData.Schema.") ? nil : name
+        })
+    }
+}
+
+/// Fails naming any field left at its type's default value.
+///
+/// Guards the fixtures, not the code. A fixture that stops being exhaustive
+/// silently weakens every test built on it, and the failure looks like success.
+@MainActor
+func assertFullyPopulated<T>(
+    _ value: T,
+    exempt: Set<String> = [],
+    sourceLocation: SourceLocation = #_sourceLocation
+) {
+    var unset: [String] = []
+    for child in Mirror(reflecting: value).children {
+        guard let label = child.label, !exempt.contains(label) else { continue }
+        let described = String(describing: child.value)
+        if described == "" || described == "0" || described == "false"
+            || described == "[]" || described == "{}" || described == "nil"
+            || described == "Optional(\"\")" || described == "[:]" {
+            unset.append(label)
+        }
+    }
+    #expect(unset.isEmpty,
+            "fixture leaves \(unset.sorted()) at default — tests built on it would pass vacuously",
+            sourceLocation: sourceLocation)
+}
+
+/// A `Song`'s exportable state, for whole-object comparison across a round trip.
+///
+/// Equatable so a failure names the differing field rather than saying "not
+/// equal". Relationships are covered by their own suites; the exemptions below
+/// each carry a reason, because an unexplained exemption is how a real loss
+/// gets normalised.
+struct SongSnapshot: Equatable {
+    var title = "", author = "", copyright = "", ccliNumber = ""
+    var key = "", tempo = "", songNumber = "", tags = ""
+    var titlesJSON = "", language = "", themesJSON = "", style = ""
+    var songbookNumber = "", authorWords = "", authorMusic = "", authorTranslation = ""
+    var notes = "", mediaJSON = "", extensionsJSON = ""
+    var verified = false, sourceFile = "", originalVersionID = ""
+
+    init(_ song: Song) {
+        title = song.title; author = song.author; copyright = song.copyright
+        ccliNumber = song.ccliNumber; key = song.key; tempo = song.tempo
+        songNumber = song.songNumber; tags = song.tags
+        titlesJSON = song.titlesJSON; language = song.language
+        themesJSON = song.themesJSON; style = song.style
+        songbookNumber = song.songbookNumber
+        authorWords = song.authorWords; authorMusic = song.authorMusic
+        authorTranslation = song.authorTranslation
+        notes = song.notes; mediaJSON = song.mediaJSON
+        extensionsJSON = song.extensionsJSON
+        verified = song.verified; sourceFile = song.sourceFile
+        originalVersionID = song.originalVersionID
+    }
+
+    /// Names this snapshot claims to cover — checked against the model.
+    static let coveredFields: Set<String> = [
+        "title", "author", "copyright", "ccliNumber", "key", "tempo",
+        "songNumber", "tags", "titlesJSON", "language", "themesJSON", "style",
+        "songbookNumber", "authorWords", "authorMusic", "authorTranslation",
+        "notes", "mediaJSON", "extensionsJSON", "verified", "sourceFile",
+        "originalVersionID",
+    ]
+
+    /// Deliberately outside the round trip. Each entry is a claim that losing
+    /// this field is CORRECT — not that we forgot it.
+    static let exemptFields: [String: String] = [
+        "id": "regenerated on import; identity is re-established by the duplicate resolver",
+        "searchText": "denormalized cache rebuilt from title/aliases/author/lyrics",
+        "editLogJSON": "internal change log, documented as never exported (SongModels.swift:153)",
+        "modifiedDate": "a real import must NOT adopt a stranger's timestamp; editor-revert preserves it via preservesTimestamps",
+    ]
+
+    static let relationshipFields: Set<String> = ["collection", "songbook", "versions", "verses"]
+}
+
+@MainActor struct ModelFieldCoverageTests {
+
+    @Test func songSnapshotCoversEveryStoredField() {
+        let model = PersistedFieldNames.of(Song.self)
+        let accounted = SongSnapshot.coveredFields
+            .union(SongSnapshot.exemptFields.keys)
+            .union(SongSnapshot.relationshipFields)
+        let missing = model.subtracting(accounted)
+        #expect(missing.isEmpty, """
+            Song gained \(missing.sorted()). Add each to SongSnapshot AND to \
+            ExportService.songDictV2 AND to TopPresenterSongImporter — or list it \
+            in SongSnapshot.exemptFields with the reason losing it is correct.
+            """)
+    }
+
+    @Test func theSnapshotDoesNotClaimFieldsTheModelLost() {
+        // The other direction: a field renamed or deleted on the model leaves a
+        // stale entry here, and the coverage test above would still pass.
+        let model = PersistedFieldNames.of(Song.self)
+        let stale = SongSnapshot.coveredFields.subtracting(model)
+        #expect(stale.isEmpty, "SongSnapshot lists \(stale.sorted()), which Song no longer has")
+    }
+
+    @Test func everyExemptionIsRealAndExplained() {
+        let model = PersistedFieldNames.of(Song.self)
+        for (field, reason) in SongSnapshot.exemptFields {
+            #expect(model.contains(field), "exemption for '\(field)' names a field Song does not have")
+            #expect(reason.count > 20, "exemption for '\(field)' needs a real reason, not '\(reason)'")
+        }
+    }
+}
+
+// MARK: - Song round trip (GOAT)
+//
+// The song exporter is not only a file format — it is the song editor's undo
+// snapshot (`SongsView.swift:1519`), and Cancel rebuilds the song from it
+// (`:2184-2187`) through `applyResult`, which assigns key/tempo/tags
+// unconditionally (`ImportService.swift:771-774`). So a field the exporter
+// forgets is destroyed for operators who never export anything at all.
+@MainActor struct SongRoundTripTests {
+
+    private func makeContext() throws -> ModelContext {
+        let container = try ModelContainer(
+            for: Schema(versionedSchema: SchemaV2.self),
+            configurations: [ModelConfiguration(isStoredInMemoryOnly: true)]
+        )
+        return ModelContext(container)
+    }
+
+    /// Every exportable field set to a distinctive non-default value.
+    /// `assertFullyPopulated` keeps it honest as the model grows.
+    private func fullyPopulatedSong(in ctx: ModelContext) -> Song {
+        let song = Song(title: "Mare ești Tu", author: "Anon",
+                        copyright: "© 1953", ccliNumber: "7104200", songNumber: "7")
+        ctx.insert(song)
+        // Deliberately DISCRIMINATING values. An earlier version of this fixture
+        // used song.key == the version's key and tags == themes.joined(", "),
+        // so three of the losses below reconstructed by accident and the test
+        // under-reported the bug. A fixture whose values can be re-derived from
+        // elsewhere proves nothing.
+        song.key = "D"                    // version's key is G — must not be re-derived
+        song.tempo = "72"
+        song.tags = "botez, seara"        // themes are worship/easter — must not be re-derived
+        song.titles = ["How Great Thou Art"]
+        song.language = "ro"
+        song.themes = ["worship", "easter"]
+        song.style = "imn"
+        song.songbookNumber = "42"
+        song.authorWords = "Carl Boberg"
+        song.authorMusic = "Trad."
+        song.authorTranslation = "N. Moldoveanu"
+        song.notes = "verificat 2026"
+        song.media = [SongMediaRef(role: "audio", kind: "mp3", filename: "mare.mp3", bookmark: nil)]
+        song.extensionsJSON = #"{"anatomiaEvangheliei":"da"}"#
+        song.verified = true
+        song.sourceFile = "mare-esti-tu.tpsong"
+        // With a songbook present, songDictV2 takes the branch that drops
+        // songNumber; without one it drops songbookNumber. Both must survive.
+        let book = Songbook(name: "Cântările Evangheliei", publisher: "X", language: "ro", year: "1990")
+        ctx.insert(book)
+        song.songbook = book
+
+        let v = SongVersion(name: "Clasică", order: 0, language: "ro",
+                            key: "G", capo: 2, tempo: "72", timeSignature: "4/4")
+        v.arrangement = ["v1", "c"]
+        v.song = song
+        ctx.insert(v)
+        let s1 = SongSection(sectionKey: "v1", type: "verse", label: "Strofa 1", order: 0, lines: [
+            SongLine(text: "Mare ești Tu", chords: [SongChord(sym: "G", pos: 0)], translations: [:])
+        ])
+        s1.version = v
+        ctx.insert(s1)
+        song.originalVersionID = v.id.uuidString
+        return song
+    }
+
+    @Test func theFixtureIsExhaustive() throws {
+        let ctx = try makeContext()
+        let song = fullyPopulatedSong(in: ctx)
+        assertFullyPopulated(SongSnapshot(song))
+    }
+
+    @Test(.disabled("red until Phase 1 — songDictV2 drops key/tempo/tags/songNumber/songbookNumber/sourceFile"))
+    func everyFieldSurvivesAGoatRoundTrip() throws {
+        let ctx = try makeContext()
+        let song = fullyPopulatedSong(in: ctx)
+        let before = SongSnapshot(song)
+
+        let json = try ExportService.exportSongToTopPresenterJSON(song)
+        let result = try #require(TopPresenterSongImporter.result(fromJSON: json))
+        let rebuilt = Song(title: "")
+        ctx.insert(rebuilt)
+        ImportService.applyResult(result, to: rebuilt, modelContext: ctx)
+
+        #expect(SongSnapshot(rebuilt) == before)
+    }
+
+    @Test(.disabled("red until Phase 1 — the fields songDictV2 never emits"))
+    func theSevenLostFieldsAreNamedIndividually() throws {
+        let ctx = try makeContext()
+        let song = fullyPopulatedSong(in: ctx)
+        let json = try ExportService.exportSongToTopPresenterJSON(song)
+        let result = try #require(TopPresenterSongImporter.result(fromJSON: json))
+        let rebuilt = Song(title: "")
+        ctx.insert(rebuilt)
+        ImportService.applyResult(result, to: rebuilt, modelContext: ctx)
+
+        #expect(rebuilt.key == "D", "key lost — re-derived from the version instead")
+        #expect(rebuilt.tempo == "72", "tempo lost")
+        #expect(rebuilt.tags == "botez, seara", "tags lost — rewritten from themes")
+        #expect(rebuilt.songNumber == "7", "songNumber lost — emitted only when songbook == nil")
+        #expect(rebuilt.sourceFile == "mare-esti-tu.tpsong", "sourceFile lost")
+        // songbookNumber is NOT asserted here — see the companion test below.
+    }
+
+    /// `songDictV2` emits `songbook` **or** `songNumber` in an if/else
+    /// (`ExportService.swift:362-369`), so exactly one of the pair is always
+    /// lost and no single fixture can demonstrate both: with a songbook you lose
+    /// `songNumber`, without one you lose `songbookNumber`.
+    @Test(.disabled("red until Phase 1 — the songbook/songNumber if/else"))
+    func theSongbookPairIsMutuallyExclusiveAndOneIsAlwaysLost() throws {
+        let ctx = try makeContext()
+        let song = fullyPopulatedSong(in: ctx)
+        song.songbook = nil               // take the OTHER branch
+        song.songbookNumber = "42"
+
+        let json = try ExportService.exportSongToTopPresenterJSON(song)
+        let result = try #require(TopPresenterSongImporter.result(fromJSON: json))
+        let rebuilt = Song(title: "")
+        ctx.insert(rebuilt)
+        ImportService.applyResult(result, to: rebuilt, modelContext: ctx)
+
+        #expect(rebuilt.songbookNumber == "42",
+                "songbookNumber lost — emitted only inside the songbook dict")
+    }
+
+    /// THE bug: no file, no export, no import — just open the editor and cancel.
+    @Test(.disabled("red until Phase 1 — editor Cancel wipes key/tempo/tags"))
+    func openingTheEditorAndCancellingChangesNothing() throws {
+        let ctx = try makeContext()
+        let song = fullyPopulatedSong(in: ctx)
+        let before = SongSnapshot(song)
+
+        // Exactly what SongEditor does: snapshot on open, rebuild on Cancel.
+        let snapshot = try ExportService.exportSongToTopPresenterJSON(song)
+        let result = try #require(TopPresenterSongImporter.result(fromJSON: snapshot))
+        ImportService.applyResult(result, to: song, modelContext: ctx)
+
+        #expect(SongSnapshot(song) == before, "Cancel must be a no-op")
+    }
+}
