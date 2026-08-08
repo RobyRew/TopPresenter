@@ -6702,6 +6702,14 @@ struct SongSectionSnapshot: Equatable {
             carriedBy: "ExportService.songDictV2 and TopPresenterSongImporter")
     }
 
+    @Test func presentationSlideSnapshotAccountsForEveryStoredField() {
+        assertFieldCoverage(
+            PresentationSlide.self, snapshot: "PresentationSlideSnapshot",
+            covered: PresentationSlideSnapshot.coveredFields,
+            exempt: PresentationSlideSnapshot.exemptFields,
+            carriedBy: "SlideDeckArchive (.tpslides, Phase 6)")
+    }
+
     @Test func serviceScheduleSnapshotAccountsForEveryStoredField() {
         assertFieldCoverage(
             ServiceSchedule.self, snapshot: "ServiceScheduleSnapshot",
@@ -7533,5 +7541,142 @@ struct BibleVerseSnapshot: Equatable {
             Only the versionName fallback still resolves it, and that fails the \
             moment an arrangement is renamed.
             """)
+    }
+}
+
+// MARK: - Custom slides — the format that does not exist yet
+//
+// Custom Slides can neither import nor export, so there is nothing to
+// round-trip. The snapshot is written now anyway, as the CONTRACT `.tpslides`
+// has to meet in Phase 6: a field added to PresentationSlide between now and
+// then fails the coverage test and gets carried, instead of being discovered
+// missing after the format ships.
+
+struct PresentationSlideSnapshot: Equatable {
+    var title = "", content = "", subtitle = "", slideType = ""
+    var order = 0
+
+    init(_ s: PresentationSlide) {
+        title = s.title; content = s.content; subtitle = s.subtitle
+        slideType = s.slideType; order = s.order
+    }
+
+    static let coveredFields: Set<String> = ["title", "content", "subtitle", "slideType", "order"]
+    static let exemptFields: [String: String] = [
+        "id": "regenerated on import; a slide's identity is its content digest (plan §4.2)",
+        "createdDate": "means 'when THIS library made it' — a slide arriving from elsewhere is new here",
+    ]
+}
+
+// MARK: - What the folder walk can see
+//
+// Three defects, all in `expandToImportableFiles`, all invisible to the
+// operator: the drop simply does nothing and nothing says why.
+
+@MainActor struct ImportScannerTests {
+
+    private func makeTree(_ files: [String: String]) throws -> URL {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("scan-\(UUID().uuidString)")
+        for (relativePath, contents) in files {
+            let url = root.appendingPathComponent(relativePath)
+            try FileManager.default.createDirectory(at: url.deletingLastPathComponent(),
+                                                    withIntermediateDirectories: true)
+            try Data(contents.utf8).write(to: url)
+        }
+        return root
+    }
+
+    private static let openSongXML = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <song><title>Mare ești Tu</title><author>Anon</author>
+        <lyrics>[V1]
+        Mare ești Tu</lyrics></song>
+        """
+
+    /// Dropping a folder of photos imports nothing. The filter is Bible/Song
+    /// extensions only (`DragDropImportHandler.swift:95-97`), and media is
+    /// excluded on purpose — the comment cites multi-GB drone footage
+    /// beach-balling the app, which is a real risk. So the fix is not "drop the
+    /// filter" but "widen it to every kind we can import", which still never
+    /// opens a file it cannot use.
+    @Test(.disabled("red until Phase 2 — ImportScanner filters on ImportCatalog, not on bible/song only"))
+    func aFolderOfPhotosYieldsItsPhotos() throws {
+        let root = try makeTree([
+            "poze/fundal.jpg": "not really a jpeg",
+            "poze/logo.png": "not really a png",
+            "poze/clip.mp4": "not really a video",
+        ])
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let found = DragDropImportHandler.expandToImportableFiles([root])
+        #expect(found.count == 3,
+                "a folder of photos yielded \(found.map(\.lastPathComponent)) — dropping it does nothing at all")
+    }
+
+    /// OpenSong files have NO extension, which `isImportableFile` requires — even
+    /// though `SongImportProtocol.swift:34-48` explicitly accepts extensionless
+    /// files when handed them directly. Drop the file: it imports. Drop the
+    /// folder containing it: nothing happens.
+    @Test(.disabled("red until Phase 2 — ImportScanner probes extensionless files"))
+    func aFolderOfExtensionlessOpenSongFilesYieldsThem() throws {
+        let root = try makeTree([
+            "cantari/MareEstiTu": Self.openSongXML,
+            "cantari/CeMareEsti": Self.openSongXML,
+        ])
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let found = DragDropImportHandler.expandToImportableFiles([root])
+        #expect(found.count == 2,
+                "extensionless OpenSong files were skipped by the folder walk, though dropping one directly imports it")
+    }
+
+    /// The depth cap is 3, and a real songbook tree is deeper than that —
+    /// `Cântări/Tineret/2026/Vara/…` is four before a single file. The cap
+    /// exists as beach-ball protection, which the extension filter already
+    /// provides; Phase 2 replaces it with a budget that REPORTS truncation
+    /// instead of silently stopping.
+    @Test(.disabled("red until Phase 2 — maxDepth 8 + a reported budget replaces the silent depth-3 cap"))
+    func theWalkReachesPastTheThirdLevel() throws {
+        let root = try makeTree([
+            "Cantari/Tineret/2026/Vara/cantec.chordpro": "{title: Mare ești Tu}\nMare ești Tu",
+        ])
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let found = DragDropImportHandler.expandToImportableFiles([root])
+        #expect(found.count == 1,
+                "a file four folders deep is invisible to the walk, and nothing tells the operator it was skipped")
+    }
+
+    /// Two media extension lists that do not agree, in a codebase where which
+    /// one you happen to ask decides whether a file is importable at all.
+    ///
+    /// `DragDropImportHandler.MediaExtensions` knows svg, ico and flv;
+    /// `MediaKind.classify` knows none of them and answers `.image` for all
+    /// three via its fallback — so an `.flv` classified as video by one is an
+    /// image to the other. Plan §6.A collapses them into `MediaKind`.
+    @Test(.disabled("red until Phase 2 — one media list, on MediaKind"))
+    func bothMediaListsAgreeOnEveryExtension() throws {
+        let root = try makeTree([
+            "a.svg": "<svg/>", "b.ico": "icon", "c.flv": "flash", "d.mp4": "video", "e.jpg": "photo",
+        ])
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        for url in try FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: nil) {
+            guard case let .media(kindRaw) = DragDropImportHandler.classify(url) else { continue }
+            let kind = MediaKind.classify(extension: url.pathExtension)
+            #expect(kind.rawValue == kindRaw,
+                    "\(url.lastPathComponent): the drop handler says \(kindRaw), MediaKind says \(kind.rawValue)")
+        }
+    }
+
+    /// `MediaKind.classify` cannot say "this is not media" — it answers `.image`
+    /// for anything it does not recognise. Harmless while only a media picker
+    /// calls it; the moment the folder walk recurses (Phase 2) it would turn a
+    /// stray `.docx` into a media item.
+    @Test(.disabled("red until Phase 2 — MediaKind.classify becomes optional"))
+    func anUnknownExtensionIsNotSilentlyAnImage() {
+        #expect(MediaKind.classify(extension: "docx") != .image,
+                "an unrecognised extension answers .image, so recursing a folder would import documents as photos")
     }
 }
