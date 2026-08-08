@@ -8159,3 +8159,139 @@ struct PresentationSlideSnapshot: Equatable {
         #expect(summary.headline == String(localized: "Nothing to import", comment: "Import summary"))
     }
 }
+
+// MARK: - The import plan
+//
+// The rules about what gets selected, what counts as a duplicate within one
+// batch, and when the advanced mode is worth showing — tested without driving
+// a sheet, which is why they live on the model rather than in the view.
+
+@MainActor struct ImportPlanTests {
+
+    private func makeTree(_ files: [String: String]) throws -> URL {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("plan-\(UUID().uuidString)")
+        for (relativePath, contents) in files {
+            let url = root.appendingPathComponent(relativePath)
+            try FileManager.default.createDirectory(at: url.deletingLastPathComponent(),
+                                                    withIntermediateDirectories: true)
+            try Data(contents.utf8).write(to: url)
+        }
+        return root
+    }
+
+    private static func bibleJSON(_ code: String) -> String {
+        """
+        {"format":"TopPresenter Bible","translation":{"code":"\(code)","name":"\(code)"},
+         "books":[{"number":1,"name":"Genesis","testament":"OT",
+         "chapters":[{"number":1,"verses":[{"number":1,"text":"la început"}]}]}]}
+        """
+    }
+
+    /// A three-photo drop should not open a control panel; a mixed folder
+    /// should, because there is something to decide.
+    @Test func advancedModeAppearsOnlyWhenThereIsSomethingToDecide() async throws {
+        let simple = try makeTree(["a.jpg": "x", "b.jpg": "y"])
+        defer { try? FileManager.default.removeItem(at: simple) }
+        let plan = ImportPlanModel()
+        await plan.load([simple])
+        #expect(plan.mode == .simple)
+
+        let mixed = try makeTree(["a.jpg": "x", "biblia.json": Self.bibleJSON("MIX")])
+        defer { try? FileManager.default.removeItem(at: mixed) }
+        let other = ImportPlanModel()
+        await other.load([mixed])
+        #expect(other.mode == .advanced, "two kinds at once is a decision")
+    }
+
+    /// `Biblia.tpbible` and `Biblia copy.tpbible` in one folder. The scanner
+    /// drops the same PATH twice; it cannot see this.
+    @Test func identicalFilesInOneFolderAreDeselectedWithAReason() async throws {
+        let json = Self.bibleJSON("DUP")
+        let root = try makeTree(["biblia.json": json, "biblia copy.json": json, "alta.json": Self.bibleJSON("ALT")])
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let plan = ImportPlanModel()
+        await plan.load([root])
+        #expect(plan.rows.count == 3)
+        let deselected = plan.rows.filter { !$0.isSelected }
+        #expect(deselected.count == 1, "one of the identical pair is kept, the other is not")
+        // "Deselected, no reason given" is indistinguishable from a bug.
+        #expect(deselected.first?.duplicateOf != nil)
+        #expect(plan.selectedRows.count == 2)
+    }
+
+    /// Opening from the Songs tab must not silently import the Bibles that
+    /// happened to share the folder — but it must still SHOW them.
+    @Test func preselectionNarrowsTheSelectionWithoutHidingAnything() async throws {
+        let root = try makeTree(["cantec.chordpro": "{title: T}\nlinie", "biblia.json": Self.bibleJSON("PRE")])
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let plan = ImportPlanModel()
+        plan.preselectedKinds = [.song]
+        await plan.load([root])
+        #expect(plan.rows.count == 2, "the Bible is still listed")
+        #expect(plan.selectedRows.count == 1)
+        #expect(plan.selectedRows.first?.kind == .song)
+    }
+
+    /// A file the operator NAMED gets an answer. The old drop path showed one
+    /// alert reciting a hardcoded format list and said nothing about the file.
+    @Test func aFileYouDroppedYourselfIsAnsweredForByName() async throws {
+        let root = try makeTree(["notes.docx": "x", "a.jpg": "y"])
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let plan = ImportPlanModel()
+        await plan.load([root.appendingPathComponent("notes.docx"),
+                         root.appendingPathComponent("a.jpg")])
+        #expect(plan.rows.count == 1)
+        #expect(plan.unsupported.map(\.fileName) == ["notes.docx"])
+        #expect(plan.unsupported.first?.reason.isEmpty == false)
+    }
+
+    /// A FOLDER is a request to find what is usable inside it, so the four
+    /// hundred unrelated files in a Documents tree are not listed one by one.
+    /// But a folder that yielded nothing has to say so — otherwise the sheet
+    /// just bounces back to its drop zone and the operator is left guessing.
+    @Test func aFolderWithNothingUsableSaysSoInsteadOfGoingQuiet() async throws {
+        let empty = try makeTree(["notes.docx": "x", "raport.xlsx": "y"])
+        defer { try? FileManager.default.removeItem(at: empty) }
+
+        let plan = ImportPlanModel()
+        await plan.load([empty])
+        #expect(plan.rows.isEmpty)
+        #expect(plan.unsupported.count == 1, "the FOLDER is named, not each file inside it")
+        #expect(plan.unsupported.first?.fileName == empty.lastPathComponent)
+        #expect(plan.stage == .planning, "bouncing back to the drop zone would explain nothing")
+    }
+
+    /// The mirror of the rule above: a folder that DID yield something says
+    /// nothing about the unrelated files beside them.
+    @Test func aFolderThatYieldedSomethingDoesNotListItsOtherFiles() async throws {
+        let root = try makeTree(["notes.docx": "x", "a.jpg": "y"])
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let plan = ImportPlanModel()
+        await plan.load([root])
+        #expect(plan.rows.count == 1)
+        #expect(plan.unsupported.isEmpty)
+    }
+
+    @Test func selectingNothingDisablesTheImportButton() async throws {
+        let root = try makeTree(["a.jpg": "x"])
+        defer { try? FileManager.default.removeItem(at: root) }
+        let plan = ImportPlanModel()
+        await plan.load([root])
+        #expect(plan.canImport)
+        plan.setSelected(false, forKind: .media)
+        #expect(!plan.canImport)
+    }
+
+    /// A `.tpschedule` and a `.tptheme` are documents the sheet handles now.
+    /// They used to have their own panels, each with its own folder walk and
+    /// its own (absent) duplicate behaviour.
+    @Test func sessionsAndThemesAreFirstClassCategories() {
+        #expect(DragDropImportHandler.classify(URL(fileURLWithPath: "/tmp/a.tpschedule")).kind == .session)
+        #expect(DragDropImportHandler.classify(URL(fileURLWithPath: "/tmp/a.tptheme")).kind == .theme)
+    }
+}

@@ -1293,57 +1293,12 @@ struct ThemeGalleryView: View {
         }
     }
 
+    /// Themes import through the ONE sheet. The panel this replaces accepted
+    /// ANY file type, did its own one-level folder walk, and had no duplicate
+    /// check — the same package opened twice produced two themes.
     private func importThemes() {
-        let panel = NSOpenPanel()
-        panel.canChooseDirectories = true
-        panel.canChooseFiles = true
-        panel.allowsMultipleSelection = true
-        panel.message = String(localized: "Alege pachete .tptheme — sau un folder care le conține", comment: "Import panel message")
-        guard panel.runModal() == .OK else { return }
-
-        // Selecting a plain folder imports every .tptheme found inside it.
-        var packages: [URL] = []
-        let fm = FileManager.default
-        for url in panel.urls {
-            if url.pathExtension == "tptheme" {
-                packages.append(url)
-            } else if (try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true {
-                let accessing = url.startAccessingSecurityScopedResource()
-                let children = (try? fm.contentsOfDirectory(at: url, includingPropertiesForKeys: nil)) ?? []
-                packages.append(contentsOf: children.filter { $0.pathExtension == "tptheme" })
-                if accessing { url.stopAccessingSecurityScopedResource() }
-            } else {
-                packages.append(url)
-            }
-        }
-
-        // A bare count hides which package failed and why — the operator is left
-        // guessing which of a dozen dropped themes did not make it.
-        var imported = 0
-        var failures: [String] = []
-        var skippedAssets: [String] = []
-        for url in packages {
-            do {
-                _ = try pm.importTheme(from: url)
-                imported += 1
-                skippedAssets.append(contentsOf: pm.lastThemeImportSkippedAssets)
-            } catch {
-                failures.append("\(url.lastPathComponent) — \(error.localizedDescription)")
-            }
-        }
-
-        var message = imported > 0
-            ? String(localized: "S-au importat \(imported) teme.", comment: "Import result")
-            : String(localized: "Niciun pachet .tptheme valid în selecție.", comment: "Import result")
-        if !failures.isEmpty {
-            message += "\n" + String(localized: "Eșuate: \(failures.joined(separator: "; "))",
-                                     comment: "Import result — failures")
-        }
-        if !skippedAssets.isEmpty {
-            message += "\n" + String(localized: "Fișiere media lipsă din pachet: \(skippedAssets.joined(separator: ", ")). Fundalurile respective vor fi goale.",
-                                     comment: "Import result — skipped assets")
-        }
-        importResultMessage = message
+        NotificationCenter.default.post(name: .importFiles, object: nil,
+                                        userInfo: ["kinds": [ImportKind.theme.rawValue]])
     }
 }
 

@@ -214,26 +214,11 @@ struct MediaView: View {
                                video: videoPlayerService, audio: audioPlayerManager)
     }
 
+    /// Media imports through the ONE sheet, so a folder of photos, a mixed
+    /// drop and a picked file all behave the same and all report the same way.
     private func importMedia() {
-        let panel = NSOpenPanel()
-        panel.allowedContentTypes = ImportCatalog.contentTypes(for: [.media])
-        panel.allowsMultipleSelection = true
-        // Folders are pickable now: the scanner walks them and keeps only what
-        // it can actually read, so "import my backgrounds folder" works.
-        panel.canChooseDirectories = true
-        panel.message = String(localized: "Select media files or folders",
-                               comment: "Open panel message")
-        guard panel.runModal() == .OK else { return }
-
-        let outcome = MediaImportService.importMedia(
-            urls: ImportScanner.scan(panel.urls).files, modelContext: modelContext)
-        if !outcome.skipped.isEmpty {
-            appState.showSuccess(
-                String(localized: "Import complete", comment: "Alert title"),
-                message: String(localized: "\(outcome.imported.count) imported, \(outcome.skipped.count) already in the library.",
-                                comment: "Alert message")
-            )
-        }
+        NotificationCenter.default.post(name: .importFiles, object: nil,
+                                        userInfo: ["kinds": [ImportKind.media.rawValue]])
     }
 
     private func deleteMedia(_ item: MediaItem) {

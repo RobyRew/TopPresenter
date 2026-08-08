@@ -25,7 +25,8 @@ struct MainControlView: View {
     @State private var showBatchImport = false
     @State private var showBatchExport = false
     @State private var showLayoutEditor = false
-    @State private var droppedFiles: [PendingImportFile] = []
+    @State private var importURLs: [URL] = []
+    @State private var importKinds: Set<ImportKind> = []
     @State private var isDragTargeted = false
     /// Drives our own sidebar toggle. Per window, so one tab hiding its sidebar
     /// leaves the others alone.
@@ -105,7 +106,7 @@ struct MainControlView: View {
                     KeyboardShortcutsSheet()
                 }
                 .sheet(isPresented: $showBatchImport) {
-                    BatchImportSheet(pendingFiles: droppedFiles)
+                    UniversalImportSheet(initialURLs: importURLs, preselectedKinds: importKinds)
                 }
                 .sheet(isPresented: $showBatchExport) {
                     BatchExportSheet()
@@ -129,11 +130,14 @@ struct MainControlView: View {
                 ))
                 .modifier(QuickSearchCommandHandler(showQuickSearch: $showQuickSearch))
                 .modifier(BatchExportCommandHandler(showBatchExport: $showBatchExport))
-                .onKeyWindowNotification(.batchImportFiles) { notification in
-                    if let files = notification.userInfo?["files"] as? [PendingImportFile] {
-                        droppedFiles = files
-                        showBatchImport = true
-                    }
+                // Every import entry point — the menu items, each library's
+                // Import button, a window drop — arrives here. There is one
+                // sheet and one set of rules behind it.
+                .onKeyWindowNotification(.importFiles) { notification in
+                    importURLs = notification.userInfo?["urls"] as? [URL] ?? []
+                    importKinds = Set((notification.userInfo?["kinds"] as? [String] ?? [])
+                        .compactMap(ImportKind.init(rawValue:)))
+                    showBatchImport = true
                 }
                 // Drag & Drop support
                 .onDrop(of: [.fileURL], isTargeted: $isDragTargeted) { providers in
@@ -401,80 +405,16 @@ struct MainControlView: View {
             }
         }
 
-        group.notify(queue: .main) { [self] in
+        group.notify(queue: .main) {
             let urls = collected.withLock { $0 }
             guard !urls.isEmpty else { return }
-            Task {
-                // EXPAND folders first (USFM sets and .tptheme packages kept
-                // whole) — dropping one or MORE folders works exactly like the
-                // picker. Direct FILES keep their own classification, including
-                // media and unknown, so a single dropped file is never filtered
-                // out by the scanner's rules. The walk runs off the main actor
-                // so a big tree never beach-balls.
-                let classified = await Task.detached(priority: .userInitiated) {
-                    let fm = FileManager.default
-                    var expanded: [URL] = []
-                    for url in urls {
-                        var isDir: ObjCBool = false
-                        if fm.fileExists(atPath: url.path, isDirectory: &isDir), isDir.boolValue {
-                            expanded.append(contentsOf: ImportScanner.scan([url]).files)
-                        } else {
-                            expanded.append(url)
-                        }
-                    }
-                    return DragDropImportHandler.classify(expanded)
-                }.value
-                handleClassifiedDrop(classified)
-            }
+            // A drop opens the same sheet as everything else. It used to take a
+            // shortcut: media auto-imported with an alert, Bibles and songs
+            // went to a different sheet, and unknown files raised a third
+            // dialog — three outcomes from one gesture, none of which showed
+            // what was about to happen.
+            NotificationCenter.default.post(name: .importFiles, object: nil, userInfo: ["urls": urls])
         }
-    }
-
-    private func handleClassifiedDrop(_ classified: [PendingImportFile]) {
-
-            // Separate by category
-            let bibleFiles = classified.filter { if case .bible = $0.category { return true }; return false }
-            let songFiles = classified.filter { if case .song = $0.category { return true }; return false }
-            let mediaFiles = classified.filter { if case .media = $0.category { return true }; return false }
-            let unknownFiles = classified.filter { if case .unknown = $0.category { return true }; return false }
-
-            // Auto-import media files immediately (no dialog needed)
-            if !mediaFiles.isEmpty {
-                let outcome = MediaImportService.importMedia(
-                    urls: mediaFiles.map(\.url), modelContext: modelContext)
-                // Reporting a count that includes files nothing was done with
-                // is how a silent double-import goes unnoticed. Say which.
-                appState.showSuccess(
-                    String(localized: "Media Imported", comment: "Alert"),
-                    message: outcome.skipped.isEmpty
-                        ? String(localized: "\(outcome.imported.count) media file(s) imported.", comment: "Alert")
-                        : String(localized: "\(outcome.imported.count) imported, \(outcome.skipped.count) already in the library.",
-                                 comment: "Alert message")
-                )
-                // Switch to media tab if only media was dropped
-                if bibleFiles.isEmpty && songFiles.isEmpty {
-                    appState.selectedSidebarItem = .media
-                }
-            }
-
-            // Process Bible and Song files through batch import
-            let importableFiles = bibleFiles + songFiles
-            if !importableFiles.isEmpty {
-                if importableFiles.count == 1, let single = importableFiles.first {
-                    droppedFiles = [single]
-                    showBatchImport = true
-                } else {
-                    droppedFiles = importableFiles
-                    showBatchImport = true
-                }
-            }
-
-            // Show error only if everything was unknown
-            if bibleFiles.isEmpty && songFiles.isEmpty && mediaFiles.isEmpty && !unknownFiles.isEmpty {
-                appState.showError(
-                    String(localized: "Unrecognized Files", comment: "Alert"),
-                    message: String(localized: "None of the dropped files were recognized. Supported: Bible modules (.json, .xml, .mybible, .usfm), Songs (.xml, .pptx, .ppt), Media (images, audio, video).", comment: "Alert")
-                )
-            }
     }
 
     // MARK: - Module Toolbar Items (customizable — each module has its own id'd set)
@@ -889,13 +829,16 @@ private struct MenuCommandHandler: ViewModifier {
 
     func body(content: Content) -> some View {
         content
+            // The menu items no longer poke a per-tab flag: they open the one
+            // sheet, preselecting that library's kinds so the other files in a
+            // folder are still SHOWN but not silently included.
             .onKeyWindowNotification(.importBible) { _ in
-                appState.selectedSidebarItem = .bible
-                appState.triggerBibleImport = true
+                NotificationCenter.default.post(name: .importFiles, object: nil,
+                                                userInfo: ["kinds": [ImportKind.bible.rawValue]])
             }
             .onKeyWindowNotification(.importSongs) { _ in
-                appState.selectedSidebarItem = .songs
-                appState.triggerSongImport = true
+                NotificationCenter.default.post(name: .importFiles, object: nil,
+                                                userInfo: ["kinds": [ImportKind.song.rawValue]])
             }
             .onKeyWindowNotification(.exportBible) { _ in
                 showExportSheet = true

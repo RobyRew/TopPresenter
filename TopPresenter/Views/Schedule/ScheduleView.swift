@@ -309,50 +309,13 @@ struct ScheduleView: View {
         }
     }
 
+    /// Sessions import through the ONE sheet, like everything else. This used
+    /// to be a bare panel with its own one-level folder walk and its own
+    /// duplicate behaviour (none), which is exactly the fragmentation the
+    /// universal sheet exists to remove.
     private func importSessions() {
-        let panel = NSOpenPanel()
-        panel.allowsMultipleSelection = true
-        panel.canChooseDirectories = true
-        panel.allowedContentTypes = [UTType(exportedAs: "com.robyrew.toppresenter.schedule"), .json]
-        guard panel.runModal() == .OK else { return }
-
-        // Expand folders → .tpschedule files inside (mirrors theme import).
-        var files: [URL] = []
-        let fm = FileManager.default
-        for url in panel.urls {
-            var isDir: ObjCBool = false
-            if fm.fileExists(atPath: url.path, isDirectory: &isDir), isDir.boolValue {
-                let children = (try? fm.contentsOfDirectory(at: url, includingPropertiesForKeys: nil)) ?? []
-                files.append(contentsOf: children.filter { $0.pathExtension == SessionArchiveService.fileExtension })
-            } else {
-                files.append(url)
-            }
-        }
-
-        var imported = 0
-        var unresolved: [String] = []
-        var failures: [String] = []
-        for file in files {
-            do {
-                let data = try Data(contentsOf: file)
-                let result = try SessionArchiveService.importSession(data, context: modelContext)
-                imported += 1
-                unresolved.append(contentsOf: result.unresolvedMedia)
-            } catch {
-                // Per-file reasons used to be discarded, leaving only a count.
-                failures.append("\(file.lastPathComponent) — \(error.localizedDescription)")
-            }
-        }
-
-        var message = String(localized: "\(imported) sesiuni importate.", comment: "Import result")
-        if !failures.isEmpty {
-            message += "\n" + String(localized: "Eșuate: \(failures.joined(separator: "; "))",
-                                     comment: "Import result — failures")
-        }
-        if !unresolved.isEmpty {
-            message += "\n" + String(localized: "Media lipsă din bibliotecă: \(unresolved.joined(separator: ", ")). Importă fișierele în modulul Media pentru rezolvare automată.", comment: "Import result — missing media")
-        }
-        archiveResultMessage = message
+        NotificationCenter.default.post(name: .importFiles, object: nil,
+                                        userInfo: ["kinds": [ImportKind.session.rawValue]])
     }
 
     private func deleteSchedule(_ schedule: ServiceSchedule) {

@@ -32718,6 +32718,512 @@
           }
         }
       }
+    },
+    "Simple" : {
+      "comment" : "Import mode",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Simple"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Simple"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Simplu"
+          }
+        }
+      }
+    },
+    "Advanced" : {
+      "comment" : "Import mode",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Advanced"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Avanzado"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Avansat"
+          }
+        }
+      }
+    },
+    "Imported Songs" : {
+      "comment" : "Default song collection",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Imported Songs"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Canciones importadas"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cântări importate"
+          }
+        }
+      }
+    },
+    "No extension, and the contents are not a format we read." : {
+      "comment" : "Unsupported file reason",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No extension, and the contents are not a format we read."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sin extensión, y el contenido no es un formato que leamos."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fără extensie, iar conținutul nu este un format pe care îl citim."
+          }
+        }
+      }
+    },
+    "TopPresenter files use their own extensions now. Re-export it, or rename it." : {
+      "comment" : "Unsupported file reason",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "TopPresenter files use their own extensions now. Re-export it, or rename it."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los archivos de TopPresenter ya tienen sus propias extensiones. Vuelve a exportarlo o renómbralo."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fișierele TopPresenter au acum extensii proprii. Exportă-l din nou sau redenumește-l."
+          }
+        }
+      }
+    },
+    ".%@ is not a format TopPresenter reads." : {
+      "comment" : "Unsupported file reason",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : ".%@ is not a format TopPresenter reads."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : ".%@ no es un formato que TopPresenter lea."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : ".%@ nu este un format pe care TopPresenter îl citește."
+          }
+        }
+      }
+    },
+    "Nothing in this folder is a format TopPresenter reads." : {
+      "comment" : "Unsupported file reason",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nothing in this folder is a format TopPresenter reads."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nada de esta carpeta es un formato que TopPresenter lea."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nimic din acest dosar nu este un format pe care TopPresenter îl citește."
+          }
+        }
+      }
+    },
+    "Bibles, songs, media, sessions and themes" : {
+      "comment" : "Import subtitle",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bibles, songs, media, sessions and themes"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Biblias, canciones, multimedia, sesiones y temas"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Biblii, cântări, media, sesiuni și teme"
+          }
+        }
+      }
+    },
+    "Looking through the selection…" : {
+      "comment" : "Import subtitle",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Looking through the selection…"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Revisando la selección…"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Se parcurge selecția…"
+          }
+        }
+      }
+    },
+    "%lld of %lld selected" : {
+      "comment" : "Import subtitle",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$lld of %2$lld selected"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$lld de %2$lld seleccionados"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$lld din %2$lld selectate"
+          }
+        }
+      }
+    },
+    "Drop files or folders here" : {
+      "comment" : "Drop zone title",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Drop files or folders here"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Arrastra archivos o carpetas aquí"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Trage fișiere sau dosare aici"
+          }
+        }
+      }
+    },
+    "or click to browse — subfolders are scanned" : {
+      "comment" : "Drop zone subtitle",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "or click to browse — subfolders are scanned"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "o haz clic para explorar — se recorren las subcarpetas"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "sau apasă pentru a răsfoi — subdosarele sunt parcurse"
+          }
+        }
+      }
+    },
+    "What can I import?" : {
+      "comment" : "Disclosure",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "What can I import?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Qué puedo importar?"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ce pot importa?"
+          }
+        }
+      }
+    },
+    "Filter files" : {
+      "comment" : "Filter prompt",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Filter files"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Filtrar archivos"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Filtrează fișierele"
+          }
+        }
+      }
+    },
+    "None" : {
+      "comment" : "Bulk select",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "None"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ninguno"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Niciunul"
+          }
+        }
+      }
+    },
+    "All" : {
+      "comment" : "Bulk select",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "All"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Todos"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Toate"
+          }
+        }
+      }
+    },
+    "identical to %@" : {
+      "comment" : "Duplicate row note",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "identical to %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "idéntico a %@"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "identic cu %@"
+          }
+        }
+      }
+    },
+    "Not recognised (%lld)" : {
+      "comment" : "Section",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Not recognised (%lld)"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No reconocidos (%lld)"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nerecunoscute (%lld)"
+          }
+        }
+      }
+    },
+    "Copy report" : {
+      "comment" : "Button",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copy report"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copiar informe"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copiază raportul"
+          }
+        }
+      }
+    },
+    "Select files or folders to import" : {
+      "comment" : "Open panel message",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Select files or folders to import"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Selecciona archivos o carpetas para importar"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Selectează fișiere sau dosare de importat"
+          }
+        }
+      }
+    },
+    "%@ — %lld media not found" : {
+      "comment" : "Session import status",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ — %2$lld media not found"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ — %2$lld archivos multimedia no encontrados"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ — %2$lld fișiere media negăsite"
+          }
+        }
+      }
+    },
+    "No presentation manager available." : {
+      "comment" : "Import error",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No presentation manager available."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No hay gestor de presentación disponible."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Managerul de prezentare nu este disponibil."
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

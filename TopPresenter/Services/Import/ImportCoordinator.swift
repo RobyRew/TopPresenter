@@ -83,9 +83,12 @@ final class ImportCoordinator {
     static let kindOrder: [ImportKind] = [.media, .bible, .song, .theme, .slides, .session]
 
     private let modelContext: ModelContext
+    /// Themes live in the manager, not the store, so importing one needs it.
+    private let presentationManager: PresentationManager?
 
-    init(modelContext: ModelContext) {
+    init(modelContext: ModelContext, presentationManager: PresentationManager? = nil) {
         self.modelContext = modelContext
+        self.presentationManager = presentationManager
     }
 
     /// Import a classified selection, one kind at a time, in `kindOrder`.
@@ -155,10 +158,65 @@ final class ImportCoordinator {
                 summary.results += batch.failures.map { .failed(name: $0.file, reason: $0.reason) }
                 for file in group { onUpdate(file.id, .success(file.fileName)) }
 
-            case .theme, .slides, .session:
-                // Themes and sessions have no drop category yet, so nothing is
-                // ever grouped under them; they arrive with the universal sheet
-                // in Phase 5. Slides have no format at all until Phase 6.
+            case .theme:
+                for file in group {
+                    onUpdate(file.id, .importing)
+                    do {
+                        let before = presentationManager?.themes.count ?? 0
+                        guard let theme = try presentationManager?.importTheme(from: file.url) else {
+                            summary.results.append(.failed(name: file.fileName,
+                                                           reason: String(localized: "No presentation manager available.",
+                                                                          comment: "Import error")))
+                            continue
+                        }
+                        // The gallery not growing means the package was already
+                        // here, or replaced the theme it came from.
+                        let after = presentationManager?.themes.count ?? 0
+                        if after == before {
+                            summary.results.append(.skippedDuplicate(
+                                name: theme.name,
+                                matchedOn: String(localized: "the same theme", comment: "Duplicate match reason")))
+                        } else {
+                            summary.results.append(.imported(theme.name))
+                        }
+                        onUpdate(file.id, .success(theme.name))
+                    } catch {
+                        summary.results.append(.failed(name: file.fileName, reason: error.localizedDescription))
+                        onUpdate(file.id, .failed(error.localizedDescription))
+                    }
+                }
+
+            case .session:
+                for file in group {
+                    onUpdate(file.id, .importing)
+                    do {
+                        let before = (try? modelContext.fetch(FetchDescriptor<ServiceSchedule>()))?.count ?? 0
+                        let data = try Data(contentsOf: file.url)
+                        let result = try SessionArchiveService.importSession(data, context: modelContext)
+                        let after = (try? modelContext.fetch(FetchDescriptor<ServiceSchedule>()))?.count ?? 0
+                        if after == before {
+                            summary.results.append(.skippedDuplicate(
+                                name: result.schedule.name,
+                                matchedOn: String(localized: "the same session", comment: "Duplicate match reason")))
+                        } else {
+                            summary.results.append(.imported(result.schedule.name))
+                        }
+                        // Media that did not resolve is named, not swallowed:
+                        // a session that silently loses its clips is worse than
+                        // one that says which are missing.
+                        onUpdate(file.id, .success(result.unresolvedMedia.isEmpty
+                            ? result.schedule.name
+                            : String(localized: "\(result.schedule.name) — \(result.unresolvedMedia.count) media not found",
+                                     comment: "Session import status")))
+                    } catch {
+                        summary.results.append(.failed(name: file.fileName, reason: error.localizedDescription))
+                        onUpdate(file.id, .failed(error.localizedDescription))
+                    }
+                }
+
+            case .slides:
+                // Custom Slides have no file format at all until Phase 6, so
+                // nothing is ever classified under this kind.
                 continue
             }
         }

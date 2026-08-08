@@ -14,6 +14,8 @@ enum DroppedFileCategory: Sendable {
     case bible(SupportedBibleFormat)
     case song(SupportedSongFormat)
     case media(String)  // "image", "audio", "video"
+    case session
+    case theme
     case unknown
 
     var displayName: String {
@@ -21,6 +23,8 @@ enum DroppedFileCategory: Sendable {
         case .bible(let fmt): return "Bible (\(fmt.displayName))"
         case .song(let fmt): return "Song (\(fmt.displayName))"
         case .media(let type): return "Media (\(type))"
+        case .session: return "Session"
+        case .theme: return "Theme"
         case .unknown: return "Unknown"
         }
     }
@@ -36,6 +40,8 @@ enum DroppedFileCategory: Sendable {
         case .bible: return .bible
         case .song: return .song
         case .media: return .media
+        case .session: return .session
+        case .theme: return .theme
         case .unknown: return nil
         }
     }
@@ -43,10 +49,20 @@ enum DroppedFileCategory: Sendable {
 
 /// A pending file identified by drag & drop, ready for batch import.
 struct PendingImportFile: Identifiable, Sendable {
-    let id = UUID()
+    /// Settable so a caller can keep its OWN row identity across the hand-off.
+    /// The coordinator reports progress by this id, and a freshly minted one
+    /// would arrive matching nothing.
+    let id: UUID
     let url: URL
     let category: DroppedFileCategory
     var status: ImportFileStatus = .pending
+
+    nonisolated init(url: URL, category: DroppedFileCategory, status: ImportFileStatus = .pending, id: UUID = UUID()) {
+        self.id = id
+        self.url = url
+        self.category = category
+        self.status = status
+    }
 
     var fileName: String { url.lastPathComponent }
 }
@@ -90,6 +106,11 @@ final class DragDropImportHandler {
     /// Classify a single file URL into a category.
     nonisolated static func classify(_ url: URL) -> DroppedFileCategory {
         let ext = url.pathExtension.lowercased()
+
+        // The native document types, by extension. Checked first: a .tptheme is
+        // a PACKAGE, so anything that inspects it as a file would guess wrong.
+        if ext == SessionArchiveService.fileExtension { return .session }
+        if ext == "tptheme" { return .theme }
 
         // Check PowerPoint first (these are songs)
         if ext == "pptx" || ext == "ppt" {

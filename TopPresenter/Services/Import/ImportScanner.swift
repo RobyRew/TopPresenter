@@ -75,6 +75,14 @@ nonisolated enum ImportScanner {
         var truncations: [Truncation] = []
         /// Entries examined — for the progress line on a big drop.
         var visitedEntries = 0
+        /// Things the operator NAMED that yielded nothing: a file we cannot
+        /// read, or a folder with nothing readable in it.
+        ///
+        /// Only top-level entries. A folder is a request to find what is
+        /// usable inside it, so listing the four hundred unrelated files in a
+        /// Documents tree would be noise — but dropping `notes.docx` and being
+        /// shown an empty sheet is just baffling.
+        var rejected: [URL] = []
 
         var wasTruncated: Bool { !truncations.isEmpty }
     }
@@ -165,7 +173,11 @@ nonisolated enum ImportScanner {
             }
         }
 
-        for url in urls { walk(url, depth: 0) }
+        for url in urls {
+            let before = result.files.count
+            walk(url, depth: 0)
+            if result.files.count == before { result.rejected.append(url) }
+        }
         return result
     }
 

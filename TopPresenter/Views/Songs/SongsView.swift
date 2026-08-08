@@ -19,7 +19,11 @@ struct SongsView: View {
 
     @Query(sort: \SongCollection.name) private var collections: [SongCollection]
 
-    @State private var showImportSheet = false
+    /// Import is one sheet, hosted once in MainControlView.
+    private func openImport() {
+        NotificationCenter.default.post(name: .importFiles, object: nil,
+                                        userInfo: ["kinds": [ImportKind.song.rawValue]])
+    }
     @State private var showDeleteConfirmation = false
     @State private var collectionToDelete: SongCollection?
 
@@ -35,9 +39,6 @@ struct SongsView: View {
                 }
             }
         }
-        .sheet(isPresented: $showImportSheet) {
-            SongImportSheet()
-        }
         .sheet(item: Binding(
             get: { libraryManager.songToEdit },
             set: { libraryManager.songToEdit = $0 }
@@ -46,7 +47,7 @@ struct SongsView: View {
         }
         .onChange(of: appState.triggerSongImport) { _, newValue in
             if newValue {
-                showImportSheet = true
+                openImport()
                 appState.triggerSongImport = false
             }
         }
@@ -83,7 +84,7 @@ struct SongsView: View {
                 .multilineTextAlignment(.center)
 
             Button {
-                showImportSheet = true
+                openImport()
             } label: {
                 Label(
                     String(localized: "Import Songs", comment: "Button"),
@@ -1130,194 +1131,6 @@ struct SongSlideThumbnail: View {
                 .stroke(isSelected ? appHighlight : .clear, lineWidth: 2)
         )
         .contentShape(Rectangle())
-    }
-}
-
-// MARK: - Song Import Sheet
-struct SongImportSheet: View {
-    @Environment(\.modelContext) private var modelContext
-    @Environment(\.dismiss) private var dismiss
-    @Environment(AppState.self) private var appState
-
-    @State private var collectionName: String = ""
-    @State private var selectedURLs: [URL] = []
-    @State private var isImporting = false
-    @State private var importProgress: Double = 0
-    @State private var importStatusText = ""
-    @State private var dupMode = "version"   // version | keepBoth | skip
-    @Query(sort: \SongCollection.name) private var existingCollections: [SongCollection]
-
-    var body: some View {
-        VStack(spacing: 20) {
-            Text(String(localized: "Import Songs", comment: "Sheet title"))
-                .font(.title2.bold())
-
-            Text(String(localized: "Alege fișiere și/sau directoare (subdirectoarele sunt incluse) — formatul fiecărui fișier este detectat automat.", comment: "Import sheet hint"))
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(spacing: 6) {
-                    TextField(
-                        String(localized: "Nume folder (gol = Nesortate)", comment: "Text field placeholder"),
-                        text: $collectionName
-                    )
-                    .textFieldStyle(.roundedBorder)
-                    if !existingCollections.isEmpty {
-                        Menu {
-                            ForEach(existingCollections) { c in
-                                Button(c.name) { collectionName = c.name }
-                            }
-                        } label: { Image(systemName: "folder") }
-                        .menuStyle(.borderlessButton).fixedSize()
-                        .help(String(localized: "Alege un folder existent", comment: "Tooltip"))
-                    }
-                }
-                Picker(String(localized: "La nume existent", comment: "Label"), selection: $dupMode) {
-                    Text(String(localized: "Versiune nouă", comment: "Option")).tag("version")
-                    Text(String(localized: "Cântec nou", comment: "Option")).tag("keepBoth")
-                    Text(String(localized: "Sări peste", comment: "Option")).tag("skip")
-                }
-                .pickerStyle(.segmented)
-            }
-
-            HStack {
-                if selectedURLs.isEmpty {
-                    Text(String(localized: "Nimic selectat", comment: "Placeholder"))
-                        .foregroundStyle(.secondary)
-                } else if selectedURLs.count == 1 {
-                    Text(selectedURLs[0].lastPathComponent)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                } else {
-                    Text(String(localized: "\(selectedURLs.count) elemente selectate", comment: "Selection summary"))
-                }
-
-                Spacer()
-
-                Button(String(localized: "Alege…", comment: "Button")) {
-                    chooseLocation()
-                }
-            }
-            .padding()
-            .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
-
-            if selectedURLs.count > 1 {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 2) {
-                        ForEach(selectedURLs, id: \.self) { url in
-                            Text(url.lastPathComponent)
-                                .font(.caption)
-                                .lineLimit(1)
-                                .truncationMode(.middle)
-                        }
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                }
-                .frame(maxHeight: 90)
-            }
-
-            if isImporting {
-                ProgressView(value: importProgress) {
-                    Text(importStatusText).font(.caption)
-                }
-                .progressViewStyle(.linear)
-            }
-
-            HStack {
-                Button(String(localized: "Cancel", comment: "Button")) { dismiss() }
-                    .keyboardShortcut(.cancelAction)
-                Spacer()
-                Button(String(localized: "Import", comment: "Button")) { performImport() }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(selectedURLs.isEmpty || isImporting)
-                    .keyboardShortcut(.defaultAction)
-            }
-        }
-        .padding(24)
-        .frame(width: 500)
-    }
-
-    private func chooseLocation() {
-        let panel = NSOpenPanel()
-        panel.canChooseDirectories = true
-        panel.canChooseFiles = true
-        panel.allowsMultipleSelection = true
-        // Only supported song file types are selectable; folders stay pickable.
-        panel.allowedContentTypes = SupportedSongFormat.allCases
-            .flatMap { $0.fileExtensions }
-            .compactMap { UTType(filenameExtension: $0) }
-        panel.message = String(localized: "Alege cântece (fișiere sau directoare)", comment: "Open panel message")
-
-        if panel.runModal() == .OK {
-            selectedURLs = panel.urls
-            if collectionName.isEmpty, let first = panel.urls.first {
-                collectionName = first.deletingPathExtension().lastPathComponent
-            }
-        }
-    }
-
-    private func performImport() {
-        guard !selectedURLs.isEmpty else { return }
-        isImporting = true
-        let targetName = collectionName.trimmingCharacters(in: .whitespaces).isEmpty
-            ? String(localized: "Nesortate", comment: "Default collection")
-            : collectionName
-        let resolution: SongDuplicateResolution = {
-            switch dupMode {
-            case "keepBoth": return .keepBoth
-            case "skip": return .skip
-            default: return .addAsVersion
-            }
-        }()
-
-        Task {
-            let result = await ImportService.importSongItems(
-                urls: selectedURLs,
-                collectionName: targetName,
-                modelContext: modelContext,
-                duplicateResolution: resolution,
-                progressHandler: { progress, status in
-                    Task { @MainActor in
-                        importProgress = progress
-                        importStatusText = status
-                    }
-                }
-            )
-
-            await MainActor.run {
-                isImporting = false
-                if result.failures.isEmpty, !result.importedTitles.isEmpty {
-                    appState.showSuccess(
-                        String(localized: "Import Successful", comment: "Alert title"),
-                        message: String(localized: "Au fost importate \(result.importedTitles.count) cântece în \"\(targetName)\".", comment: "Alert message")
-                    )
-                    dismiss()
-                } else if result.importedTitles.isEmpty {
-                    let details = result.failures
-                        .prefix(5)
-                        .map { "\($0.file): \($0.reason)" }
-                        .joined(separator: "\n")
-                    appState.showError(
-                        String(localized: "Import Failed", comment: "Alert title"),
-                        message: details.isEmpty
-                            ? String(localized: "Nu a fost găsit niciun cântec.", comment: "Alert message")
-                            : details
-                    )
-                } else {
-                    let details = result.failures
-                        .prefix(5)
-                        .map { "\($0.file): \($0.reason)" }
-                        .joined(separator: "\n")
-                    appState.showSuccess(
-                        String(localized: "Import Parțial", comment: "Alert title"),
-                        message: String(localized: "Importate: \(result.importedTitles.count). Eșuate: \(result.failures.count).\n\(details)", comment: "Alert message")
-                    )
-                    dismiss()
-                }
-            }
-        }
     }
 }
 
