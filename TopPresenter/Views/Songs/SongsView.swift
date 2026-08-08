@@ -2181,9 +2181,15 @@ struct SongEditorSheet: View {
     }
 
     /// Discard all edits made in this session by rebuilding the song from the snapshot.
+    ///
+    /// A revert is not an import: the song is the SAME song, so its edit time
+    /// and its arrangements' identities have to come back too. Without those
+    /// two flags, cancelling stamped the song as just-edited and handed every
+    /// arrangement a new UUID, breaking any session that pointed at one.
     private func revert() {
         guard let result = TopPresenterSongImporter.result(fromJSON: openSnapshot) else { return }
-        ImportService.applyResult(result, to: song, modelContext: modelContext)
+        ImportService.applyResult(result, to: song, modelContext: modelContext,
+                                  preservesTimestamps: true, preservingVersionIDs: true)
         try? modelContext.save()
     }
 }

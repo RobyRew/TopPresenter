@@ -160,7 +160,11 @@ final class TopPresenterSongImporter: SongImporter {
             }
         }
 
-        let songNumber = stringValue(obj["songNumber"]) .isEmpty ? (songbook?.number ?? "") : stringValue(obj["songNumber"])
+        // Present-but-empty is an answer: the exporter now always writes
+        // `songNumber`, so an empty one means the song genuinely has none.
+        // Only an ABSENT key (older files, other producers) falls back to the
+        // songbook's number.
+        let songNumber = obj["songNumber"].map(stringValue) ?? (songbook?.number ?? "")
 
         // Preserve source-specific extras (melodia.ro Anatomia Evangheliei, capos, …) verbatim.
         let extensionsJSON: String = {
@@ -170,7 +174,7 @@ final class TopPresenterSongImporter: SongImporter {
             return s
         }()
 
-        return SongImportResult(
+        var result = SongImportResult(
             title: title,
             author: combinedAuthor,
             copyright: (obj["copyright"] as? String) ?? "",
@@ -194,6 +198,16 @@ final class TopPresenterSongImporter: SongImporter {
             extensionsJSON: extensionsJSON,
             verified: (obj["verified"] as? Bool) ?? false
         )
+        // E4 — the fields the exporter used to drop. `songbookNumber` is
+        // read at the top level first and only then from inside the songbook,
+        // so a song carrying a number without a songbook keeps it.
+        if let sourceFile = obj["sourceFile"] as? String, !sourceFile.isEmpty {
+            result.sourceFile = sourceFile
+        }
+        result.songbookNumber = obj["songbookNumber"].map(stringValue) ?? songbook?.number
+        result.modifiedDate = (obj["modifiedDate"] as? String)
+            .flatMap { ISO8601DateFormatter().date(from: $0) }
+        return result
     }
 
     private static func parseVersion(_ obj: [String: Any], fallbackOrder: Int) -> SongImportVersion {

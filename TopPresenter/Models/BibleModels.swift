@@ -209,13 +209,22 @@ final class BibleVerse {
     var hasWordsOfChrist: Bool = false
     /// Interlinear reading gloss (e.g. English under a Hebrew/Greek verse). "" = none.
     var gloss: String = ""
+    /// Poetic line indentation level (Psalms, Proverbs, the prophets). nil = prose.
+    ///
+    /// Every TopPresenter Bible has carried this since the format existed and
+    /// `TopPresenterBibleImporter` has always parsed it — into a struct field
+    /// that nothing then read, because no model had anywhere to put it.
+    /// Additive optional, like `versification` and `canon`, so V2 keeps
+    /// migrating lightly.
+    var poetryIndent: Int?
     var extensionsJSON: String?
 
     var chapter: BibleChapter?
 
     init(verseNumber: Int, text: String, runsJSON: String? = nil,
          footnotesJSON: String? = nil, crossRefsJSON: String? = nil,
-         hasWordsOfChrist: Bool = false, gloss: String = "", extensionsJSON: String? = nil) {
+         hasWordsOfChrist: Bool = false, gloss: String = "",
+         poetryIndent: Int? = nil, extensionsJSON: String? = nil) {
         self.id = UUID()
         self.verseNumber = verseNumber
         self.text = text
@@ -224,6 +233,7 @@ final class BibleVerse {
         self.crossRefsJSON = crossRefsJSON
         self.hasWordsOfChrist = hasWordsOfChrist
         self.gloss = gloss
+        self.poetryIndent = poetryIndent
         self.extensionsJSON = extensionsJSON
     }
 

@@ -150,7 +150,9 @@ final class ImportService {
             name: resolvedName,
             abbreviation: result.abbreviation,
             language: correctedLanguage,
-            sourceFormat: format.rawValue,
+            // E2 — the file's own claim wins; the format being read is only the
+            // fallback, for sources that cannot carry provenance at all.
+            sourceFormat: result.sourceFormat ?? format.rawValue,
             moduleDescription: result.description,
             versification: result.versification,
             canon: result.canon,
@@ -205,6 +207,7 @@ final class ImportService {
                             crossRefsJSON: BibleRichData.encode(importVerse.crossReferences),
                             hasWordsOfChrist: importVerse.hasWordsOfChrist,
                             gloss: importVerse.gloss,
+                            poetryIndent: importVerse.poetryIndent,
                             extensionsJSON: importVerse.extensionsJSON
                         )
                         verse.chapter = chapter
@@ -556,10 +559,18 @@ final class ImportService {
     ) async -> SongBatchResult {
         var result = SongBatchResult()
 
+        // E6 — the scope has to stay open for the whole import (files are read
+        // one at a time, well after this loop) and then actually be CLOSED.
+        // The old code opened one per root and closed none: the comment said
+        // "kept open until the function ends" and nothing ever ended it, so
+        // every folder import leaked a scope for the life of the process.
+        var openedRoots: [URL] = []
+        defer { for root in openedRoots { root.stopAccessingSecurityScopedResource() } }
+
         // Expand directories RECURSIVELY (subfolders included); keep the immediate parent for tagging.
         var fileURLs: [(url: URL, parent: URL?)] = []
         for url in urls {
-            _ = url.startAccessingSecurityScopedResource()  // kept open until the function ends
+            if url.startAccessingSecurityScopedResource() { openedRoots.append(url) }
             var isDirectory: ObjCBool = false
             if FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory),
                isDirectory.boolValue {
@@ -763,7 +774,30 @@ final class ImportService {
     /// Apply a parsed GOAT result onto a song: set every scalar field, then CLEAR its
     /// existing version graph + verse cache and rebuild them. Used by import (on a fresh
     /// song) and by the song editor's Cancel-revert (rebuild from an open snapshot).
-    static func applyResult(_ result: SongImportResult, to song: Song, modelContext: ModelContext) {
+    ///
+    /// The two callers want opposite things from identity and time, so they say
+    /// which they are:
+    ///
+    /// - `preservesTimestamps` — a REVERT must leave `modifiedDate` exactly as
+    ///   it was, because cancelling changed nothing. An import leaves the
+    ///   receiving song's own timestamp alone (for a new song, when it was
+    ///   created here) rather than adopting the sender's.
+    /// - `preservingVersionIDs` — the rebuild mints fresh UUIDs, which orphans
+    ///   every `SessionItemPayload.versionID` pointing at an arrangement (E5).
+    ///   For a revert the versions are the SAME versions, so their ids are
+    ///   restored by order; for a real import they are genuinely new.
+    static func applyResult(
+        _ result: SongImportResult,
+        to song: Song,
+        modelContext: ModelContext,
+        preservesTimestamps: Bool = false,
+        preservingVersionIDs: Bool = false
+    ) {
+        // Snapshot identity BEFORE the graph is torn down.
+        let previousModifiedDate = song.modifiedDate
+        let previousVersionIDs: [(order: Int, id: UUID)] = preservingVersionIDs
+            ? song.versions.sorted { $0.order < $1.order }.map { ($0.order, $0.id) }
+            : []
         song.title = result.title
         song.author = result.author
         song.copyright = result.copyright
@@ -776,7 +810,9 @@ final class ImportService {
         song.language = result.language
         song.themes = result.themes
         song.style = result.style
-        song.songbookNumber = result.songbook?.number ?? ""
+        // E4 — the top-level number when the file states one; the songbook's
+        // only as the fallback, so a song with a number and no songbook keeps it.
+        song.songbookNumber = result.songbookNumber ?? result.songbook?.number ?? ""
         song.authorWords = result.authorWords
         song.authorMusic = result.authorMusic
         song.authorTranslation = result.authorTranslation
@@ -796,6 +832,17 @@ final class ImportService {
         for verse in song.verses { modelContext.delete(verse) }
 
         let builtVersions = makeVersions(from: result)
+        // E5 — restore the previous identities so anything referencing an
+        // arrangement (a session's `versionID`, a history entry) still resolves
+        // after a revert. Only by matching order, and only when the counts
+        // match: if the edit added or removed an arrangement, position no
+        // longer means the same thing and guessing would be worse than a fresh id.
+        if preservingVersionIDs, previousVersionIDs.count == builtVersions.count {
+            for (built, previous) in zip(builtVersions.sorted { $0.order < $1.order },
+                                         previousVersionIDs) {
+                built.id = previous.id
+            }
+        }
         for v in builtVersions { v.song = song }
         // GOAT "original": true wins; else finalize picks first-with-songbook.
         if result.versions.count == builtVersions.count,
@@ -818,6 +865,12 @@ final class ImportService {
             authorWords: song.authorWords, songNumber: song.songNumber,
             songbookNumber: song.songbookNumber, lyrics: lyrics
         )
+        // Cancelling an edit changed nothing, so it must not look like an edit.
+        // A real import deliberately does NOT take `result.modifiedDate`: that
+        // is when the SENDER last touched the song, not when this library did.
+        // It is parsed and kept on the result because Phase 3's duplicate
+        // resolver needs it to answer "is the incoming copy newer than mine?".
+        if preservesTimestamps { song.modifiedDate = previousModifiedDate }
         NotificationCenter.default.post(name: .libraryDidChange, object: nil)
     }
 

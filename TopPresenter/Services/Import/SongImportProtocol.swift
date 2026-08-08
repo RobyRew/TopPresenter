@@ -93,6 +93,14 @@ struct SongImportResult {
     var verified: Bool = false
     /// Filename this result was parsed from (stamped by the import pipeline).
     var sourceFile: String = ""
+    /// E4 — the song's own songbook number, independent of whether a `Songbook`
+    /// came with it. It used to be reachable only THROUGH `songbook.number`, so
+    /// a song carrying a number but no songbook lost it.
+    var songbookNumber: String? = nil
+    /// E4 — when the file says the song was last edited. nil for formats that
+    /// cannot say, and deliberately NOT adopted on a real import: see
+    /// `applyResult(preservesTimestamps:)`.
+    var modifiedDate: Date? = nil
 }
 
 struct SongImportVerse {

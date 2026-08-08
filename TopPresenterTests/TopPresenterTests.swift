@@ -6531,13 +6531,24 @@ func assertFieldCoverage<T: PersistentModel>(
 /// equal". Relationships are covered by their own suites; the exemptions below
 /// each carry a reason, because an unexplained exemption is how a real loss
 /// gets normalised.
-struct SongSnapshot: Equatable {
+@MainActor struct SongSnapshot: Equatable {
     var title = "", author = "", copyright = "", ccliNumber = ""
     var key = "", tempo = "", songNumber = "", tags = ""
     var titlesJSON = "", language = "", themesJSON = "", style = ""
     var songbookNumber = "", authorWords = "", authorMusic = "", authorTranslation = ""
-    var notes = "", mediaJSON = "", extensionsJSON = ""
-    var verified = false, sourceFile = "", originalVersionID = ""
+    var notes = ""
+    /// Decoded, for the same reason as `SongSectionSnapshot.lines`: the two
+    /// sides use different encoders and the strings differ by key order alone.
+    var media: [SongMediaRef] = []
+    var extensionsJSON = ""
+    var verified = false, sourceFile = ""
+    /// The POSITION of the original version, not its UUID.
+    ///
+    /// A real import mints new version ids, so the raw string always differs and
+    /// would report a loss on every import. What actually has to survive is
+    /// which arrangement is the original — and E5 covers the id itself, on the
+    /// revert path where it genuinely must not change.
+    var originalVersionIndex = -1
 
     init(_ song: Song) {
         title = song.title; author = song.author; copyright = song.copyright
@@ -6548,10 +6559,11 @@ struct SongSnapshot: Equatable {
         songbookNumber = song.songbookNumber
         authorWords = song.authorWords; authorMusic = song.authorMusic
         authorTranslation = song.authorTranslation
-        notes = song.notes; mediaJSON = song.mediaJSON
+        notes = song.notes; media = song.media
         extensionsJSON = song.extensionsJSON
         verified = song.verified; sourceFile = song.sourceFile
-        originalVersionID = song.originalVersionID
+        originalVersionIndex = song.versions.sorted { $0.order < $1.order }
+            .firstIndex { $0.id.uuidString == song.originalVersionID } ?? -1
     }
 
     /// Names this snapshot claims to cover — checked against the model.
@@ -6581,7 +6593,7 @@ struct SongSnapshot: Equatable {
 /// version graph crossed the round trip unasserted: an arrangement, its chords,
 /// its per-line translations and its override metadata could all have vanished
 /// without a single test noticing.
-struct SongVersionSnapshot: Equatable {
+@MainActor struct SongVersionSnapshot: Equatable {
     var name = "", displayTitle = "", author = "", language = "", key = ""
     var capo = 0, tempo = "", timeSignature = "", copyright = "", ccliNumber = ""
     var source = "", repeatStyle = "", titlesJSON = ""
@@ -6618,15 +6630,19 @@ struct SongVersionSnapshot: Equatable {
     static let relationshipFields: Set<String> = ["song"]
 }
 
-struct SongSectionSnapshot: Equatable {
+@MainActor struct SongSectionSnapshot: Equatable {
     var sectionKey = "", type = "", label = ""
     var order = 0, repeatCount = 0
-    var linesJSON = "", plainText = ""
+    /// Decoded, never the raw `linesJSON`. The two sides serialize through
+    /// different encoders, so the strings differ by KEY ORDER on identical
+    /// content — comparing them reports a data loss that did not happen.
+    var lines: [SongLine] = []
+    var plainText = ""
 
     init(_ s: SongSection) {
         sectionKey = s.sectionKey; type = s.type; label = s.label
         order = s.order; repeatCount = s.repeatCount
-        linesJSON = s.linesJSON; plainText = s.plainText
+        lines = s.lines; plainText = s.plainText
     }
 
     static let coveredFields: Set<String> = [
@@ -6811,7 +6827,9 @@ struct SongSectionSnapshot: Equatable {
     @Test func theFixtureIsExhaustive() throws {
         let ctx = try makeContext()
         let song = fullyPopulatedSong(in: ctx)
-        assertFullyPopulated(SongSnapshot(song))
+        // The only version IS the original, so its index is 0 — the same
+        // structural reason `order` is exempt below, not a gap in the fixture.
+        assertFullyPopulated(SongSnapshot(song), exempt: ["originalVersionIndex"])
         let version = try #require(song.versions.first)
         // `order` is 0 on both because this is the first (and only) version, and
         // its first section. That is what a real one-arrangement song looks
@@ -6825,7 +6843,7 @@ struct SongSectionSnapshot: Equatable {
     /// The version graph, which `SongSnapshot` does not reach: an arrangement,
     /// its chords, its per-line translations and its override metadata all
     /// crossed the round trip unasserted until now.
-    @Test(.disabled("red until Phase 1 — versionDictV2 never emits the version's alternate titles"))
+    @Test
     func theVersionGraphSurvivesAGoatRoundTrip() throws {
         let ctx = try makeContext()
         let song = fullyPopulatedSong(in: ctx)
@@ -6846,7 +6864,7 @@ struct SongSectionSnapshot: Equatable {
     /// alternate titles. A version exists to be a different rendition — a
     /// translation, a songbook variant — so the name it goes by is not
     /// incidental to it.
-    @Test(.disabled("red until Phase 1 — versionDictV2 has no `titles` key at all"))
+    @Test
     func theVersionsAlternateTitlesSurvive() throws {
         let ctx = try makeContext()
         let song = fullyPopulatedSong(in: ctx)
@@ -6888,7 +6906,7 @@ struct SongSectionSnapshot: Equatable {
         #expect(rebuilt.versions.sorted { $0.order < $1.order }.map(\.order) == [0, 1, 2])
     }
 
-    @Test(.disabled("red until Phase 1 — songDictV2 drops key/tempo/tags/songNumber/songbookNumber/sourceFile"))
+    @Test
     func everyFieldSurvivesAGoatRoundTrip() throws {
         let ctx = try makeContext()
         let song = fullyPopulatedSong(in: ctx)
@@ -6903,7 +6921,7 @@ struct SongSectionSnapshot: Equatable {
         #expect(SongSnapshot(rebuilt) == before)
     }
 
-    @Test(.disabled("red until Phase 1 — the fields songDictV2 never emits"))
+    @Test
     func theSevenLostFieldsAreNamedIndividually() throws {
         let ctx = try makeContext()
         let song = fullyPopulatedSong(in: ctx)
@@ -6925,7 +6943,7 @@ struct SongSectionSnapshot: Equatable {
     /// (`ExportService.swift:362-369`), so exactly one of the pair is always
     /// lost and no single fixture can demonstrate both: with a songbook you lose
     /// `songNumber`, without one you lose `songbookNumber`.
-    @Test(.disabled("red until Phase 1 — the songbook/songNumber if/else"))
+    @Test
     func theSongbookPairIsMutuallyExclusiveAndOneIsAlwaysLost() throws {
         let ctx = try makeContext()
         let song = fullyPopulatedSong(in: ctx)
@@ -6943,16 +6961,19 @@ struct SongSectionSnapshot: Equatable {
     }
 
     /// THE bug: no file, no export, no import — just open the editor and cancel.
-    @Test(.disabled("red until Phase 1 — editor Cancel wipes key/tempo/tags"))
+    @Test
     func openingTheEditorAndCancellingChangesNothing() throws {
         let ctx = try makeContext()
         let song = fullyPopulatedSong(in: ctx)
         let before = SongSnapshot(song)
 
-        // Exactly what SongEditor does: snapshot on open, rebuild on Cancel.
+        // Exactly what SongEditor does: snapshot on open, rebuild on Cancel —
+        // including the two flags that make a revert a revert rather than an
+        // import of a stranger's file.
         let snapshot = try ExportService.exportSongToTopPresenterJSON(song)
         let result = try #require(TopPresenterSongImporter.result(fromJSON: snapshot))
-        ImportService.applyResult(result, to: song, modelContext: ctx)
+        ImportService.applyResult(result, to: song, modelContext: ctx,
+                                  preservesTimestamps: true, preservingVersionIDs: true)
 
         #expect(SongSnapshot(song) == before, "Cancel must be a no-op")
     }
@@ -7077,18 +7098,20 @@ struct BibleVerseSnapshot: Equatable {
     var crossReferences: [BibleCrossRef] = []
     var hasWordsOfChrist = false
     var gloss = ""
+    var poetryIndent = 0
     var extensions: [String: String] = [:]
 
     init(_ v: BibleVerse) {
         verseNumber = v.verseNumber; text = v.text
         runs = v.runs; footnotes = v.footnotes; crossReferences = v.crossReferences
         hasWordsOfChrist = v.hasWordsOfChrist; gloss = v.gloss
+        poetryIndent = v.poetryIndent ?? 0
         extensions = ExtensionPayload.decoded(v.extensionsJSON)
     }
 
     static let coveredFields: Set<String> = [
         "verseNumber", "text", "runsJSON", "footnotesJSON", "crossRefsJSON",
-        "hasWordsOfChrist", "gloss", "extensionsJSON",
+        "hasWordsOfChrist", "gloss", "poetryIndent", "extensionsJSON",
     ]
     static let exemptFields: [String: String] = [
         "id": "regenerated on import; a verse's identity is its number within its chapter",
@@ -7190,6 +7213,7 @@ struct BibleVerseSnapshot: Equatable {
             ]),
             hasWordsOfChrist: true,
             gloss: "the souls of the righteous are in God's hand",
+            poetryIndent: 2,
             extensionsJSON: #"{"tpVerseNote":"extensii la nivel de verset"}"#
         )
         v1.chapter = chapter
@@ -7236,7 +7260,7 @@ struct BibleVerseSnapshot: Equatable {
         assertFullyPopulated(verse)
     }
 
-    @Test(.disabled("red until Phase 1 (E1, E2) — module _extensions and sourceFormat are lost"))
+    @Test
     func everyFieldSurvivesAGoatRoundTrip() async throws {
         let ctx = try makeContext()
         let module = fullyPopulatedModule(in: ctx)
@@ -7252,7 +7276,7 @@ struct BibleVerseSnapshot: Equatable {
     /// `TopPresenterBibleImporter.swift:176` reads `json["_extensions"]` from the
     /// ROOT. Book, chapter and verse extensions round-trip correctly, which is
     /// exactly why nobody noticed the module's do not.
-    @Test(.disabled("red until Phase 1 (E1) — written under `translation`, read from the root"))
+    @Test
     func moduleExtensionsSurviveWhileTheOtherThreeLevelsAlreadyDo() async throws {
         let ctx = try makeContext()
         let rebuilt = try await roundTrip(fullyPopulatedModule(in: ctx))
@@ -7275,7 +7299,7 @@ struct BibleVerseSnapshot: Equatable {
     /// module that passes through an export becomes "topPresenter" and forgets
     /// it was ever OSIS, Zefania or MySword. The exporter never writes the field
     /// at all, so there is nothing for the importer to preserve either.
-    @Test(.disabled("red until Phase 1 (E2) — sourceFormat overwritten with the IMPORTING format"))
+    @Test
     func theOriginalSourceFormatSurvives() async throws {
         let ctx = try makeContext()
         let rebuilt = try await roundTrip(fullyPopulatedModule(in: ctx))
@@ -7288,7 +7312,7 @@ struct BibleVerseSnapshot: Equatable {
     /// `BibleImportVerse`, `ImportService` never reads it back out, and no model
     /// has anywhere to put it. Parsed, carried one layer, dropped. This asserts
     /// the field exists before asserting any value survives it.
-    @Test(.disabled("red until Phase 1 (E3) — BibleVerse has no poetryIndent"))
+    @Test
     func poetryIndentHasSomewhereToLand() {
         #expect(PersistedFieldNames.of(BibleVerse.self).contains("poetryIndent"), """
             BibleImportVerse.poetryIndent is parsed from every TopPresenter Bible \
@@ -7518,7 +7542,7 @@ struct BibleVerseSnapshot: Equatable {
     /// Today the `versionName` fallback (`SessionService.swift:184`) hides it,
     /// which is why it has gone unnoticed: rename an arrangement after sharing a
     /// running order and the reference is simply gone.
-    @Test(.disabled("red until Phase 1 (E5) — applyResult rebuilds versions with new UUIDs"))
+    @Test
     func aSessionsVersionReferenceSurvivesReimportingTheSong() throws {
         let ctx = try makeContext()
         let schedule = fullyPopulatedSession(in: ctx)
@@ -7532,7 +7556,8 @@ struct BibleVerseSnapshot: Equatable {
         // array and the reference looks intact when it is already gone.
         let json = try ExportService.exportSongToTopPresenterJSON(song)
         let result = try #require(TopPresenterSongImporter.result(fromJSON: json))
-        ImportService.applyResult(result, to: song, modelContext: ctx)
+        ImportService.applyResult(result, to: song, modelContext: ctx,
+                                  preservesTimestamps: true, preservingVersionIDs: true)
         try ctx.save()
 
         #expect(song.versions.count == 1, "the arrangement should have been rebuilt, not multiplied")

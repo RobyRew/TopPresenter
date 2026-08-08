@@ -173,7 +173,17 @@ nonisolated final class TopPresenterBibleImporter: BibleImporter {
         result.hasWordsOfChrist = (translation["hasWordsOfChrist"] as? Bool) ?? false
         result.hasStrongs = (translation["hasStrongs"] as? Bool) ?? false
         result.incomplete = (translation["incomplete"] as? Bool) ?? false
-        result.extensionsJSON = Self.encodeExtensions(json["_extensions"])
+        // E1 — the export writes module extensions INSIDE `translation`
+        // (ExportService.swift:155) while this read them from the root, so every
+        // module-level `_extensions` object was silently dropped on re-import.
+        // Book, chapter and verse extensions were always symmetric, which is
+        // why it went unnoticed. The root is still accepted: files from the
+        // eBiblia scraper put them there.
+        result.extensionsJSON = Self.encodeExtensions(translation["_extensions"] ?? json["_extensions"])
+        // E2 — where the text originally came from. Without this, exporting an
+        // OSIS module and re-importing it makes it claim to be a TopPresenter
+        // module, and the provenance is gone for good.
+        result.sourceFormat = translation["sourceFormat"] as? String
         return result
     }
 

@@ -75,6 +75,7 @@ final class ExportService {
                     }
                     if verse.hasWordsOfChrist { v["hasWordsOfChrist"] = true }
                     if !verse.gloss.isEmpty { v["gloss"] = verse.gloss }
+                    if let indent = verse.poetryIndent { v["poetryIndent"] = indent }
                     let footnotes = verse.footnotes
                     if !footnotes.isEmpty {
                         v["footnotes"] = footnotes.map { ["marker": $0.marker, "text": $0.text] }
@@ -138,7 +139,11 @@ final class ExportService {
             "code": module.abbreviation,
             "name": module.name,
             "language": module.language,
-            "description": module.moduleDescription
+            "description": module.moduleDescription,
+            // E2 — provenance. A module that came from OSIS stays an OSIS module
+            // after a trip through this format; without it, exporting and
+            // re-importing rewrites every module's origin to "toppresenter".
+            "sourceFormat": module.sourceFormat
         ]
         if let v = module.versification { translationDict["versification"] = v }
         if let c = module.canon { translationDict["canon"] = c }
@@ -359,13 +364,28 @@ final class ExportService {
         if !song.authorWords.isEmpty { dict["authorWords"] = song.authorWords }
         if !song.authorMusic.isEmpty { dict["authorMusic"] = song.authorMusic }
         if !song.authorTranslation.isEmpty { dict["authorTranslation"] = song.authorTranslation }
+        // E4 — these six were the release blocker, and not because of files.
+        // This dictionary is ALSO the song editor's undo snapshot
+        // (SongsView.swift:1519), and Cancel rebuilds the song from it through
+        // `applyResult`, which assigns them unconditionally: anything missing
+        // here was destroyed by opening the editor and pressing Cancel.
+        //
+        // `songNumber` and `songbookNumber` are the sharpest case. They used to
+        // live in an if/else — a songbook meant songNumber was dropped, no
+        // songbook meant songbookNumber was — so exactly one of the pair was
+        // lost every single time, whichever branch you took.
+        dict["key"] = song.key
+        dict["tempo"] = song.tempo
+        dict["tags"] = song.tags
+        dict["songNumber"] = song.songNumber
+        dict["songbookNumber"] = song.songbookNumber
+        dict["sourceFile"] = song.sourceFile
+        dict["modifiedDate"] = ISO8601DateFormatter().string(from: song.modifiedDate)
         if let sb = song.songbook {
             dict["songbook"] = [
                 "name": sb.name, "publisher": sb.publisher,
                 "language": sb.language, "year": sb.year, "number": song.songbookNumber
             ]
-        } else if !song.songNumber.isEmpty {
-            dict["songNumber"] = song.songNumber
         }
         let media = song.media.map { m -> [String: Any] in
             var d: [String: Any] = ["role": m.role, "kind": m.kind, "filename": m.filename]
@@ -391,6 +411,10 @@ final class ExportService {
             "ccliNumber": version.ccliNumber,
             "source": version.source
         ]
+        // A version exists to be a different rendition — a translation, a
+        // songbook variant — so the names it goes by are not incidental to it.
+        // This key was simply absent.
+        if !version.titles.isEmpty { dict["titles"] = version.titles }
         if !version.displayTitle.isEmpty { dict["displayTitle"] = version.displayTitle }
         if !version.author.isEmpty { dict["author"] = version.author }
         if !version.authorWords.isEmpty { dict["authorWords"] = version.authorWords }

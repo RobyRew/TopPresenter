@@ -83,6 +83,12 @@ nonisolated struct BibleImportResult {
     var hasStrongs: Bool = false
     var incomplete: Bool = false
     var extensionsJSON: String? = nil
+    /// Where the text ORIGINALLY came from, when the file says so.
+    ///
+    /// Only the native format can carry it — a `.osis` file cannot tell you it
+    /// used to be MySword. nil means "this import IS the origin", and
+    /// `importBible` falls back to the format it is reading.
+    var sourceFormat: String? = nil
 }
 
 nonisolated struct BibleImportBook {
