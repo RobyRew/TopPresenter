@@ -188,41 +188,4 @@ final class DragDropImportHandler {
 
         return collections
     }
-
-    /// Import all pending Media files.
-    static func importMedia(
-        files: [PendingImportFile],
-        modelContext: ModelContext,
-        onUpdate: @escaping (UUID, ImportFileStatus) -> Void
-    ) -> [MediaItem] {
-        var imported: [MediaItem] = []
-
-        for file in files {
-            guard case .media(let mediaType) = file.category else { continue }
-
-            onUpdate(file.id, .importing)
-
-            let item = MediaItem(
-                name: file.url.lastPathComponent,
-                filePath: file.url.path,
-                mediaType: mediaType
-            )
-
-            // Generate thumbnail for images
-            if mediaType == "image", let image = NSImage(contentsOf: file.url) {
-                let thumbnailSize = NSSize(width: 200, height: 200)
-                if let resized = image.resized(to: thumbnailSize) {
-                    item.thumbnailData = resized.tiffRepresentation
-                }
-            }
-
-            modelContext.insert(item)
-            item.createBookmark(from: file.url)
-            imported.append(item)
-            onUpdate(file.id, .success(file.fileName))
-        }
-
-        try? modelContext.save()
-        return imported
-    }
 }

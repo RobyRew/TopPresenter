@@ -244,13 +244,13 @@ struct BatchImportSheet: View {
 
             // Import Media
             await MainActor.run {
-                let _ = DragDropImportHandler.importMedia(
-                    files: mediaFiles,
+                MediaImportService.importMedia(
+                    urls: mediaFiles.map(\.url),
                     modelContext: modelContext
-                ) { fileID, status in
-                    if let idx = pendingFiles.firstIndex(where: { $0.id == fileID }) {
-                        pendingFiles[idx].status = status
-                    }
+                ) { url, status in
+                    // The service reports by URL; the rows are keyed by id.
+                    guard let idx = pendingFiles.firstIndex(where: { $0.url == url }) else { return }
+                    pendingFiles[idx].status = status
                     if case .success = status { completedCount += 1 }
                     if case .failed = status { completedCount += 1 }
                 }

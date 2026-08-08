@@ -24,6 +24,7 @@ struct MediaView: View {
     @Environment(AudioPlayerManager.self) private var audioPlayerManager
     @Environment(VideoPlayerService.self) private var videoPlayerService
     @Environment(LibraryManager.self) private var libraryManager
+    @Environment(AppState.self) private var appState
 
     @Query(sort: \MediaItem.importDate, order: .reverse) private var mediaItems: [MediaItem]
 
@@ -215,29 +216,24 @@ struct MediaView: View {
 
     private func importMedia() {
         let panel = NSOpenPanel()
-        panel.allowedContentTypes = [.image, .audio, .movie, .mpeg4Movie, .mpeg4Audio, .mp3, .wav, .aiff]
+        panel.allowedContentTypes = ImportCatalog.contentTypes(for: [.media])
         panel.allowsMultipleSelection = true
-        panel.canChooseDirectories = false
+        // Folders are pickable now: the scanner walks them and keeps only what
+        // it can actually read, so "import my backgrounds folder" works.
+        panel.canChooseDirectories = true
+        panel.message = String(localized: "Select media files or folders",
+                               comment: "Open panel message")
         guard panel.runModal() == .OK else { return }
 
-        for url in panel.urls {
-            // The panel already filters to media types, so an unrecognised
-            // extension here means a file we have no player for. Skipping it
-            // beats importing a library item that can never render.
-            guard let kind = MediaKind.classify(extension: url.pathExtension) else { continue }
-            let item = MediaItem(name: url.lastPathComponent, filePath: url.path, mediaType: kind.rawValue)
-            modelContext.insert(item)
-            item.createBookmark(from: url)
-            // Thumbnail + duration are probed asynchronously so a big import
-            // never blocks the UI; the grid updates as they land.
-            Task { @MainActor in
-                item.thumbnailData = await MediaThumbnailFactory.thumbnailData(for: url, kind: kind)
-                try? modelContext.save()
-            }
-            MediaPresenter.backfillDurationIfNeeded(item, url: url)
+        let outcome = MediaImportService.importMedia(
+            urls: ImportScanner.scan(panel.urls).files, modelContext: modelContext)
+        if !outcome.skipped.isEmpty {
+            appState.showSuccess(
+                String(localized: "Import complete", comment: "Alert title"),
+                message: String(localized: "\(outcome.imported.count) imported, \(outcome.skipped.count) already in the library.",
+                                comment: "Alert message")
+            )
         }
-        try? modelContext.save()
-        NotificationCenter.default.post(name: .libraryDidChange, object: nil)
     }
 
     private func deleteMedia(_ item: MediaItem) {

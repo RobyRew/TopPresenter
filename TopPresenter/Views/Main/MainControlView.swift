@@ -439,15 +439,16 @@ struct MainControlView: View {
 
             // Auto-import media files immediately (no dialog needed)
             if !mediaFiles.isEmpty {
-                let _ = DragDropImportHandler.importMedia(
-                    files: mediaFiles,
-                    modelContext: modelContext,
-                    onUpdate: { _, _ in }
-                )
-                let count = mediaFiles.count
+                let outcome = MediaImportService.importMedia(
+                    urls: mediaFiles.map(\.url), modelContext: modelContext)
+                // Reporting a count that includes files nothing was done with
+                // is how a silent double-import goes unnoticed. Say which.
                 appState.showSuccess(
                     String(localized: "Media Imported", comment: "Alert"),
-                    message: String(localized: "\(count) media file(s) imported.", comment: "Alert")
+                    message: outcome.skipped.isEmpty
+                        ? String(localized: "\(outcome.imported.count) media file(s) imported.", comment: "Alert")
+                        : String(localized: "\(outcome.imported.count) imported, \(outcome.skipped.count) already in the library.",
+                                 comment: "Alert message")
                 )
                 // Switch to media tab if only media was dropped
                 if bibleFiles.isEmpty && songFiles.isEmpty {

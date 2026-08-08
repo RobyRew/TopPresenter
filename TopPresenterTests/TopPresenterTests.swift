@@ -8026,3 +8026,136 @@ struct PresentationSlideSnapshot: Equatable {
         }
     }
 }
+
+// MARK: - Media import
+//
+// Media was the only kind with NO duplicate check of any sort, so the same
+// photo could be imported without limit and the grid filled with identical
+// tiles. There were also two import paths that disagreed about what importing
+// media means — one made thumbnails for images only and never read a duration.
+
+@MainActor struct MediaImportServiceTests {
+
+    private func makeContext() throws -> ModelContext {
+        let container = try ModelContainer(
+            for: Schema(versionedSchema: SchemaV2.self),
+            configurations: [ModelConfiguration(isStoredInMemoryOnly: true)]
+        )
+        return ModelContext(container)
+    }
+
+    private func makeFiles(_ names: [String]) throws -> URL {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("media-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        for name in names {
+            try Data("pretend \(name)".utf8).write(to: root.appendingPathComponent(name))
+        }
+        return root
+    }
+
+    /// G4 for media — plan §4.4.
+    @Test func importingTheSamePhotoTwiceIsANoOp() throws {
+        let ctx = try makeContext()
+        let root = try makeFiles(["fundal.jpg", "clip.mp4"])
+        defer { try? FileManager.default.removeItem(at: root) }
+        let urls = ["fundal.jpg", "clip.mp4"].map { root.appendingPathComponent($0) }
+
+        let first = MediaImportService.importMedia(urls: urls, modelContext: ctx)
+        #expect(first.imported.count == 2)
+        #expect(first.skipped.isEmpty)
+
+        let second = MediaImportService.importMedia(urls: urls, modelContext: ctx)
+        #expect(second.imported.isEmpty)
+        #expect(second.skipped.count == 2)
+        #expect(try ctx.fetch(FetchDescriptor<MediaItem>()).count == 2,
+                "the same files imported twice produced a second copy of each")
+        // The row has to say WHAT it matched, or a skip is indistinguishable
+        // from a failure.
+        #expect(second.skipped.allSatisfy { !$0.matchedOn.isEmpty })
+    }
+
+    /// The classifier can say "not media" now, so a stray document in a picked
+    /// folder is reported rather than filed as a photo.
+    @Test func aNonMediaFileIsReportedNotImportedAsAnImage() throws {
+        let ctx = try makeContext()
+        let root = try makeFiles(["notes.docx", "fundal.png"])
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let outcome = MediaImportService.importMedia(
+            urls: ["notes.docx", "fundal.png"].map { root.appendingPathComponent($0) },
+            modelContext: ctx)
+        #expect(outcome.imported.count == 1)
+        #expect(outcome.unsupported.map(\.lastPathComponent) == ["notes.docx"])
+    }
+
+    /// `.keepBoth` is a real choice for media — the same picture under two
+    /// names is sometimes deliberate — so the policy has to be honoured.
+    @Test func keepBothImportsTheDuplicateAnyway() throws {
+        let ctx = try makeContext()
+        let root = try makeFiles(["fundal.jpg"])
+        defer { try? FileManager.default.removeItem(at: root) }
+        let urls = [root.appendingPathComponent("fundal.jpg")]
+
+        _ = MediaImportService.importMedia(urls: urls, modelContext: ctx)
+        let again = MediaImportService.importMedia(urls: urls, modelContext: ctx, policy: .keepBoth)
+        #expect(again.imported.count == 1)
+        #expect(try ctx.fetch(FetchDescriptor<MediaItem>()).count == 2)
+    }
+}
+
+// MARK: - The coordinator
+
+@MainActor struct ImportCoordinatorTests {
+
+    private func makeContext() throws -> ModelContext {
+        let container = try ModelContainer(
+            for: Schema(versionedSchema: SchemaV2.self),
+            configurations: [ModelConfiguration(isStoredInMemoryOnly: true)]
+        )
+        return ModelContext(container)
+    }
+
+    /// Media before sessions is a correctness rule, not a preference:
+    /// `importSession` re-links media against the library AS IT STANDS, so a
+    /// session imported first arrives with everything reported missing.
+    @Test func mediaRunsBeforeSessions() {
+        let order = ImportCoordinator.kindOrder
+        let media = try? #require(order.firstIndex(of: .media))
+        let session = try? #require(order.firstIndex(of: .session))
+        #expect(media != nil && session != nil)
+        #expect(media! < session!, "a session imported before its media resolves to nothing")
+    }
+
+    @Test func theSummaryDistinguishesImportedFromAlreadyThere() async throws {
+        let ctx = try makeContext()
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("coord-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let photo = root.appendingPathComponent("fundal.jpg")
+        try Data("x".utf8).write(to: photo)
+
+        let files = [PendingImportFile(url: photo, category: .media("image"))]
+        let coordinator = ImportCoordinator(modelContext: ctx)
+
+        let first = await coordinator.run(files, songCollectionName: "Test")
+        #expect(first.imported == 1)
+        #expect(first.skipped == 0)
+
+        let second = await coordinator.run(files, songCollectionName: "Test")
+        #expect(second.imported == 0)
+        #expect(second.skipped == 1)
+        // A bare count cannot tell these two runs apart, which is exactly how a
+        // silent double-import goes unnoticed.
+        #expect(first.headline != second.headline)
+        #expect(second.report.contains("fundal.jpg"))
+    }
+
+    @Test func anEmptyRunSaysSoRatherThanReportingZeroes() async throws {
+        let summary = await ImportCoordinator(modelContext: try makeContext())
+            .run([], songCollectionName: "Test")
+        #expect(summary.isEmpty)
+        #expect(summary.headline == String(localized: "Nothing to import", comment: "Import summary"))
+    }
+}
