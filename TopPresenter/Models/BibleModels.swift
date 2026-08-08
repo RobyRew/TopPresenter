@@ -45,6 +45,13 @@ final class BibleModule {
     var incomplete: Bool = false
     /// JSON-encoded `_extensions` object — any future/unknown fields survive round-trip.
     var extensionsJSON: String?
+    /// Stable identity ACROSS libraries, carried in the exported header.
+    ///
+    /// Assigned once when the module enters a library and never regenerated, so
+    /// exporting it and importing it somewhere else lands on the same module
+    /// rather than a second copy of it. Empty for modules imported before this
+    /// existed — `DuplicateResolver`'s ladder has two more rungs for them.
+    var contentID: String = ""
 
     @Relationship(deleteRule: .cascade, inverse: \BibleBook.module)
     var books: [BibleBook] = []
@@ -67,7 +74,8 @@ final class BibleModule {
         hasWordsOfChrist: Bool = false,
         hasStrongs: Bool = false,
         incomplete: Bool = false,
-        extensionsJSON: String? = nil
+        extensionsJSON: String? = nil,
+        contentID: String = UUID().uuidString
     ) {
         self.id = UUID()
         self.name = name
@@ -89,6 +97,7 @@ final class BibleModule {
         self.hasStrongs = hasStrongs
         self.incomplete = incomplete
         self.extensionsJSON = extensionsJSON
+        self.contentID = contentID
     }
 }
 

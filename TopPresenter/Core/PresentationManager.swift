@@ -3000,6 +3000,11 @@ final class PresentationManager {
     /// The portable theme file format (versioned for future evolution).
     struct ThemeArchive: Codable {
         var version: Int = 1
+        /// The theme's identity, so re-importing a package UPDATES the theme it
+        /// came from instead of adding a second one beside it. Absent on
+        /// packages exported before this existed; the resolver falls back to
+        /// the name for those.
+        var themeID: String = ""
         var name: String = PresentationDefaults.themeName
         var format: String = "all"
         var payload: ThemePayload = ThemePayload()
@@ -3010,6 +3015,7 @@ final class PresentationManager {
         init(from decoder: Decoder) throws {
             let c = try decoder.container(keyedBy: CodingKeys.self)
             version = try c.decodeIfPresent(Int.self, forKey: .version) ?? 1
+            themeID = try c.decodeIfPresent(String.self, forKey: .themeID) ?? ""
             name = try c.decodeIfPresent(String.self, forKey: .name) ?? PresentationDefaults.themeName
             format = try c.decodeIfPresent(String.self, forKey: .format) ?? "all"
             payload = try c.decodeIfPresent(ThemePayload.self, forKey: .payload) ?? ThemePayload()
@@ -3042,6 +3048,7 @@ final class PresentationManager {
         try fm.createDirectory(at: mediaDir, withIntermediateDirectories: true)
 
         var archive = ThemeArchive()
+        archive.themeID = theme.id.uuidString
         archive.name = theme.name
         archive.format = theme.formatRaw
         var payload = theme.payload
@@ -3135,7 +3142,31 @@ final class PresentationManager {
         }
         let archive = try JSONDecoder().decode(ThemeArchive.self, from: data)
 
-        let themeID = UUID()
+        // Is this theme already here? `importTheme` used to check nothing at
+        // all, so the same package opened twice produced two themes — with the
+        // same name, since it did not even run them through `uniqueThemeName`.
+        //
+        // Identity is the theme's own id, which is why re-importing a package
+        // REPLACES the theme it came from: that is what "I edited the file and
+        // opened it again" means. A different theme that merely shares a name
+        // keeps both, under the disambiguated name.
+        let incoming = ThemeIdentity(
+            id: archive.themeID,
+            name: archive.name,
+            payloadDigest: Self.digest(of: archive.payload)
+        )
+        let verdict = DuplicateResolver.verdict(for: incoming, against: themes.map(Self.identity(of:)))
+        if case .identical(let match) = verdict {
+            return themes[match.existingIndex]
+        }
+        let replacingIndex: Int? = {
+            if case .sameIdentityDifferentContent(let match) = verdict { return match.existingIndex }
+            return nil
+        }()
+
+        // Keep the incoming id when there is one, so this theme stays the same
+        // theme wherever it travels.
+        let themeID = UUID(uuidString: archive.themeID) ?? UUID()
         let fm = FileManager.default
         let containerDir = Self.themeMediaDirectory(for: themeID)
         try fm.createDirectory(at: containerDir, withIntermediateDirectories: true)
@@ -3195,9 +3226,40 @@ final class PresentationManager {
             }
         }
 
-        let theme = Theme(id: themeID, name: archive.name, formatRaw: archive.format, payload: payload)
-        themes.append(theme)
+        // A theme that shares only its NAME with an existing one is a different
+        // theme, and two identical rows in the gallery help nobody.
+        let name = replacingIndex == nil && themes.contains(where: { $0.name == archive.name })
+            ? uniqueThemeName(archive.name)
+            : archive.name
+        let theme = Theme(id: themeID, name: name, formatRaw: archive.format, payload: payload)
+        if let replacingIndex {
+            themes[replacingIndex] = theme
+        } else {
+            themes.append(theme)
+        }
         return theme
+    }
+
+    /// The identity of a theme already in the gallery.
+    static func identity(of theme: Theme) -> ThemeIdentity {
+        ThemeIdentity(id: theme.id.uuidString, name: theme.name, payloadDigest: digest(of: theme.payload))
+    }
+
+    /// A digest of the look itself. Bookmarks are stripped first: export
+    /// rebuilds them against the copied files, so two identical themes
+    /// legitimately hold different bookmark bytes.
+    static func digest(of payload: ThemePayload) -> String {
+        var stripped = payload
+        stripped.backgroundImageBookmark = nil
+        for (key, var profile) in stripped.profiles {
+            profile.background.imageBookmark = nil
+            for index in profile.mediaBoxes.indices { profile.mediaBoxes[index].bookmarkData = nil }
+            stripped.profiles[key] = profile
+        }
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        guard let data = try? encoder.encode(stripped) else { return "" }
+        return ContentFingerprint.digest(of: data)
     }
 
     /// Restores a full look snapshot (used by themes AND layout undo/redo).

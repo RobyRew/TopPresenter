@@ -89,6 +89,10 @@ nonisolated struct BibleImportResult {
     /// used to be MySword. nil means "this import IS the origin", and
     /// `importBible` falls back to the format it is reading.
     var sourceFormat: String? = nil
+    /// The module's stable identity, when the file carries one. Empty means the
+    /// file predates it (or came from another producer), and the duplicate
+    /// resolver falls back to abbreviation + language.
+    var contentID: String = ""
 }
 
 nonisolated struct BibleImportBook {

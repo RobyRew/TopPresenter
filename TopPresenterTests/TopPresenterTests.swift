@@ -2113,7 +2113,7 @@ struct PresentationManagerTests {
             "books": [["number": 27, "name": "Daniel", "testament": "OT", "chapters": [
                 ["number": 6, "verses": [["number": 1, "text": "six"]]],
                 ["number": 8, "verses": [["number": 1, "text": "eight"]]]]]]]
-        let m1 = try await ImportService.importBible(fileURL: try write(v1, "dup1.json"), format: .topPresenter, modelContext: ctx, resolution: .keepBoth)
+        let m1 = try await ImportService.importBible(fileURL: try write(v1, "dup1.json"), format: .topPresenter, modelContext: ctx, resolution: .keepBoth).module
         #expect(m1.books.first?.chapters.count == 2)
 
         // Second import (same code) supplying the missing chapter 7 → MERGE.
@@ -2121,7 +2121,7 @@ struct PresentationManagerTests {
             "books": [["number": 27, "name": "Daniel", "testament": "OT", "chapters": [
                 ["number": 6, "verses": [["number": 1, "text": "SIX-overwrite-attempt"]]],
                 ["number": 7, "verses": [["number": 1, "text": "seven"]]]]]]]
-        let merged = try await ImportService.importBible(fileURL: try write(v2, "dup2.json"), format: .topPresenter, modelContext: ctx, resolution: .merge)
+        let merged = try await ImportService.importBible(fileURL: try write(v2, "dup2.json"), format: .topPresenter, modelContext: ctx, resolution: .merge).module
 
         #expect(merged.id == m1.id)                                          // merged INTO existing
         let daniel = try #require(merged.books.first)
@@ -2132,20 +2132,40 @@ struct PresentationManagerTests {
         #expect(mods.filter { $0.abbreviation == "DUP" }.count == 1)         // no duplicate module
     }
 
-    @Test func duplicateImportAskThrowsConflict() async throws {
+    /// A conflict is "you have something else under this name", not "you have
+    /// this". Re-importing the identical file used to raise the dialog too,
+    /// which is a question with no useful answer: every option does nothing.
+    @Test func duplicateImportAskThrowsConflictOnlyWhenTheContentDiffers() async throws {
         let container = try ModelContainer(
             for: BibleModule.self, BibleBook.self, BibleChapter.self, BibleVerse.self,
             configurations: ModelConfiguration(isStoredInMemoryOnly: true)
         )
         let ctx = container.mainContext
-        let j: [String: Any] = ["format": "TopPresenter Bible", "translation": ["code": "ASK", "name": "Ask"],
+        func write(_ j: [String: Any], _ name: String) throws -> URL {
+            let u = FileManager.default.temporaryDirectory.appendingPathComponent(name)
+            try JSONSerialization.data(withJSONObject: j).write(to: u)
+            return u
+        }
+        let original: [String: Any] = ["format": "TopPresenter Bible", "translation": ["code": "ASK", "name": "Ask"],
             "books": [["number": 1, "name": "Genesis", "testament": "OT",
                        "chapters": [["number": 1, "verses": [["number": 1, "text": "x"]]]]]]]
-        let u = FileManager.default.temporaryDirectory.appendingPathComponent("ask.json")
-        try JSONSerialization.data(withJSONObject: j).write(to: u)
+        let u = try write(original, "ask.json")
         _ = try await ImportService.importBible(fileURL: u, format: .topPresenter, modelContext: ctx, resolution: .keepBoth)
+
+        // The SAME file again: not a conflict, and not a second module.
+        let again = try await ImportService.importBible(fileURL: u, format: .topPresenter,
+                                                        modelContext: ctx, resolution: .ask)
+        #expect(again.action == .skippedDuplicate(matchedOn: "abbreviation ASK and language en"))
+        #expect(try ctx.fetch(FetchDescriptor<BibleModule>()).count == 1)
+
+        // A DIFFERENT edition under the same code is what the dialog is for.
+        let revised: [String: Any] = ["format": "TopPresenter Bible", "translation": ["code": "ASK", "name": "Ask"],
+            "books": [["number": 1, "name": "Genesis", "testament": "OT",
+                       "chapters": [["number": 1, "verses": [["number": 1, "text": "x"],
+                                                             ["number": 2, "text": "y"]]]]]]]
         await #expect(throws: ImportService.BibleConflict.self) {
-            _ = try await ImportService.importBible(fileURL: u, format: .topPresenter, modelContext: ctx, resolution: .ask)
+            _ = try await ImportService.importBible(fileURL: try write(revised, "ask2.json"),
+                                                    format: .topPresenter, modelContext: ctx, resolution: .ask)
         }
     }
 
@@ -2654,7 +2674,7 @@ struct BibleLanguageDetectionTests {
             "translation": ["code": "INTER", "name": "Interlinear", "language": "ro"],
             "books": [["number": 64, "name": "3 John", "testament": "NT", "chapters": [
                 ["number": 1, "verses": [["number": 1, "text": "Ὁ πρεσβύτερος τῷ ἀγαπητῷ Γαΐῳ ὃν ἐγὼ ἀγαπῶ"]]]]]]]
-        let gm = try await ImportService.importBible(fileURL: try write(greek, "lang_gr.json"), format: .topPresenter, modelContext: ctx, resolution: .keepBoth)
+        let gm = try await ImportService.importBible(fileURL: try write(greek, "lang_gr.json"), format: .topPresenter, modelContext: ctx, resolution: .keepBoth).module
         #expect(gm.language == "gr")
         #expect(gm.languageName == "Ελληνικά")
 
@@ -2663,7 +2683,7 @@ struct BibleLanguageDetectionTests {
             "translation": ["code": "VDC", "name": "Cornilescu", "language": "ro"],
             "books": [["number": 64, "name": "3 Ioan", "testament": "NT", "chapters": [
                 ["number": 1, "verses": [["number": 1, "text": "Bătrânul, către preaiubitul Gaiu, pe care îl iubesc în adevăr"]]]]]]]
-        let rm = try await ImportService.importBible(fileURL: try write(ro, "lang_ro.json"), format: .topPresenter, modelContext: ctx, resolution: .keepBoth)
+        let rm = try await ImportService.importBible(fileURL: try write(ro, "lang_ro.json"), format: .topPresenter, modelContext: ctx, resolution: .keepBoth).module
         #expect(rm.language == "ro")
     }
 }
@@ -5118,7 +5138,7 @@ struct RemoteExtractionTests {
     /// package opened twice is two themes. §4.2 settles what it should do: the
     /// payload already carries a stable theme `id`, so same id means Replace —
     /// re-importing a package IS updating it.
-    @Test(.disabled("red until Phase 3 — DuplicateResolver; importTheme never checks identity"))
+    @Test
     func importingTheSameThemeTwiceIsANoOp() throws {
         let source = makeTestManager()
         decorate(source)
@@ -7043,7 +7063,7 @@ nonisolated enum ExtensionPayload {
 /// either — naming the level it happened at.
 struct BibleModuleSnapshot: Equatable {
     var name = "", abbreviation = "", language = "", sourceFormat = ""
-    var moduleDescription = "", versification = "", canon = ""
+    var moduleDescription = "", versification = "", canon = "", contentID = ""
     var nameLocal = "", languageName = "", copyright = "", aboutText = "", textSource = ""
     var year = 0, direction = ""
     var hasWordsOfChrist = false, hasStrongs = false, incomplete = false
@@ -7054,6 +7074,7 @@ struct BibleModuleSnapshot: Equatable {
         name = m.name; abbreviation = m.abbreviation; language = m.language
         sourceFormat = m.sourceFormat; moduleDescription = m.moduleDescription
         versification = m.versification ?? ""; canon = m.canon ?? ""
+        contentID = m.contentID
         nameLocal = m.nameLocal; languageName = m.languageName
         copyright = m.copyright; aboutText = m.aboutText; textSource = m.textSource
         year = m.year ?? 0; direction = m.direction
@@ -7067,7 +7088,7 @@ struct BibleModuleSnapshot: Equatable {
         "name", "abbreviation", "language", "sourceFormat", "moduleDescription",
         "versification", "canon", "nameLocal", "languageName", "copyright",
         "aboutText", "textSource", "year", "direction", "hasWordsOfChrist",
-        "hasStrongs", "incomplete", "extensionsJSON", "books",
+        "hasStrongs", "incomplete", "extensionsJSON", "contentID", "books",
     ]
 
     static let exemptFields: [String: String] = [
@@ -7280,7 +7301,7 @@ struct BibleVerseSnapshot: Equatable {
 
         let fresh = try makeContext()
         return try await ImportService.importBible(
-            fileURL: url, format: .topPresenter, modelContext: fresh, resolution: .keepBoth)
+            fileURL: url, format: .topPresenter, modelContext: fresh, resolution: .keepBoth).module
     }
 
     @Test func theFixtureIsExhaustive() throws {
@@ -7358,7 +7379,7 @@ struct BibleVerseSnapshot: Equatable {
     /// G4 — the guarantee named in plan §4.4: importing the same file twice with
     /// default policies is a no-op. Today the default is `.keepBoth`, so the
     /// second import silently creates "Biblia Ortodoxă Sinodală (2)".
-    @Test(.disabled("red until Phase 3 — DuplicateResolver; the default is .keepBoth, so this doubles"))
+    @Test
     func importingTheSameFileTwiceIsANoOp() async throws {
         let source = try makeContext()
         let module = fullyPopulatedModule(in: source)
@@ -7423,8 +7444,12 @@ struct BibleVerseSnapshot: Equatable {
     }
 
     static let coveredFields: Set<String> = ["name", "notes", "date", "items"]
+    /// Not compared across a round trip: a locally-authored session has none
+    /// until it is exported, and one that arrived carries the sender's. Its
+    /// behaviour is asserted directly by the idempotency test instead.
     static let exemptFields: [String: String] = [
-        "id": "regenerated on import; identity comes from the sessionID header field added in Phase 3",
+        "id": "regenerated on import; identity comes from sourceSessionID instead",
+        "sourceSessionID": "the SENDER's identity, deliberately not the local id — asserted by importingTheSameSessionTwiceIsANoOp",
     ]
 }
 
@@ -7555,7 +7580,7 @@ struct BibleVerseSnapshot: Equatable {
     /// G4 — plan §4.4. `SessionArchive.swift:135` inserts unconditionally, with
     /// no identity check of any kind, so a `.tpschedule` opened twice is simply
     /// there twice.
-    @Test(.disabled("red until Phase 3 — sessionID + DuplicateResolver; today the insert is unconditional"))
+    @Test
     func importingTheSameSessionTwiceIsANoOp() throws {
         let ctx = try makeContext()
         let data = try SessionArchiveService.export(fullyPopulatedSession(in: ctx))
@@ -7821,5 +7846,183 @@ struct PresentationSlideSnapshot: Equatable {
         #expect(!bibleOnly.contains("jpg"))
         #expect(ImportCatalog.contentTypes(for: [.media])
             .compactMap(\.preferredFilenameExtension).contains("mp4"))
+    }
+}
+
+// MARK: - "Have I already got this?"
+//
+// The resolver is a pure function over value types, on purpose: the batch path
+// and the interactive path both call it, which is what stopped them agreeing
+// last time. These are the cases the answers have to get right.
+
+@MainActor struct DuplicateResolverTests {
+
+    // MARK: Bible
+
+    private func kjv(_ mutate: (inout BibleIdentity) -> Void = { _ in }) -> BibleIdentity {
+        var identity = BibleIdentity(contentID: "", abbreviation: "KJV", language: "en",
+                                     name: "King James Version", bookCount: 66,
+                                     verseCount: 31_102, contentDigest: "aaa")
+        mutate(&identity)
+        return identity
+    }
+
+    @Test func theSameModuleTwiceIsIdentical() {
+        let verdict = DuplicateResolver.verdict(for: kjv(), against: [kjv()])
+        guard case .identical(let match) = verdict else {
+            Issue.record("expected .identical, got \(verdict)"); return
+        }
+        #expect(match.differences.isEmpty)
+        #expect(match.confidence == .strong)   // matched on abbreviation + language
+    }
+
+    /// The distinction the whole design rests on: same name is not same content.
+    @Test func sameAbbreviationDifferentEditionSaysHowTheyDiffer() {
+        let revised = kjv { $0.verseCount = 31_086; $0.contentDigest = "bbb" }
+        let verdict = DuplicateResolver.verdict(for: revised, against: [kjv()])
+        guard case .sameIdentityDifferentContent(let match) = verdict else {
+            Issue.record("expected .sameIdentityDifferentContent, got \(verdict)"); return
+        }
+        #expect(match.differences.count == 1)
+        // Digits only: the message is localized and groups them ("31.086"), and
+        // what matters is that BOTH counts reach the operator — they can only
+        // choose well if they can see what was compared.
+        let digits = String(match.differences[0].filter(\.isNumber))
+        #expect(digits.contains("31086"), "the incoming count is missing from \(match.differences[0])")
+        #expect(digits.contains("31102"), "the existing count is missing from \(match.differences[0])")
+        #expect(DuplicatePolicy.suggested(for: verdict, kind: .bible) == .ask)
+    }
+
+    /// A Romanian and an English module can legitimately share an abbreviation.
+    /// Matching on the code alone merged them.
+    @Test func sameAbbreviationInAnotherLanguageIsNotTheSameModule() {
+        let romanian = kjv { $0.language = "ro"; $0.name = "Versiunea King James"; $0.contentDigest = "ccc" }
+        #expect(DuplicateResolver.verdict(for: romanian, against: [kjv()]) == .unique)
+    }
+
+    /// A module with no abbreviation was never matched at all, so every
+    /// re-import of one silently duplicated it.
+    @Test func aModuleWithNoAbbreviationFallsBackToItsName() {
+        let anonymous = kjv { $0.abbreviation = "" }
+        let verdict = DuplicateResolver.verdict(for: anonymous, against: [anonymous])
+        guard case .identical(let match) = verdict else {
+            Issue.record("expected .identical, got \(verdict)"); return
+        }
+        #expect(match.confidence == .weak)
+    }
+
+    /// contentID outranks everything: a module renamed after export is still
+    /// that module.
+    @Test func contentIDWinsOverEveryOtherRule() {
+        let original = kjv { $0.contentID = "ID-1" }
+        let renamed = kjv { $0.contentID = "ID-1"; $0.abbreviation = "KJ21"; $0.name = "Renamed" }
+        let verdict = DuplicateResolver.verdict(for: renamed, against: [original])
+        #expect(verdict.match?.confidence == .certain)
+    }
+
+    // MARK: Song
+
+    private func song(_ mutate: (inout SongIdentity) -> Void = { _ in }) -> SongIdentity {
+        var identity = SongIdentity(ccliNumber: "7104200", normalizedTitle: "mare esti tu",
+                                    normalizedFirstLine: "mare esti tu doamne",
+                                    versionCount: 1, sectionCount: 4, lyricsDigest: "aaa")
+        mutate(&identity)
+        return identity
+    }
+
+    @Test func sameCCLIWithADifferentTitleIsStillTheSameSong() {
+        let translated = song { $0.normalizedTitle = "how great thou art"
+                                $0.normalizedFirstLine = "o lord my god"
+                                $0.lyricsDigest = "bbb" }
+        let verdict = DuplicateResolver.verdict(for: translated, against: [song()])
+        #expect(verdict.match?.confidence == .certain)
+        #expect(verdict.match?.matchedOn.contains("7104200") == true)
+        #expect(DuplicatePolicy.suggested(for: verdict, kind: .song) == .addAsVersion)
+    }
+
+    /// Titles vary across translations and songbooks; first lines do not. This
+    /// is the upgrade over matching on the title alone.
+    @Test func sameTitleButADifferentFirstLineIsOnlyProbable() {
+        let other = song { $0.ccliNumber = ""
+                           $0.normalizedFirstLine = "cat de mare esti tu"
+                           $0.lyricsDigest = "bbb" }
+        let existing = song { $0.ccliNumber = "" }
+        let verdict = DuplicateResolver.verdict(for: other, against: [existing])
+        guard case .probable(let match) = verdict else {
+            Issue.record("expected .probable, got \(verdict)"); return
+        }
+        #expect(match.confidence == .weak)
+        // Two different songs that happen to share a title must NOT be merged.
+        #expect(DuplicatePolicy.suggested(for: verdict, kind: .song) == .keepBoth)
+    }
+
+    @Test func sameTitleAndFirstLineIsStrongEnoughToBeAnArrangement() {
+        let incoming = song { $0.ccliNumber = ""; $0.versionCount = 2; $0.lyricsDigest = "bbb" }
+        let existing = song { $0.ccliNumber = "" }
+        let verdict = DuplicateResolver.verdict(for: incoming, against: [existing])
+        #expect(verdict.match?.confidence == .strong)
+        #expect(DuplicatePolicy.suggested(for: verdict, kind: .song) == .addAsVersion)
+    }
+
+    // MARK: Media
+
+    @Test func mediaMatchesByPathAndThenByNameAndSize() {
+        let onDisk = MediaIdentity(resolvedPath: "/Users/x/fundal.jpg", filename: "fundal.jpg", byteSize: 2048)
+        #expect(DuplicateResolver.verdict(for: onDisk, against: [onDisk]).match?.confidence == .certain)
+
+        // The same file reached by a different path — a copied library folder.
+        let moved = MediaIdentity(resolvedPath: "/Volumes/Stick/fundal.jpg", filename: "fundal.jpg", byteSize: 2048)
+        #expect(DuplicateResolver.verdict(for: moved, against: [onDisk]).match?.confidence == .strong)
+
+        // Same name, different size: a different picture.
+        let different = MediaIdentity(resolvedPath: "/Volumes/Stick/fundal.jpg", filename: "fundal.jpg", byteSize: 9999)
+        #expect(DuplicateResolver.verdict(for: different, against: [onDisk]) == .unique)
+    }
+
+    /// The stated limit: no content hash, because hashing multi-GB video on
+    /// import beach-balls. Two different clips with the same name and byte size
+    /// are taken for one, and that is written down rather than hidden.
+    @Test func mediaAtTheSamePathThatChangedSizeIsFlaggedNotSkipped() {
+        let before = MediaIdentity(resolvedPath: "/a/clip.mp4", filename: "clip.mp4", byteSize: 100)
+        let after = MediaIdentity(resolvedPath: "/a/clip.mp4", filename: "clip.mp4", byteSize: 200)
+        let verdict = DuplicateResolver.verdict(for: after, against: [before])
+        guard case .sameIdentityDifferentContent(let match) = verdict else {
+            Issue.record("expected .sameIdentityDifferentContent, got \(verdict)"); return
+        }
+        #expect(!match.differences.isEmpty)
+    }
+
+    // MARK: Within one batch
+
+    /// The scanner drops the same PATH picked twice. It cannot see that
+    /// `Biblia.tpbible` and `Biblia copy.tpbible` are the same file.
+    @Test func identicalFilesInOneBatchKeepOnlyTheFirst() {
+        let a = ContentFingerprint(byteSize: 1000, digest: "aaa")
+        let b = ContentFingerprint(byteSize: 2000, digest: "bbb")
+        let duplicates = DuplicateResolver.duplicatesWithinBatch([a, b, a, a, nil, b])
+        #expect(duplicates == [2: 0, 3: 0, 5: 1])
+        #expect(duplicates[0] == nil, "the first of each group is the one that is kept")
+        #expect(duplicates[4] == nil, "a file with no fingerprint is never called a duplicate")
+    }
+
+    // MARK: Policy
+
+    @Test func eachKindOffersOnlyThePoliciesThatMeanSomethingForIt() {
+        #expect(DuplicatePolicy.allowed(for: .bible).contains(.merge))
+        #expect(!DuplicatePolicy.allowed(for: .song).contains(.merge),
+                "merging two songs is not a thing the app can do")
+        #expect(DuplicatePolicy.allowed(for: .song).contains(.addAsVersion))
+        #expect(!DuplicatePolicy.allowed(for: .bible).contains(.addAsVersion))
+        #expect(!DuplicatePolicy.allowed(for: .media).contains(.ask),
+                "asking per photo would make a 200-file import unusable")
+    }
+
+    /// The guarantee the whole feature is judged by (plan §4.4).
+    @Test func identicalContentIsAlwaysSkippedWhateverTheKind() {
+        let match = DuplicateMatch(existingIndex: 0, confidence: .certain, matchedOn: "x", differences: [])
+        for kind in ImportKind.allCases {
+            #expect(DuplicatePolicy.suggested(for: .identical(match), kind: kind) == .skip,
+                    "\(kind) would not skip an exact duplicate")
+        }
     }
 }

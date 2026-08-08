@@ -50,7 +50,7 @@ final class ImportService {
 
     /// Import a Bible file in the specified format
     /// What to do when a Bible with the same code is already in the library.
-    enum BibleConflictResolution {
+    nonisolated enum BibleConflictResolution: Equatable, Sendable {
         case ask          // surface a BibleConflict for the UI to resolve
         case replace      // delete existing, import fresh
         case merge        // fill in missing books/chapters/verses
@@ -79,6 +79,84 @@ final class ImportService {
         return all.first { $0.abbreviation.lowercased() == needle }
     }
 
+    /// What actually happened, so a caller can report "3 imported, 2 already in
+    /// the library" instead of a bare count that hides a silent double-import.
+    nonisolated enum BibleImportAction: Sendable, Equatable {
+        case imported
+        case skippedDuplicate(matchedOn: String)
+        case replaced
+        case merged
+    }
+
+    /// Not Sendable: it carries a `BibleModule`, which belongs to the context
+    /// it was made in. It crosses back to the caller's isolation the same way
+    /// the bare module always did.
+    nonisolated struct BibleImportOutcome {
+        let module: BibleModule
+        let action: BibleImportAction
+    }
+
+    /// The identity of a module already in the library.
+    nonisolated static func identity(of module: BibleModule) -> BibleIdentity {
+        var verses = 0
+        var shape: [String] = []
+        for book in module.books.sorted(by: { $0.bookNumber < $1.bookNumber }) {
+            for chapter in book.sortedChapters {
+                verses += chapter.verses.count
+                shape.append("\(book.bookNumber).\(chapter.chapterNumber).\(chapter.verses.count)")
+            }
+        }
+        let anchors = anchorVerses.map { book, chapter, verse -> String in
+            module.books.first { $0.bookNumber == book }?
+                .chapters.first { $0.chapterNumber == chapter }?
+                .verses.first { $0.verseNumber == verse }?.text ?? ""
+        }
+        return BibleIdentity(
+            contentID: module.contentID,
+            abbreviation: module.abbreviation,
+            language: module.language,
+            name: module.name,
+            bookCount: module.books.count,
+            verseCount: verses,
+            contentDigest: contentDigest(shape: shape, anchors: anchors)
+        )
+    }
+
+    /// The identity of a module about to be imported.
+    nonisolated static func identity(of result: BibleImportResult) -> BibleIdentity {
+        var shape: [String] = []
+        for book in result.books.sorted(by: { $0.bookNumber < $1.bookNumber }) {
+            for chapter in book.chapters.sorted(by: { $0.chapterNumber < $1.chapterNumber }) {
+                shape.append("\(book.bookNumber).\(chapter.chapterNumber).\(chapter.verses.count)")
+            }
+        }
+        let anchors = anchorVerses.map { book, chapter, verse -> String in
+            result.books.first { $0.bookNumber == book }?
+                .chapters.first { $0.chapterNumber == chapter }?
+                .verses.first { $0.verseNumber == verse }?.text ?? ""
+        }
+        return BibleIdentity(
+            contentID: result.contentID,
+            abbreviation: result.abbreviation,
+            language: result.language,
+            name: result.moduleName,
+            bookCount: result.books.count,
+            verseCount: verseCount(of: result),
+            contentDigest: contentDigest(shape: shape, anchors: anchors)
+        )
+    }
+
+    /// Three verses that exist in essentially every edition — Genesis 1:1,
+    /// Psalm 23:1 and John 3:16. They tell two structurally identical modules
+    /// apart (a revised translation) without digesting 31 000 verses; the shape
+    /// tells apart everything else.
+    nonisolated private static let anchorVerses = [(1, 1, 1), (19, 23, 1), (43, 3, 16)]
+
+    nonisolated private static func contentDigest(shape: [String], anchors: [String]) -> String {
+        ContentFingerprint.digest(of: shape.joined(separator: ",")
+            + "\u{1}" + anchors.joined(separator: "\u{1}"))
+    }
+
     /// nonisolated(nonsending): runs on the CALLER's isolation and operates only
     /// on the passed context — call it from the main actor with the main context
     /// (single-file UI imports) or from BackgroundImportActor with ITS context
@@ -89,7 +167,7 @@ final class ImportService {
         modelContext: ModelContext,
         resolution: BibleConflictResolution = .keepBoth,
         progressHandler: (@MainActor @Sendable (Double, String) -> Void)? = nil
-    ) async throws -> BibleModule {
+    ) async throws -> BibleImportOutcome {
         guard let importer = makeBibleImporter(for: format) else {
             throw BibleImportError.unsupportedFormat(format.displayName)
         }
@@ -106,9 +184,29 @@ final class ImportService {
 
         let result = try await importer.parse(fileURL: fileURL)
 
-        // ── Duplicate handling (code already in the DB) ──
+        // ── Duplicate handling ──
+        //
+        // Two questions, not one. "Is this already here?" is answered by
+        // DuplicateResolver's ladder — contentID, then abbreviation + language,
+        // then the name when there is no abbreviation. Only if the answer is
+        // "yes, and it has CHANGED" does the conflict resolution below apply.
+        //
+        // Identical content short-circuits regardless of `resolution`, because
+        // re-dropping a file already in the library is not a conflict and no
+        // answer to a conflict dialog is the right response to it. This is what
+        // makes importing the same file twice a no-op.
+        let existingModules = (try? modelContext.fetch(FetchDescriptor<BibleModule>())) ?? []
+        let incoming = identity(of: result)
+        let verdict = DuplicateResolver.verdict(for: incoming,
+                                                against: existingModules.map(identity(of:)))
+        if case .identical(let match) = verdict {
+            await progressHandler?(1.0, String(localized: "Already in the library", comment: "Import progress"))
+            return BibleImportOutcome(module: existingModules[match.existingIndex],
+                                      action: .skippedDuplicate(matchedOn: match.matchedOn))
+        }
+
         var resolvedName = result.moduleName
-        if let existing = existingBibleModule(code: result.abbreviation, modelContext: modelContext) {
+        if let existing = verdict.existingIndex.map({ existingModules[$0] }) {
             switch resolution {
             case .ask:
                 throw BibleConflict(
@@ -125,7 +223,7 @@ final class ImportService {
                 mergeBible(result, into: existing, modelContext: modelContext)
                 try modelContext.save()
                 await progressHandler?(1.0, String(localized: "Complete!", comment: "Import progress"))
-                return existing
+                return BibleImportOutcome(module: existing, action: .merged)
             case .replace:
                 modelContext.delete(existing)
             case .keepBoth:
@@ -166,7 +264,10 @@ final class ImportService {
             hasWordsOfChrist: result.hasWordsOfChrist,
             hasStrongs: result.hasStrongs,
             incomplete: result.incomplete,
-            extensionsJSON: result.extensionsJSON
+            extensionsJSON: result.extensionsJSON,
+            // Keep the incoming identity when the file states one, so the same
+            // module landing in two libraries stays one module.
+            contentID: result.contentID.isEmpty ? UUID().uuidString : result.contentID
         )
         modelContext.insert(module)
 
@@ -227,7 +328,8 @@ final class ImportService {
         try modelContext.save()
         await progressHandler?(1.0, String(localized: "Complete!", comment: "Import progress"))
 
-        return module
+        return BibleImportOutcome(module: module,
+                                  action: resolution == .replace && verdict.isDuplicate ? .replaced : .imported)
     }
 
     /// Total verse count of a parsed result (for the conflict dialog stats).

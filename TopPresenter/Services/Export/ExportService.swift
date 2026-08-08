@@ -145,6 +145,10 @@ final class ExportService {
             // re-importing rewrites every module's origin to "toppresenter".
             "sourceFormat": module.sourceFormat
         ]
+        // The module's identity, so the receiving library recognises it as THIS
+        // module rather than a second copy. Omitted when empty (a module that
+        // predates the field) so the header never carries a meaningless value.
+        if !module.contentID.isEmpty { translationDict["contentID"] = module.contentID }
         if let v = module.versification { translationDict["versification"] = v }
         if let c = module.canon { translationDict["canon"] = c }
         if !module.nameLocal.isEmpty { translationDict["nameLocal"] = module.nameLocal }

@@ -1420,7 +1420,7 @@ struct BibleImportSheet: View {
 
         Task {
             do {
-                let module = try await ImportService.importBible(
+                let outcome = try await ImportService.importBible(
                     fileURL: fileURL,
                     format: format,
                     modelContext: modelContext,
@@ -1433,12 +1433,23 @@ struct BibleImportSheet: View {
                 }
 
                 await MainActor.run {
+                    let module = outcome.module
                     libraryManager.selectModule(module)
                     isImporting = false
-                    appState.showSuccess(
-                        String(localized: "Import Successful", comment: "Alert title"),
-                        message: String(localized: "Successfully imported \"\(module.name)\" with \(module.books.count) books.", comment: "Alert message")
-                    )
+                    // "Already in the library" is not a failure and not an
+                    // import — saying "imported" for it is how a silent
+                    // double-import goes unnoticed.
+                    if case .skippedDuplicate(let matchedOn) = outcome.action {
+                        appState.showSuccess(
+                            String(localized: "Already in the library", comment: "Alert title"),
+                            message: String(localized: "\"\(module.name)\" is already here — matched on \(matchedOn). Nothing was imported.", comment: "Alert message")
+                        )
+                    } else {
+                        appState.showSuccess(
+                            String(localized: "Import Successful", comment: "Alert title"),
+                            message: String(localized: "Successfully imported \"\(module.name)\" with \(module.books.count) books.", comment: "Alert message")
+                        )
+                    }
                     dismiss()
                 }
             } catch let conflict as ImportService.BibleConflict {

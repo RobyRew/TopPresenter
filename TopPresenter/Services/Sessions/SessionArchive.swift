@@ -17,6 +17,9 @@ import SwiftData
 struct SessionArchive: Codable {
     var schemaVersion = 1
     var format = "TopPresenter Session"
+    /// Stable identity, so a session opened twice is recognised rather than
+    /// duplicated. Empty on files written before it existed.
+    var sessionID = ""
     var name = ""
     var dateISO = ""
     var notes = ""
@@ -66,6 +69,7 @@ struct SessionArchive: Codable {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         schemaVersion = try c.decodeIfPresent(Int.self, forKey: .schemaVersion) ?? 1
         format = try c.decodeIfPresent(String.self, forKey: .format) ?? "TopPresenter Session"
+        sessionID = try c.decodeIfPresent(String.self, forKey: .sessionID) ?? ""
         name = try c.decodeIfPresent(String.self, forKey: .name) ?? ""
         dateISO = try c.decodeIfPresent(String.self, forKey: .dateISO) ?? ""
         notes = try c.decodeIfPresent(String.self, forKey: .notes) ?? ""
@@ -84,6 +88,7 @@ enum SessionArchiveService {
     /// Serialize a session (pretty + sorted keys, like the GOAT exports).
     static func export(_ schedule: ServiceSchedule) throws -> Data {
         var archive = SessionArchive()
+        archive.sessionID = schedule.portableID
         archive.name = schedule.name
         archive.dateISO = ISO8601DateFormatter().string(from: schedule.date)
         archive.notes = schedule.notes
@@ -108,6 +113,17 @@ enum SessionArchiveService {
         return try encoder.encode(archive)
     }
 
+    /// The identity of a session already in the library.
+    static func identity(of schedule: ServiceSchedule) -> SessionIdentity {
+        SessionIdentity(
+            sessionID: schedule.portableID,
+            name: schedule.name,
+            dateISO: ISO8601DateFormatter().string(from: schedule.date),
+            itemCount: schedule.items.count,
+            itemTypes: schedule.sortedItems.map(\.itemType)
+        )
+    }
+
     /// Import a .tpschedule: recreates the session + items, re-linking media
     /// payloads to the LOCAL library (by id, else by name). Returns the new
     /// session and the media names that did NOT resolve (for the user alert).
@@ -128,11 +144,31 @@ enum SessionArchiveService {
         let archive = try JSONDecoder().decode(SessionArchive.self, from: data)
 
         let date = ISO8601DateFormatter().date(from: archive.dateISO) ?? .now
+
+        // Is this session already here? `context.insert(schedule)` used to run
+        // unconditionally, with no identity check of ANY kind, so opening the
+        // same .tpschedule twice simply gave you it twice — and nothing said so.
+        let existing = (try? context.fetch(FetchDescriptor<ServiceSchedule>())) ?? []
+        let incoming = SessionIdentity(
+            sessionID: archive.sessionID,
+            name: archive.name,
+            dateISO: archive.dateISO,
+            itemCount: archive.items.count,
+            itemTypes: archive.items.sorted { $0.order < $1.order }.map(\.itemType)
+        )
+        let verdict = DuplicateResolver.verdict(for: incoming, against: existing.map(identity(of:)))
+        if case .identical(let match) = verdict {
+            return (existing[match.existingIndex], [])
+        }
+
         let schedule = ServiceSchedule(
             name: archive.name.isEmpty
                 ? String(localized: "Sesiune importată", comment: "Default imported session name")
                 : archive.name,
-            date: date, notes: archive.notes
+            date: date, notes: archive.notes,
+            // Carry the sender's identity, so this session stays ONE session no
+            // matter how many libraries it passes through.
+            sourceSessionID: archive.sessionID
         )
         context.insert(schedule)
 

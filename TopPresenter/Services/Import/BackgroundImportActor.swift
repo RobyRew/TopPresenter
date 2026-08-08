@@ -19,8 +19,15 @@ actor BackgroundImportActor {
     /// Import every Bible file in the batch on this actor's context.
     /// Status updates hop to the main actor; returns how many succeeded.
     @discardableResult
+    /// `resolution` used to be hardcoded to `.keepBoth` here, so a batch import
+    /// silently bypassed the conflict dialog that the single-file path shows —
+    /// two editions of the same translation both landed, renamed, with nothing
+    /// asked. It is the caller's decision now. (Identical content is skipped by
+    /// `importBible` itself, whatever this says: re-dropping a file you already
+    /// have is not a conflict.)
     func importBibles(
         files: [PendingImportFile],
+        resolution: ImportService.BibleConflictResolution = .keepBoth,
         onUpdate: @escaping @MainActor @Sendable (UUID, ImportFileStatus) -> Void
     ) async -> Int {
         var imported = 0
@@ -29,14 +36,19 @@ actor BackgroundImportActor {
 
             await onUpdate(file.id, .importing)
             do {
-                let module = try await ImportService.importBible(
+                let outcome = try await ImportService.importBible(
                     fileURL: file.url,
                     format: format,
                     modelContext: modelContext,
-                    resolution: .keepBoth
+                    resolution: resolution
                 )
-                imported += 1
-                await onUpdate(file.id, .success(module.name))
+                if case .skippedDuplicate = outcome.action {
+                    await onUpdate(file.id, .success(String(localized: "\(outcome.module.name) — already in the library",
+                                                            comment: "Batch import status")))
+                } else {
+                    imported += 1
+                    await onUpdate(file.id, .success(outcome.module.name))
+                }
             } catch {
                 await onUpdate(file.id, .failed(error.localizedDescription))
             }

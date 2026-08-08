@@ -184,6 +184,7 @@ nonisolated final class TopPresenterBibleImporter: BibleImporter {
         // OSIS module and re-importing it makes it claim to be a TopPresenter
         // module, and the provenance is gone for good.
         result.sourceFormat = translation["sourceFormat"] as? String
+        result.contentID = (translation["contentID"] as? String) ?? ""
         return result
     }
 

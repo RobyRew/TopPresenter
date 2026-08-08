@@ -185,15 +185,32 @@ final class ServiceSchedule {
     var name: String
     var date: Date
     var notes: String
+    /// Identity that travels with the session file.
+    ///
+    /// The local `id` cannot: a `.tpschedule` arriving in another library
+    /// becomes a new `ServiceSchedule` with a new `id`, so re-importing it had
+    /// nothing to recognise and simply made a second copy every time. This is
+    /// the exporter's id, kept, so the same session stays one session wherever
+    /// it lands. Empty for sessions created before this existed; the resolver
+    /// falls back to name + date for those. Additive with an inline default —
+    /// lightweight migration.
+    var sourceSessionID: String = ""
 
     @Relationship(deleteRule: .cascade, inverse: \ScheduleItem.schedule)
     var items: [ScheduleItem] = []
 
-    init(name: String, date: Date = Date(), notes: String = "") {
+    init(name: String, date: Date = Date(), notes: String = "", sourceSessionID: String = "") {
         self.id = UUID()
         self.name = name
         self.date = date
         self.notes = notes
+        self.sourceSessionID = sourceSessionID
+    }
+
+    /// What an export writes as this session's identity — its own, until it has
+    /// travelled, and then the identity it arrived with.
+    var portableID: String {
+        sourceSessionID.isEmpty ? id.uuidString : sourceSessionID
     }
 
     var sortedItems: [ScheduleItem] {
