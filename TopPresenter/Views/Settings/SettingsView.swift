@@ -431,32 +431,46 @@ struct BibleSettingsTab: View {
 // MARK: - Import / Export Settings
 struct ImportExportSettingsTab: View {
     @AppStorage("defaultExportFormat") private var defaultExportFormat: String = SupportedExportFormat.topPresenter.rawValue
-    @AppStorage("autoDetectFormat") private var autoDetectFormat: Bool = true
     @AppStorage("includeMetadataOnExport") private var includeMetadata: Bool = true
     @AppStorage("exportPrettyPrint") private var prettyPrint: Bool = true
 
     var body: some View {
         Form {
+            // The "automatic format detection" toggle that used to live here was
+            // read by nothing: detection has always been automatic, and there
+            // was no manual mode to fall back to. A setting that does not do
+            // anything is worse than no setting.
+            //
+            // The list is rendered from `ImportCatalog`, so it cannot drift from
+            // what the importer actually accepts — and it covers every library,
+            // not only Bibles, which is what an operator is asking when they
+            // open this page.
             Section(String(localized: "Import", comment: "Settings section")) {
-                Toggle(String(localized: "Detectare automată a formatului", comment: "Setting label"), isOn: $autoDetectFormat)
-
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(String(localized: "Formate de import suportate:", comment: "Settings info"))
-                        .font(.caption.bold())
-                        .foregroundStyle(.secondary)
-
-                    ForEach(SupportedBibleFormat.allCases) { format in
-                        HStack(spacing: 6) {
-                            Image(systemName: "checkmark.circle.fill")
-                                .font(.caption2)
-                                .foregroundStyle(.green)
-                            Text(format.displayName)
-                                .font(.caption)
-                            Spacer()
-                            Text(format.fileExtensions.map { ".\($0)" }.joined(separator: ", "))
-                                .font(.caption2)
-                                .foregroundStyle(.tertiary)
+                ForEach(ImportKind.allCases) { kind in
+                    let formats = ImportCatalog.importable.filter { $0.kind == kind }
+                    if !formats.isEmpty {
+                        VStack(alignment: .leading, spacing: 5) {
+                            Label(kind.displayName, systemImage: kind.systemImage)
+                                .font(.caption.bold())
+                                .foregroundStyle(.secondary)
+                            ForEach(formats) { format in
+                                HStack(spacing: 6) {
+                                    Text(format.displayName)
+                                        .font(.caption)
+                                    if format.isNative {
+                                        Text(String(localized: "native", comment: "Format badge"))
+                                            .font(.caption2)
+                                            .padding(.horizontal, 5).padding(.vertical, 1)
+                                            .background(Capsule().fill(appAccent.opacity(0.16)))
+                                    }
+                                    Spacer()
+                                    Text(format.fileExtensions.map { ".\($0)" }.joined(separator: " "))
+                                        .font(.caption2)
+                                        .foregroundStyle(.tertiary)
+                                }
+                            }
                         }
+                        .padding(.vertical, 2)
                     }
                 }
             }
@@ -478,7 +492,7 @@ struct ImportExportSettingsTab: View {
                         Image(systemName: "star.fill")
                             .foregroundStyle(.yellow)
                             .font(.caption)
-                        Text(String(localized: "TopPresenter JSON este formatul recomandat pentru fidelitate completă, inclusiv referințe încrucișate, note de subsol și titluri de secțiuni.", comment: "Settings info"))
+                        Text(String(localized: "The TopPresenter formats are the only ones that survive a round trip whole — cross-references, footnotes, section headings and all.", comment: "Settings info"))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }

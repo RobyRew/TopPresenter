@@ -265,7 +265,6 @@ extension Notification.Name {
 
     // Batch operations
     static let batchExport = Notification.Name("TopPresenter.batchExport")
-    static let batchImportFiles = Notification.Name("TopPresenter.batchImportFiles")
     /// The ONE import entry point. userInfo: "urls" -> [URL] (optional — an
     /// empty sheet opens on its drop zone), "kinds" -> [String] raw
     /// `ImportKind` values to preselect when opened from a specific library.

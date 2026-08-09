@@ -33454,6 +33454,144 @@
           }
         }
       }
+    },
+    "TopPresenter Song" : {
+      "comment" : "Song format name",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "TopPresenter Song"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Canción de TopPresenter"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cântare TopPresenter"
+          }
+        }
+      }
+    },
+    "The native format, with cross-references, footnotes and headings" : {
+      "comment" : "Format description",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The native format, with cross-references, footnotes and headings"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El formato nativo, con referencias cruzadas, notas y títulos"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Formatul nativ, cu referințe încrucișate, note și titluri"
+          }
+        }
+      }
+    },
+    "native" : {
+      "comment" : "Format badge",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "native"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "nativo"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "nativ"
+          }
+        }
+      }
+    },
+    "Import a Bible module to get started.\nSupported: .tpbible, OSIS XML, Zefania XML, MySword, USFM, Unbound Bible" : {
+      "comment" : "Empty state message",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Import a Bible module to get started.\nSupported: .tpbible, OSIS XML, Zefania XML, MySword, USFM, Unbound Bible"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Importa un módulo bíblico para empezar.\nCompatibles: .tpbible, OSIS XML, Zefania XML, MySword, USFM, Unbound Bible"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Importă un modul biblic pentru a începe.\nAcceptate: .tpbible, OSIS XML, Zefania XML, MySword, USFM, Unbound Bible"
+          }
+        }
+      }
+    },
+    "Import songs to get started.\nSupported: .tpsong, OpenSong, OpenLyrics, ChordPro, PowerPoint, plain text." : {
+      "comment" : "Empty state message",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Import songs to get started.\nSupported: .tpsong, OpenSong, OpenLyrics, ChordPro, PowerPoint, plain text."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Importa canciones para empezar.\nCompatibles: .tpsong, OpenSong, OpenLyrics, ChordPro, PowerPoint, texto simple."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Importă cântări pentru a începe.\nAcceptate: .tpsong, OpenSong, OpenLyrics, ChordPro, PowerPoint, text simplu."
+          }
+        }
+      }
+    },
+    "The TopPresenter formats are the only ones that survive a round trip whole — cross-references, footnotes, section headings and all." : {
+      "comment" : "Settings info",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The TopPresenter formats are the only ones that survive a round trip whole — cross-references, footnotes, section headings and all."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los formatos de TopPresenter son los únicos que sobreviven enteros a una ida y vuelta — con referencias cruzadas, notas y títulos de sección incluidos."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Formatele TopPresenter sunt singurele care supraviețuiesc întregi unui dus-întors — cu tot cu referințe încrucișate, note și titluri de secțiune."
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

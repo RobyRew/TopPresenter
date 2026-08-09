@@ -8429,3 +8429,4 @@ struct PresentationSlideSnapshot: Equatable {
         #expect(try ctx.fetch(FetchDescriptor<PresentationSlide>()).isEmpty)
     }
 }
+

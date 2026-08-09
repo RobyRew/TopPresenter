@@ -438,7 +438,8 @@ struct MainControlView: View {
 
             ToolbarItem(id: "bible.import") {
                 Button {
-                    appState.triggerBibleImport = true
+                    NotificationCenter.default.post(name: .importFiles, object: nil,
+                                                    userInfo: ["kinds": [ImportKind.bible.rawValue]])
                 } label: {
                     Label(String(localized: "Import", comment: "Toolbar button"), systemImage: "square.and.arrow.down")
                 }
@@ -466,7 +467,8 @@ struct MainControlView: View {
 
             ToolbarItem(id: "songs.import") {
                 Button {
-                    appState.triggerSongImport = true
+                    NotificationCenter.default.post(name: .importFiles, object: nil,
+                                                    userInfo: ["kinds": [ImportKind.song.rawValue]])
                 } label: {
                     Label(String(localized: "Import", comment: "Toolbar button"), systemImage: "square.and.arrow.down")
                 }

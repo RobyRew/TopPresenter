@@ -86,12 +86,7 @@ struct BibleView: View {
                 }
             }
         }
-        .onChange(of: appState.triggerBibleImport) { _, newValue in
-            if newValue {
-                openImport()
-                appState.triggerBibleImport = false
-            }
-        }
+
         .alert(
             String(localized: "Delete Bible Module", comment: "Alert title"),
             isPresented: $showDeleteConfirmation
@@ -179,7 +174,7 @@ struct BibleView: View {
             Text(String(localized: "No Bible Modules", comment: "Empty state title"))
                 .font(.title2)
 
-            Text(String(localized: "Import a Bible module to get started.\nSupported formats: TopPresenter JSON, OSIS XML, Zefania XML, MySword, USFM, Unbound Bible", comment: "Empty state message"))
+            Text(String(localized: "Import a Bible module to get started.\nSupported: .tpbible, OSIS XML, Zefania XML, MySword, USFM, Unbound Bible", comment: "Empty state message"))
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
 

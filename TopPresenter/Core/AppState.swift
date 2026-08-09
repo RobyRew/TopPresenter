@@ -31,8 +31,6 @@ final class AppState {
     var importStatus: String = ""
 
     // MARK: - Menu-triggered Actions
-    var triggerBibleImport: Bool = false
-    var triggerSongImport: Bool = false
 
     // MARK: - Alert
     var showAlert: Bool = false

@@ -26,7 +26,7 @@ nonisolated enum SupportedBibleFormat: String, CaseIterable, Identifiable {
 
     var displayName: String {
         switch self {
-        case .topPresenter: return String(localized: "TopPresenter JSON", comment: "Bible format name")
+        case .topPresenter: return String(localized: "TopPresenter Bible", comment: "Bible format name")
         case .osisXML: return String(localized: "OSIS XML", comment: "Bible format name")
         case .zefaniaXML: return String(localized: "Zefania XML", comment: "Bible format name")
         case .mySword: return String(localized: "MySword", comment: "Bible format name")
@@ -51,7 +51,7 @@ nonisolated enum SupportedBibleFormat: String, CaseIterable, Identifiable {
 
     var formatDescription: String {
         switch self {
-        case .topPresenter: return String(localized: "TopPresenter native JSON format with cross-references, footnotes, and headings", comment: "Format description")
+        case .topPresenter: return String(localized: "The native format, with cross-references, footnotes and headings", comment: "Format description")
         case .osisXML: return String(localized: "Open Scripture Information Standard XML format", comment: "Format description")
         case .zefaniaXML: return String(localized: "Zefania XML Bible format", comment: "Format description")
         case .mySword: return String(localized: "MySword SQLite database (.bbl.mybible)", comment: "Format description")
@@ -143,7 +143,7 @@ nonisolated enum SupportedSongFormat: String, CaseIterable, Identifiable {
 
     var displayName: String {
         switch self {
-        case .topPresenterJSON: return String(localized: "TopPresenter Song JSON", comment: "Song format name")
+        case .topPresenterJSON: return String(localized: "TopPresenter Song", comment: "Song format name")
         case .openSongXML: return String(localized: "OpenSong XML", comment: "Song format name")
         case .openLyricsXML: return String(localized: "OpenLyrics XML", comment: "Song format name")
         case .chordPro: return String(localized: "ChordPro", comment: "Song format name")

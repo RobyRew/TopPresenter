@@ -45,12 +45,7 @@ struct SongsView: View {
         )) { song in
             SongEditorSheet(song: song)
         }
-        .onChange(of: appState.triggerSongImport) { _, newValue in
-            if newValue {
-                openImport()
-                appState.triggerSongImport = false
-            }
-        }
+
         .alert(
             String(localized: "Delete Collection", comment: "Alert title"),
             isPresented: $showDeleteConfirmation
@@ -79,7 +74,7 @@ struct SongsView: View {
             Text(String(localized: "No Song Collections", comment: "Empty state title"))
                 .font(.title2)
 
-            Text(String(localized: "Import songs to get started.\nSupported: TopPresenter JSON, OpenSong, OpenLyrics, ChordPro, PowerPoint, plain text.", comment: "Empty state message"))
+            Text(String(localized: "Import songs to get started.\nSupported: .tpsong, OpenSong, OpenLyrics, ChordPro, PowerPoint, plain text.", comment: "Empty state message"))
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
 
