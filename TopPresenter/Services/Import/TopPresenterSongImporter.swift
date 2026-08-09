@@ -47,10 +47,10 @@
 import Foundation
 
 /// Importer for the native TopPresenter Song JSON format (single song per file).
-final class TopPresenterSongImporter: SongImporter {
+nonisolated final class TopPresenterSongImporter: SongImporter {
     let format: SupportedSongFormat = .topPresenterJSON
 
-    func parse(fileURL: URL) async throws -> SongImportResult {
+    func parse(fileURL: URL) async throws -> sending SongImportResult {
         guard FileManager.default.fileExists(atPath: fileURL.path) else {
             throw SongImportError.fileNotFound
         }
@@ -64,7 +64,7 @@ final class TopPresenterSongImporter: SongImporter {
 
     /// Every song in the file — one for a single-song doc, N for a bundle
     /// (`{ "songs": [ … ] }`, e.g. the ResurseCrestine per-letter exports).
-    func parseAll(fileURL: URL) async throws -> [SongImportResult] {
+    func parseAll(fileURL: URL) async throws -> sending [SongImportResult] {
         guard FileManager.default.fileExists(atPath: fileURL.path) else {
             throw SongImportError.fileNotFound
         }

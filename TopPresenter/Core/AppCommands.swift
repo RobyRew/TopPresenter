@@ -235,7 +235,7 @@ struct HelpCommands: Commands {
 }
 
 // MARK: - Notification Names
-extension Notification.Name {
+nonisolated extension Notification.Name {
     // File
     static let newSchedule = Notification.Name("TopPresenter.newSchedule")
     static let importBible = Notification.Name("TopPresenter.importBible")

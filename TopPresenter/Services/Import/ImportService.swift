@@ -28,23 +28,24 @@ final class ImportService {
         }
     }
 
-    /// Registered Song importers. Add new importers here to support additional formats.
-    private static let songImporters: [SupportedSongFormat: SongImporter] = {
-        var importers: [SupportedSongFormat: SongImporter] = [:]
-        let topPresenterImporter = TopPresenterSongImporter()
-        importers[topPresenterImporter.format] = topPresenterImporter
-        let openSongImporter = OpenSongImporter()
-        importers[openSongImporter.format] = openSongImporter
-        let openLyricsImporter = OpenLyricsImporter()
-        importers[openLyricsImporter.format] = openLyricsImporter
-        let chordProImporter = ChordProImporter()
-        importers[chordProImporter.format] = chordProImporter
-        let plainTextImporter = PlainTextSongImporter()
-        importers[plainTextImporter.format] = plainTextImporter
-        let powerPointImporter = PowerPointSongImporter()
-        importers[powerPointImporter.format] = powerPointImporter
-        return importers
-    }()
+    /// Fresh importer per import, exactly like `makeBibleImporter`.
+    ///
+    /// This replaced a SHARED dictionary of long-lived importer instances. The
+    /// Bible side had already learned why that is wrong — the XML importers
+    /// carry mutable parser state, so sharing one across concurrent imports is
+    /// a latent data race — and the song side had the identical bug sitting
+    /// there unnoticed. A new instance per call is correct AND is what lets
+    /// song imports run off the main actor.
+    nonisolated private static func makeSongImporter(for format: SupportedSongFormat) -> (any SongImporter)? {
+        switch format {
+        case .topPresenterJSON: return TopPresenterSongImporter()
+        case .openSongXML: return OpenSongImporter()
+        case .openLyricsXML: return OpenLyricsImporter()
+        case .chordPro: return ChordProImporter()
+        case .plainText: return PlainTextSongImporter()
+        case .powerPoint: return PowerPointSongImporter()
+        }
+    }
 
     // MARK: - Bible Import
 
@@ -525,7 +526,7 @@ final class ImportService {
         collection: SongCollection,
         modelContext: ModelContext
     ) async throws -> Song {
-        guard let importer = songImporters[format] else {
+        guard let importer = makeSongImporter(for: format) else {
             throw SongImportError.invalidFormat(format.displayName)
         }
 
@@ -557,7 +558,7 @@ final class ImportService {
         modelContext: ModelContext,
         progressHandler: ((Double, String) -> Void)? = nil
     ) async throws -> SongCollection {
-        guard let importer = songImporters[format] else {
+        guard let importer = makeSongImporter(for: format) else {
             throw SongImportError.invalidFormat(format.displayName)
         }
 
@@ -603,7 +604,7 @@ final class ImportService {
         collectionName: String,
         modelContext: ModelContext
     ) async throws -> SongCollection {
-        guard let importer = songImporters[format] else {
+        guard let importer = makeSongImporter(for: format) else {
             throw SongImportError.invalidFormat(format.displayName)
         }
 
@@ -642,7 +643,7 @@ final class ImportService {
     }
 
     /// Result of a multi-file song import: what worked, what didn't and why.
-    struct SongBatchResult {
+    nonisolated struct SongBatchResult {
         var collection: SongCollection?
         var importedTitles: [String] = []
         var failures: [(file: String, reason: String)] = []
@@ -651,22 +652,22 @@ final class ImportService {
     /// Imports any mix of song FILES and/or DIRECTORIES into one collection.
     /// Format is AUTO-DETECTED per file (extension + content sniffing) — no
     /// format picker traps. Per-file failures are collected, not swallowed.
-    /// STILL MAIN-ACTOR, unlike `importBible`, and that is a known limitation
-    /// rather than an oversight.
+    /// nonisolated(nonsending), like `importBible`: it runs on the CALLER's
+    /// isolation and touches only the context it was handed, so
+    /// `BackgroundImportActor` can run a whole collection off the main thread.
     ///
-    /// Moving it off-main is a real refactor, not an annotation: the whole song
-    /// path it calls — `createSongFromResult`, `applyResult`, `appendVersions`,
-    /// `normalizedSongKey`, the importer registry — is main-actor isolated, and
-    /// `SongBatchResult` carries a `SongCollection`. Fifteen call sites. Doing
-    /// that carelessly in the code that writes tens of thousands of songs is how
-    /// you get a data race that corrupts a library, so it is its own change.
-    static func importSongItems(
+    /// Getting here meant making the entire song call graph nonisolated —
+    /// `createSongFromResult`, `applyResult`, `appendVersions`,
+    /// `normalizedSongKey`, `upsertSongbook`, the importer factory. That is the
+    /// refactor, and it is worth it: thousands of inserts on the context that
+    /// draws the window is what made the app unusable while songs imported.
+    nonisolated static func importSongItems(
         urls: [URL],
         collectionName: String,
         modelContext: ModelContext,
         duplicateResolution: SongDuplicateResolution = .addAsVersion,
-        isCancelled: @escaping () -> Bool = { false },
-        progressHandler: ((Double, String) -> Void)? = nil
+        isCancelled: @escaping @Sendable () -> Bool = { false },
+        progressHandler: (@Sendable (Double, String) -> Void)? = nil
     ) async -> SongBatchResult {
         var result = SongBatchResult()
 
@@ -732,7 +733,7 @@ final class ImportService {
                 result.failures.append((name, String(localized: "Format necunoscut (acceptat: TopPresenter/OpenSong/OpenLyrics, ChordPro, TXT, PPTX, PPT).", comment: "Import error")))
                 continue
             }
-            guard let importer = songImporters[format] else {
+            guard let importer = makeSongImporter(for: format) else {
                 result.failures.append((name, String(localized: "Niciun importator pentru acest format.", comment: "Import error")))
                 continue
             }
@@ -786,10 +787,10 @@ final class ImportService {
     /// Lowercased extensions of every supported song format — used to skip
     /// unrelated files when scanning a folder, so we never try to parse (or read)
     /// e.g. video footage sitting in the same directory tree.
-    private static let songFileExtensions: Set<String> =
+    nonisolated private static let songFileExtensions: Set<String> =
         Set(SupportedSongFormat.allCases.flatMap { $0.fileExtensions.map { $0.lowercased() } })
 
-    private static func recursiveSongFiles(in dir: URL) -> [URL] {
+    nonisolated private static func recursiveSongFiles(in dir: URL) -> [URL] {
         var out: [URL] = []
         let keys: Set<URLResourceKey> = [.isRegularFileKey]
         if let en = FileManager.default.enumerator(at: dir, includingPropertiesForKeys: Array(keys), options: [.skipsHiddenFiles]) {
@@ -807,7 +808,7 @@ final class ImportService {
     }
 
     /// Tag a song with its immediate folder name (folder structure → searchable tags/themes).
-    private static func applyFolderTag(_ parent: URL?, to song: Song) {
+    nonisolated private static func applyFolderTag(_ parent: URL?, to song: Song) {
         guard let parent else { return }
         let folder = parent.lastPathComponent
         guard !folder.isEmpty else { return }
@@ -864,7 +865,7 @@ final class ImportService {
 
     // MARK: - Private Helpers
 
-    private static func createSongFromResult(
+    nonisolated private static func createSongFromResult(
         _ result: SongImportResult,
         collection: SongCollection,
         modelContext: ModelContext
@@ -899,7 +900,7 @@ final class ImportService {
     ///   every `SessionItemPayload.versionID` pointing at an arrangement (E5).
     ///   For a revert the versions are the SAME versions, so their ids are
     ///   restored by order; for a real import they are genuinely new.
-    static func applyResult(
+    nonisolated static func applyResult(
         _ result: SongImportResult,
         to song: Song,
         modelContext: ModelContext,
@@ -992,7 +993,7 @@ final class ImportService {
     /// Summarize what changed between two parsed song states — for the song editor's
     /// change log. Versions are matched by order; sections by key. Returns [] when
     /// nothing meaningful changed.
-    static func summarizeChanges(old: SongImportResult, new: SongImportResult) -> [String] {
+    nonisolated static func summarizeChanges(old: SongImportResult, new: SongImportResult) -> [String] {
         var out: [String] = []
         if old.title != new.title { out.append(String(localized: "Titlu modificat", comment: "Edit log")) }
         if old.author != new.author { out.append(String(localized: "Autor modificat", comment: "Edit log")) }
@@ -1022,7 +1023,7 @@ final class ImportService {
         return out
     }
 
-    private static func summarizeSectionChanges(old: [SongImportSection], new: [SongImportSection],
+    nonisolated private static func summarizeSectionChanges(old: [SongImportSection], new: [SongImportSection],
                                                 versionName: String, multiVersion: Bool) -> [String] {
         func skey(_ s: SongImportSection) -> String { s.sectionKey.isEmpty ? s.label : s.sectionKey }
         let oldByKey = Dictionary(old.map { (skey($0), $0) }, uniquingKeysWith: { a, _ in a })
@@ -1045,7 +1046,7 @@ final class ImportService {
     }
 
     /// Reuse an existing Songbook with the same name, or create and insert a new one.
-    private static func upsertSongbook(_ sb: SongImportSongbook, modelContext: ModelContext) -> Songbook {
+    nonisolated private static func upsertSongbook(_ sb: SongImportSongbook, modelContext: ModelContext) -> Songbook {
         let name = sb.name
         let descriptor = FetchDescriptor<Songbook>(predicate: #Predicate { $0.name == name })
         if let existing = try? modelContext.fetch(descriptor).first {
@@ -1058,7 +1059,7 @@ final class ImportService {
 
     /// Build the rich version graph from an import result (not yet attached to a song).
     /// When the importer only produced flat verses, synthesize a single "Original" version.
-    private static func makeVersions(from result: SongImportResult) -> [SongVersion] {
+    nonisolated private static func makeVersions(from result: SongImportResult) -> [SongVersion] {
         let importVersions: [SongImportVersion]
         if !result.versions.isEmpty {
             importVersions = result.versions
@@ -1116,7 +1117,7 @@ final class ImportService {
     /// Append an import result as additional version(s) of an existing song (the user's
     /// "a song can have 3 versions" case). The active/first version — and therefore the
     /// flattened SongVerse cache — is unchanged; only searchText grows.
-    private static func appendVersions(from result: SongImportResult, to song: Song) {
+    nonisolated private static func appendVersions(from result: SongImportResult, to song: Song) {
         let newVersions = makeVersions(from: result)
         let base = song.versions.count
         var extraLyrics = ""
@@ -1168,7 +1169,7 @@ final class ImportService {
     /// and pick the ORIGINAL (default) version: keep an explicit user choice if
     /// still valid, else the first version that references a songbook, else the
     /// first by order.
-    static func finalizeVersionMetadata(for song: Song) {
+    nonisolated static func finalizeVersionMetadata(for song: Song) {
         let versions = song.sortedVersions
         guard let first = versions.first else { return }
 
@@ -1193,7 +1194,7 @@ final class ImportService {
     }
 
     /// Normalized key for duplicate detection (diacritic- and case-insensitive, whitespace-collapsed).
-    static func normalizedSongKey(_ title: String) -> String {
+    nonisolated static func normalizedSongKey(_ title: String) -> String {
         title.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
             .components(separatedBy: .whitespacesAndNewlines)
             .filter { !$0.isEmpty }

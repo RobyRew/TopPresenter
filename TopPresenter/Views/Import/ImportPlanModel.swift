@@ -94,6 +94,24 @@ final class ImportPlanModel {
 
     var canImport: Bool { stage == .planning && !selectedRows.isEmpty }
 
+    /// Total bytes of everything currently selected.
+    var selectedBytes: Int {
+        selectedRows.reduce(0) { total, row in
+            total + ((try? row.url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0)
+        }
+    }
+
+    /// Roughly how long this plan will take, BEFORE it starts.
+    ///
+    /// Deliberately coarse and labelled as such where it is shown. It exists so
+    /// "this is a ten-minute job, go make coffee" is knowable in advance rather
+    /// than discovered four minutes in — which is the complaint that started
+    /// all of this. Anything under half a minute is not worth saying.
+    var preflightEstimate: TimeInterval? {
+        let estimate = LibraryTaskProgress.estimate(forBytes: selectedBytes)
+        return estimate >= 30 ? estimate : nil
+    }
+
     // MARK: - Building the plan
 
     /// Expand and classify a selection. Runs the walk off the main actor: a

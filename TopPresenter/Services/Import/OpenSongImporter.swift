@@ -12,10 +12,10 @@ import Foundation
 ///
 /// Rich mapping: `.`-prefixed chord lines become positioned `SongChord`s on the following
 /// lyric line, and the `<presentation>` order becomes the version `arrangement`.
-final class OpenSongImporter: SongImporter {
+nonisolated final class OpenSongImporter: SongImporter {
     let format: SupportedSongFormat = .openSongXML
 
-    func parse(fileURL: URL) async throws -> SongImportResult {
+    func parse(fileURL: URL) async throws -> sending SongImportResult {
         guard FileManager.default.fileExists(atPath: fileURL.path) else {
             throw SongImportError.fileNotFound
         }
@@ -222,7 +222,7 @@ final class OpenSongImporter: SongImporter {
 }
 
 // MARK: - OpenSong XML Parser Delegate
-private final class OpenSongParserDelegate: NSObject, XMLParserDelegate {
+nonisolated private final class OpenSongParserDelegate: NSObject, XMLParserDelegate {
     var title = ""
     var author = ""
     var copyright = ""

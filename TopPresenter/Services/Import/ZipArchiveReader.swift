@@ -14,7 +14,7 @@
 import Foundation
 import Compression
 
-struct ZipArchiveReader {
+nonisolated struct ZipArchiveReader {
     struct Entry {
         let name: String
         let method: UInt16          // 0 = stored, 8 = deflate

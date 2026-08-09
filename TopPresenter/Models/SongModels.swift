@@ -27,7 +27,7 @@ nonisolated func tpDecodeJSON<T: Decodable>(_ string: String, as type: T.Type, f
 // MARK: - Value Types (encoded into linesJSON / mediaJSON)
 
 /// A chord placed at a character offset within a line (ChordPro-style).
-struct SongChord: Codable, Hashable {
+nonisolated struct SongChord: Codable, Hashable {
     var sym: String          // e.g. "G", "D/F#"
     var pos: Int             // character offset into the line text
 
@@ -38,7 +38,7 @@ struct SongChord: Codable, Hashable {
 }
 
 /// One lyric line: text + optional chords + optional per-language translations (bilingual).
-struct SongLine: Codable, Hashable {
+nonisolated struct SongLine: Codable, Hashable {
     var text: String
     var chords: [SongChord]
     var translations: [String: String]   // languageCode -> translated line
@@ -51,7 +51,7 @@ struct SongLine: Codable, Hashable {
 }
 
 /// One coarse entry in a song's change log (edit-log only; never restored).
-struct SongEditEntry: Codable, Hashable {
+nonisolated struct SongEditEntry: Codable, Hashable {
     var date: Date
     var summary: String
 
@@ -62,7 +62,7 @@ struct SongEditEntry: Codable, Hashable {
 }
 
 /// A linked media asset (audio negative / karaoke / background).
-struct SongMediaRef: Codable, Hashable {
+nonisolated struct SongMediaRef: Codable, Hashable {
     var role: String         // "negative" | "karaoke" | "audio" | "background"
     var kind: String         // "audio" | "video" | "image"
     var filename: String

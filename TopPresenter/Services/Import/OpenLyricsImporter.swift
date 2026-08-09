@@ -13,10 +13,10 @@ import Foundation
 ///
 /// Rich mapping: multiple `<title>`s → aliases, `<theme>`s → themes, inline `<chord>` →
 /// SongChord positions, and same-named verses in different `lang`s → bilingual translations.
-final class OpenLyricsImporter: SongImporter {
+nonisolated final class OpenLyricsImporter: SongImporter {
     let format: SupportedSongFormat = .openLyricsXML
 
-    func parse(fileURL: URL) async throws -> SongImportResult {
+    func parse(fileURL: URL) async throws -> sending SongImportResult {
         guard FileManager.default.fileExists(atPath: fileURL.path) else {
             throw SongImportError.fileNotFound
         }
@@ -137,7 +137,7 @@ private struct VerseGroup {
     var lines: [String: [SongLine]] = [:]   // lang -> ordered lines
 }
 
-private final class OpenLyricsParserDelegate: NSObject, XMLParserDelegate {
+nonisolated private final class OpenLyricsParserDelegate: NSObject, XMLParserDelegate {
     var titles: [String] = []
     var authors: [String] = []
     var authorWords = ""

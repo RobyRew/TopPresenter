@@ -10,10 +10,10 @@ import Foundation
 /// Importer for plain-text songs (.txt): blank-line-separated stanzas become sections.
 /// A stanza whose first line is a bracketed/keyword label (e.g. "[Chorus]", "Refren:")
 /// is typed accordingly; everything else is a verse.
-final class PlainTextSongImporter: SongImporter {
+nonisolated final class PlainTextSongImporter: SongImporter {
     let format: SupportedSongFormat = .plainText
 
-    func parse(fileURL: URL) async throws -> SongImportResult {
+    func parse(fileURL: URL) async throws -> sending SongImportResult {
         guard FileManager.default.fileExists(atPath: fileURL.path) else {
             throw SongImportError.fileNotFound
         }

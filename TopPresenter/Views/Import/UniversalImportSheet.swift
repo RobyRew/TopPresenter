@@ -367,6 +367,15 @@ struct UniversalImportSheet: View {
                 Button(String(localized: "Close", comment: "Button")) { dismiss() }
                     .keyboardShortcut(.defaultAction)
             default:
+                if let estimate = plan.preflightEstimate {
+                    Label(String(localized: "about \(LibraryTaskProgress.formatted(estimate))",
+                                 comment: "Pre-flight estimate"),
+                          systemImage: "clock")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .help(String(localized: "A rough estimate from the total size — the real time depends on the files.",
+                                     comment: "Pre-flight estimate tooltip"))
+                }
                 Button(String(localized: "Cancel", comment: "Button")) { dismiss() }
                     .keyboardShortcut(.cancelAction)
                 Button(String(localized: "Import", comment: "Button")) {

@@ -10,10 +10,10 @@ import Foundation
 /// Imports songs from PowerPoint files (.pptx, .ppt).
 /// Each slide becomes a song verse/section.
 /// The first slide's title (or first text) becomes the song title.
-final class PowerPointSongImporter: SongImporter {
+nonisolated final class PowerPointSongImporter: SongImporter {
     var format: SupportedSongFormat { .powerPoint }
 
-    func parse(fileURL: URL) async throws -> SongImportResult {
+    func parse(fileURL: URL) async throws -> sending SongImportResult {
         let ext = fileURL.pathExtension.lowercased()
 
         if ext == "pptx" {
@@ -32,7 +32,7 @@ final class PowerPointSongImporter: SongImporter {
     /// Read ENTIRELY in-process via ZipArchiveReader: spawning /usr/bin/ditto
     /// fails in the sandbox because child processes don't inherit the user's
     /// file-access grant for the selected file.
-    private func parsePPTX(fileURL: URL) async throws -> SongImportResult {
+    private func parsePPTX(fileURL: URL) async throws -> sending SongImportResult {
         let archiveData = try Data(contentsOf: fileURL)
         let zip: ZipArchiveReader
         do {
@@ -102,7 +102,7 @@ final class PowerPointSongImporter: SongImporter {
 
     /// PPT files are OLE Compound Documents.
     /// We read the binary, find text records, and group by slides.
-    private func parsePPT(fileURL: URL) async throws -> SongImportResult {
+    private func parsePPT(fileURL: URL) async throws -> sending SongImportResult {
         let data = try Data(contentsOf: fileURL)
         guard data.count > 512 else {
             throw SongImportError.parsingFailed("File too small to be a valid PPT")
@@ -382,7 +382,7 @@ final class PowerPointSongImporter: SongImporter {
         fileName: String,
         presentationTitle: String,
         slides: [(title: String, body: String)]
-    ) -> SongImportResult {
+    ) -> sending SongImportResult {
         let songTitle: String
         if !presentationTitle.isEmpty {
             songTitle = presentationTitle
@@ -505,7 +505,7 @@ final class PowerPointSongImporter: SongImporter {
 // MARK: - PPTX Slide XML Parser
 
 /// Parses a single PPTX slide XML to extract title and body text.
-private class PPTXSlideXMLParser: NSObject, XMLParserDelegate {
+nonisolated private class PPTXSlideXMLParser: NSObject, XMLParserDelegate {
     private let xmlString: String
 
     // Parsing state

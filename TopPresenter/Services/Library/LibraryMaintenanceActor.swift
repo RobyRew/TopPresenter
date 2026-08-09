@@ -97,4 +97,51 @@ actor LibraryMaintenanceActor {
         }
         return outcome
     }
+
+    struct ExportOutcome: Sendable {
+        var exported = 0
+        var failures: [String] = []
+        var wasCancelled = false
+    }
+
+    /// Export Bible modules to a folder, off the main thread.
+    ///
+    /// Serializing a Bible is the same order of work as importing one — 31 000
+    /// verses into JSON — so doing seventy of them on the context that draws
+    /// the window beach-balls exactly like the delete did.
+    func exportBibleModules(
+        ids: [UUID],
+        toFolder folder: URL,
+        onProgress: @escaping @MainActor @Sendable (String, Int) -> Void,
+        onItemProgress: @escaping @MainActor @Sendable (Double) -> Void = { _ in },
+        isCancelled: @escaping @MainActor @Sendable () -> Bool
+    ) async -> ExportOutcome {
+        var outcome = ExportOutcome()
+        for (index, id) in ids.enumerated() {
+            if await isCancelled() {
+                outcome.wasCancelled = true
+                break
+            }
+            let descriptor = FetchDescriptor<BibleModule>(predicate: #Predicate { $0.id == id })
+            guard let module = try? modelContext.fetch(descriptor).first else { continue }
+            let name = module.name
+            await onProgress(name, index)
+
+            let fileName = ExportNaming.filename(
+                module.abbreviation.isEmpty ? module.name : module.abbreviation,
+                qualifier: module.language.uppercased(), format: .bible)
+            do {
+                try await ExportService.exportBible(
+                    module: module, format: .topPresenter,
+                    to: folder.appendingPathComponent(fileName)
+                ) { fraction, _ in
+                    MainActor.assumeIsolated { onItemProgress(fraction) }
+                }
+                outcome.exported += 1
+            } catch {
+                outcome.failures.append("\(name) — \(error.localizedDescription)")
+            }
+        }
+        return outcome
+    }
 }

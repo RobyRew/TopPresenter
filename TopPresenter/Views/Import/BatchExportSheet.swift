@@ -14,6 +14,7 @@ struct BatchExportSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @Environment(AppState.self) private var appState
+    @Environment(LibraryTaskRunner.self) private var libraryTasks
 
     @Query(sort: \BibleModule.name) private var modules: [BibleModule]
 
@@ -176,29 +177,15 @@ struct BatchExportSheet: View {
             var succeeded = 0
             var failed = 0
 
-            for module in selectedModules {
-                let fileName = ExportNaming.filename(
-                    module.abbreviation.isEmpty ? module.name : module.abbreviation,
-                    qualifier: module.language.uppercased(),
-                    format: .bible)
-                let fileURL = folder.appendingPathComponent(fileName)
-
-                do {
-                    try await ExportService.exportBible(
-                        module: module,
-                        format: selectedFormat,
-                        to: fileURL
-                    )
-                    succeeded += 1
-                } catch {
-                    failed += 1
-                }
-
-                await MainActor.run {
-                    exportedCount += 1
-                }
+            // Off the main thread, via the runner — serializing seventy
+            // Bibles is the same order of work as importing them, and doing it
+            // here froze the window exactly like the delete used to.
+            await MainActor.run {
+                libraryTasks.exportBibleModules(selectedModules, to: folder)
+                isExporting = false
+                dismiss()
             }
-
+            return
             await MainActor.run {
                 isExporting = false
                 if failed == 0 {

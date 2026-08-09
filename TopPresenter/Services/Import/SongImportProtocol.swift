@@ -9,29 +9,29 @@ import Foundation
 
 /// Protocol that all Song format importers must conform to.
 /// Implement this protocol to add support for a new song file format.
-protocol SongImporter {
+nonisolated protocol SongImporter {
     /// The format this importer handles
     var format: SupportedSongFormat { get }
 
     /// Parse a single song file and return a structured result
-    func parse(fileURL: URL) async throws -> SongImportResult
+    func parse(fileURL: URL) async throws -> sending SongImportResult
 
     /// Parse EVERY song contained in a single file. For most formats this is one
     /// song, but a TopPresenter Song JSON *bundle* (`{ "songs": [ … ] }`) holds many —
     /// the scraper userscript emits one bundle per letter. Default = `[parse()]`.
-    func parseAll(fileURL: URL) async throws -> [SongImportResult]
+    func parseAll(fileURL: URL) async throws -> sending [SongImportResult]
 
     /// Parse a directory of song files (for formats that use one file per song)
-    func parseDirectory(directoryURL: URL) async throws -> [SongImportResult]
+    func parseDirectory(directoryURL: URL) async throws -> sending [SongImportResult]
 }
 
 /// Default implementations
-extension SongImporter {
-    func parseAll(fileURL: URL) async throws -> [SongImportResult] {
+nonisolated extension SongImporter {
+    nonisolated func parseAll(fileURL: URL) async throws -> sending [SongImportResult] {
         [try await parse(fileURL: fileURL)]
     }
 
-    func parseDirectory(directoryURL: URL) async throws -> [SongImportResult] {
+    nonisolated func parseDirectory(directoryURL: URL) async throws -> sending [SongImportResult] {
         let fileManager = FileManager.default
         let contents = try fileManager.contentsOfDirectory(
             at: directoryURL,
@@ -63,7 +63,7 @@ extension SongImporter {
 /// must produce. Richer importers (v2 JSON, OpenLyrics, ChordPro…) additionally populate
 /// `versions` and the metadata fields; when `versions` is empty, `ImportService` synthesizes
 /// a single "Original" version from `verses`.
-struct SongImportResult {
+nonisolated struct SongImportResult {
     let title: String
     let author: String
     let copyright: String
@@ -103,7 +103,7 @@ struct SongImportResult {
     var modifiedDate: Date? = nil
 }
 
-struct SongImportVerse {
+nonisolated struct SongImportVerse {
     let label: String
     let verseType: String  // "verse", "chorus", "bridge", etc.
     let text: String
@@ -114,7 +114,7 @@ struct SongImportVerse {
 
 // Reference type on purpose: as a value type with this many fields, copying
 // `Optional<SongImportVersion>` hit a miscompiled outlined value-witness (segfault).
-final class SongImportVersion {
+nonisolated final class SongImportVersion {
     var name: String
     var displayTitle: String
     var author: String
@@ -197,7 +197,7 @@ final class SongImportVersion {
     }
 }
 
-struct SongImportSection {
+nonisolated struct SongImportSection {
     var sectionKey: String
     var type: String
     var label: String
@@ -206,7 +206,7 @@ struct SongImportSection {
     var lines: [SongLine] = []   // SongLine carries chords + bilingual translations
 }
 
-struct SongImportSongbook {
+nonisolated struct SongImportSongbook {
     var name: String
     var publisher: String = ""
     var language: String = ""
@@ -214,7 +214,7 @@ struct SongImportSongbook {
     var number: String = ""
 }
 
-struct SongImportMedia {
+nonisolated struct SongImportMedia {
     var role: String
     var kind: String
     var filename: String

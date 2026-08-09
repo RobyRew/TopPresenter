@@ -33945,6 +33945,98 @@
           }
         }
       }
+    },
+    "%lld exported." : {
+      "comment" : "Export result",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld exported."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld exportados."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld exportate."
+          }
+        }
+      }
+    },
+    "%lld exported, %lld failed." : {
+      "comment" : "Export result",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$lld exported, %2$lld failed."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$lld exportados, %2$lld fallidos."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$lld exportate, %2$lld eșuate."
+          }
+        }
+      }
+    },
+    "about %@" : {
+      "comment" : "Pre-flight estimate",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "about %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "unos %@"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "aproximativ %@"
+          }
+        }
+      }
+    },
+    "A rough estimate from the total size — the real time depends on the files." : {
+      "comment" : "Pre-flight estimate tooltip",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A rough estimate from the total size — the real time depends on the files."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Una estimación aproximada según el tamaño total — el tiempo real depende de los archivos."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O estimare aproximativă din dimensiunea totală — timpul real depinde de fișiere."
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

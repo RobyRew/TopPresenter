@@ -9,12 +9,12 @@ import Foundation
 import SwiftData
 
 /// Service for exporting Bible modules and Song collections to various file formats.
-final class ExportService {
+nonisolated final class ExportService {
 
     // MARK: - Public API — Bible
 
     /// Export a Bible module to the specified format at the given URL.
-    static func exportBible(
+    nonisolated static func exportBible(
         module: BibleModule,
         format: SupportedExportFormat,
         to fileURL: URL,
@@ -34,7 +34,7 @@ final class ExportService {
 
     // MARK: - TopPresenter JSON Export
 
-    private static func exportToTopPresenterJSON(
+    nonisolated private static func exportToTopPresenterJSON(
         module: BibleModule,
         progressHandler: ((Double, String) -> Void)?
     ) async throws -> String {
@@ -180,7 +180,7 @@ final class ExportService {
     }
 
     /// Decode a stored `_extensions` JSON string back into an object for export.
-    private static func decodeExt(_ json: String?) -> [String: Any]? {
+    nonisolated private static func decodeExt(_ json: String?) -> [String: Any]? {
         guard let json, let data = json.data(using: .utf8),
               let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               !obj.isEmpty else { return nil }
@@ -192,7 +192,7 @@ final class ExportService {
     // MARK: - Public API — Songs
 
     /// Export a song collection to the specified format at the given URL.
-    static func exportSongs(
+    nonisolated static func exportSongs(
         collection: SongCollection,
         format: SupportedSongExportFormat,
         to fileURL: URL,
@@ -209,10 +209,10 @@ final class ExportService {
 
     // MARK: - TopPresenter Song JSON Export (GOAT v2.0.0 — one song per file)
 
-    static let songExporterVersion = "1.0.0"
+    nonisolated static let songExporterVersion = "1.0.0"
 
     /// Serialize a single song to the canonical single-song GOAT document.
-    static func exportSongToTopPresenterJSON(_ song: Song) throws -> String {
+    nonisolated static func exportSongToTopPresenterJSON(_ song: Song) throws -> String {
         let result: [String: Any] = [
             "schemaVersion": songExporterVersion,
             "format": "TopPresenter Song",
@@ -227,7 +227,7 @@ final class ExportService {
     }
 
     /// Bulk export: write one GOAT file per song into a directory.
-    static func exportSongsToFolder(
+    nonisolated static func exportSongsToFolder(
         _ songs: [Song],
         directory: URL,
         progressHandler: ((Double, String) -> Void)? = nil
@@ -244,7 +244,7 @@ final class ExportService {
     }
 
     /// Bundle several songs into a single file (array of GOAT song objects).
-    private static func exportSongsToTopPresenterJSON(
+    nonisolated private static func exportSongsToTopPresenterJSON(
         collection: SongCollection,
         progressHandler: ((Double, String) -> Void)?
     ) async throws -> String {
@@ -277,7 +277,7 @@ final class ExportService {
 
     // MARK: GOAT dictionary builders
 
-    static func songDictV2(_ song: Song) -> [String: Any] {
+    nonisolated static func songDictV2(_ song: Song) -> [String: Any] {
         var dict: [String: Any] = [
             "title": song.title,
             "language": song.language,
@@ -327,7 +327,7 @@ final class ExportService {
         return dict
     }
 
-    private static func versionDictV2(_ version: SongVersion) -> [String: Any] {
+    nonisolated private static func versionDictV2(_ version: SongVersion) -> [String: Any] {
         var dict: [String: Any] = [
             "name": version.name,
             "language": version.language,
@@ -361,7 +361,7 @@ final class ExportService {
         return dict
     }
 
-    private static func sectionDictV2(_ section: SongSection) -> [String: Any] {
+    nonisolated private static func sectionDictV2(_ section: SongSection) -> [String: Any] {
         let lines = section.lines.map { line -> [String: Any] in
             var l: [String: Any] = ["text": line.text]
             if !line.chords.isEmpty { l["chords"] = line.chords.map { ["sym": $0.sym, "pos": $0.pos] } }
@@ -379,13 +379,13 @@ final class ExportService {
         return dict
     }
 
-    private static func jsonString(from object: [String: Any]) throws -> String {
+    nonisolated private static func jsonString(from object: [String: Any]) throws -> String {
         let data = try JSONSerialization.data(withJSONObject: object, options: [.prettyPrinted, .sortedKeys])
         guard let string = String(data: data, encoding: .utf8) else { throw ExportError.encodingFailed }
         return string
     }
 
-    private static func sanitizeFilename(_ name: String) -> String {
+    nonisolated private static func sanitizeFilename(_ name: String) -> String {
         let invalid = CharacterSet(charactersIn: "/\\:?%*|\"<>")
         let cleaned = name.components(separatedBy: invalid).joined(separator: "-")
         return String(cleaned.prefix(120)).trimmingCharacters(in: .whitespaces)
@@ -394,7 +394,7 @@ final class ExportService {
 
 
     /// Escape special XML characters
-    private static func escapeXML(_ string: String) -> String {
+    nonisolated private static func escapeXML(_ string: String) -> String {
         string
             .replacingOccurrences(of: "&", with: "&amp;")
             .replacingOccurrences(of: "<", with: "&lt;")

@@ -138,5 +138,29 @@ final class LibraryTaskRunner {
         }
     }
 
+    // MARK: - Export
+
+    /// Export Bible modules to a folder. Same deal as import: off the main
+    /// thread, reported in the strip, cancellable, and the sheet may close.
+    func exportBibleModules(_ modules: [BibleModule], to folder: URL) {
+        guard !isBusy, !modules.isEmpty else { return }
+        let ids = modules.map(\.id)
+        progress.begin(.exporting, total: ids.count)
+        current = Task { [weak self] in
+            guard let self else { return }
+            let outcome = await makeMaintenance().exportBibleModules(
+                ids: ids, toFolder: folder,
+                onProgress: { [weak self] name, _ in self?.progress.startItem(name) },
+                onItemProgress: { [weak self] in self?.progress.setItemFraction($0) },
+                isCancelled: { [weak self] in self?.progress.isCancelled ?? false }
+            )
+            lastNote = outcome.failures.isEmpty
+                ? String(localized: "\(outcome.exported) exported.", comment: "Export result")
+                : String(localized: "\(outcome.exported) exported, \(outcome.failures.count) failed.",
+                         comment: "Export result")
+            progress.end()
+        }
+    }
+
     func cancel() { progress.cancel() }
 }

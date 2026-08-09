@@ -10,10 +10,10 @@ import Foundation
 /// Importer for ChordPro / Chord chart files (.cho, .crd, .chordpro, .chopro).
 /// Parses `{directive: value}` metadata, `{start_of_*}` section blocks, and inline
 /// `[Chord]` markers (kept as `SongChord` positions so the GOAT format preserves chords).
-final class ChordProImporter: SongImporter {
+nonisolated final class ChordProImporter: SongImporter {
     let format: SupportedSongFormat = .chordPro
 
-    func parse(fileURL: URL) async throws -> SongImportResult {
+    func parse(fileURL: URL) async throws -> sending SongImportResult {
         guard FileManager.default.fileExists(atPath: fileURL.path) else {
             throw SongImportError.fileNotFound
         }
