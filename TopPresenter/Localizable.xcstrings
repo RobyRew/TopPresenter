@@ -33224,6 +33224,236 @@
           }
         }
       }
+    },
+    "TopPresenter Bible" : {
+      "comment" : "Export format",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "TopPresenter Bible"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Biblia de TopPresenter"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Biblie TopPresenter"
+          }
+        }
+      }
+    },
+    "TopPresenter Song Collection" : {
+      "comment" : "Song export format",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "TopPresenter Song Collection"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Colección de canciones de TopPresenter"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Colecție de cântări TopPresenter"
+          }
+        }
+      }
+    },
+    "Native format with all metadata, cross-references, footnotes and section headings" : {
+      "comment" : "Export format description",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Native format with all metadata, cross-references, footnotes and section headings"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Formato nativo, con todos los metadatos, referencias cruzadas, notas y títulos de sección"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Format nativ, cu toate metadatele, referințele încrucișate, notele și titlurile de secțiune"
+          }
+        }
+      }
+    },
+    "This file is not a TopPresenter slide deck." : {
+      "comment" : "Import error",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This file is not a TopPresenter slide deck."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El archivo no es un conjunto de diapositivas de TopPresenter."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fișierul nu este un set de slide-uri TopPresenter."
+          }
+        }
+      }
+    },
+    "the same slide" : {
+      "comment" : "Duplicate match reason",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "the same slide"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "la misma diapositiva"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "același slide"
+          }
+        }
+      }
+    },
+    "%lld slides" : {
+      "comment" : "Slide import status",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld slides"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld diapositivas"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld slide-uri"
+          }
+        }
+      }
+    },
+    "Show in Finder" : {
+      "comment" : "Menu",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show in Finder"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mostrar en el Finder"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Arată în Finder"
+          }
+        }
+      }
+    },
+    "Import slides" : {
+      "comment" : "Tooltip",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Import slides"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Importar diapositivas"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Importă slide-uri"
+          }
+        }
+      }
+    },
+    "Export slides" : {
+      "comment" : "Tooltip",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Export slides"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Exportar diapositivas"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Exportă slide-uri"
+          }
+        }
+      }
+    },
+    "Export slide…" : {
+      "comment" : "Context menu",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Export slide…"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Exportar diapositiva…"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Exportă slide-ul…"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

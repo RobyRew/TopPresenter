@@ -282,7 +282,7 @@
                     progress(letter, i + 1, entries.length);
                 }
                 if (songs.length) {
-                    saveFile(JSON.stringify(wrapBundle(songs), null, 2), 'TopPresenter Songs/litera-' + letter + '.json', 'application/json');
+                    saveFile(JSON.stringify(wrapBundle(songs), null, 2), 'TopPresenter Songs/litera-' + letter + '.tpsongcollection', 'application/json');
                     log('Litera ' + letter + ': ' + songs.length + ' cântece descărcate', 'ok');
                 }
             }
@@ -305,7 +305,7 @@
                 if (typeof GM_setClipboard === 'function') GM_setClipboard(json, { type: 'text', mimetype: 'text/plain' });
                 log('JSON copiat în clipboard: ' + song.title, 'ok');
             } else {
-                saveFile(json, 'TopPresenter Songs/' + sanitize(m[1] + '-' + m[2]) + '.json', 'application/json');
+                saveFile(json, 'TopPresenter Songs/' + sanitize(m[1] + '-' + m[2]) + '.tpsong', 'application/json');
                 log('Descărcat: ' + song.title, 'ok');
             }
         } catch (e) { log('Eroare: ' + e.message, 'err'); }

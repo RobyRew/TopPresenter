@@ -551,7 +551,7 @@ function bibleFilename(bible) {
   const name = (bible.translation.name || '').replace(/[\/\\:*?"<>|]/g, ' ').replace(/\s+/g, ' ').trim();
   let base = name && name.toUpperCase() !== code.toUpperCase() ? `${code} — ${name}` : code;
   if (base.length > 120) base = base.slice(0, 120).trim();
-  return base + '.json';
+  return base + '.tpbible';
 }
 
 // ── CLI ─────────────────────────────────────────────────────────────────────────

@@ -196,7 +196,7 @@ nonisolated enum ImportCatalog {
             displayName: String(localized: "TopPresenter Theme", comment: "Format name"),
             summary: String(localized: "The complete presentation look, with backgrounds embedded in the package.",
                             comment: "Format description"),
-            fileExtensions: ["tptheme"],
+            fileExtensions: [TopPresenterFormat.theme.fileExtension],
             isDirectorySource: true,
             isNative: true,
             canExport: true
@@ -206,13 +206,9 @@ nonisolated enum ImportCatalog {
             kind: .slides,
             displayName: String(localized: "TopPresenter Slides", comment: "Format name"),
             summary: String(localized: "Custom slides.", comment: "Format description"),
-            fileExtensions: ["tpslides"],
+            fileExtensions: [TopPresenterFormat.slides.fileExtension],
             isNative: true,
-            // Custom Slides can neither import nor export yet. Listed so the
-            // catalog describes the whole shape of the app rather than only the
-            // parts already built; Phase 6 flips both flags.
-            canImport: false,
-            canExport: false
+            canExport: true
         ),
     ]
 

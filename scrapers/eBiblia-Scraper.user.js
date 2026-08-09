@@ -1792,7 +1792,7 @@
         var base = (name && name.toUpperCase() !== code.toUpperCase()) ? (code + ' — ' + name) : code;
         if (partial) base += ' (partial)';
         if (base.length > 120) base = base.slice(0, 120).trim();
-        return base + '.json';
+        return base + '.tpbible';
     }
 
     /// Serializes a finished export and saves it under

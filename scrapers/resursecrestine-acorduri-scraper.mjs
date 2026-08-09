@@ -226,7 +226,7 @@ async function main() {
     return;
   }
   await mkdir(o.out, { recursive: true });
-  const existing = new Set((await readdir(o.out).catch(() => [])).map(f => f.replace(/\.json$/i, '')));
+  const existing = new Set((await readdir(o.out).catch(() => [])).map(f => f.replace(/\.tpsong$/i, '')));
   const letters = o.letters || LETTERS;
 
   let written = 0, skipped = 0, failed = 0, withChords = 0;
@@ -247,7 +247,7 @@ async function main() {
         const base = sanitize(doc.song.title || slug);
         if (o.resume && existing.has(base)) { skipped++; continue; }
         try {
-          await writeFile(path.join(o.out, `${base}.json`), JSON.stringify(doc, null, 2), 'utf8');
+          await writeFile(path.join(o.out, `${base}.tpsong`), JSON.stringify(doc, null, 2), 'utf8');
           written++; existing.add(base);
           if (doc.song._extensions.resursecrestineAcorduri.hasChords) withChords++;
           if (written % 50 === 0) process.stderr.write(`  …${written} written\n`);

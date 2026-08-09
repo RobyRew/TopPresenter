@@ -177,7 +177,10 @@ struct BatchExportSheet: View {
             var failed = 0
 
             for module in selectedModules {
-                let fileName = "\(module.abbreviation.isEmpty ? module.name : module.abbreviation).\(selectedFormat.fileExtension)"
+                let fileName = ExportNaming.filename(
+                    module.abbreviation.isEmpty ? module.name : module.abbreviation,
+                    qualifier: module.language.uppercased(),
+                    format: .bible)
                 let fileURL = folder.appendingPathComponent(fileName)
 
                 do {

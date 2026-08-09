@@ -169,7 +169,10 @@ struct BibleExportSheet: View {
         panel.allowedContentTypes = [
             UTType(filenameExtension: selectedFormat.fileExtension) ?? .data
         ]
-        panel.nameFieldStringValue = "\(module.abbreviation.isEmpty ? module.name : module.abbreviation).\(selectedFormat.fileExtension)"
+        panel.nameFieldStringValue = ExportNaming.filename(
+            module.abbreviation.isEmpty ? module.name : module.abbreviation,
+            qualifier: module.language.uppercased(),
+            format: .bible)
         panel.message = String(localized: "Choose where to save the exported Bible module", comment: "Save panel message")
         panel.prompt = String(localized: "Export", comment: "Save panel button")
 

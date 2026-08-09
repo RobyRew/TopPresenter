@@ -71,7 +71,7 @@ The design studio behind everything you see on screen:
 
 ### 📖 Bible
 
-- **6 import formats** — TopPresenter JSON, OSIS XML, Zefania XML, MySword SQLite, USFM, Unbound Bible
+- **6 import formats** — TopPresenter Bible (`.tpbible`), OSIS XML, Zefania XML, MySword SQLite, USFM, Unbound Bible
 - **The GOAT format** — TopPresenter Bible JSON **v1.0.0** is a superset of every format: section headings, footnotes, cross-references, Strong's numbers, poetry, and **red-letter** (words of Christ) all round-trip through import → store → export. Fields are optional; nothing is lost importing OSIS/USFM and re-exporting.
 - **Red-letter theme** — highlight the words spoken by Jesus in any color, per theme (Editor de Teme ▸ Text ▸ *Cuvintele lui Isus*). Populated from OSIS/USFM Bibles that mark them.
 - **Smart duplicate handling** — importing a Bible whose code already exists prompts **Combină / Înlocuiește / Păstrează ambele / Anulează**; *Combină* fills in only the chapters/verses you're missing.
@@ -80,7 +80,7 @@ The design studio behind everything you see on screen:
 - **List view &amp; Grid view** with color-coded book categories
 - **Multi-verse selection** (⌘+Click) and **auto-fill** that measures the actual verse box
 - **Block navigation** crossing chapter/book boundaries; double-click to go live
-- **Export** as TopPresenter JSON (full v2 schema), Plain Text, or CSV
+- **Export** as TopPresenter Bible (`.tpbible`, full v2 schema) — lossless, and re-importable
 
 ### 🎵 Songs &amp; Lyrics
 
@@ -143,11 +143,11 @@ The design studio behind everything you see on screen:
 
 | | Formats |
 |---|---|
-| **Bible import** | TopPresenter JSON · OSIS XML · Zefania XML · MySword SQLite · USFM · Unbound Bible |
+| **Bible import** | TopPresenter Bible (`.tpbible`) · OSIS XML · Zefania XML · MySword SQLite · USFM · Unbound Bible |
 | **Song import** | TopPresenter Song JSON · OpenSong XML · OpenLyrics XML · ChordPro (`.cho`, `.crd`, `.chordpro`) · Plain text (`.txt`) · PowerPoint (`.pptx`, `.ppt`) |
 | **Media** | Images (jpg, png, gif, heic, tiff, bmp, webp, svg) · Audio (mp3, wav, aac, m4a, flac, ogg, aiff) · Video (mp4, mov, avi, mkv, webm, m4v) |
 | **Themes** | `.tptheme` packages (theme.json + embedded media) |
-| **Export** | Bible: TopPresenter JSON, TXT, CSV · Songs: TopPresenter JSON, OpenLyrics, TXT · Themes: `.tptheme` |
+| **Export** | `.tpbible` · `.tpsong` · `.tpsongcollection` · `.tpslides` · `.tpschedule` · `.tptheme` — every one re-importable without loss |
 
 ---
 
@@ -177,7 +177,7 @@ Dependency-free scrapers that export worship songs (Romanian + English/Spanish/P
 
 ### cantaricrestine.ro — "Cântări Creștine în PowerPoint"
 
-- **[`cantaricrestine-scraper.mjs`](scrapers/cantaricrestine-scraper.mjs)** (Node 18+, resumable) — uses the site's public JSON API (`api.php`; `token` is just a random anti-bot value) to export all **~9.5k songs**, organized into **per-book folders**. Each song carries its lyrics (parsed into sections with `//: ://` repeats), book/number, and `_extensions.cantaricrestine` (id, date added, downloads/views, PowerPoint URL). It also **downloads every PowerPoint** (`.ppt`/`.pptx`) next to the JSON, and writes a `_completeness.json` (which songs have lyrics vs are PowerPoint-only). Run `--no-ppt` for JSON only. Disk-full-resilient (always writes the JSON; flags any PowerPoint it couldn't save).
+- **[`cantaricrestine-scraper.mjs`](scrapers/cantaricrestine-scraper.mjs)** (Node 18+, resumable) — uses the site's public JSON API (`api.php`; `token` is just a random anti-bot value) to export all **~9.5k songs**, organized into **per-book folders**. Each song carries its lyrics (parsed into sections with `//: ://` repeats), book/number, and `_extensions.cantaricrestine` (id, date added, downloads/views, PowerPoint URL). It also **downloads every PowerPoint** (`.ppt`/`.pptx`) next to the song file, and writes a `_completeness.json` (which songs have lyrics vs are PowerPoint-only). Run `--no-ppt` for song files only. Disk-full-resilient (always writes the JSON; flags any PowerPoint it couldn't save).
 - **[`cantaricrestine-scraper.user.js`](scrapers/cantaricrestine-scraper.user.js)** (Tampermonkey) — pick a book (or *Toate*) and download a single importable TopPresenter Songs bundle, straight from the API.
 
 ### worshiptogether.com — modern worship (EN / ES / PT)
@@ -189,7 +189,7 @@ Dependency-free scrapers that export worship songs (Romanian + English/Spanish/P
 
 ### Keeping your library up to date
 
-Re-running a scraper into the **same output folder** fetches only the songs you don't already have — it skips every `.json` already present (`--resume`, on by default). So `node melodia-scraper.mjs --out ./songs` next month grabs just the newly-added songs; the existing thousands skip in seconds. Keep the output folder as your archive so the scraper knows what's missing.
+Re-running a scraper into the **same output folder** fetches only the songs you don't already have — it skips every song file already present (`--resume`, on by default). So `node melodia-scraper.mjs --out ./songs` next month grabs just the newly-added songs; the existing thousands skip in seconds. Keep the output folder as your archive so the scraper knows what's missing.
 
 How each source signals change (so you know what a re-run can and can't catch):
 
@@ -237,16 +237,16 @@ reads the preferred language once at launch.
 
 <!-- i18n-coverage:start -->
 
-**1248 translatable strings.** Regenerated on every commit — do not edit by hand.
+**1258 translatable strings.** Regenerated on every commit — do not edit by hand.
 
 | | Language | Progress | Done |
 |---|---|---|---|
 | 🇬🇧 | **English** (`en`) | `████████████████████████` 100% | ✅ |
 | 🇷🇴 | **Română** (`ro`) | `████████████████████████` 100% | ✅ |
 | 🇪🇸 | **Español** (`es`) | `████████████████████████` 100% | ✅ |
-| 🇫🇷 | **Français** (`fr`) | `████░░░░░░░░░░░░░░░░░░░░` 16% | 210/1248 |
-| 🇩🇪 | **Deutsch** (`de`) | `████░░░░░░░░░░░░░░░░░░░░` 16% | 210/1248 |
-| 🇷🇺 | **Русский** (`ru`) | `████░░░░░░░░░░░░░░░░░░░░` 16% | 210/1248 |
+| 🇫🇷 | **Français** (`fr`) | `████░░░░░░░░░░░░░░░░░░░░` 16% | 210/1258 |
+| 🇩🇪 | **Deutsch** (`de`) | `████░░░░░░░░░░░░░░░░░░░░` 16% | 210/1258 |
+| 🇷🇺 | **Русский** (`ru`) | `████░░░░░░░░░░░░░░░░░░░░` 16% | 210/1258 |
 
 <!-- i18n-coverage:end -->
 
@@ -357,7 +357,7 @@ xcodebuild -scheme TopPresenter -destination 'platform=macOS' test -only-testing
 - Every push to `main` publishes an **alpha pre-release**; the alpha number counts **per version**, so bumping `MARKETING_VERSION` restarts the series (e.g. `v0.1.0-alpha.1`).
 - Stable releases come from final tags (`v1.0.0`): bump `MARKETING_VERSION`, push, then `git tag v1.0.0 && git push origin v1.0.0`.
 - The [Resurse release](https://github.com/RobyRew/TopPresenter/releases/tag/resources-1) hosts the starter themes and the EDC100 Bible.
-- The [Bible Library release](https://github.com/RobyRew/TopPresenter/releases/tag/bibles-1) bundles **all 70 Bible translations** (17 languages) as TopPresenter JSON — red-letter, Strong's, headings, cross-references and metadata included.
+- The [Bible Library release](https://github.com/RobyRew/TopPresenter/releases/tag/bibles-1) bundles **all 70 Bible translations** (17 languages) as `.tpbible` — red-letter, Strong's, headings, cross-references and metadata included.
 - The [Themes release](https://github.com/RobyRew/TopPresenter/releases/tag/themes-1) bundles the starter `.tptheme` pack (Default, Cer Nepal, Galaxie, Minimal) with backgrounds embedded.
 
 ## License

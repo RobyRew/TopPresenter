@@ -133,6 +133,11 @@ struct MainControlView: View {
                 // Every import entry point — the menu items, each library's
                 // Import button, a window drop — arrives here. There is one
                 // sheet and one set of rules behind it.
+                .task {
+                    // Anything Finder handed us before this point is delivered
+                    // now, once there is something to deliver it to.
+                    OpenFileRouter.windowIsReady()
+                }
                 .onKeyWindowNotification(.importFiles) { notification in
                     importURLs = notification.userInfo?["urls"] as? [URL] ?? []
                     importKinds = Set((notification.userInfo?["kinds"] as? [String] ?? [])

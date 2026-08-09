@@ -11,6 +11,10 @@ import CoreSpotlight
 
 @main
 struct TopPresenterApp: App {
+    /// Finder opens arrive through the app delegate. It buffers them until a
+    /// window is listening — on a cold launch the open event beats the first
+    /// window body, and posting then would drop the file in silence.
+    @NSApplicationDelegateAdaptor(OpenFileRouter.self) private var openFileRouter
     @State private var presentationManager: PresentationManager
     @State private var audioPlayerManager: AudioPlayerManager
     @State private var videoPlayerService: VideoPlayerService

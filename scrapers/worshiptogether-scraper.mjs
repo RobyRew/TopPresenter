@@ -262,7 +262,7 @@ async function main() {
     if (written >= o.limit) break;
     const dir = path.join(o.out, lang);
     await mkdir(dir, { recursive: true });
-    const existing = new Set((await readdir(dir).catch(() => [])).map(f => f.replace(/\.json$/i, '')));
+    const existing = new Set((await readdir(dir).catch(() => [])).map(f => f.replace(/\.tpsong$/i, '')));
     process.stderr.write(`[${lang}] enumerating… `);
     const songs = await enumerate(lang, o.retries);
     process.stderr.write(`${songs.length} songs\n`);

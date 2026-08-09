@@ -238,7 +238,7 @@
   function download(doc) {
     const blob = new Blob([JSON.stringify(doc, null, 2)], { type: 'application/json' });
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
-    a.download = sanitize(doc.song.title || doc.song._extensions.melodia.slug) + '.json';
+    a.download = sanitize(doc.song.title || doc.song._extensions.melodia.slug) + '.tpsong';
     document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   }
 

@@ -201,6 +201,19 @@ struct MediaView: View {
         }
         AddToSessionMenu(draft: { .media(item) })
         Divider()
+        // Media is REFERENCED, never copied, so "where is this actually?" is a
+        // question the app could not answer at all. It is also the only in-app
+        // signal that a file has moved or been deleted: the item disables.
+        Button {
+            guard let url = item.resolvedURL else { return }
+            let accessing = url.startAccessingSecurityScopedResource()
+            defer { if accessing { url.stopAccessingSecurityScopedResource() } }
+            NSWorkspace.shared.activateFileViewerSelecting([url])
+        } label: {
+            Label(String(localized: "Show in Finder", comment: "Menu"), systemImage: "folder")
+        }
+        .disabled(item.resolvedURL == nil)
+        Divider()
         Button(role: .destructive) { mediaToDelete = item } label: {
             Label(String(localized: "Șterge", comment: "Menu"), systemImage: "trash")
         }

@@ -405,7 +405,7 @@ async function main() {
   }
   if (!slugs.length) { console.error('No songs found.'); process.exit(1); }
 
-  const existing = new Set((await readdir(o.out).catch(() => [])).map(f => f.replace(/\.json$/i, '')));
+  const existing = new Set((await readdir(o.out).catch(() => [])).map(f => f.replace(/\.tpsong$/i, '')));
   const manifest = [];
   let done = 0, written = 0, failed = 0, skipped = 0;
 
@@ -424,10 +424,10 @@ async function main() {
         if (doc.song.versions[0].sections.length === 0) {
           failed++; process.stderr.write(`✗ ${slug} (no sections)\n`);
         } else {
-          const file = path.join(o.out, `${safe}.json`);
+          const file = path.join(o.out, `${safe}.tpsong`);
           await writeFile(file, JSON.stringify(doc, null, 2), 'utf8');
           written++;
-          if (o.manifest) manifest.push({ slug, title: doc.song.title, id: doc.song._extensions.melodia.id, file: `${safe}.json` });
+          if (o.manifest) manifest.push({ slug, title: doc.song.title, id: doc.song._extensions.melodia.id, file: `${safe}.tpsong` });
           if (written % 25 === 0) process.stderr.write(`  …${written} written (${done}/${slugs.length})\n`);
         }
       } catch (e) { failed++; process.stderr.write(`✗ ${slug}: ${e.message}\n`); }

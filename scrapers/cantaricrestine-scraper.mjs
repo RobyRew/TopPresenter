@@ -233,7 +233,7 @@ async function main() {
       const cat = s.categoria || 'Diverse';
       const folder = bookFolder(s);
       const base = sanitize(s.denumire || `cantare-${s.id}`);
-      const jsonName = `${base}.json`;
+      const jsonName = `${base}.tpsong`;
       await mkdir(path.join(o.out, folder), { recursive: true });
 
       const doc = buildSong(s);

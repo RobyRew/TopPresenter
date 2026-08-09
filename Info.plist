@@ -2,8 +2,6 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<!-- Sparkle auto-update (see UPDATES.md). Replace SUPublicEDKey with the EdDSA
-	     public key from `generate_keys`; the appcast is published to GitHub Pages. -->
 	<key>SUFeedURL</key>
 	<string>https://robyrew.github.io/TopPresenter/appcast.xml</string>
 	<key>SUPublicEDKey</key>
@@ -24,18 +22,77 @@
 	<array>
 		<dict>
 			<key>UTTypeIdentifier</key>
-			<string>com.robyrew.toppresenter.theme</string>
+			<string>com.robyrew.toppresenter.bible</string>
 			<key>UTTypeDescription</key>
-			<string>TopPresenter Theme</string>
+			<string>TopPresenter Bible</string>
 			<key>UTTypeConformsTo</key>
 			<array>
-				<string>com.apple.package</string>
+				<string>public.json</string>
 			</array>
+			<key>UTTypeIconFile</key>
+			<string>TopPresenterDocument</string>
 			<key>UTTypeTagSpecification</key>
 			<dict>
 				<key>public.filename-extension</key>
 				<array>
-					<string>tptheme</string>
+					<string>tpbible</string>
+				</array>
+			</dict>
+		</dict>
+		<dict>
+			<key>UTTypeIdentifier</key>
+			<string>com.robyrew.toppresenter.song</string>
+			<key>UTTypeDescription</key>
+			<string>TopPresenter Song</string>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.json</string>
+			</array>
+			<key>UTTypeIconFile</key>
+			<string>TopPresenterDocument</string>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>tpsong</string>
+				</array>
+			</dict>
+		</dict>
+		<dict>
+			<key>UTTypeIdentifier</key>
+			<string>com.robyrew.toppresenter.songcollection</string>
+			<key>UTTypeDescription</key>
+			<string>TopPresenter Song Collection</string>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.json</string>
+			</array>
+			<key>UTTypeIconFile</key>
+			<string>TopPresenterDocument</string>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>tpsongcollection</string>
+				</array>
+			</dict>
+		</dict>
+		<dict>
+			<key>UTTypeIdentifier</key>
+			<string>com.robyrew.toppresenter.slides</string>
+			<key>UTTypeDescription</key>
+			<string>TopPresenter Slides</string>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.json</string>
+			</array>
+			<key>UTTypeIconFile</key>
+			<string>TopPresenterDocument</string>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>tpslides</string>
 				</array>
 			</dict>
 		</dict>
@@ -48,6 +105,8 @@
 			<array>
 				<string>public.json</string>
 			</array>
+			<key>UTTypeIconFile</key>
+			<string>TopPresenterDocument</string>
 			<key>UTTypeTagSpecification</key>
 			<dict>
 				<key>public.filename-extension</key>
@@ -56,18 +115,83 @@
 				</array>
 			</dict>
 		</dict>
+		<dict>
+			<key>UTTypeIdentifier</key>
+			<string>com.robyrew.toppresenter.theme</string>
+			<key>UTTypeDescription</key>
+			<string>TopPresenter Theme</string>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>com.apple.package</string>
+			</array>
+			<key>UTTypeIconFile</key>
+			<string>TopPresenterDocument</string>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>tptheme</string>
+				</array>
+			</dict>
+		</dict>
 	</array>
 	<key>CFBundleDocumentTypes</key>
 	<array>
 		<dict>
 			<key>CFBundleTypeName</key>
-			<string>TopPresenter Theme</string>
+			<string>TopPresenter Bible</string>
 			<key>CFBundleTypeRole</key>
 			<string>Viewer</string>
 			<key>LSItemContentTypes</key>
 			<array>
-				<string>com.robyrew.toppresenter.theme</string>
+				<string>com.robyrew.toppresenter.bible</string>
 			</array>
+			<key>CFBundleTypeIconFile</key>
+			<string>TopPresenterDocument</string>
+			<key>LSHandlerRank</key>
+			<string>Owner</string>
+		</dict>
+		<dict>
+			<key>CFBundleTypeName</key>
+			<string>TopPresenter Song</string>
+			<key>CFBundleTypeRole</key>
+			<string>Viewer</string>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>com.robyrew.toppresenter.song</string>
+			</array>
+			<key>CFBundleTypeIconFile</key>
+			<string>TopPresenterDocument</string>
+			<key>LSHandlerRank</key>
+			<string>Owner</string>
+		</dict>
+		<dict>
+			<key>CFBundleTypeName</key>
+			<string>TopPresenter Song Collection</string>
+			<key>CFBundleTypeRole</key>
+			<string>Viewer</string>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>com.robyrew.toppresenter.songcollection</string>
+			</array>
+			<key>CFBundleTypeIconFile</key>
+			<string>TopPresenterDocument</string>
+			<key>LSHandlerRank</key>
+			<string>Owner</string>
+		</dict>
+		<dict>
+			<key>CFBundleTypeName</key>
+			<string>TopPresenter Slides</string>
+			<key>CFBundleTypeRole</key>
+			<string>Viewer</string>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>com.robyrew.toppresenter.slides</string>
+			</array>
+			<key>CFBundleTypeIconFile</key>
+			<string>TopPresenterDocument</string>
+			<key>LSHandlerRank</key>
+			<string>Owner</string>
 		</dict>
 		<dict>
 			<key>CFBundleTypeName</key>
@@ -78,6 +202,24 @@
 			<array>
 				<string>com.robyrew.toppresenter.schedule</string>
 			</array>
+			<key>CFBundleTypeIconFile</key>
+			<string>TopPresenterDocument</string>
+			<key>LSHandlerRank</key>
+			<string>Owner</string>
+		</dict>
+		<dict>
+			<key>CFBundleTypeName</key>
+			<string>TopPresenter Theme</string>
+			<key>CFBundleTypeRole</key>
+			<string>Viewer</string>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>com.robyrew.toppresenter.theme</string>
+			</array>
+			<key>CFBundleTypeIconFile</key>
+			<string>TopPresenterDocument</string>
+			<key>LSHandlerRank</key>
+			<string>Owner</string>
 		</dict>
 	</array>
 </dict>

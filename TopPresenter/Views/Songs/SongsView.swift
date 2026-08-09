@@ -578,8 +578,8 @@ struct SongListPanel: View {
 
     private func exportSong(_ song: Song) {
         let panel = NSSavePanel()
-        panel.allowedContentTypes = [.json]
-        panel.nameFieldStringValue = "\(song.title).json"
+        panel.allowedContentTypes = [UTType(filenameExtension: TopPresenterFormat.song.fileExtension) ?? .json]
+        panel.nameFieldStringValue = ExportNaming.filename(song.title, format: .song)
         guard panel.runModal() == .OK, let url = panel.url else { return }
         try? ExportService.exportSongToTopPresenterJSON(song).write(to: url, atomically: true, encoding: .utf8)
     }

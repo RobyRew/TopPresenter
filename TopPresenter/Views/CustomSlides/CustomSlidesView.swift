@@ -10,6 +10,7 @@
 //
 
 import SwiftUI
+import UniformTypeIdentifiers
 import SwiftData
 
 struct CustomSlidesView: View {
@@ -17,6 +18,7 @@ struct CustomSlidesView: View {
     @Environment(PresentationManager.self) private var presentationManager
     @Environment(SearchIndex.self) private var searchIndex
     @Environment(LibraryManager.self) private var libraryManager
+    @Environment(AppState.self) private var appState
 
     @Query(sort: \PresentationSlide.order) private var slides: [PresentationSlide]
 
@@ -90,6 +92,14 @@ struct CustomSlidesView: View {
                 viewMode: viewMode,
                 count: String(localized: "\(filteredSlides.count) slide-uri", comment: "Slide count")
             ) {
+                LibraryHeaderButton(systemImage: "square.and.arrow.down",
+                                    help: String(localized: "Import slides", comment: "Tooltip")) {
+                    NotificationCenter.default.post(name: .importFiles, object: nil,
+                                                    userInfo: ["kinds": [ImportKind.slides.rawValue]])
+                }
+                LibraryHeaderButton(systemImage: "square.and.arrow.up",
+                                    help: String(localized: "Export slides", comment: "Tooltip")) { exportSlides() }
+                    .disabled(slides.isEmpty)
                 LibraryHeaderButton(systemImage: "plus",
                                     help: String(localized: "Slide nou", comment: "Tooltip"),
                                     prominent: true) { addSlide() }
@@ -210,9 +220,32 @@ struct CustomSlidesView: View {
         Button(String(localized: "Show on Screen", comment: "Context menu")) {
             presentSlide(title: slide.title, content: slide.content)
         }
+        Button(String(localized: "Export slide…", comment: "Context menu")) {
+            exportSlides([slide])
+        }
         Divider()
         Button(String(localized: "Delete", comment: "Context menu"), role: .destructive) {
             slideToDelete = slide
+        }
+    }
+
+    /// Custom Slides could neither import nor export: an evening of writing
+    /// announcements existed on exactly one machine, and moving them meant
+    /// retyping them.
+    private func exportSlides(_ subset: [PresentationSlide]? = nil) {
+        let deck = subset ?? slides
+        guard !deck.isEmpty else { return }
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [UTType(filenameExtension: TopPresenterFormat.slides.fileExtension) ?? .json]
+        panel.nameFieldStringValue = ExportNaming.filename(
+            deck.count == 1 ? deck[0].title : String(localized: "Slides", comment: "Default deck name"),
+            format: .slides)
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do {
+            try SlideDeckArchiveService.export(deck).write(to: url, options: .atomic)
+        } catch {
+            appState.showError(String(localized: "Export Failed", comment: "Alert title"),
+                               message: error.localizedDescription)
         }
     }
 

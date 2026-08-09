@@ -16,6 +16,7 @@ enum DroppedFileCategory: Sendable {
     case media(String)  // "image", "audio", "video"
     case session
     case theme
+    case slides
     case unknown
 
     var displayName: String {
@@ -25,6 +26,7 @@ enum DroppedFileCategory: Sendable {
         case .media(let type): return "Media (\(type))"
         case .session: return "Session"
         case .theme: return "Theme"
+        case .slides: return "Slides"
         case .unknown: return "Unknown"
         }
     }
@@ -42,6 +44,7 @@ enum DroppedFileCategory: Sendable {
         case .media: return .media
         case .session: return .session
         case .theme: return .theme
+        case .slides: return .slides
         case .unknown: return nil
         }
     }
@@ -134,8 +137,12 @@ final class DragDropImportHandler {
 
         // Fallback: guess by extension
         switch ext {
-        case "json":
+        case TopPresenterFormat.bible.fileExtension:
             return .bible(.topPresenter)
+        case TopPresenterFormat.song.fileExtension, TopPresenterFormat.songCollection.fileExtension:
+            return .song(.topPresenterJSON)
+        case TopPresenterFormat.slides.fileExtension:
+            return .slides
         case "mybible":
             return .bible(.mySword)
         case "usfm", "sfm":

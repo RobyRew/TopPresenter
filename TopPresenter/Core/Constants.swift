@@ -37,7 +37,10 @@ nonisolated enum SupportedBibleFormat: String, CaseIterable, Identifiable {
 
     var fileExtensions: [String] {
         switch self {
-        case .topPresenter: return ["json"]
+        // Its own extension since v1. `.json` is deliberately NOT accepted:
+        // see the refusal message in ImportPlanModel, which tells the operator
+        // what to do instead of calling their file unrecognised.
+        case .topPresenter: return [TopPresenterFormat.bible.fileExtension]
         case .osisXML: return ["xml", "osis"]
         case .zefaniaXML: return ["xml", "zef"]
         case .mySword: return ["mybible", "bbl.mybible"]
@@ -67,35 +70,20 @@ nonisolated enum SupportedBibleFormat: String, CaseIterable, Identifiable {
 }
 
 // MARK: - Supported Export Formats
+//
+// One case. Plain text and CSV were lossy one-way doors: what they wrote could
+// never be read back, so "export" meant two different things depending on which
+// you picked. After this, only TopPresenter can read what TopPresenter writes —
+// and everything it writes, it can read back whole.
 nonisolated enum SupportedExportFormat: String, CaseIterable, Identifiable {
     case topPresenter = "toppresenter"
-    case plainText = "plaintext"
-    case csv = "csv"
 
     var id: String { rawValue }
-
-    var displayName: String {
-        switch self {
-        case .topPresenter: return String(localized: "TopPresenter JSON", comment: "Export format")
-        case .plainText: return String(localized: "Plain Text", comment: "Export format")
-        case .csv: return String(localized: "CSV", comment: "Export format")
-        }
-    }
-
-    var fileExtension: String {
-        switch self {
-        case .topPresenter: return "json"
-        case .plainText: return "txt"
-        case .csv: return "csv"
-        }
-    }
-
+    var displayName: String { String(localized: "TopPresenter Bible", comment: "Export format") }
+    var fileExtension: String { TopPresenterFormat.bible.fileExtension }
     var formatDescription: String {
-        switch self {
-        case .topPresenter: return String(localized: "Native JSON with all metadata, cross-references, footnotes, and section headings", comment: "Export format description")
-        case .plainText: return String(localized: "Simple text file with book, chapter, and verse numbers", comment: "Export format description")
-        case .csv: return String(localized: "Comma-separated values: Book, Chapter, Verse, Text", comment: "Export format description")
-        }
+        String(localized: "Native format with all metadata, cross-references, footnotes and section headings",
+               comment: "Export format description")
     }
 }
 
@@ -166,7 +154,8 @@ nonisolated enum SupportedSongFormat: String, CaseIterable, Identifiable {
 
     var fileExtensions: [String] {
         switch self {
-        case .topPresenterJSON: return ["json"]
+        case .topPresenterJSON:
+            return [TopPresenterFormat.song.fileExtension, TopPresenterFormat.songCollection.fileExtension]
         case .openSongXML: return ["xml"]
         case .openLyricsXML: return ["xml"]
         case .chordPro: return ["cho", "crd", "chordpro", "chopro"]
@@ -179,35 +168,11 @@ nonisolated enum SupportedSongFormat: String, CaseIterable, Identifiable {
 // MARK: - Supported Song Export Formats
 nonisolated enum SupportedSongExportFormat: String, CaseIterable, Identifiable {
     case topPresenter = "toppresenter"
-    case openLyricsXML = "openlyrics"
-    case plainText = "plaintext"
 
     var id: String { rawValue }
-
-    var displayName: String {
-        switch self {
-        case .topPresenter: return String(localized: "TopPresenter JSON", comment: "Song export format")
-        case .openLyricsXML: return String(localized: "OpenLyrics XML", comment: "Song export format")
-        case .plainText: return String(localized: "Plain Text", comment: "Song export format")
-        }
-    }
-
-    var fileExtension: String {
-        switch self {
-        case .topPresenter: return "json"
-        case .openLyricsXML: return "xml"
-        case .plainText: return "txt"
-        }
-    }
-
-    /// The format identifier stored at the top of the export file
-    var formatIdentifier: String {
-        switch self {
-        case .topPresenter: return "TopPresenter Songs"
-        case .openLyricsXML: return "OpenLyrics"
-        case .plainText: return "Plain Text"
-        }
-    }
+    var displayName: String { String(localized: "TopPresenter Song Collection", comment: "Song export format") }
+    var fileExtension: String { TopPresenterFormat.songCollection.fileExtension }
+    var formatIdentifier: String { TopPresenterFormat.songCollection.marker }
 }
 
 // MARK: - Presentation Defaults

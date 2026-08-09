@@ -215,9 +215,27 @@ final class ImportCoordinator {
                 }
 
             case .slides:
-                // Custom Slides have no file format at all until Phase 6, so
-                // nothing is ever classified under this kind.
-                continue
+                for file in group {
+                    onUpdate(file.id, .importing)
+                    do {
+                        let data = try Data(contentsOf: file.url)
+                        let result = try SlideDeckArchiveService.importDeck(data, context: modelContext)
+                        summary.results += result.imported.map { .imported($0.title) }
+                        // A deck is a loose collection someone adds to over
+                        // months, so identity is per SLIDE: re-importing a deck
+                        // you extended elsewhere brings in what is new.
+                        summary.results += result.skipped.map {
+                            .skippedDuplicate(name: $0,
+                                              matchedOn: String(localized: "the same slide",
+                                                                comment: "Duplicate match reason"))
+                        }
+                        onUpdate(file.id, .success(String(localized: "\(result.imported.count) slides",
+                                                          comment: "Slide import status")))
+                    } catch {
+                        summary.results.append(.failed(name: file.fileName, reason: error.localizedDescription))
+                        onUpdate(file.id, .failed(error.localizedDescription))
+                    }
+                }
             }
         }
         return summary

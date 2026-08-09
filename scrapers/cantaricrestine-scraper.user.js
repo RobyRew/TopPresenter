@@ -119,7 +119,7 @@
         exportInfo: { source: 'cantaricrestine.ro', exportDate: new Date().toISOString(), exporterVersion: '1.0.0', totalSongs: songs.length },
         songs: songs.map(buildSong),
       };
-      download(bundle, `cantaricrestine - ${sanitize(label)}.json`);
+      download(bundle, `cantaricrestine - ${sanitize(label)}.tpsongcollection`);
       btn.textContent = `✅ ${songs.length} cântări`;
     } catch (e) { console.error('[cc→TP]', e); btn.textContent = '⚠️ eroare'; }
     finally { setTimeout(() => { btn.textContent = old; btn.disabled = false; }, 2200); }

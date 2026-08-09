@@ -425,8 +425,8 @@ final class ImportService {
     nonisolated static func detectBibleFormat(fileURL: URL) -> SupportedBibleFormat? {
         let ext = fileURL.pathExtension.lowercased()
 
-        // Check for TopPresenter JSON first (priority format)
-        if ext == "json" {
+        // Check for the native format first (priority format)
+        if ext == TopPresenterFormat.bible.fileExtension {
             if let data = try? Data(contentsOf: fileURL, options: .mappedIfSafe),
                let header = String(data: data.prefix(1000), encoding: .utf8) {
                 if header.contains("\"TopPresenter Bible\"") || header.contains("\"format\"") && header.contains("\"books\"") {
@@ -828,8 +828,10 @@ final class ImportService {
         guard let data = try? Data(contentsOf: fileURL, options: .mappedIfSafe) else { return nil }
         guard let content = String(data: data.prefix(2000), encoding: .utf8) else { return nil }
 
-        // TopPresenter Song JSON (single-song doc or legacy bundle)
-        if ext == "json" || content.contains("\"format\"") {
+        // The native song document (one song) or collection (a bundle).
+        let nativeSongExtensions = [TopPresenterFormat.song.fileExtension,
+                                    TopPresenterFormat.songCollection.fileExtension]
+        if nativeSongExtensions.contains(ext) || content.contains("\"format\"") {
             if content.contains("TopPresenter Song") || content.contains("\"versions\"") || content.contains("\"verses\"") {
                 return .topPresenterJSON
             }

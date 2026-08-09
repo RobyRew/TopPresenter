@@ -300,7 +300,10 @@ struct ScheduleView: View {
     private func exportSession(_ schedule: ServiceSchedule) {
         let panel = NSSavePanel()
         panel.allowedContentTypes = [UTType(exportedAs: "com.robyrew.toppresenter.schedule")]
-        panel.nameFieldStringValue = "\(schedule.name).\(SessionArchiveService.fileExtension)"
+        panel.nameFieldStringValue = ExportNaming.filename(
+            schedule.name,
+            qualifier: schedule.date.formatted(.iso8601.year().month().day().dateSeparator(.dash)),
+            format: .session)
         guard panel.runModal() == .OK, let url = panel.url else { return }
         do {
             try SessionArchiveService.export(schedule).write(to: url)

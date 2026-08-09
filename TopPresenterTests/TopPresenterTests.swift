@@ -296,20 +296,20 @@ import SwiftData
         try fm.createDirectory(at: lang2deep, withIntermediateDirectories: true)
         defer { try? fm.removeItem(at: root) }
 
-        try writeBible(lang1.appendingPathComponent("A.json"))
-        try writeBible(lang1.appendingPathComponent("B.json"))
-        try writeBible(lang2deep.appendingPathComponent("C.json"))     // nested subfolder
+        try writeBible(lang1.appendingPathComponent("A.tpbible"))
+        try writeBible(lang1.appendingPathComponent("B.tpbible"))
+        try writeBible(lang2deep.appendingPathComponent("C.tpbible"))  // nested subfolder
         try "not a bible".data(using: .utf8)!.write(to: root.appendingPathComponent("readme.txt"))
         // Four levels down. This used to be silently ignored: the walk stopped
         // at three, which any real library tree exceeds. It is found now, and
         // what stops a runaway scan is the budget — which SAYS that it stopped.
         let deeper = root.appendingPathComponent("English/extra/way")
         try fm.createDirectory(at: deeper, withIntermediateDirectories: true)
-        try writeBible(deeper.appendingPathComponent("D.json"))
+        try writeBible(deeper.appendingPathComponent("D.tpbible"))
 
         let scan = ImportScanner.scan([root])
-        #expect(scan.files.filter { $0.pathExtension == "json" }.count == 4)
-        #expect(scan.files.contains { $0.lastPathComponent == "D.json" })
+        #expect(scan.files.filter { $0.pathExtension == "tpbible" }.count == 4)
+        #expect(scan.files.contains { $0.lastPathComponent == "D.tpbible" })
         #expect(!scan.wasTruncated, "nothing here comes close to the budget")
 
         let pending = DragDropImportHandler.classifyExpanded([root])
@@ -325,7 +325,7 @@ import SwiftData
         let root = fm.temporaryDirectory.appendingPathComponent("tp_deep_\(UUID().uuidString)")
         let deep = root.appendingPathComponent(Array(repeating: "n", count: 10).joined(separator: "/"))
         try fm.createDirectory(at: deep, withIntermediateDirectories: true)
-        try writeBible(deep.appendingPathComponent("TooDeep.json"))
+        try writeBible(deep.appendingPathComponent("TooDeep.tpbible"))
         defer { try? fm.removeItem(at: root) }
 
         let scan = ImportScanner.scan([root])
@@ -340,7 +340,7 @@ import SwiftData
         let root = fm.temporaryDirectory.appendingPathComponent("tp_many_\(UUID().uuidString)")
         try fm.createDirectory(at: root, withIntermediateDirectories: true)
         defer { try? fm.removeItem(at: root) }
-        for index in 0..<25 { try writeBible(root.appendingPathComponent("b\(index).json")) }
+        for index in 0..<25 { try writeBible(root.appendingPathComponent("b\(index).tpbible")) }
 
         var budget = ImportScanner.Budget.default
         budget.maxCandidates = 10
@@ -7803,9 +7803,13 @@ struct PresentationSlideSnapshot: Equatable {
         func candidacy(_ name: String) -> ImportCatalog.Candidacy {
             ImportCatalog.candidacy(of: URL(fileURLWithPath: "/tmp/\(name)"))
         }
-        #expect(candidacy("biblia.tpbible") == .reject)   // Phase 6 adds the extension
-        #expect(candidacy("biblia.json") == .accept)
+        #expect(candidacy("biblia.tpbible") == .accept)
+        #expect(candidacy("cantec.tpsong") == .accept)
         #expect(candidacy("fundal.jpg") == .accept)
+        // .json is no longer ours. It is refused rather than guessed at, and
+        // the sheet answers with what to DO about it — see
+        // `ImportPlanModel.reason(unsupported:)`.
+        #expect(candidacy("biblia.json") == .reject)
         #expect(candidacy("raport.docx") == .reject)      // never opened
         #expect(candidacy("MareEstiTu") == .probe)        // extensionless OpenSong
     }
@@ -7829,14 +7833,23 @@ struct PresentationSlideSnapshot: Equatable {
         #expect(usfm?.isDirectorySource == true)
     }
 
-    /// Custom Slides are described but not yet wired. When Phase 6 lands the
-    /// format, this test is what says so out loud.
-    @Test func customSlidesAreListedButNotYetImportable() {
+    /// Custom Slides could neither import nor export until v1 — the one library
+    /// whose contents existed on exactly one machine.
+    @Test func customSlidesAreAFormatNow() {
         let slides = ImportCatalog.all.first { $0.kind == .slides }
-        #expect(slides != nil, "the catalog should describe the whole app, not only the finished parts")
-        #expect(slides?.canImport == false)
-        #expect(slides?.canExport == false)
-        #expect(!ImportCatalog.importableExtensions.contains("tpslides"))
+        #expect(slides?.canImport == true)
+        #expect(slides?.canExport == true)
+        #expect(ImportCatalog.importableExtensions.contains("tpslides"))
+    }
+
+    /// The native formats own their extensions, and `.json` is not one of them.
+    @Test func theNativeFormatsClaimTheirOwnExtensions() {
+        for format in TopPresenterFormat.allCases {
+            #expect(ImportCatalog.importableExtensions.contains(format.fileExtension),
+                    "\(format) is not importable under .\(format.fileExtension)")
+        }
+        #expect(!ImportCatalog.importableExtensions.contains("json"),
+                "a .json is refused with an actionable message, not imported")
     }
 
     /// An open panel scoped to one library must not offer another's files.
@@ -8197,7 +8210,7 @@ struct PresentationSlideSnapshot: Equatable {
         await plan.load([simple])
         #expect(plan.mode == .simple)
 
-        let mixed = try makeTree(["a.jpg": "x", "biblia.json": Self.bibleJSON("MIX")])
+        let mixed = try makeTree(["a.jpg": "x", "biblia.tpbible": Self.bibleJSON("MIX")])
         defer { try? FileManager.default.removeItem(at: mixed) }
         let other = ImportPlanModel()
         await other.load([mixed])
@@ -8208,7 +8221,7 @@ struct PresentationSlideSnapshot: Equatable {
     /// drops the same PATH twice; it cannot see this.
     @Test func identicalFilesInOneFolderAreDeselectedWithAReason() async throws {
         let json = Self.bibleJSON("DUP")
-        let root = try makeTree(["biblia.json": json, "biblia copy.json": json, "alta.json": Self.bibleJSON("ALT")])
+        let root = try makeTree(["biblia.tpbible": json, "biblia copy.tpbible": json, "alta.tpbible": Self.bibleJSON("ALT")])
         defer { try? FileManager.default.removeItem(at: root) }
 
         let plan = ImportPlanModel()
@@ -8224,7 +8237,7 @@ struct PresentationSlideSnapshot: Equatable {
     /// Opening from the Songs tab must not silently import the Bibles that
     /// happened to share the folder — but it must still SHOW them.
     @Test func preselectionNarrowsTheSelectionWithoutHidingAnything() async throws {
-        let root = try makeTree(["cantec.chordpro": "{title: T}\nlinie", "biblia.json": Self.bibleJSON("PRE")])
+        let root = try makeTree(["cantec.chordpro": "{title: T}\nlinie", "biblia.tpbible": Self.bibleJSON("PRE")])
         defer { try? FileManager.default.removeItem(at: root) }
 
         let plan = ImportPlanModel()
@@ -8293,5 +8306,126 @@ struct PresentationSlideSnapshot: Equatable {
     @Test func sessionsAndThemesAreFirstClassCategories() {
         #expect(DragDropImportHandler.classify(URL(fileURLWithPath: "/tmp/a.tpschedule")).kind == .session)
         #expect(DragDropImportHandler.classify(URL(fileURLWithPath: "/tmp/a.tptheme")).kind == .theme)
+    }
+}
+
+// MARK: - Native formats, naming, and the slide deck
+
+@MainActor struct ExportNamingTests {
+
+    /// `<Name>[_<Qualifier>]_TopPresenter_<Type>.<ext>` — the redundancy is
+    /// deliberate. On Windows, on Android, in a WhatsApp attachment list, the
+    /// extension stops being shown and the name is all that is left.
+    @Test func filenamesSayWhatTheyAreAndWhereTheyCameFrom() {
+        #expect(ExportNaming.filename("EDC100", qualifier: "RO", format: .bible)
+                == "EDC100_RO_TopPresenter_Bible.tpbible")
+        #expect(ExportNaming.filename("Ce mare ești Tu", format: .song)
+                == "Ce-mare-ești-Tu_TopPresenter_Song.tpsong")
+        #expect(ExportNaming.filename("Anunțuri", format: .slides)
+                == "Anunțuri_TopPresenter_Slides.tpslides")
+    }
+
+    /// A song title can contain anything a person can type, and the result has
+    /// to survive a filesystem, a shell and an email client.
+    @Test func namesThatWouldBreakAPathAreMadeSafe() {
+        let name = ExportNaming.filename("AC/DC: \"Live\"? *maybe*", format: .song)
+        #expect(!name.contains("/"))
+        #expect(!name.contains(":"))
+        #expect(!name.contains("\""))
+        #expect(name.hasSuffix(".tpsong"))
+    }
+
+    @Test func everyNativeFormatHasItsOwnExtensionAndMarker() {
+        let extensions = TopPresenterFormat.allCases.map(\.fileExtension)
+        #expect(Set(extensions).count == extensions.count, "two formats share an extension")
+        let markers = TopPresenterFormat.allCases.map(\.marker)
+        #expect(Set(markers).count == markers.count, "two formats share a format marker")
+        for format in TopPresenterFormat.allCases {
+            #expect(TopPresenterFormat.matching(extension: format.fileExtension.uppercased()) == format)
+        }
+    }
+
+    /// The header is what makes a file recognisable as ours before anything
+    /// tries to parse it.
+    @Test func theSharedHeaderCarriesTheFormatAndTheIdentity() {
+        let header = TopPresenterHeader.fields(for: .bible, contentID: "ID-1")
+        #expect(header["format"] as? String == "TopPresenter Bible")
+        #expect(header["contentID"] as? String == "ID-1")
+        #expect(header["schemaVersion"] as? Int == 1)
+        // An empty contentID is omitted rather than written as "": a
+        // meaningless value in the header is worse than an absent one.
+        #expect(TopPresenterHeader.fields(for: .bible)["contentID"] == nil)
+    }
+}
+
+@MainActor struct SlideDeckRoundTripTests {
+
+    private func makeContext() throws -> ModelContext {
+        let container = try ModelContainer(
+            for: Schema(versionedSchema: SchemaV2.self),
+            configurations: [ModelConfiguration(isStoredInMemoryOnly: true)]
+        )
+        return ModelContext(container)
+    }
+
+    private func deck(in ctx: ModelContext) -> [PresentationSlide] {
+        let slides = [
+            PresentationSlide(title: "Anunțuri", content: "Program de vară",
+                              subtitle: "Duminică", slideType: "text", order: 0),
+            PresentationSlide(title: "Botez", content: "La ora 18",
+                              subtitle: "Seara", slideType: "text", order: 1),
+        ]
+        for slide in slides { ctx.insert(slide) }
+        return slides
+    }
+
+    @Test func everySlideFieldSurvivesTheRoundTrip() throws {
+        let source = try makeContext()
+        let before = deck(in: source).map(PresentationSlideSnapshot.init)
+        let data = try SlideDeckArchiveService.export(deck(in: source))
+
+        let target = try makeContext()
+        let result = try SlideDeckArchiveService.importDeck(data, context: target)
+        #expect(result.imported.count == 2)
+
+        let after = try target.fetch(FetchDescriptor<PresentationSlide>())
+            .sorted { $0.order < $1.order }.map(PresentationSlideSnapshot.init)
+        #expect(after == before)
+    }
+
+    /// Identity is per SLIDE, not per deck: a deck is a loose collection
+    /// someone adds to over months, so re-importing one you extended elsewhere
+    /// should bring in what is new and leave the rest alone.
+    @Test func reimportingADeckBringsInOnlyWhatIsNew() throws {
+        let ctx = try makeContext()
+        let original = deck(in: ctx)
+        let data = try SlideDeckArchiveService.export(original)
+
+        let target = try makeContext()
+        _ = try SlideDeckArchiveService.importDeck(data, context: target)
+
+        let again = try SlideDeckArchiveService.importDeck(data, context: target)
+        #expect(again.imported.isEmpty)
+        #expect(again.skipped.count == 2)
+        #expect(try target.fetch(FetchDescriptor<PresentationSlide>()).count == 2)
+
+        // One new slide added elsewhere, the rest unchanged.
+        let extended = deck(in: ctx) + [PresentationSlide(title: "Nou", content: "text nou",
+                                                          subtitle: "", slideType: "text", order: 2)]
+        let third = try SlideDeckArchiveService.importDeck(
+            try SlideDeckArchiveService.export(extended), context: target)
+        #expect(third.imported.map(\.title) == ["Nou"])
+        #expect(third.skipped.count == 2)
+    }
+
+    /// The resilient decoder defaults every missing key, so it would happily
+    /// "decode" a stranger's JSON into an empty deck and report success. The
+    /// format marker is checked first, strictly.
+    @Test func foreignJSONIsRejectedRatherThanDecodedIntoNothing() throws {
+        let ctx = try makeContext()
+        #expect(throws: (any Error).self) {
+            try SlideDeckArchiveService.importDeck(Data(#"{"hello":1}"#.utf8), context: ctx)
+        }
+        #expect(try ctx.fetch(FetchDescriptor<PresentationSlide>()).isEmpty)
     }
 }
