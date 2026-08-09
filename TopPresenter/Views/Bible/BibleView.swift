@@ -17,6 +17,7 @@ struct BibleView: View {
     @Environment(PresentationManager.self) private var presentationManager
     @Environment(AppState.self) private var appState
     @Environment(SearchIndex.self) private var searchIndex
+    @Environment(LibraryTaskRunner.self) private var libraryTasks
 
     @Query(sort: \BibleModule.name) private var modules: [BibleModule]
 
@@ -276,9 +277,9 @@ struct BibleView: View {
             libraryManager.selectedChapter = nil
             libraryManager.selectedVerses = []
         }
-        searchIndex.moduleDeleted(module.id)
-        modelContext.delete(module)
-        try? modelContext.save()
+        // Off the main thread. A Bible is ~31 000 verses; deleting it on the
+        // context that draws the window is minutes of beach ball.
+        libraryTasks.deleteBibleModules([module], searchIndex: searchIndex)
     }
 }
 

@@ -28,11 +28,14 @@ actor BackgroundImportActor {
     func importBibles(
         files: [PendingImportFile],
         resolution: ImportService.BibleConflictResolution = .keepBoth,
-        onUpdate: @escaping @MainActor @Sendable (UUID, ImportFileStatus) -> Void
-    ) async -> Int {
-        var imported = 0
+        onUpdate: @escaping @MainActor @Sendable (UUID, ImportFileStatus) -> Void,
+        onItemProgress: @escaping @MainActor @Sendable (Double) -> Void = { _ in },
+        isCancelled: @escaping @MainActor @Sendable () -> Bool = { false }
+    ) async -> [ImportCoordinator.Result] {
+        var results: [ImportCoordinator.Result] = []
         for file in files {
             guard case .bible(let format) = file.category else { continue }
+            if await isCancelled() { break }
 
             await onUpdate(file.id, .importing)
             do {
@@ -41,18 +44,32 @@ actor BackgroundImportActor {
                     format: format,
                     modelContext: modelContext,
                     resolution: resolution
-                )
-                if case .skippedDuplicate = outcome.action {
+                ) { fraction, _ in
+                    // A whole Bible is minutes of work on its own, so the bar
+                    // has to move WITHIN a file, not only between files.
+                    onItemProgress(fraction)
+                }
+                switch outcome.action {
+                case .skippedDuplicate(let matchedOn):
+                    results.append(.skippedDuplicate(name: outcome.module.name, matchedOn: matchedOn))
                     await onUpdate(file.id, .success(String(localized: "\(outcome.module.name) — already in the library",
                                                             comment: "Batch import status")))
-                } else {
-                    imported += 1
+                case .replaced:
+                    results.append(.replaced(outcome.module.name))
+                    await onUpdate(file.id, .success(outcome.module.name))
+                case .merged:
+                    results.append(.merged(outcome.module.name))
+                    await onUpdate(file.id, .success(outcome.module.name))
+                case .imported:
+                    results.append(.imported(outcome.module.name))
                     await onUpdate(file.id, .success(outcome.module.name))
                 }
             } catch {
+                results.append(.failed(name: file.fileName, reason: error.localizedDescription))
                 await onUpdate(file.id, .failed(error.localizedDescription))
             }
         }
-        return imported
+        return results
     }
+
 }

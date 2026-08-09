@@ -27,6 +27,9 @@ struct TopPresenterApp: App {
     /// Search/browse backbone: off-main-built projections + token index for the
     /// whole library (30-60k songs stay instant). App-global.
     @State private var searchIndex = SearchIndex()
+    /// Owns long library jobs so they outlive the sheet that started them —
+    /// an import no longer holds a modal open while it runs.
+    @State private var libraryTasks: LibraryTaskRunner
     /// Sparkle-backed auto-updater (launch + scheduled checks, quiet prompts).
     @StateObject private var updateController = UpdateController()
     /// Handles output-wide menu commands (black/freeze/clear/font) exactly once —
@@ -56,9 +59,14 @@ struct TopPresenterApp: App {
         // Before anything can change it: the language this process actually
         // launched under is what decides whether a restart is still owed.
         AppLanguage.captureLaunchState()
+        _libraryTasks = State(initialValue: LibraryTaskRunner(container: Self.container))
     }
 
-    var sharedModelContainer: ModelContainer = {
+    var sharedModelContainer: ModelContainer { Self.container }
+
+    /// Static so `init()` can build the task runner from it. A stored property
+    /// with a default cannot be read while `self` is still being initialized.
+    static let container: ModelContainer = {
         let schema = Schema(versionedSchema: SchemaV2.self)
         let modelConfiguration = ModelConfiguration(
             schema: schema,
@@ -93,6 +101,7 @@ struct TopPresenterApp: App {
                 .environment(pinStore)
                 .environment(sessionRunner)
                 .environment(searchIndex)
+                .environment(libraryTasks)
                 .environmentObject(updateController)
                 .frame(minWidth: 1100, minHeight: 700)
                 .task {

@@ -15,6 +15,7 @@ struct MainControlView: View {
     @Environment(AppState.self) private var appState
     @Environment(PresentationManager.self) private var presentationManager
     @Environment(LibraryManager.self) private var libraryManager
+    @Environment(LibraryTaskRunner.self) private var libraryTasks
     @Environment(SearchIndex.self) private var searchIndex
     @Environment(\.modelContext) private var modelContext
     @Environment(\.openWindow) private var openWindow
@@ -133,6 +134,10 @@ struct MainControlView: View {
                 // Every import entry point — the menu items, each library's
                 // Import button, a window drop — arrives here. There is one
                 // sheet and one set of rules behind it.
+                .safeAreaInset(edge: .bottom, spacing: 0) {
+                    LibraryTaskBar()
+                        .animation(.easeInOut(duration: 0.2), value: libraryTasks.progress.isRunning)
+                }
                 .task {
                     // Anything Finder handed us before this point is delivered
                     // now, once there is something to deliver it to.

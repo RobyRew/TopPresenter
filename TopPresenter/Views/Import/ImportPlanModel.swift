@@ -190,20 +190,33 @@ final class ImportPlanModel {
 
     // MARK: - Running
 
-    func run(modelContext: ModelContext, presentationManager: PresentationManager? = nil) async {
+    /// Hand the job to the app-wide runner and step aside.
+    ///
+    /// The sheet used to own the work, which meant closing it was not an
+    /// option and the app was unusable until seventy Bibles finished. The
+    /// runner outlives the sheet: close it and the progress strip in the main
+    /// window carries on, with the same cancel button.
+    func run(using runner: LibraryTaskRunner, presentationManager: PresentationManager? = nil) {
         stage = .running
-        let coordinator = ImportCoordinator(modelContext: modelContext,
-                                            presentationManager: presentationManager)
-        coordinator.policies = policies
         let selected = selectedRows.map {
             PendingImportFile(url: $0.url, category: $0.category, id: $0.id)
         }
-        // Rows stay mounted while this runs and their statuses animate in
-        // place, so the list never jumps out from under the operator.
-        summary = await coordinator.run(selected, songCollectionName: songCollectionName) { [weak self] id, status in
+        runner.startImport(
+            files: selected,
+            collectionName: songCollectionName,
+            policies: policies,
+            presentationManager: presentationManager
+        ) { [weak self] id, status in
+            // Rows stay mounted while this runs and their statuses animate in
+            // place, so the list never jumps out from under the operator.
             guard let self, let index = self.rows.firstIndex(where: { $0.id == id }) else { return }
             self.rows[index].status = status
         }
+    }
+
+    /// Called by the sheet when the runner reports the job finished.
+    func adopt(_ summary: ImportCoordinator.Summary) {
+        self.summary = summary
         stage = .finished
     }
 

@@ -23,6 +23,7 @@ struct UniversalImportSheet: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
     @Environment(PresentationManager.self) private var presentationManager
+    @Environment(LibraryTaskRunner.self) private var libraryTasks
 
     @State private var plan = ImportPlanModel()
     @State private var isDropTargeted = false
@@ -47,36 +48,72 @@ struct UniversalImportSheet: View {
             plan.preselectedKinds = preselectedKinds
             if !initialURLs.isEmpty { await plan.load(initialURLs) }
         }
+        .onChange(of: libraryTasks.progress.isRunning) { wasRunning, isRunning in
+            if wasRunning, !isRunning, let summary = libraryTasks.lastSummary {
+                plan.adopt(summary)
+            }
+        }
     }
 
     // MARK: - Header
 
     private var header: some View {
-        HStack(spacing: 12) {
-            Image(systemName: "square.and.arrow.down.on.square")
-                .font(.title2)
-                .foregroundStyle(appAccent)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(String(localized: "Import", comment: "Sheet title"))
-                    .font(.title3.bold())
-                Text(subtitle)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            Spacer()
-            if plan.stage == .planning, !plan.rows.isEmpty {
-                Picker("", selection: Binding(
-                    get: { plan.mode },
-                    set: { plan.modeOverride = $0 }
-                )) {
-                    ForEach(ImportPlanModel.Mode.allCases) { Text($0.displayName).tag($0) }
+        VStack(spacing: 12) {
+            HStack(spacing: 12) {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(appAccent.gradient)
+                    .frame(width: 38, height: 38)
+                    .overlay {
+                        Image(systemName: "tray.and.arrow.down.fill")
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundStyle(.white)
+                    }
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(String(localized: "Import", comment: "Sheet title"))
+                        .font(.title3.bold())
+                    Text(subtitle)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .frame(width: 180)
+                Spacer()
+                if plan.stage == .planning, !plan.rows.isEmpty {
+                    Picker("", selection: Binding(
+                        get: { plan.mode },
+                        set: { plan.modeOverride = $0 }
+                    )) {
+                        ForEach(ImportPlanModel.Mode.allCases) { Text($0.displayName).tag($0) }
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .frame(width: 176)
+                }
+            }
+            // What was found, at a glance, before reading a single row.
+            if plan.stage != .empty, !plan.kindsPresent.isEmpty {
+                HStack(spacing: 7) {
+                    ForEach(plan.kindsPresent) { kind in
+                        let count = plan.rows.filter { $0.kind == kind }.count
+                        Label("\(count)", systemImage: kind.systemImage)
+                            .font(.caption.weight(.medium))
+                            .labelStyle(.titleAndIcon)
+                            .padding(.horizontal, 9).padding(.vertical, 4)
+                            .background(Capsule().fill(appAccent.opacity(0.12)))
+                            .help(kind.displayName)
+                    }
+                    if !plan.unsupported.isEmpty {
+                        Label("\(plan.unsupported.count)", systemImage: "questionmark")
+                            .font(.caption.weight(.medium))
+                            .padding(.horizontal, 9).padding(.vertical, 4)
+                            .background(Capsule().fill(Color.secondary.opacity(0.14)))
+                            .help(String(localized: "Not recognised", comment: "Chip tooltip"))
+                    }
+                    Spacer()
+                }
             }
         }
-        .padding(16)
+        .padding(.horizontal, 18)
+        .padding(.top, 16)
+        .padding(.bottom, 12)
     }
 
     private var subtitle: String {
@@ -226,37 +263,63 @@ struct UniversalImportSheet: View {
     /// One control per row on purpose: a `Toggle` costs 4-6 ms each, which a
     /// 200-file plan feels immediately.
     private func fileRow(_ row: ImportPlanModel.Row) -> some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 11) {
             if plan.stage == .planning {
                 Button {
                     plan.setSelected(!row.isSelected, for: row.id)
                 } label: {
                     Image(systemName: row.isSelected ? "checkmark.circle.fill" : "circle")
-                        .foregroundStyle(row.isSelected ? appAccent : .secondary)
+                        .font(.system(size: 15))
+                        .foregroundStyle(row.isSelected ? appAccent : Color.secondary.opacity(0.6))
                 }
                 .buttonStyle(.plain)
             } else {
                 Image(systemName: row.status.icon)
+                    .font(.system(size: 14))
                     .foregroundStyle(row.status.color)
+                    .symbolEffect(.pulse, isActive: row.status == .importing)
             }
 
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .fill(appAccent.opacity(0.13))
+                .frame(width: 26, height: 26)
+                .overlay {
+                    Image(systemName: row.kind?.systemImage ?? "doc")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(appAccent)
+                }
+
             VStack(alignment: .leading, spacing: 1) {
-                Text(row.fileName).lineLimit(1).truncationMode(.middle)
-                if let duplicateOf = row.duplicateOf {
-                    Text(String(localized: "identical to \(duplicateOf)", comment: "Duplicate row note"))
-                        .font(.caption2).foregroundStyle(.secondary)
-                } else if case .success(let message) = row.status, message != row.fileName {
-                    Text(message).font(.caption2).foregroundStyle(.secondary)
-                } else if case .failed(let reason) = row.status {
-                    Text(reason).font(.caption2).foregroundStyle(.red)
+                Text(row.fileName)
+                    .font(.callout)
+                    .lineLimit(1).truncationMode(.middle)
+                if let detail = rowDetail(row) {
+                    Text(detail.text)
+                        .font(.caption2)
+                        .foregroundStyle(detail.isError ? Color.red : .secondary)
+                        .lineLimit(1).truncationMode(.middle)
                 }
             }
-            Spacer()
-            Text(row.category.displayName)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
+            Spacer(minLength: 8)
         }
-        .opacity(row.isSelected ? 1 : 0.5)
+        .padding(.vertical, 3)
+        .opacity(row.isSelected ? 1 : 0.45)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            guard plan.stage == .planning else { return }
+            plan.setSelected(!row.isSelected, for: row.id)
+        }
+    }
+
+    /// The one line under a filename — whichever of duplicate / status / error
+    /// is worth the space right now.
+    private func rowDetail(_ row: ImportPlanModel.Row) -> (text: String, isError: Bool)? {
+        if let duplicateOf = row.duplicateOf {
+            return (String(localized: "identical to \(duplicateOf)", comment: "Duplicate row note"), false)
+        }
+        if case .failed(let reason) = row.status { return (reason, true) }
+        if case .success(let message) = row.status, message != row.fileName { return (message, false) }
+        return nil
     }
 
     private var unsupportedSection: some View {
@@ -296,13 +359,18 @@ struct UniversalImportSheet: View {
                 Button(String(localized: "Done", comment: "Button")) { dismiss() }
                     .keyboardShortcut(.defaultAction)
             case .running:
-                ProgressView().controlSize(.small)
-                Button(String(localized: "Cancel", comment: "Button")) { dismiss() }
+                ProgressView(value: libraryTasks.progress.fraction)
+                    .frame(width: 130)
+                Button(String(localized: "Stop", comment: "Button")) { libraryTasks.cancel() }
+                // Closing is FINE now — the job belongs to the runner, and the
+                // main window keeps showing it.
+                Button(String(localized: "Close", comment: "Button")) { dismiss() }
+                    .keyboardShortcut(.defaultAction)
             default:
                 Button(String(localized: "Cancel", comment: "Button")) { dismiss() }
                     .keyboardShortcut(.cancelAction)
                 Button(String(localized: "Import", comment: "Button")) {
-                    Task { await plan.run(modelContext: modelContext, presentationManager: presentationManager) }
+                    plan.run(using: libraryTasks, presentationManager: presentationManager)
                 }
                 .keyboardShortcut(.defaultAction)
                 .disabled(!plan.canImport)

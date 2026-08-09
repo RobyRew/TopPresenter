@@ -67,7 +67,9 @@ struct PendingImportFile: Identifiable, Sendable {
         self.status = status
     }
 
-    var fileName: String { url.lastPathComponent }
+    /// nonisolated for the same reason as `category.kind`: the background
+    /// import actor builds its results off the main actor.
+    nonisolated var fileName: String { url.lastPathComponent }
 }
 
 enum ImportFileStatus: Equatable, Sendable {

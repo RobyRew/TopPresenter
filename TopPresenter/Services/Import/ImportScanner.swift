@@ -41,8 +41,39 @@ nonisolated enum ImportScanner {
         /// anything we would keep.
         var maxVisitedEntries = 200_000
 
+        /// Extensionless files are the only ones the scanner OPENS, so this is
+        /// the one that keeps a stray tree cheap.
+        var maxProbes = 400
+        /// An OpenSong file is a few KB of XML. Anything past this is not one,
+        /// and reading it would be pure cost.
+        var maxProbeBytes = 2 * 1024 * 1024
+
         static let `default` = Budget()
     }
+
+    /// Directories that never contain a worship library and always contain
+    /// thousands of files.
+    ///
+    /// Without this, pointing the scanner anywhere near a code checkout walks
+    /// `node_modules` — and since a probe OPENS every extensionless file, and
+    /// npm packages are full of `LICENSE` and binstubs with no extension, it
+    /// opened hundreds of them. macOS logged a decompression error for each.
+    /// Skipping by name is cruder than it looks and exactly right here: these
+    /// are conventions, not guesses.
+    static let skippedDirectoryNames: Set<String> = [
+        "node_modules", ".git", ".svn", ".hg", "Pods", "Carthage", ".build",
+        "build", "DerivedData", ".swiftpm", "__pycache__", ".venv", "venv",
+        "vendor", "target", ".next", ".nuxt", "dist", ".cache", ".gradle",
+    ]
+
+    /// Extensionless files that are conventionally NOT documents. Cheap to
+    /// check, and it removes the overwhelming majority of what a probe would
+    /// otherwise open.
+    static let neverProbedNames: Set<String> = [
+        "license", "licence", "readme", "changelog", "authors", "contributors",
+        "copying", "notice", "makefile", "dockerfile", "procfile", "rakefile",
+        "gemfile", "podfile", "cartfile", "brewfile", "vagrantfile",
+    ]
 
     /// Why a scan stopped early. Always surfaced — a silent truncation is how
     /// "I dropped the folder and half of it is missing" happens.
@@ -114,12 +145,21 @@ nonisolated enum ImportScanner {
             if seen.insert(url.standardizedFileURL.path).inserted { result.files.append(url) }
         }
 
-        /// True when a file with no extension is worth keeping. This is the only
-        /// place the scanner opens anything, and `detectSongFormat` reads a
-        /// mapped 2 KB prefix rather than the file, so an extensionless 4 GB
-        /// blob costs the same as an empty one.
+        var probesUsed = 0
+
+        /// True when a file with no extension is worth keeping.
+        ///
+        /// This is the ONLY place the scanner opens anything, so it is the only
+        /// place that can be slow — and it was: every `LICENSE` in every npm
+        /// package got opened. Three cheap refusals come before the read, and
+        /// the read itself is a mapped prefix, not the file.
         func extensionlessFileIsImportable(_ url: URL) -> Bool {
-            ImportService.detectSongFormat(fileURL: url) != nil
+            guard probesUsed < budget.maxProbes else { return false }
+            guard !Self.neverProbedNames.contains(url.lastPathComponent.lowercased()) else { return false }
+            let size = (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
+            guard size > 0, size <= budget.maxProbeBytes else { return false }
+            probesUsed += 1
+            return ImportService.detectSongFormat(fileURL: url) != nil
                 || ImportService.detectBibleFormat(fileURL: url) != nil
         }
 
@@ -150,6 +190,10 @@ nonisolated enum ImportScanner {
                 }
                 return
             }
+
+            // Never walk a build or dependency tree. Checked before anything
+            // else touches the directory, including the USFM probe.
+            if depth > 0, Self.skippedDirectoryNames.contains(url.lastPathComponent) { return }
 
             // Some folders ARE the document: a `.tptheme` package, a USFM book
             // set. Walking into them would import their parts as loose files.

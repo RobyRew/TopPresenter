@@ -8316,13 +8316,12 @@ struct PresentationSlideSnapshot: Equatable {
     /// `<Name>[_<Qualifier>]_TopPresenter_<Type>.<ext>` — the redundancy is
     /// deliberate. On Windows, on Android, in a WhatsApp attachment list, the
     /// extension stops being shown and the name is all that is left.
-    @Test func filenamesSayWhatTheyAreAndWhereTheyCameFrom() {
-        #expect(ExportNaming.filename("EDC100", qualifier: "RO", format: .bible)
-                == "EDC100_RO_TopPresenter_Bible.tpbible")
-        #expect(ExportNaming.filename("Ce mare ești Tu", format: .song)
-                == "Ce-mare-ești-Tu_TopPresenter_Song.tpsong")
-        #expect(ExportNaming.filename("Anunțuri", format: .slides)
-                == "Anunțuri_TopPresenter_Slides.tpslides")
+    /// The name stays the operator's — the extension already says what the file
+    /// is and whose it is.
+    @Test func filenamesKeepTheNameTheOperatorGaveThem() {
+        #expect(ExportNaming.filename("EDC100", qualifier: "RO", format: .bible) == "EDC100_RO.tpbible")
+        #expect(ExportNaming.filename("Ce mare ești Tu", format: .song) == "Ce mare ești Tu.tpsong")
+        #expect(ExportNaming.filename("Anunțuri", format: .slides) == "Anunțuri.tpslides")
     }
 
     /// A song title can contain anything a person can type, and the result has

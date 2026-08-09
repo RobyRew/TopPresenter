@@ -651,6 +651,15 @@ final class ImportService {
     /// Imports any mix of song FILES and/or DIRECTORIES into one collection.
     /// Format is AUTO-DETECTED per file (extension + content sniffing) — no
     /// format picker traps. Per-file failures are collected, not swallowed.
+    /// STILL MAIN-ACTOR, unlike `importBible`, and that is a known limitation
+    /// rather than an oversight.
+    ///
+    /// Moving it off-main is a real refactor, not an annotation: the whole song
+    /// path it calls — `createSongFromResult`, `applyResult`, `appendVersions`,
+    /// `normalizedSongKey`, the importer registry — is main-actor isolated, and
+    /// `SongBatchResult` carries a `SongCollection`. Fifteen call sites. Doing
+    /// that carelessly in the code that writes tens of thousands of songs is how
+    /// you get a data race that corrupts a library, so it is its own change.
     static func importSongItems(
         urls: [URL],
         collectionName: String,

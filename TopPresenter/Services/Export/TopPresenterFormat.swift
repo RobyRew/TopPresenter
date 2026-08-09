@@ -112,28 +112,29 @@ nonisolated enum TopPresenterHeader {
 
 // MARK: - Naming
 
-/// `<Name>[_<Qualifier>]_TopPresenter_<Type>.<ext>`
+/// `<Name>[_<Qualifier>].<ext>`
 ///
-/// The redundancy is deliberate. On Windows, on Android, in a WhatsApp
-/// attachment list, the extension stops being shown — and then the name is the
-/// only thing left that says what the file is and where it came from.
+/// The name stays the operator's. An earlier version stamped
+/// `_TopPresenter_Bible` into every filename on the theory that the extension
+/// is hidden on Windows and in attachment lists — but `.tpbible` already says
+/// both what it is and whose it is, and paying for that twice turns
+/// "EDC100" into "EDC100_RO_TopPresenter_Bible" in every file dialog the
+/// operator ever sees.
 nonisolated enum ExportNaming {
     static func filename(_ name: String, qualifier: String = "", format: TopPresenterFormat) -> String {
         var parts = [sanitize(name)]
         let cleanQualifier = sanitize(qualifier)
         if !cleanQualifier.isEmpty { parts.append(cleanQualifier) }
-        parts.append("TopPresenter")
-        parts.append(format.nameSuffix)
         return parts.joined(separator: "_") + "." + format.fileExtension
     }
 
-    /// Spaces become hyphens so the name survives a URL, a shell and an email
-    /// client without being escaped into unreadability.
+    /// Removes only what a path cannot hold. Spaces are left alone — a
+    /// filename is for a person to read, and "Ce mare ești Tu.tpsong" is a
+    /// better name than "Ce-mare-ești-Tu.tpsong".
     static func sanitize(_ raw: String) -> String {
         let invalid = CharacterSet(charactersIn: "/\\:?%*|\"<>")
         let cleaned = raw.components(separatedBy: invalid).joined(separator: "-")
             .trimmingCharacters(in: .whitespacesAndNewlines)
-            .replacingOccurrences(of: " ", with: "-")
-        return String(cleaned.prefix(80))
+        return String(cleaned.prefix(90))
     }
 }

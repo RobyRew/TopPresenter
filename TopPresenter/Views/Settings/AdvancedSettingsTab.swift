@@ -17,6 +17,7 @@ struct AdvancedSettingsTab: View {
     @Environment(LibraryManager.self) private var libraryManager
     @Environment(HistoryStore.self) private var history
     @Environment(AppState.self) private var appState
+    @Environment(LibraryTaskRunner.self) private var libraryTasks
 
     @State private var pendingAction: DestructiveAction?
     @State private var isWorking = false
@@ -198,20 +199,15 @@ struct AdvancedSettingsTab: View {
             libraryManager.selectedBook = nil
             libraryManager.selectedChapter = nil
             libraryManager.selectedVerses = []
-            for module in (try? modelContext.fetch(FetchDescriptor<BibleModule>())) ?? [] {
-                index.moduleDeleted(module.id)
-                modelContext.delete(module)
-            }
+            // THE six-minute beach ball. This used to delete every module on
+            // the MAIN context and save once at the end: seventy Bibles is over
+            // two million cascade-deleted rows in a single transaction, on the
+            // thread that draws the window. It runs on a background actor now,
+            // one save per module, with a progress strip and a Stop button.
+            let modules = (try? modelContext.fetch(FetchDescriptor<BibleModule>())) ?? []
             VerseIndexCache.deleteAll()
-            do {
-                try modelContext.save()
-            } catch {
-                lastActionNote = String(localized: "Ștergerea nu a putut fi salvată: \(error.localizedDescription)",
-                                        comment: "Advanced error")
-                return
-            }
-            NotificationCenter.default.post(name: .libraryDidChange, object: nil)
-            lastActionNote = String(localized: "Toate Bibliile au fost șterse.", comment: "Advanced note")
+            libraryTasks.deleteBibleModules(modules, searchIndex: index)
+            lastActionNote = String(localized: "Se șterg \(modules.count) Biblii…", comment: "Advanced note")
 
         case .deleteHistory:
             history.clearAll()

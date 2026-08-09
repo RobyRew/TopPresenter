@@ -85,17 +85,28 @@ final class ImportCoordinator {
     private let modelContext: ModelContext
     /// Themes live in the manager, not the store, so importing one needs it.
     private let presentationManager: PresentationManager?
+    /// Bibles and songs run HERE when it is present — on their own context and
+    /// their own thread. Without it they run on the main context, which is what
+    /// froze the app for minutes at a time.
+    private let background: BackgroundImportActor?
+    /// Reports what is happening while it happens.
+    private let progress: LibraryTaskProgress?
 
-    init(modelContext: ModelContext, presentationManager: PresentationManager? = nil) {
+    init(modelContext: ModelContext,
+         presentationManager: PresentationManager? = nil,
+         background: BackgroundImportActor? = nil,
+         progress: LibraryTaskProgress? = nil) {
         self.modelContext = modelContext
         self.presentationManager = presentationManager
+        self.background = background
+        self.progress = progress
     }
 
     /// Import a classified selection, one kind at a time, in `kindOrder`.
     func run(
         _ files: [PendingImportFile],
         songCollectionName: String,
-        onUpdate: @MainActor (UUID, ImportFileStatus) -> Void = { _, _ in }
+        onUpdate: @escaping @MainActor @Sendable (UUID, ImportFileStatus) -> Void = { _, _ in }
     ) async -> Summary {
         var summary = Summary()
         let byKind = Dictionary(grouping: files) { $0.category.kind }
@@ -119,6 +130,23 @@ final class ImportCoordinator {
                 summary.results += outcome.unsupported.map { .unsupported(name: $0.lastPathComponent) }
 
             case .bible:
+                if let background {
+                    summary.results += await background.importBibles(
+                        files: group,
+                        resolution: resolution(for: policies[.bible] ?? .keepBoth),
+                        onUpdate: { [progress] id, status in
+                            onUpdate(id, status)
+                            if case .importing = status,
+                               let file = group.first(where: { $0.id == id }) {
+                                progress?.startItem(file.fileName)
+                            }
+                            if case .success = status { progress?.finishItem() }
+                            if case .failed = status { progress?.finishItem() }
+                        },
+                        onItemProgress: { [progress] in progress?.setItemFraction($0) },
+                        isCancelled: { [progress] in progress?.isCancelled ?? false })
+                    continue
+                }
                 for file in group {
                     guard case .bible(let format) = file.category else { continue }
                     onUpdate(file.id, .importing)
@@ -148,6 +176,12 @@ final class ImportCoordinator {
                 }
 
             case .song:
+                // Songs still run on the main context — see the note on
+                // `ImportService.importSongItems`. The progress bar reports
+                // them, but the window will still stutter on a big collection
+                // until that path is moved off-main properly.
+                progress?.startItem(group.first?.fileName ?? "")
+                defer { progress?.finishItem() }
                 let batch = await ImportService.importSongItems(
                     urls: group.map(\.url),
                     collectionName: songCollectionName,
@@ -160,6 +194,8 @@ final class ImportCoordinator {
 
             case .theme:
                 for file in group {
+                    progress?.startItem(file.fileName)
+                    defer { progress?.finishItem() }
                     onUpdate(file.id, .importing)
                     do {
                         let before = presentationManager?.themes.count ?? 0
@@ -188,6 +224,8 @@ final class ImportCoordinator {
 
             case .session:
                 for file in group {
+                    progress?.startItem(file.fileName)
+                    defer { progress?.finishItem() }
                     onUpdate(file.id, .importing)
                     do {
                         let before = (try? modelContext.fetch(FetchDescriptor<ServiceSchedule>()))?.count ?? 0
@@ -216,6 +254,8 @@ final class ImportCoordinator {
 
             case .slides:
                 for file in group {
+                    progress?.startItem(file.fileName)
+                    defer { progress?.finishItem() }
                     onUpdate(file.id, .importing)
                     do {
                         let data = try Data(contentsOf: file.url)
