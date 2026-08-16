@@ -2482,8 +2482,12 @@ struct LayoutEditorSheet: View {
                     )) {
                         Text(String(localized: "Implicit (auto)", comment: "Box source option")).tag("auto")
                         Divider()
-                        // Source choices + labels follow the EDITED presenter
-                        ForEach(PresentationManager.sourceOptions(for: pm.activeProfileKey), id: \.raw) { option in
+                        // Source choices + labels follow the EDITED presenter,
+                        // plus whatever this box is ALREADY bound to — see
+                        // sourceOptions(for:including:).
+                        ForEach(PresentationManager.sourceOptions(
+                            for: pm.activeProfileKey,
+                            including: pm.sourceRaw(for: section)), id: \.raw) { option in
                             Text(option.label).tag(option.raw)
                         }
                     }
@@ -2583,7 +2587,10 @@ struct LayoutEditorSheet: View {
                         Divider()
                         // Source choices + labels follow the EDITED presenter
                         ForEach(
-                            PresentationManager.sourceOptions(for: pm.activeProfileKey).filter { $0.raw != "static" },
+                            PresentationManager.sourceOptions(
+                                for: pm.activeProfileKey,
+                                including: binding.wrappedValue.sourceRaw
+                            ).filter { $0.raw != "static" },
                             id: \.raw
                         ) { option in
                             Text(option.label).tag(option.raw)

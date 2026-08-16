@@ -2225,6 +2225,40 @@ final class PresentationManager {
         commonSourceOptions(for: key) + presenterSourceOptions(for: key) + genericSourceOptions()
     }
 
+    /// The same options, guaranteed to contain `selection`.
+    ///
+    /// `presenterSourceOptions` is still disjoint per presenter — "mediaName"
+    /// exists only under "media", "ccli" only under "song". A casetă keeps its
+    /// `sourceRaw` when you switch the layout editor to another presenter, so
+    /// the Picker ends up with a selection that matches none of its tags, and
+    /// SwiftUI says so out loud:
+    ///
+    ///   Picker: the selection "mediaName" is invalid and does not have an
+    ///   associated tag, this will give undefined results.
+    ///
+    /// "Undefined" is not cosmetic: the control can display the wrong row and
+    /// write that wrong value back on the next interaction, silently retargeting
+    /// the box. Carrying the orphan as its own entry keeps the Picker honest —
+    /// the box goes on saying what it is bound to, and the operator can see that
+    /// it belongs to a different presenter instead of having it quietly changed.
+    static func sourceOptions(for key: String,
+                              including selection: String) -> [(raw: String, label: String)] {
+        var options = sourceOptions(for: key)
+        guard !selection.isEmpty,
+              selection != "auto", selection != "static",
+              !options.contains(where: { $0.raw == selection }) else { return options }
+
+        let known = ["bible", "song", "text", "media"]
+            .lazy
+            .compactMap { other in sourceOptions(for: other).first { $0.raw == selection }?.label }
+            .first
+        let label = known ?? selection
+        options.append((selection,
+                        String(localized: "\(label) — other layout",
+                               comment: "Box source belonging to a different presenter")))
+        return options
+    }
+
     /// Live fields every presenter carries, labelled in that presenter's language.
     static func commonSourceOptions(for key: String) -> [(raw: String, label: String)] {
         switch key {

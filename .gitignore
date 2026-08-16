@@ -39,5 +39,12 @@ ExtraAssets/Bibles/
 # Scraped song corpora — kept local, not committed (melodia.ro, ResurseCrestine)
 ExtraAssets/Songs/
 resursecrestine-songs/
+# Theme packs — distributed as a GitHub release, not committed (~106 MB of
+# backgrounds and clips). Everything here is REGENERABLE: the generated art
+# comes from scripts/make_theme_backgrounds.swift and the packages from
+# scripts/build_theme_pack.py, so the recipe is in git even though the output
+# is not.
+ExtraAssets/Themes/
+ExtraAssets/ThemesV2/
 # Icon Composer raster exports (regenerable from the .icon / .svg)
 Logo/Icon-Exports/
