@@ -176,18 +176,35 @@ final class ImportCoordinator {
                 }
 
             case .song:
-                // Songs still run on the main context — see the note on
-                // `ImportService.importSongItems`. The progress bar reports
-                // them, but the window will still stutter on a big collection
-                // until that path is moved off-main properly.
                 progress?.startItem(group.first?.fileName ?? "")
                 defer { progress?.finishItem() }
-                let batch = await ImportService.importSongItems(
-                    urls: group.map(\.url),
-                    collectionName: songCollectionName,
-                    modelContext: modelContext,
-                    duplicateResolution: songResolution(for: policies[.song] ?? .addAsVersion)
-                )
+                let resolution = songResolution(for: policies[.song] ?? .addAsVersion)
+                let urls = group.map(\.url)
+                let batch: ImportService.SongImportSummary
+                if let background {
+                    // On the actor's own context, like the Bibles. Parsing was
+                    // already off the main thread; this is what finally moves
+                    // the INSERTS off it too.
+                    batch = await background.importSongs(
+                        urls: urls,
+                        collectionName: songCollectionName,
+                        resolution: resolution,
+                        onProgress: { [weak progress] fraction, _ in progress?.setItemFraction(fraction) },
+                        // The thread-safe mirror, not the main-actor property:
+                        // this is polled between files from the importer's own
+                        // actor, where an await would defeat the point.
+                        isCancelled: { [weak progress] in progress?.isCancelledNow ?? false }
+                    )
+                } else {
+                    // No actor (tests, and any caller that hands us a bare
+                    // context): same work, caller's context.
+                    batch = await ImportService.importSongItems(
+                        urls: urls,
+                        collectionName: songCollectionName,
+                        modelContext: modelContext,
+                        duplicateResolution: resolution
+                    ).sendableSummary
+                }
                 summary.results += batch.importedTitles.map { .imported($0) }
                 summary.results += batch.failures.map { .failed(name: $0.file, reason: $0.reason) }
                 for file in group { onUpdate(file.id, .success(file.fileName)) }

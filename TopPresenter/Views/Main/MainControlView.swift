@@ -23,11 +23,32 @@ struct MainControlView: View {
     @State private var showExportSheet = false
     @State private var showKeyboardShortcuts = false
     @State private var showQuickSearch = false
-    @State private var showBatchImport = false
     @State private var showBatchExport = false
     @State private var showLayoutEditor = false
-    @State private var importURLs: [URL] = []
-    @State private var importKinds: Set<ImportKind> = []
+
+    /// One import request, presented with `.sheet(item:)`.
+    ///
+    /// This was three pieces of state — a Bool plus the URLs plus the kinds —
+    /// set in that order and then presented, which has two failure modes that
+    /// both show up as "the second time I imported, it was wrong":
+    ///
+    /// 1. `.sheet(isPresented:)` builds its content from the values as they
+    ///    stood when presentation began, so a request that set the URLs in the
+    ///    same run loop as the flag could be built from the PREVIOUS one's.
+    /// 2. `@State` inside the sheet is keyed on view identity, and re-presenting
+    ///    the same view does not reliably reset it — so the plan from the last
+    ///    import could still be sitting there.
+    ///
+    /// A fresh `id` per request fixes both: the payload travels WITH the
+    /// trigger, and `.id(request.id)` guarantees the sheet is a new view with
+    /// new state every single time.
+    @State private var importRequest: ImportRequest?
+
+    struct ImportRequest: Identifiable {
+        let id = UUID()
+        var urls: [URL] = []
+        var kinds: Set<ImportKind> = []
+    }
     @State private var isDragTargeted = false
     /// Drives our own sidebar toggle. Per window, so one tab hiding its sidebar
     /// leaves the others alone.
@@ -106,8 +127,10 @@ struct MainControlView: View {
                 .sheet(isPresented: $showKeyboardShortcuts) {
                     KeyboardShortcutsSheet()
                 }
-                .sheet(isPresented: $showBatchImport) {
-                    UniversalImportSheet(initialURLs: importURLs, preselectedKinds: importKinds)
+                .sheet(item: $importRequest) { request in
+                    UniversalImportSheet(initialURLs: request.urls,
+                                         preselectedKinds: request.kinds)
+                        .id(request.id)
                 }
                 .sheet(isPresented: $showBatchExport) {
                     BatchExportSheet()
@@ -144,10 +167,11 @@ struct MainControlView: View {
                     OpenFileRouter.windowIsReady()
                 }
                 .onKeyWindowNotification(.importFiles) { notification in
-                    importURLs = notification.userInfo?["urls"] as? [URL] ?? []
-                    importKinds = Set((notification.userInfo?["kinds"] as? [String] ?? [])
-                        .compactMap(ImportKind.init(rawValue:)))
-                    showBatchImport = true
+                    importRequest = ImportRequest(
+                        urls: notification.userInfo?["urls"] as? [URL] ?? [],
+                        kinds: Set((notification.userInfo?["kinds"] as? [String] ?? [])
+                            .compactMap(ImportKind.init(rawValue:)))
+                    )
                 }
                 // Drag & Drop support
                 .onDrop(of: [.fileURL], isTargeted: $isDragTargeted) { providers in

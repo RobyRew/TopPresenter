@@ -16,10 +16,25 @@
 //
 
 import Foundation
+import os
 
 @MainActor
 @Observable
 final class LibraryTaskProgress {
+
+    /// Cancellation as the BACKGROUND sees it.
+    ///
+    /// `isCancelled` below is main-actor state, which the UI needs and an
+    /// importer cannot read: the song loop polls between files, synchronously,
+    /// from its own actor. Making it `await` a main-actor hop per file would
+    /// serialise the import against the very thread it was moved off.
+    ///
+    /// So the flag is mirrored behind a lock. `cancel()` and `begin()` write
+    /// both; nothing else may write this one.
+    private let cancelFlag = OSAllocatedUnfairLock(initialState: false)
+
+    /// Readable from any thread, unlike `isCancelled`.
+    nonisolated var isCancelledNow: Bool { cancelFlag.withLock { $0 } }
 
     enum Kind: Sendable {
         case importing, deleting, exporting
@@ -62,6 +77,7 @@ final class LibraryTaskProgress {
         itemFraction = -1
         itemDurations = []
         isCancelled = false
+        cancelFlag.withLock { $0 = false }
         isRunning = true
         startedAt = Date()
         itemStartedAt = Date()
@@ -90,7 +106,10 @@ final class LibraryTaskProgress {
         itemFraction = -1
     }
 
-    func cancel() { isCancelled = true }
+    func cancel() {
+        isCancelled = true
+        cancelFlag.withLock { $0 = true }
+    }
 
     // MARK: - Reading it
 

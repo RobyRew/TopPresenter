@@ -72,4 +72,31 @@ actor BackgroundImportActor {
         return results
     }
 
+    /// Import songs on THIS actor's context.
+    ///
+    /// The song call graph was made `nonisolated` so it *could* run here, and
+    /// then nothing actually moved it: `ImportCoordinator` is `@MainActor` and
+    /// was still handing `importSongItems` the main context. Every song was
+    /// parsed off the main thread and then inserted on it, which is the half of
+    /// the work that touches the store — so the window still stuttered, exactly
+    /// as the coordinator's own comment admitted.
+    func importSongs(
+        urls: [URL],
+        collectionName: String,
+        resolution: SongDuplicateResolution,
+        onProgress: @escaping @MainActor @Sendable (Double, String) -> Void = { _, _ in },
+        isCancelled: @escaping @Sendable () -> Bool = { false }
+    ) async -> ImportService.SongImportSummary {
+        let batch = await ImportService.importSongItems(
+            urls: urls,
+            collectionName: collectionName,
+            modelContext: modelContext,
+            duplicateResolution: resolution,
+            isCancelled: isCancelled,
+            progressHandler: { fraction, note in
+                Task { @MainActor in onProgress(fraction, note) }
+            }
+        )
+        return batch.sendableSummary
+    }
 }

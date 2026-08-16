@@ -680,6 +680,25 @@ final class ImportService {
         var collection: SongCollection?
         var importedTitles: [String] = []
         var failures: [(file: String, reason: String)] = []
+
+        /// The part of the result that can leave the actor that produced it.
+        ///
+        /// `collection` is a `@Model`, so it belongs to the context it was made
+        /// in and cannot cross isolation. Nothing outside the importer wanted
+        /// it anyway — the coordinator reports titles and failures.
+        var sendableSummary: SongImportSummary {
+            SongImportSummary(importedTitles: importedTitles,
+                              failures: failures.map { .init(file: $0.file, reason: $0.reason) })
+        }
+    }
+
+    nonisolated struct SongImportSummary: Sendable {
+        nonisolated struct Failure: Sendable {
+            let file: String
+            let reason: String
+        }
+        var importedTitles: [String] = []
+        var failures: [Failure] = []
     }
 
     /// Imports any mix of song FILES and/or DIRECTORIES into one collection.
@@ -1236,7 +1255,7 @@ final class ImportService {
 }
 
 /// What to do when an imported song matches one already in the library.
-enum SongDuplicateResolution {
+nonisolated enum SongDuplicateResolution {
     case addAsVersion   // append the import as a new version of the existing song
     case replace        // delete the existing song, import fresh
     case keepBoth       // import as a separate song
