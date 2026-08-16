@@ -416,6 +416,7 @@ private extension MediaKind {
         case .image: return .teal
         case .video: return .indigo
         case .audio: return .pink
+        case .document: return .orange
         }
     }
 }
@@ -445,6 +446,8 @@ enum MediaThumbnailFactory {
                 if let data = try? await meta.load(.dataValue) { return data }
             }
             return nil
+        case .document:
+            return PDFPageRenderer.thumbnail(url: url)?.tiffRepresentation
         }
     }
 }
@@ -499,6 +502,9 @@ struct MediaDetailPane: View {
     // surface (it has to match the projector), so the scrubber lives out here.
     @State private var previewTime: Double = 0
     @State private var previewDuration: Double = 0
+    /// Page count of the selected PDF, so the panel can say "1 / 12" before it
+    /// is live (once live, `PresentationManager` is the authority).
+    @State private var previewPageCount = 0
     @State private var isScrubbing = false
     /// The video the scrub frames come from. The URL and not a stored
     /// `AVAssetImageGenerator`: the generator is not `Sendable`, and one held in
@@ -516,6 +522,7 @@ struct MediaDetailPane: View {
 
                 if kind == .video { videoTransport }
                 if kind == .audio { audioTransport }
+                if kind == .document { documentTransport(item) }
 
                 VStack(spacing: 3) {
                     Text(item.name)
@@ -565,7 +572,9 @@ struct MediaDetailPane: View {
     private func preview(item: MediaItem, kind: MediaKind) -> some View {
         ZStack {
             switch kind {
-            case .video, .image:
+            // A PDF page is already a still image by the time it reaches here,
+            // so it previews through the same card as a photo.
+            case .video, .image, .document:
                 // The projector's own renderer. `playsVideo` is safe here because
                 // the player handed over is this pane's, never the live one.
                 PresentationPreviewCard(
@@ -579,7 +588,7 @@ struct MediaDetailPane: View {
                     showsBadges: false,
                     playsVideo: true,
                     mediaOverride: .init(
-                        image: kind == .image ? fullImage : nil,
+                        image: kind == .video ? nil : fullImage,
                         player: kind == .video ? previewPlayer : nil,
                         url: item.resolvedURL,
                         kindRaw: item.mediaType
@@ -618,6 +627,61 @@ struct MediaDetailPane: View {
                 }
                 .onEnded { _ in panBase = nil }
         )
+    }
+
+    /// Page controls for a PDF.
+    ///
+    /// A video's transport scrubs the PREVIEW and leaves the output alone. This
+    /// one is the opposite on purpose: a document has no audition to scrub, and
+    /// the only thing anyone wants from it mid-service is "next page, on the
+    /// screen, now". So the arrows drive the LIVE output — and they are disabled
+    /// until this document is the thing that is live, so they can never turn a
+    /// page nobody is looking at.
+    @ViewBuilder
+    private func documentTransport(_ item: MediaItem) -> some View {
+        let isLive = pm.isPresentingDocument && pm.documentURL == item.resolvedURL
+        let pageCount = isLive ? pm.documentPageCount : previewPageCount
+        let page = isLive ? pm.documentPage : 0
+
+        HStack(spacing: 10) {
+            Button { pm.turnDocumentPage(by: -1) } label: {
+                Image(systemName: "chevron.left")
+            }
+            .disabled(!isLive || page <= 0)
+            .keyboardShortcut(.leftArrow, modifiers: [])
+            .help(String(localized: "Previous page", comment: "PDF control"))
+
+            VStack(spacing: 1) {
+                Text(verbatim: "\(page + 1) / \(max(pageCount, 1))")
+                    .font(.callout.weight(.medium)).monospacedDigit()
+                if !isLive {
+                    Text(String(localized: "not live", comment: "PDF control state"))
+                        .font(.caption2).foregroundStyle(.secondary)
+                }
+            }
+            .frame(minWidth: 76)
+
+            Button { pm.turnDocumentPage(by: 1) } label: {
+                Image(systemName: "chevron.right")
+            }
+            .disabled(!isLive || page >= pageCount - 1)
+            .keyboardShortcut(.rightArrow, modifiers: [])
+            .help(String(localized: "Next page", comment: "PDF control"))
+
+            Divider().frame(height: 16)
+
+            Button {
+                if let url = item.resolvedURL { pm.showDocument(url: url, page: 0) }
+            } label: {
+                Label(isLive
+                      ? String(localized: "First page", comment: "PDF control")
+                      : String(localized: "Present", comment: "PDF control"),
+                      systemImage: isLive ? "backward.end" : "play.rectangle")
+            }
+            .disabled(item.resolvedURL == nil)
+        }
+        .buttonStyle(.bordered)
+        .controlSize(.large)
     }
 
     /// Transport for the audition video: play/pause, a scrubber, and the clock.
@@ -770,6 +834,18 @@ struct MediaDetailPane: View {
             await refreshScrubFrame(at: 0)
         case .audio:
             previewPlayer = AVPlayer(url: url)
+        case .document:
+            // Page one at preview size. Rasterising happens off-main because a
+            // dense page is real work and this runs on selection — NSImage is
+            // not Sendable, so the CGImage crosses back and is wrapped here.
+            let rendered = await Task.detached(priority: .userInitiated) {
+                PDFPageRenderer.render(url: url, page: 0, maxPixels: 1400)?
+                    .cgImage(forProposedRect: nil, context: nil, hints: nil)
+            }.value
+            fullImage = rendered.map { NSImage(cgImage: $0, size: .zero) }
+            previewPageCount = await Task.detached(priority: .utility) {
+                PDFPageRenderer.pageCount(of: url)
+            }.value
         }
     }
 

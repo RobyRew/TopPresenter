@@ -17,7 +17,7 @@ import Foundation
 /// not, so an `.flv` was a video to the drop handler and an image here. Which
 /// list you happened to ask decided what a file was.
 nonisolated enum MediaKind: String, CaseIterable, Identifiable, Sendable {
-    case image, video, audio
+    case image, video, audio, document
 
     var id: String { rawValue }
 
@@ -32,6 +32,13 @@ nonisolated enum MediaKind: String, CaseIterable, Identifiable, Sendable {
                              "ogg", "wma", "opus"]
         case .video: return ["mp4", "mov", "avi", "mkv", "m4v", "wmv", "webm",
                              "mpg", "mpeg"]
+        // PDF only, deliberately. It is the one page-based format macOS can
+        // render natively (PDFKit), and every tool that makes slides — Keynote,
+        // PowerPoint, Google Slides, Word — exports to it. Taking `.pptx` here
+        // would mean promising to draw DrawingML, which is a graphics engine
+        // rather than a feature; `.pptx` stays a SONG import, where only its
+        // text is wanted.
+        case .document: return ["pdf"]
         }
     }
 
@@ -45,6 +52,7 @@ nonisolated enum MediaKind: String, CaseIterable, Identifiable, Sendable {
         case .image: return String(localized: "Foto", comment: "Media kind filter")
         case .video: return String(localized: "Video", comment: "Media kind filter")
         case .audio: return String(localized: "Audio", comment: "Media kind filter")
+        case .document: return String(localized: "PDF", comment: "Media kind filter")
         }
     }
 
@@ -53,8 +61,12 @@ nonisolated enum MediaKind: String, CaseIterable, Identifiable, Sendable {
         case .image: return "photo"
         case .video: return "film"
         case .audio: return "waveform"
+        case .document: return "doc.richtext"
         }
     }
+
+    /// This kind is presented one PAGE at a time rather than as a single frame.
+    var isPaged: Bool { self == .document }
 
     /// File-extension classification — the single rule the importer uses.
     ///

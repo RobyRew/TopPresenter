@@ -32,8 +32,15 @@ enum MediaPresenter {
         case .audio:
             audio.loadAudio(url: url)
             audio.play()
+        case .document:
+            pm.showDocument(url: url, page: 0)
         }
         backfillDurationIfNeeded(item, url: url)
+    }
+
+    /// Step a live PDF. No-op when the live content is not one.
+    static func turnPage(by delta: Int, pm: PresentationManager) {
+        pm.turnDocumentPage(by: delta)
     }
 
     /// Use an image (or GIF/video) as the global output background.

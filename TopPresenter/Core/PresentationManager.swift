@@ -4085,6 +4085,66 @@ final class PresentationManager {
         }
     }
 
+    // MARK: - PDF
+
+    /// The PDF currently on the output, and where in it we are.
+    ///
+    /// Held here rather than in the media library because it is LIVE state, not
+    /// library state: the same document can be presented twice in a service and
+    /// start from page one each time.
+    private(set) var documentURL: URL?
+    private(set) var documentPage = 0
+    private(set) var documentPageCount = 0
+
+    var isPresentingDocument: Bool { documentURL != nil && liveContent.mediaKind == "document" }
+
+    /// Show one page of a PDF.
+    ///
+    /// The page is rasterised here and handed over as `mediaImage`, which is
+    /// the same slot a photo uses — so the output view, the framing controls
+    /// and Fit/Fill all work on a PDF without knowing what a PDF is.
+    func showDocument(url: URL, page: Int) {
+        guard !isFrozen else { return }
+        let count = documentURL == url && documentPageCount > 0
+            ? documentPageCount
+            : PDFPageRenderer.pageCount(of: url)
+        guard count > 0 else { return }
+        let clamped = min(max(page, 0), count - 1)
+        guard let image = PDFPageRenderer.render(url: url, page: clamped) else { return }
+
+        documentURL = url
+        documentPageCount = count
+        documentPage = clamped
+
+        presentContent { [self] in
+            liveContent.setMedia(kind: "document", url: url, image: image)
+            // Pages ARE slides as far as the rest of the app is concerned, so
+            // every "3 of 12" readout and every next/previous binding that
+            // already exists keeps working.
+            liveContent.slideIndex = clamped
+            liveContent.slideCount = count
+            lastLiveProfileKey = "media"
+            liveContent.isLive = true
+            isBlackScreen = false
+        }
+    }
+
+    /// Step the live PDF. Stops at both ends rather than wrapping — running off
+    /// the end of a document mid-service should not silently restart it.
+    func turnDocumentPage(by delta: Int) {
+        guard let documentURL, documentPageCount > 0 else { return }
+        let target = documentPage + delta
+        guard target >= 0, target < documentPageCount, target != documentPage else { return }
+        showDocument(url: documentURL, page: target)
+    }
+
+    /// Forget the live document — called when something else takes the output.
+    func clearDocument() {
+        documentURL = nil
+        documentPage = 0
+        documentPageCount = 0
+    }
+
     /// Sets the global background from any supported media: image, GIF, or video.
     func setBackgroundMedia(from url: URL) {
         registerLayoutUndo()

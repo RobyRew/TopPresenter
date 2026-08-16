@@ -8595,3 +8595,106 @@ struct BulkDeleteSpike {
                 "batch \(String(format: "%.2f", batchSeconds))s vs graph \(String(format: "%.2f", graphSeconds))s — expected far faster, so the bulk path has probably fallen back to faulting the whole graph again")
     }
 }
+
+// MARK: - PDF as media
+
+/// PDF is the one page-based format macOS renders natively, so it is the one
+/// TopPresenter accepts. These tests draw a REAL PDF and rasterise it, because
+/// "it compiled" says nothing about whether a page arrives as a visible image
+/// or as a blank rectangle.
+@Suite("PDF media")
+struct PDFMediaTests {
+
+    /// A two-page PDF: page 1 portrait, page 2 landscape, each filled with a
+    /// solid colour so the render can be checked by sampling a pixel.
+    private func makePDF(at url: URL) throws {
+        let portrait = CGRect(x: 0, y: 0, width: 200, height: 400)
+        let landscape = CGRect(x: 0, y: 0, width: 400, height: 200)
+        var box = portrait
+        guard let consumer = CGDataConsumer(url: url as CFURL),
+              let ctx = CGContext(consumer: consumer, mediaBox: &box, nil) else {
+            throw CocoaError(.fileWriteUnknown)
+        }
+        for (rect, color) in [(portrait, CGColor(red: 1, green: 0, blue: 0, alpha: 1)),
+                              (landscape, CGColor(red: 0, green: 0, blue: 1, alpha: 1))] {
+            var pageBox = rect
+            ctx.beginPage(mediaBox: &pageBox)
+            ctx.setFillColor(color)
+            ctx.fill(rect)
+            ctx.endPage()
+        }
+        ctx.closePDF()
+    }
+
+    private func withPDF<T>(_ body: (URL) throws -> T) throws -> T {
+        let url = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("tp-\(UUID().uuidString).pdf")
+        try makePDF(at: url)
+        defer { try? FileManager.default.removeItem(at: url) }
+        return try body(url)
+    }
+
+    @Test func countsPages() throws {
+        try withPDF { url in
+            #expect(PDFPageRenderer.pageCount(of: url) == 2)
+        }
+    }
+
+    @Test func nonPDFReportsNoPagesRatherThanCrashing() throws {
+        let url = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("tp-\(UUID().uuidString).pdf")
+        try Data("this is not a pdf".utf8).write(to: url)
+        defer { try? FileManager.default.removeItem(at: url) }
+        #expect(PDFPageRenderer.pageCount(of: url) == 0)
+        #expect(PDFPageRenderer.render(url: url, page: 0) == nil)
+    }
+
+    @Test func rendersAPageAsAnImageOfTheRightShape() throws {
+        try withPDF { url in
+            let page = try #require(PDFPageRenderer.render(url: url, page: 0, maxPixels: 800))
+            // Portrait 200x400 → taller than wide, whatever the scale.
+            #expect(page.size.height > page.size.width)
+
+            let landscape = try #require(PDFPageRenderer.render(url: url, page: 1, maxPixels: 800))
+            #expect(landscape.size.width > landscape.size.height,
+                    "page 2 is 400x200 and came back \(landscape.size) — the render is not following page geometry")
+        }
+    }
+
+    /// The failure this guards is invisible in a unit test that only checks
+    /// sizes: a PDF page has no background, so drawing it without filling white
+    /// first gives a transparent bitmap that projects as black.
+    @Test func pageContentIsActuallyDrawnAndNotTransparent() throws {
+        try withPDF { url in
+            let image = try #require(PDFPageRenderer.render(url: url, page: 0, maxPixels: 200))
+            let cg = try #require(image.cgImage(forProposedRect: nil, context: nil, hints: nil))
+            let bitmap = NSBitmapImageRep(cgImage: cg)
+            let middle = try #require(bitmap.colorAt(x: bitmap.pixelsWide / 2,
+                                                     y: bitmap.pixelsHigh / 2))
+            #expect(middle.alphaComponent > 0.99, "the page came out transparent")
+            // The fixture's page one is solid red.
+            #expect(middle.redComponent > 0.8 && middle.greenComponent < 0.2,
+                    "expected the page's red fill, got \(middle)")
+        }
+    }
+
+    @Test func outOfRangePagesAreRefused() throws {
+        try withPDF { url in
+            #expect(PDFPageRenderer.render(url: url, page: -1) == nil)
+            #expect(PDFPageRenderer.render(url: url, page: 2) == nil)
+        }
+    }
+
+    /// The import side has to file a `.pdf` as media, and must not have started
+    /// claiming anything else along the way.
+    @Test func pdfClassifiesAsDocumentMedia() {
+        #expect(MediaKind.classify(extension: "pdf") == .document)
+        #expect(MediaKind.classify(extension: "PDF") == .document)
+        #expect(MediaKind.document.isPaged)
+        #expect(!MediaKind.image.isPaged)
+        // .pptx stays a SONG import — text only. Taking it as media would be a
+        // promise to render DrawingML.
+        #expect(MediaKind.classify(extension: "pptx") == nil)
+        #expect(ImportCatalog.importable.contains { $0.fileExtensions.contains("pdf") })
+    }
+}

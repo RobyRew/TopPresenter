@@ -237,6 +237,8 @@ nonisolated enum ImportCatalog {
         case .image: return String(localized: "Background images and graphics.", comment: "Format description")
         case .video: return String(localized: "Video clips.", comment: "Format description")
         case .audio: return String(localized: "Audio files.", comment: "Format description")
+        case .document: return String(localized: "PDF documents, presented a page at a time. Export slides from Keynote or PowerPoint as PDF to show them here.",
+                                      comment: "Format description")
         }
     }
 }
