@@ -31,23 +31,13 @@ struct UniversalImportSheet: View {
     /// Files the sheet was opened with (a drop, or a picked selection).
     var initialURLs: [URL] = []
     /// Preselect one library's kinds when opened from that tab.
+    ///
+    /// This affects what is TICKED, never what the sheet looks like. Import is
+    /// one screen with one appearance no matter how it was reached — an earlier
+    /// pass gave it a per-tab identity (the tab's icon, "Import Bibles", only
+    /// that tab's formats) and it was the wrong call: it turned one thing you
+    /// learn once into six things that each look slightly different.
     var preselectedKinds: Set<ImportKind> = []
-
-    /// The one kind this sheet was opened FOR, if it was opened for one.
-    ///
-    /// Pressing Import in the Bible tab is a statement of intent, and answering
-    /// it with the everything-screen — a generic tray icon, "Bibles, songs,
-    /// media, sessions and themes", six kind chips — makes the operator re-state
-    /// what they already said. The full layout belongs to the gesture that
-    /// genuinely has no context: dropping files on the window.
-    ///
-    /// This only scopes the PRESENTATION. A scoped sheet still scans everything
-    /// and still lists whatever else it finds, deselected — see
-    /// `ImportPlanModel.applyPreselection`. Narrowing the wording is helpful;
-    /// silently discarding files because of which tab you were on is not.
-    private var scope: ImportKind? {
-        preselectedKinds.count == 1 ? preselectedKinds.first : nil
-    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -79,12 +69,12 @@ struct UniversalImportSheet: View {
                     .fill(appAccent.gradient)
                     .frame(width: 38, height: 38)
                     .overlay {
-                        Image(systemName: scope?.systemImage ?? "tray.and.arrow.down.fill")
+                        Image(systemName: "tray.and.arrow.down.fill")
                             .font(.system(size: 17, weight: .semibold))
                             .foregroundStyle(.white)
                     }
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(title)
+                    Text(String(localized: "Import", comment: "Sheet title"))
                         .font(.title3.bold())
                     Text(subtitle)
                         .font(.caption)
@@ -132,29 +122,14 @@ struct UniversalImportSheet: View {
         .padding(.bottom, 12)
     }
 
-    private var title: String {
-        guard let scope else { return String(localized: "Import", comment: "Sheet title") }
-        return String(localized: "Import \(scope.displayName)", comment: "Sheet title, scoped to one kind")
-    }
-
     private var subtitle: String {
         switch plan.stage {
-        case .empty:
-            // Scoped, the useful thing to say is which formats this tab reads —
-            // the question the generic list was never answering anyway.
-            guard let scope else {
-                return String(localized: "Bibles, songs, media, sessions and themes", comment: "Import subtitle")
-            }
-            return scopedFormats(scope).map(\.displayName).joined(separator: " · ")
+        case .empty: return String(localized: "Bibles, songs, media, sessions and themes", comment: "Import subtitle")
         case .scanning: return String(localized: "Looking through the selection…", comment: "Import subtitle")
         case .planning, .running:
             return String(localized: "\(plan.selectedRows.count) of \(plan.rows.count) selected", comment: "Import subtitle")
         case .finished: return plan.summary?.headline ?? ""
         }
-    }
-
-    private func scopedFormats(_ kind: ImportKind) -> [ImportFormatDescriptor] {
-        ImportCatalog.importable.filter { $0.kind == kind }
     }
 
     // MARK: - Content
@@ -196,15 +171,15 @@ struct UniversalImportSheet: View {
                         Circle()
                             .fill(isDropTargeted ? appAccent.opacity(0.16) : Color.secondary.opacity(0.09))
                             .frame(width: 72, height: 72)
-                        Image(systemName: isDropTargeted
-                              ? "tray.and.arrow.down.fill"
-                              : (scope?.systemImage ?? "tray.and.arrow.down"))
+                        Image(systemName: isDropTargeted ? "tray.and.arrow.down.fill" : "tray.and.arrow.down")
                             .font(.system(size: 30, weight: .light))
                             .foregroundStyle(isDropTargeted ? appAccent : .secondary)
                             .symbolEffect(.bounce, value: isDropTargeted)
                     }
                     VStack(spacing: 4) {
-                        Text(dropZoneTitle)
+                        Text(isDropTargeted
+                             ? String(localized: "Release to add", comment: "Drop zone title, hovering")
+                             : String(localized: "Drop files or folders here", comment: "Drop zone title"))
                             .font(.title3.weight(.medium))
                         Text(String(localized: "Subfolders are scanned, and nothing is added until you confirm.",
                                     comment: "Drop zone subtitle"))
@@ -226,66 +201,13 @@ struct UniversalImportSheet: View {
             .help(String(localized: "Click to browse, or drop files anywhere in this window",
                          comment: "Drop zone tooltip"))
 
-            if let scope {
-                formatStrip(for: scope)
-            } else {
-                kindStrip
-            }
+            kindStrip
         }
         .padding(16)
         .onDrop(of: [.fileURL], isTargeted: $isDropTargeted) { providers in
             loadDropped(providers)
             return true
         }
-    }
-
-    private var dropZoneTitle: String {
-        if isDropTargeted {
-            return String(localized: "Release to add", comment: "Drop zone title, hovering")
-        }
-        guard let scope else {
-            return String(localized: "Drop files or folders here", comment: "Drop zone title")
-        }
-        return String(localized: "Drop \(scope.displayName) here", comment: "Drop zone title, scoped")
-    }
-
-    /// One kind's formats, named, with their extensions on hover.
-    ///
-    /// This is the payoff of a scoped sheet: instead of six icons that mostly
-    /// say "not this one", the panel answers the question the operator actually
-    /// has — what counts as a Bible around here.
-    private func formatStrip(for kind: ImportKind) -> some View {
-        HStack(spacing: 6) {
-            ForEach(scopedFormats(kind)) { format in
-                formatChip(format)
-            }
-        }
-    }
-
-    // Split out of `formatStrip`: inline, the ternaries and the `??` chains
-    // pushed the whole HStack past the type-checker's budget.
-    private func formatChip(_ format: ImportFormatDescriptor) -> some View {
-        let extensions = format.fileExtensions.map { ".\($0)" }
-        let primary = extensions.first ?? String(localized: "folder", comment: "Format with no extension")
-        let tip = format.summary.isEmpty
-            ? extensions.joined(separator: " ")
-            : "\(format.summary)\n\(extensions.joined(separator: " "))"
-        let fill: Color = format.isNative ? appAccent.opacity(0.11) : Color.secondary.opacity(0.06)
-
-        return VStack(spacing: 3) {
-            Text(format.displayName)
-                .font(.caption.weight(.medium))
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
-            Text(primary)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 8)
-        .padding(.horizontal, 4)
-        .background(RoundedRectangle(cornerRadius: 9, style: .continuous).fill(fill))
-        .help(tip)
     }
 
     /// The six kinds, always visible, each listing its formats on hover.
@@ -538,10 +460,7 @@ struct UniversalImportSheet: View {
         panel.canChooseFiles = directories != true
         panel.canChooseDirectories = directories != false
         if panel.canChooseFiles {
-            // Scoped to the tab that opened this, so the panel greys out the
-            // songs when the operator asked for Bibles.
-            panel.allowedContentTypes = scope.map { ImportCatalog.contentTypes(for: [$0]) }
-                ?? ImportCatalog.contentTypes()
+            panel.allowedContentTypes = ImportCatalog.contentTypes()
         }
         panel.message = directories == true
             ? String(localized: "Select folders to scan for importable files", comment: "Open panel message")
