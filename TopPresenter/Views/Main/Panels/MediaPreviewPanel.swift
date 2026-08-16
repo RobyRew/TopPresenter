@@ -125,7 +125,11 @@ struct MediaControlsBar: View {
                         .lineLimit(1)
                         .truncationMode(.middle)
                     Spacer()
-                    if let badge = item.durationBadge {
+                    if stepsPagesInstead {
+                        Text(verbatim: "\(pm.documentPage + 1) / \(pm.documentPageCount)")
+                            .font(.caption2.monospacedDigit())
+                            .foregroundStyle(appAccent)
+                    } else if let badge = item.durationBadge {
                         Text(badge)
                             .font(.caption2.monospacedDigit())
                             .foregroundStyle(.secondary)
@@ -135,11 +139,18 @@ struct MediaControlsBar: View {
 
             HStack(spacing: 8) {
                 Button { step(-1) } label: {
+                    // Same chevrons in both modes on purpose. The obvious
+                    // "paging" symbols (arrow.left.doc.text and friends) simply
+                    // do not exist in SF Symbols — Image(systemName:) fails
+                    // SILENTLY at runtime, so they ship as blank buttons — and
+                    // chevron.left.2 already means "cross a chapter boundary"
+                    // elsewhere in the app. The page counter above, in accent,
+                    // is what says which mode these are in.
                     Image(systemName: "chevron.left")
                         .frame(width: 34, height: 34)
                 }
-                .disabled(orderedItems.isEmpty)
-                .help(String(localized: "Media anterioară", comment: "Tooltip"))
+                .disabled(!canStep(-1))
+                .help(stepHelp(-1))
 
                 if liveMediaShowing {
                     Button { pm.clearOutput() } label: {
@@ -165,8 +176,8 @@ struct MediaControlsBar: View {
                     Image(systemName: "chevron.right")
                         .frame(width: 34, height: 34)
                 }
-                .disabled(orderedItems.isEmpty)
-                .help(String(localized: "Media următoare", comment: "Tooltip"))
+                .disabled(!canStep(1))
+                .help(stepHelp(1))
             }
             .buttonStyle(.bordered)
             .lineLimit(1)
@@ -179,15 +190,50 @@ struct MediaControlsBar: View {
         }
     }
 
-    /// Step selection through the grid ordering; while media is live, stepping
-    /// presents the new item immediately (mirrors verse navigation while live).
+    /// Is the live output a PDF that these arrows should be paging?
+    private var stepsPagesInstead: Bool {
+        pm.isPresentingDocument && pm.documentURL == selectedItem?.resolvedURL
+    }
+
+    /// Step INSIDE the live item when it has an inside; otherwise step to the
+    /// neighbouring item in the grid.
+    ///
+    /// Paging beats skipping while a document is live. Arrows next to a Present
+    /// button read as "next thing to show", and once a twelve-page PDF is on the
+    /// wall the next thing to show is page two — not whatever photo happens to
+    /// sit beside it in the library. Jumping the whole document off the screen
+    /// mid-service is the one outcome nobody wanted.
     private func step(_ direction: Int) {
+        if stepsPagesInstead {
+            pm.turnDocumentPage(by: direction)
+            return
+        }
         guard let next = MediaLibrary.neighbor(of: selectedItem, in: orderedItems, direction: direction),
               next.id != selectedItem?.id else { return }
         libraryManager.selectedMediaItem = next
         if liveMediaShowing, next.mediaType != "audio" {
             presentSelected()
         }
+    }
+
+    /// Whether stepping in this direction would do anything.
+    private func canStep(_ direction: Int) -> Bool {
+        if stepsPagesInstead {
+            let target = pm.documentPage + direction
+            return target >= 0 && target < pm.documentPageCount
+        }
+        return !orderedItems.isEmpty
+    }
+
+    private func stepHelp(_ direction: Int) -> String {
+        if stepsPagesInstead {
+            return direction < 0
+                ? String(localized: "Previous page", comment: "PDF control")
+                : String(localized: "Next page", comment: "PDF control")
+        }
+        return direction < 0
+            ? String(localized: "Media anterioară", comment: "Tooltip")
+            : String(localized: "Media următoare", comment: "Tooltip")
     }
 
     private func presentSelected() {

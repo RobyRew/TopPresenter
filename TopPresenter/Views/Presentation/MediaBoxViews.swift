@@ -123,6 +123,18 @@ struct MediaBoxContent: View {
     var playsVideo: Bool = false
     var liveOverride: LiveOverride? = nil
 
+    /// Draw the icon-and-filename plate when there is nothing to show.
+    ///
+    /// True everywhere you are ARRANGING a casetă — the editor canvas and the
+    /// preview panel — where an empty box has to remain visible and grabbable,
+    /// and where the file name is the only clue about what will land in it.
+    ///
+    /// False on the REAL output, always. A grey plate reading "photo ·
+    /// Untitled.pdf" is a debugging affordance; projecting it in front of a
+    /// congregation is just a glitch on the wall. The output shows the content
+    /// or it shows nothing.
+    var showsPlaceholder: Bool = true
+
     @State private var image: NSImage?
     @State private var resolvedURL: URL?
     /// First frame of a video this context cannot play (preview card, canvas) —
@@ -202,11 +214,12 @@ struct MediaBoxContent: View {
 
     @ViewBuilder
     private var liveContent: some View {
+        let isStill = MediaKind.rendersAsStillImage(rawValue: pm.liveContent.mediaKind)
         if let liveOverride {
             overrideContent(liveOverride)
-        } else if let image = pm.liveContent.mediaImage, pm.liveContent.mediaKind == "image" {
+        } else if let image = pm.liveContent.mediaImage, isStill {
             fitted { Image(nsImage: image) }
-        } else if pm.liveContent.mediaKind != "image", let player = pm.videoService?.player, playsVideo {
+        } else if !isStill, let player = pm.videoService?.player, playsVideo {
             OutputVideoView(player: player, fills: box.contentModeRaw == "fill")
         } else if let posterFrame {
             // A video this surface cannot play: its own first frame, so the preview
@@ -296,18 +309,20 @@ struct MediaBoxContent: View {
 
     @ViewBuilder
     private func placeholder(icon: String, caption: String? = nil) -> some View {
-        ZStack {
-            Rectangle().fill(.black.opacity(0.5))
-            VStack(spacing: 4) {
-                Image(systemName: icon)
-                    .font(.title3)
-                    .foregroundStyle(.white.opacity(0.7))
-                Text(caption ?? box.fileName)
-                    .font(.system(size: 9))
-                    .foregroundStyle(.white.opacity(0.6))
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                    .padding(.horizontal, 4)
+        if showsPlaceholder {
+            ZStack {
+                Rectangle().fill(.black.opacity(0.5))
+                VStack(spacing: 4) {
+                    Image(systemName: icon)
+                        .font(.title3)
+                        .foregroundStyle(.white.opacity(0.7))
+                    Text(caption ?? box.fileName)
+                        .font(.system(size: 9))
+                        .foregroundStyle(.white.opacity(0.6))
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .padding(.horizontal, 4)
+                }
             }
         }
     }

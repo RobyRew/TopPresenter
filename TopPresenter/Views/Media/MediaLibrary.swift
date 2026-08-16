@@ -68,6 +68,19 @@ nonisolated enum MediaKind: String, CaseIterable, Identifiable, Sendable {
     /// This kind is presented one PAGE at a time rather than as a single frame.
     var isPaged: Bool { self == .document }
 
+    /// Reaches the output as a still bitmap rather than a video stream.
+    ///
+    /// The output used to test `mediaKind == "image"` literally, so a PDF —
+    /// which arrives as a fully rendered page in exactly the same slot — failed
+    /// the test, fell through to the branch that hands the box to the VIDEO
+    /// player, and ended up drawing a placeholder glyph instead of the page.
+    var rendersAsStillImage: Bool { self == .image || self == .document }
+
+    /// Same question, from the raw string the live content carries.
+    static func rendersAsStillImage(rawValue: String) -> Bool {
+        MediaKind(rawValue: rawValue)?.rendersAsStillImage ?? (rawValue == "image")
+    }
+
     /// File-extension classification — the single rule the importer uses.
     ///
     /// Optional, and that is the point. It used to answer `.image` for anything

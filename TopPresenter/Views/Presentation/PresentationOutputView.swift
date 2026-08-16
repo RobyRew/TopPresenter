@@ -224,7 +224,10 @@ struct PresentationOutputView: View {
                box.isVisible,
                box.showsFor(contentType: live.contentType, isLive: live.isLive),
                !live.isLive || pm.scopeMatchesLiveSlide(box.displayOnRaw) {
-                MediaBoxContent(box: box, canvasSize: canvasSize, playsVideo: true)
+                // showsPlaceholder: false — this is the wall. Empty means black,
+                // never an icon and a file name.
+                MediaBoxContent(box: box, canvasSize: canvasSize, playsVideo: true,
+                                showsPlaceholder: false)
                     .allowsHitTesting(false)
                     .transition(.opacity)
             }

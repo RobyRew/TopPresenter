@@ -49,6 +49,7 @@ struct UniversalImportSheet: View {
             footer
         }
         .frame(minWidth: 620, idealWidth: 720, minHeight: 460, idealHeight: 560)
+        .background(ClickOutsideDismiss { dismiss() })
         .task {
             plan.preselectedKinds = preselectedKinds
             if !initialURLs.isEmpty { await plan.load(initialURLs) }
@@ -485,6 +486,66 @@ struct UniversalImportSheet: View {
         group.notify(queue: .main) {
             let urls = collected.withLock { $0 }
             Task { await plan.load(urls) }
+        }
+    }
+}
+
+// MARK: - Click outside to dismiss
+
+/// Closes the sheet when a click lands anywhere but on it.
+///
+/// A macOS sheet is window-modal and deliberately swallows clicks on its parent
+/// — the system's own answer is to bounce the sheet at you, which is fine for
+/// "you have unsaved changes" and wrong for a picker you opened by accident.
+///
+/// Done with an event monitor rather than by rebuilding the sheet as an overlay
+/// with a dimmed backdrop. The overlay version would have to re-implement
+/// modality, and it would still leave the window's TOOLBAR live behind the
+/// scrim, so the "modal" panel would sit there while you pressed Import again.
+/// The real sheet keeps all of that correct; this only adds the one missing
+/// gesture.
+private struct ClickOutsideDismiss: NSViewRepresentable {
+    let action: () -> Void
+
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView(frame: .zero)
+        // The window is not attached during makeNSView, so the monitor is armed
+        // on the next turn of the loop, once there is a sheet to compare against.
+        DispatchQueue.main.async { [weak view] in
+            context.coordinator.arm(sheet: view?.window, action: action)
+        }
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {}
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
+    static func dismantleNSView(_ nsView: NSView, coordinator: Coordinator) {
+        coordinator.disarm()
+    }
+
+    @MainActor
+    final class Coordinator {
+        private var monitor: Any?
+        private weak var sheet: NSWindow?
+
+        func arm(sheet: NSWindow?, action: @escaping () -> Void) {
+            guard monitor == nil, let sheet else { return }
+            self.sheet = sheet
+            // LOCAL monitor: this app's events only, and the click is passed
+            // through untouched — swallowing it would break every click inside
+            // the sheet, since they come through here too.
+            monitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown]) { [weak self] event in
+                guard let self, let sheet = self.sheet, sheet.isVisible else { return event }
+                if event.window !== sheet { action() }
+                return event
+            }
+        }
+
+        func disarm() {
+            if let monitor { NSEvent.removeMonitor(monitor) }
+            monitor = nil
         }
     }
 }
