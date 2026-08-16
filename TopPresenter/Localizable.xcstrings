@@ -690,6 +690,29 @@
         }
       }
     },
+    "%@ elapsed" : {
+      "comment" : "Progress timing",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ elapsed"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ transcurrido"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ scurse"
+          }
+        }
+      }
+    },
     "%lld" : {
       "comment" : "",
       "localizations" : {
@@ -928,6 +951,76 @@
         }
       }
     },
+    "%lld deleted, %lld failed." : {
+      "comment" : "Delete result",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$lld deleted, %2$lld failed."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$lld eliminados, %2$lld fallidos."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$lld șterse, %2$lld eșuate."
+          }
+        }
+      }
+    },
+    "%lld deleted." : {
+      "comment" : "Delete result",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld deleted."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld eliminados."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld șterse."
+          }
+        }
+      }
+    },
+    "%lld elapsed" : {
+      "comment" : "Progress timing",
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ elapsed"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ transcurridos"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ scurse"
+          }
+        }
+      }
+    },
     "%lld elemente" : {
       "comment" : "Session row item count",
       "localizations" : {
@@ -1007,6 +1100,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "выбрано %lld элементов"
+          }
+        }
+      }
+    },
+    "%lld exported, %lld failed." : {
+      "comment" : "Export result",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$lld exported, %2$lld failed."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$lld exportados, %2$lld fallidos."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$lld exportate, %2$lld eșuate."
+          }
+        }
+      }
+    },
+    "%lld exported." : {
+      "comment" : "Export result",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld exported."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld exportados."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld exportate."
           }
         }
       }
@@ -1786,6 +1925,7 @@
     },
     "%lld succeeded, %lld failed." : {
       "comment" : "Alert",
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -2168,6 +2308,31 @@
         }
       }
     },
+    "%lldh %lldm" : {
+      "comment" : "Duration",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lldh %2$lldm"
+          }
+        }
+      }
+    },
+    "%lldm %llds" : {
+      "comment" : "Duration",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lldm %2$llds"
+          }
+        }
+      }
+    },
+    "%llds" : {
+      "comment" : "Duration"
+    },
     "×%lld" : {
       "comment" : "",
       "localizations" : {
@@ -2375,6 +2540,29 @@
         }
       }
     },
+    "A rough estimate from the total size — the real time depends on the files." : {
+      "comment" : "Pre-flight estimate tooltip",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A rough estimate from the total size — the real time depends on the files."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Una estimación aproximada según el tamaño total — el tiempo real depende de los archivos."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O estimare aproximativă din dimensiunea totală — timpul real depinde de fișiere."
+          }
+        }
+      }
+    },
     "A service running order, with stable references into the library." : {
       "comment" : "Format description",
       "localizations" : {
@@ -2481,6 +2669,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "abrevierea %1$@ și limba %2$@"
+          }
+        }
+      }
+    },
+    "about %@" : {
+      "comment" : "Pre-flight estimate",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "about %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "unos %@"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "aproximativ %@"
+          }
+        }
+      }
+    },
+    "about %@ left" : {
+      "comment" : "Progress timing",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "about %@ left"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "quedan unos %@"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "aproximativ %@ rămase"
           }
         }
       }
@@ -3193,6 +3427,29 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Adăugat la sesiune"
+          }
+        }
+      }
+    },
+    "Add" : {
+      "comment" : "Open panel button",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Añadir"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Adaugă"
           }
         }
       }
@@ -4184,6 +4441,29 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Все коллекции"
+          }
+        }
+      }
+    },
+    "All songs deleted." : {
+      "comment" : "Delete result",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "All songs deleted."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Todas las canciones eliminadas."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Toate cântecele au fost șterse."
           }
         }
       }
@@ -5837,6 +6117,7 @@
     },
     "Batch Export Complete" : {
       "comment" : "Alert",
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -5878,6 +6159,7 @@
     },
     "Batch Export Finished" : {
       "comment" : "Alert",
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -8568,6 +8850,52 @@
         }
       }
     },
+    "Choose Files…" : {
+      "comment" : "Button",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choose Files…"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Elegir archivos…"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alege fișiere…"
+          }
+        }
+      }
+    },
+    "Choose Folder…" : {
+      "comment" : "Button",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choose Folder…"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Elegir carpeta…"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alege folder…"
+          }
+        }
+      }
+    },
     "Choose where to save the exported Bible module" : {
       "comment" : "Save panel message",
       "localizations" : {
@@ -8843,6 +9171,52 @@
         }
       }
     },
+    "Click to browse, or drop files anywhere in this window" : {
+      "comment" : "Drop zone tooltip",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Click to browse, or drop files anywhere in this window"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Haz clic para explorar, o suelta archivos en cualquier parte de esta ventana"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dă clic pentru a răsfoi sau lasă fișiere oriunde în această fereastră"
+          }
+        }
+      }
+    },
+    "Close" : {
+      "comment" : "Button",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Close"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cerrar"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Închide"
+          }
+        }
+      }
+    },
     "Coborâre fină" : {
       "comment" : "Transition",
       "localizations" : {
@@ -8903,6 +9277,29 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Коллекция"
+          }
+        }
+      }
+    },
+    "Collections" : {
+      "comment" : "Delete progress",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Collections"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Colecciones"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Colecții"
           }
         }
       }
@@ -10871,6 +11268,29 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Удалить песню"
+          }
+        }
+      }
+    },
+    "Deleting" : {
+      "comment" : "Progress verb",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deleting"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eliminando"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Se șterge"
           }
         }
       }
@@ -13519,6 +13939,29 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Exportă…"
+          }
+        }
+      }
+    },
+    "Exporting" : {
+      "comment" : "Progress verb",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Exporting"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Exportando"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Se exportă"
           }
         }
       }
@@ -16829,6 +17272,29 @@
         }
       }
     },
+    "Importing" : {
+      "comment" : "Progress verb",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Importing"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Importando"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Se importă"
+          }
+        }
+      }
+    },
     "Importing %@..." : {
       "comment" : "Import progress",
       "localizations" : {
@@ -18830,7 +19296,7 @@
       }
     },
     "Looking through the selection…" : {
-      "comment" : "Import subtitle",
+      "comment" : "Import subtitle\nScanning state",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -21475,6 +21941,29 @@
         }
       }
     },
+    "Not recognised" : {
+      "comment" : "Chip tooltip",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Not recognised"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No reconocidos"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nerecunoscute"
+          }
+        }
+      }
+    },
     "Not recognised (%lld)" : {
       "comment" : "Section",
       "localizations" : {
@@ -22617,6 +23106,7 @@
     },
     "or click to browse — subfolders are scanned" : {
       "comment" : "Drop zone subtitle",
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -25267,6 +25757,29 @@
         }
       }
     },
+    "Release to add" : {
+      "comment" : "Drop zone title, hovering",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Release to add"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Suelta para añadir"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eliberează pentru a adăuga"
+          }
+        }
+      }
+    },
     "Renunță" : {
       "comment" : "Cancel button",
       "localizations" : {
@@ -26561,6 +27074,29 @@
         }
       }
     },
+    "Se șterg %lld Biblii…" : {
+      "comment" : "Advanced note",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deleting %lld Bibles…"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eliminando %lld Biblias…"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Se șterg %lld Biblii…"
+          }
+        }
+      }
+    },
     "Secțiunea de start:" : {
       "comment" : "Setting label",
       "localizations" : {
@@ -26861,6 +27397,29 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Alege folderul"
+          }
+        }
+      }
+    },
+    "Select folders to scan for importable files" : {
+      "comment" : "Open panel message",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Select folders to scan for importable files"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Selecciona carpetas para buscar archivos importables"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Selectează foldere pentru a căuta fișiere importabile"
           }
         }
       }
@@ -27998,8 +28557,31 @@
         }
       }
     },
+    "Songbooks" : {
+      "comment" : "Delete progress",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Songbooks"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cancioneros"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cărți de cântări"
+          }
+        }
+      }
+    },
     "Songs" : {
-      "comment" : "History tab\nImport kind\nMenu item\nShortcut\nSidebar item",
+      "comment" : "Delete progress\nHistory tab\nImport kind\nMenu item\nShortcut\nSidebar item",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -28819,6 +29401,7 @@
     },
     "Ștergerea nu a putut fi salvată: %@" : {
       "comment" : "Advanced error",
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -28836,6 +29419,29 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ștergerea nu a putut fi salvată: %@"
+          }
+        }
+      }
+    },
+    "Ștergerea nu a putut fi salvată." : {
+      "comment" : "Advanced error",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The deletion could not be saved."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudo guardar la eliminación."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ștergerea nu a putut fi salvată."
           }
         }
       }
@@ -28928,6 +29534,29 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Stilul textului (font, mărime, culoare…) se editează în tab-ul Text."
+          }
+        }
+      }
+    },
+    "Stop" : {
+      "comment" : "Button",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stop"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Detener"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Oprește"
           }
         }
       }
@@ -29043,6 +29672,29 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Strong"
+          }
+        }
+      }
+    },
+    "Subfolders are scanned, and nothing is added until you confirm." : {
+      "comment" : "Drop zone subtitle",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Subfolders are scanned, and nothing is added until you confirm."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Se analizan las subcarpetas y no se añade nada hasta que confirmes."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Subfolderele sunt scanate și nu se adaugă nimic până nu confirmi."
           }
         }
       }
@@ -29164,6 +29816,7 @@
     },
     "Successfully exported %lld module(s) to %@/" : {
       "comment" : "Alert",
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -31189,6 +31842,7 @@
     },
     "Toate Bibliile au fost șterse." : {
       "comment" : "Advanced note",
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -33465,6 +34119,7 @@
     },
     "What can I import?" : {
       "comment" : "Disclosure",
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -33693,623 +34348,71 @@
         }
       }
     },
-    "Importing" : {
-      "comment" : "Progress verb",
+    "Import %@" : {
+      "comment" : "Sheet title, scoped to one kind",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Importing"
+            "value" : "Import %@"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Importando"
+            "value" : "Importar %@"
           }
         },
         "ro" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Se importă"
+            "value" : "Importă %@"
           }
         }
       }
     },
-    "Deleting" : {
-      "comment" : "Progress verb",
+    "Drop %@ here" : {
+      "comment" : "Drop zone title, scoped",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Deleting"
+            "value" : "Drop %@ here"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Eliminando"
+            "value" : "Suelta %@ aquí"
           }
         },
         "ro" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Se șterge"
+            "value" : "Lasă %@ aici"
           }
         }
       }
     },
-    "Exporting" : {
-      "comment" : "Progress verb",
+    "folder" : {
+      "comment" : "Format with no extension",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Exporting"
+            "value" : "folder"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Exportando"
+            "value" : "carpeta"
           }
         },
         "ro" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Se exportă"
-          }
-        }
-      }
-    },
-    "%lld deleted." : {
-      "comment" : "Delete result",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld deleted."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld eliminados."
-          }
-        },
-        "ro" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld șterse."
-          }
-        }
-      }
-    },
-    "%lld deleted, %lld failed." : {
-      "comment" : "Delete result",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$lld deleted, %2$lld failed."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$lld eliminados, %2$lld fallidos."
-          }
-        },
-        "ro" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$lld șterse, %2$lld eșuate."
-          }
-        }
-      }
-    },
-    "%lld elapsed" : {
-      "comment" : "Progress timing",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ elapsed"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ transcurridos"
-          }
-        },
-        "ro" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ scurse"
-          }
-        }
-      }
-    },
-    "about %@ left" : {
-      "comment" : "Progress timing",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "about %@ left"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "quedan unos %@"
-          }
-        },
-        "ro" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "aproximativ %@ rămase"
-          }
-        }
-      }
-    },
-    "Stop" : {
-      "comment" : "Button",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Stop"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Detener"
-          }
-        },
-        "ro" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Oprește"
-          }
-        }
-      }
-    },
-    "Close" : {
-      "comment" : "Button",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Close"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Cerrar"
-          }
-        },
-        "ro" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Închide"
-          }
-        }
-      }
-    },
-    "Not recognised" : {
-      "comment" : "Chip tooltip",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Not recognised"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No reconocidos"
-          }
-        },
-        "ro" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Nerecunoscute"
-          }
-        }
-      }
-    },
-    "Se șterg %lld Biblii…" : {
-      "comment" : "Advanced note",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Deleting %lld Bibles…"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Eliminando %lld Biblias…"
-          }
-        },
-        "ro" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Se șterg %lld Biblii…"
-          }
-        }
-      }
-    },
-    "%lld exported." : {
-      "comment" : "Export result",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld exported."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld exportados."
-          }
-        },
-        "ro" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld exportate."
-          }
-        }
-      }
-    },
-    "%lld exported, %lld failed." : {
-      "comment" : "Export result",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$lld exported, %2$lld failed."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$lld exportados, %2$lld fallidos."
-          }
-        },
-        "ro" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$lld exportate, %2$lld eșuate."
-          }
-        }
-      }
-    },
-    "about %@" : {
-      "comment" : "Pre-flight estimate",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "about %@"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "unos %@"
-          }
-        },
-        "ro" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "aproximativ %@"
-          }
-        }
-      }
-    },
-    "A rough estimate from the total size — the real time depends on the files." : {
-      "comment" : "Pre-flight estimate tooltip",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "A rough estimate from the total size — the real time depends on the files."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Una estimación aproximada según el tamaño total — el tiempo real depende de los archivos."
-          }
-        },
-        "ro" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "O estimare aproximativă din dimensiunea totală — timpul real depinde de fișiere."
-          }
-        }
-      }
-    },
-    "%@ elapsed" : {
-      "comment" : "Progress timing",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ elapsed"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ transcurrido"
-          }
-        },
-        "ro" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ scurse"
-          }
-        }
-      }
-    },
-    "Collections" : {
-      "comment" : "Delete progress",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Collections"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Colecciones"
-          }
-        },
-        "ro" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Colecții"
-          }
-        }
-      }
-    },
-    "Songbooks" : {
-      "comment" : "Delete progress",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Songbooks"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Cancioneros"
-          }
-        },
-        "ro" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Cărți de cântări"
-          }
-        }
-      }
-    },
-    "All songs deleted." : {
-      "comment" : "Delete result",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "All songs deleted."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Todas las canciones eliminadas."
-          }
-        },
-        "ro" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Toate cântecele au fost șterse."
-          }
-        }
-      }
-    },
-    "Release to add" : {
-      "comment" : "Drop zone title, hovering",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Release to add"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Suelta para añadir"
-          }
-        },
-        "ro" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Eliberează pentru a adăuga"
-          }
-        }
-      }
-    },
-    "Subfolders are scanned, and nothing is added until you confirm." : {
-      "comment" : "Drop zone subtitle",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Subfolders are scanned, and nothing is added until you confirm."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Se analizan las subcarpetas y no se añade nada hasta que confirmes."
-          }
-        },
-        "ro" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Subfolderele sunt scanate și nu se adaugă nimic până nu confirmi."
-          }
-        }
-      }
-    },
-    "Click to browse, or drop files anywhere in this window" : {
-      "comment" : "Drop zone tooltip",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Click to browse, or drop files anywhere in this window"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Haz clic para explorar, o suelta archivos en cualquier parte de esta ventana"
-          }
-        },
-        "ro" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Dă clic pentru a răsfoi sau lasă fișiere oriunde în această fereastră"
-          }
-        }
-      }
-    },
-    "Choose Folder…" : {
-      "comment" : "Button",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Choose Folder…"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Elegir carpeta…"
-          }
-        },
-        "ro" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Alege folder…"
-          }
-        }
-      }
-    },
-    "Choose Files…" : {
-      "comment" : "Button",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Choose Files…"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Elegir archivos…"
-          }
-        },
-        "ro" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Alege fișiere…"
-          }
-        }
-      }
-    },
-    "Select folders to scan for importable files" : {
-      "comment" : "Open panel message",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Select folders to scan for importable files"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Selecciona carpetas para buscar archivos importables"
-          }
-        },
-        "ro" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Selectează foldere pentru a căuta fișiere importabile"
-          }
-        }
-      }
-    },
-    "Add" : {
-      "comment" : "Open panel button",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Add"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Añadir"
-          }
-        },
-        "ro" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Adaugă"
-          }
-        }
-      }
-    },
-    "Ștergerea nu a putut fi salvată." : {
-      "comment" : "Advanced error",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The deletion could not be saved."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No se pudo guardar la eliminación."
-          }
-        },
-        "ro" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ștergerea nu a putut fi salvată."
+            "value" : "folder"
           }
         }
       }
