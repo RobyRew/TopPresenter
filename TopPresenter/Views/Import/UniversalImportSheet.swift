@@ -27,7 +27,6 @@ struct UniversalImportSheet: View {
 
     @State private var plan = ImportPlanModel()
     @State private var isDropTargeted = false
-    @State private var showingFormats = false
 
     /// Files the sheet was opened with (a drop, or a picked selection).
     var initialURLs: [URL] = []
@@ -132,38 +131,70 @@ struct UniversalImportSheet: View {
     private var content: some View {
         switch plan.stage {
         case .empty: dropZone
-        case .scanning: ProgressView().controlSize(.large)
+        case .scanning:
+            // A folder of folders can take a moment, and a bare unlabelled
+            // spinner in the middle of an empty panel is indistinguishable from
+            // a hang.
+            VStack(spacing: 12) {
+                ProgressView().controlSize(.large)
+                Text(String(localized: "Looking through the selection…", comment: "Scanning state"))
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         case .planning, .running, .finished: planList
         }
     }
 
+    /// The empty state.
+    ///
+    /// It used to be a fixed 180pt dashed box stranded in the middle of a 460pt
+    /// panel, with a lone disclosure triangle underneath and a permanently
+    /// disabled Import button in the footer — three unrelated things floating in
+    /// a lot of nothing. The drop target now OWNS the panel: it fills the space,
+    /// so the whole sheet is the thing you can drop onto, which is also what a
+    /// window-sized drop target should look like. Underneath it, the six kinds
+    /// are shown as a real row rather than hidden behind a disclosure, because
+    /// "what can I even put here?" is the actual question at this moment.
     private var dropZone: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: 14) {
             Button { browse() } label: {
-                VStack(spacing: 10) {
-                    Image(systemName: isDropTargeted ? "tray.and.arrow.down.fill" : "square.and.arrow.down")
-                        .font(.system(size: 38, weight: .light))
-                        .foregroundStyle(isDropTargeted ? appAccent : .secondary)
-                    Text(String(localized: "Drop files or folders here", comment: "Drop zone title"))
-                        .font(.callout.weight(.medium))
-                    Text(String(localized: "or click to browse — subfolders are scanned", comment: "Drop zone subtitle"))
-                        .font(.caption).foregroundStyle(.secondary)
+                VStack(spacing: 12) {
+                    ZStack {
+                        Circle()
+                            .fill(isDropTargeted ? appAccent.opacity(0.16) : Color.secondary.opacity(0.09))
+                            .frame(width: 72, height: 72)
+                        Image(systemName: isDropTargeted ? "tray.and.arrow.down.fill" : "tray.and.arrow.down")
+                            .font(.system(size: 30, weight: .light))
+                            .foregroundStyle(isDropTargeted ? appAccent : .secondary)
+                            .symbolEffect(.bounce, value: isDropTargeted)
+                    }
+                    VStack(spacing: 4) {
+                        Text(isDropTargeted
+                             ? String(localized: "Release to add", comment: "Drop zone title, hovering")
+                             : String(localized: "Drop files or folders here", comment: "Drop zone title"))
+                            .font(.title3.weight(.medium))
+                        Text(String(localized: "Subfolders are scanned, and nothing is added until you confirm.",
+                                    comment: "Drop zone subtitle"))
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                    }
                 }
-                .frame(maxWidth: .infinity).frame(height: 180)
-                .background(RoundedRectangle(cornerRadius: 12)
-                    .fill(isDropTargeted ? appAccent.opacity(0.08) : Color.secondary.opacity(0.06)))
-                .overlay(RoundedRectangle(cornerRadius: 12)
-                    .strokeBorder(isDropTargeted ? appAccent : Color.secondary.opacity(0.35),
-                                  style: StrokeStyle(lineWidth: 1.5, dash: [7, 5])))
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .contentShape(Rectangle())
+                .background(RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(isDropTargeted ? appAccent.opacity(0.07) : Color.secondary.opacity(0.045)))
+                .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .strokeBorder(isDropTargeted ? appAccent : Color.secondary.opacity(0.3),
+                                  style: StrokeStyle(lineWidth: isDropTargeted ? 2 : 1.5, dash: [7, 5])))
+                .animation(.easeOut(duration: 0.15), value: isDropTargeted)
             }
             .buttonStyle(.plain)
+            .help(String(localized: "Click to browse, or drop files anywhere in this window",
+                         comment: "Drop zone tooltip"))
 
-            DisclosureGroup(isExpanded: $showingFormats) {
-                supportedFormats
-            } label: {
-                Label(String(localized: "What can I import?", comment: "Disclosure"), systemImage: "questionmark.circle")
-                    .font(.callout)
-            }
+            kindStrip
         }
         .padding(16)
         .onDrop(of: [.fileURL], isTargeted: $isDropTargeted) { providers in
@@ -172,27 +203,37 @@ struct UniversalImportSheet: View {
         }
     }
 
+    /// The six kinds, always visible, each listing its formats on hover.
+    ///
     /// Rendered from `ImportCatalog`, so it cannot drift from what the
     /// classifier actually accepts.
-    private var supportedFormats: some View {
-        VStack(alignment: .leading, spacing: 10) {
+    private var kindStrip: some View {
+        HStack(spacing: 6) {
             ForEach(ImportKind.allCases) { kind in
                 let formats = ImportCatalog.importable.filter { $0.kind == kind }
                 if !formats.isEmpty {
-                    VStack(alignment: .leading, spacing: 3) {
-                        Label(kind.displayName, systemImage: kind.systemImage)
-                            .font(.caption.weight(.semibold))
-                        ForEach(formats) { format in
-                            Text("\(format.displayName) — " + format.fileExtensions.map { ".\($0)" }.joined(separator: " "))
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                        }
+                    VStack(spacing: 5) {
+                        Image(systemName: kind.systemImage)
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundStyle(appAccent)
+                        Text(kind.displayName)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
                     }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 9)
+                    .background(RoundedRectangle(cornerRadius: 9, style: .continuous)
+                        .fill(Color.secondary.opacity(0.06)))
+                    // The extension list is the genuinely useful part, but it is
+                    // long and only wanted when someone is unsure — so it lives
+                    // in the tooltip rather than costing six lines on screen.
+                    .help(formats
+                        .map { "\($0.displayName) — " + $0.fileExtensions.map { ".\($0)" }.joined(separator: " ") }
+                        .joined(separator: "\n"))
                 }
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.top, 6)
     }
 
     private var planList: some View {
@@ -366,6 +407,16 @@ struct UniversalImportSheet: View {
                 // main window keeps showing it.
                 Button(String(localized: "Close", comment: "Button")) { dismiss() }
                     .keyboardShortcut(.defaultAction)
+            case .empty:
+                // An Import button with nothing to import is dead weight, and a
+                // disabled default button is the clearest possible sign that a
+                // screen was never finished. Offer the two things that actually
+                // work from here instead.
+                Button(String(localized: "Cancel", comment: "Button")) { dismiss() }
+                    .keyboardShortcut(.cancelAction)
+                Button(String(localized: "Choose Folder…", comment: "Button")) { browse(directories: true) }
+                Button(String(localized: "Choose Files…", comment: "Button")) { browse(directories: false) }
+                    .keyboardShortcut(.defaultAction)
             default:
                 if let estimate = plan.preflightEstimate {
                     Label(String(localized: "about \(LibraryTaskProgress.formatted(estimate))",
@@ -390,13 +441,24 @@ struct UniversalImportSheet: View {
 
     // MARK: - Picking
 
-    private func browse() {
+    /// `directories: true` picks folders only.
+    ///
+    /// A panel that accepts both makes picking a folder needlessly fiddly —
+    /// macOS treats a highlighted folder as "navigate into me" rather than
+    /// "choose me" — so the two buttons open two panels rather than one that
+    /// half-does both. Clicking the drop zone itself still allows either.
+    private func browse(directories: Bool? = nil) {
         let panel = NSOpenPanel()
         panel.allowsMultipleSelection = true
-        panel.canChooseFiles = true
-        panel.canChooseDirectories = true
-        panel.allowedContentTypes = ImportCatalog.contentTypes()
-        panel.message = String(localized: "Select files or folders to import", comment: "Open panel message")
+        panel.canChooseFiles = directories != true
+        panel.canChooseDirectories = directories != false
+        if panel.canChooseFiles {
+            panel.allowedContentTypes = ImportCatalog.contentTypes()
+        }
+        panel.message = directories == true
+            ? String(localized: "Select folders to scan for importable files", comment: "Open panel message")
+            : String(localized: "Select files or folders to import", comment: "Open panel message")
+        panel.prompt = String(localized: "Add", comment: "Open panel button")
         guard panel.runModal() == .OK else { return }
         Task { await plan.load(panel.urls) }
     }

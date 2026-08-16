@@ -271,15 +271,11 @@ struct BibleView: View {
     }
 
     private func deleteBibleModule(_ module: BibleModule) {
-        if libraryManager.selectedBibleModule?.id == module.id {
-            libraryManager.selectedBibleModule = nil
-            libraryManager.selectedBook = nil
-            libraryManager.selectedChapter = nil
-            libraryManager.selectedVerses = []
-        }
-        // Off the main thread. A Bible is ~31 000 verses; deleting it on the
-        // context that draws the window is minutes of beach ball.
-        libraryTasks.deleteBibleModules([module], searchIndex: searchIndex)
+        // Off the main thread, and as SQL rather than by faulting in 31 000
+        // verses to throw them away. The runner drops the selection first if
+        // this is the module currently open.
+        libraryTasks.deleteBibleModules([module], searchIndex: searchIndex,
+                                        clearing: libraryManager)
     }
 }
 

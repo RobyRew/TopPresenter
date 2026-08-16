@@ -16,10 +16,27 @@
 //  WHAT THIS DOES INSTEAD
 //
 //  A @ModelActor, so the work happens on its own context and its own thread,
-//  and one save PER MODULE rather than one at the end. The store never holds a
-//  two-million-row transaction, the freelist never grows to the point where the
-//  vacuum dominates, and — the part that matters to whoever is waiting — the
-//  job can report which module it is on and be cancelled between them.
+//  and one save PER MODULE rather than one at the end.
+//
+//  THAT WAS NOT ENOUGH, and the second CoreData log said why: a
+//  `wal_checkpoint(TRUNCATE)` and an `incremental_vacuum` after every save. The
+//  work had moved off the main thread but had not got smaller — and a checkpoint
+//  takes an EXCLUSIVE store lock, so the main thread still stalled on its next
+//  read. Off-thread is not the same as out of the way.
+//
+//  The real cost was never the save. It was building two million Swift objects
+//  in order to throw them away: `modelContext.delete(module)` faults in every
+//  book, chapter and verse so it can walk the cascade in memory.
+//
+//  `delete(model:where:)` is an NSBatchDeleteRequest — it runs as SQL and never
+//  builds the objects at all. Measured on a real-sized Bible: **7.97 s → 0.17 s**,
+//  and it still honours the four-level `.cascade` down to the verses (verified
+//  in `BulkDeleteSpike`, because a cascade that quietly stopped short would
+//  orphan 31 000 rows per module — a worse bug than being slow).
+//
+//  Reaching UP from the leaves instead — deleting verses by
+//  `$0.chapter?.book?.module?.id` — is not an available fallback: that predicate
+//  compiles and then aborts the process. Also in the spike, so nobody tries it.
 //
 
 import Foundation
@@ -51,23 +68,25 @@ actor LibraryMaintenanceActor {
                 outcome.wasCancelled = true
                 break
             }
+            // The name is read through a fetch that pulls ONE row. Reading it is
+            // the only reason this module is ever faulted; the delete below never
+            // touches the object.
             let descriptor = FetchDescriptor<BibleModule>(predicate: #Predicate { $0.id == id })
-            guard let module = try? modelContext.fetch(descriptor).first else { continue }
-            let name = module.name
+            guard let name = try? modelContext.fetch(descriptor).first?.name else { continue }
             await onProgress(name, index)
 
-            // No autoreleasepool around this: under Swift 6 the closure would
-            // be "sending" a non-Sendable model out of its region. The per-module
-            // SAVE below is what actually bounds memory anyway — it is the
-            // transaction size, not the pool, that made the old code hurt.
-            modelContext.delete(module)
             do {
+                try modelContext.delete(model: BibleModule.self, where: #Predicate { $0.id == id })
                 try modelContext.save()
                 outcome.deleted += 1
             } catch {
                 outcome.failures.append("\(name) — \(error.localizedDescription)")
             }
         }
+        // A batch delete deliberately does NOT update in-memory state, so this
+        // actor's own context is still holding rows that no longer exist. The
+        // main context is rolled back by the caller for the same reason.
+        modelContext.rollback()
         return outcome
     }
 
@@ -84,15 +103,51 @@ actor LibraryMaintenanceActor {
                 break
             }
             let descriptor = FetchDescriptor<SongCollection>(predicate: #Predicate { $0.id == id })
-            guard let collection = try? modelContext.fetch(descriptor).first else { continue }
-            let name = collection.name
+            guard let name = try? modelContext.fetch(descriptor).first?.name else { continue }
             await onProgress(name, index)
-            modelContext.delete(collection)
             do {
+                try modelContext.delete(model: SongCollection.self, where: #Predicate { $0.id == id })
                 try modelContext.save()
                 outcome.deleted += 1
             } catch {
                 outcome.failures.append("\(name) — \(error.localizedDescription)")
+            }
+        }
+        modelContext.rollback()
+        return outcome
+    }
+
+    /// Wipe the whole song library — collections, orphan songs, songbooks.
+    ///
+    /// The old version of this did it on the MAIN context: three fetch-all
+    /// loops calling `delete(_:)` object by object, then one save. A library of
+    /// any size makes that the same beach ball the Bibles had, which is exactly
+    /// what "I can't imagine for songs how it would be" was pointing at.
+    ///
+    /// Three batch deletes in dependency order instead. Collections cascade
+    /// their songs; whatever is left is genuinely orphaned and swept after;
+    /// songbooks go last because `Song.songbook` nullifies rather than
+    /// cascades, and nullifying into rows that are already gone is wasted work.
+    func deleteAllSongs(
+        onProgress: @escaping @MainActor @Sendable (String, Int) -> Void
+    ) async -> DeleteOutcome {
+        var outcome = DeleteOutcome()
+        let steps: [(String, () throws -> Void)] = [
+            (String(localized: "Collections", comment: "Delete progress"),
+             { try self.modelContext.delete(model: SongCollection.self) }),
+            (String(localized: "Songs", comment: "Delete progress"),
+             { try self.modelContext.delete(model: Song.self) }),
+            (String(localized: "Songbooks", comment: "Delete progress"),
+             { try self.modelContext.delete(model: Songbook.self) }),
+        ]
+        for (index, step) in steps.enumerated() {
+            await onProgress(step.0, index)
+            do {
+                try step.1()
+                try modelContext.save()
+                outcome.deleted += 1
+            } catch {
+                outcome.failures.append("\(step.0) — \(error.localizedDescription)")
             }
         }
         return outcome

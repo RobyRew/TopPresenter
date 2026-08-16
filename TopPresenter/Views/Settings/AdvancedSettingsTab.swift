@@ -167,46 +167,30 @@ struct AdvancedSettingsTab: View {
         defer { isWorking = false }
         switch action {
         case .deleteSongs:
-            // Collections cascade their songs; orphan songs + songbooks swept after.
-            for col in (try? modelContext.fetch(FetchDescriptor<SongCollection>())) ?? [] {
-                modelContext.delete(col)
+            // Was the Bibles' beach ball in miniature: fetch every collection,
+            // song and songbook onto the MAIN context, delete them one object
+            // at a time, save once. Now three batch deletes on the maintenance
+            // actor — and the note is written when the job finishes, not while
+            // it is still running, so it cannot claim success before there is
+            // any.
+            libraryTasks.deleteAllSongs(clearing: libraryManager) { succeeded in
+                lastActionNote = succeeded
+                    ? String(localized: "Toate cântecele au fost șterse.", comment: "Advanced note")
+                    : String(localized: "Ștergerea nu a putut fi salvată.", comment: "Advanced error")
             }
-            for song in (try? modelContext.fetch(FetchDescriptor<Song>())) ?? [] {
-                modelContext.delete(song)
-            }
-            for book in (try? modelContext.fetch(FetchDescriptor<Songbook>())) ?? [] {
-                modelContext.delete(book)
-            }
-            do {
-                try modelContext.save()
-            } catch {
-                // The objects are already gone from the in-memory graph, so a failed
-                // save means the deletion may not survive relaunch. Saying "done"
-                // here would be a lie the user only discovers after restarting.
-                lastActionNote = String(localized: "Ștergerea nu a putut fi salvată: \(error.localizedDescription)",
-                                        comment: "Advanced error")
-                return
-            }
-            libraryManager.selectedSongCollection = nil
-            libraryManager.selectedSong = nil
-            libraryManager.selectedSongVersion = nil
-            libraryManager.selectedSongVerse = nil
-            NotificationCenter.default.post(name: .libraryDidChange, object: nil)
-            lastActionNote = String(localized: "Toate cântecele au fost șterse.", comment: "Advanced note")
 
         case .deleteBibles:
-            libraryManager.selectedBibleModule = nil
-            libraryManager.selectedBook = nil
-            libraryManager.selectedChapter = nil
-            libraryManager.selectedVerses = []
             // THE six-minute beach ball. This used to delete every module on
             // the MAIN context and save once at the end: seventy Bibles is over
             // two million cascade-deleted rows in a single transaction, on the
-            // thread that draws the window. It runs on a background actor now,
-            // one save per module, with a progress strip and a Stop button.
+            // thread that draws the window. Moving it to a background actor was
+            // only half the cure — it still built every one of those objects in
+            // order to delete them. It runs as a batch delete now, in SQL, with
+            // a progress strip and a Stop button.
             let modules = (try? modelContext.fetch(FetchDescriptor<BibleModule>())) ?? []
             VerseIndexCache.deleteAll()
-            libraryTasks.deleteBibleModules(modules, searchIndex: index)
+            libraryTasks.deleteBibleModules(modules, searchIndex: index,
+                                            clearing: libraryManager)
             lastActionNote = String(localized: "Se șterg \(modules.count) Biblii…", comment: "Advanced note")
 
         case .deleteHistory:

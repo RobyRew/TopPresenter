@@ -88,16 +88,29 @@ final class LibraryTaskRunner {
 
     // MARK: - Delete
 
-    /// Delete Bible modules off the main thread, one save per module.
+    /// Delete Bible modules off the main thread.
     ///
     /// The ids are read on the main context BEFORE the job starts, because that
     /// is the only thread allowed to touch those objects; everything after is
     /// the actor's.
-    func deleteBibleModules(_ modules: [BibleModule], searchIndex: SearchIndex?) {
+    ///
+    /// Pass `libraryManager` whenever one is in scope. The delete runs as SQL
+    /// and never marks the objects deleted, so a selection pointing into a
+    /// module that is about to vanish would survive as a reference to a row
+    /// that does not exist. Clearing it is done HERE, up front and while the
+    /// objects are still valid, so that no call site has to remember the rule.
+    func deleteBibleModules(_ modules: [BibleModule],
+                            searchIndex: SearchIndex?,
+                            clearing libraryManager: LibraryManager? = nil) {
         guard !isBusy, !modules.isEmpty else { return }
         let ids = modules.map(\.id)
-        let names = modules.map(\.name)
         for id in ids { searchIndex?.moduleDeleted(id) }
+
+        if let libraryManager,
+           let open = libraryManager.selectedBibleModule,
+           ids.contains(open.id) {
+            libraryManager.clearBibleSelection()
+        }
 
         progress.begin(.deleting, total: ids.count)
         current = Task { [weak self] in
@@ -107,22 +120,26 @@ final class LibraryTaskRunner {
                 onProgress: { [weak self] name, _ in self?.progress.startItem(name) },
                 isCancelled: { [weak self] in self?.progress.isCancelled ?? false }
             )
-            // The actor deleted on its own context; the main one still holds
-            // faults for rows that no longer exist.
-            container.mainContext.rollback()
             lastNote = outcome.failures.isEmpty
                 ? String(localized: "\(outcome.deleted) deleted.", comment: "Delete result")
                 : String(localized: "\(outcome.deleted) deleted, \(outcome.failures.count) failed.",
                          comment: "Delete result")
-            _ = names
             progress.end()
             NotificationCenter.default.post(name: .libraryDidChange, object: nil)
         }
     }
 
-    func deleteSongCollections(_ collections: [SongCollection]) {
+    func deleteSongCollections(_ collections: [SongCollection],
+                               clearing libraryManager: LibraryManager? = nil) {
         guard !isBusy, !collections.isEmpty else { return }
         let ids = collections.map(\.id)
+
+        if let libraryManager,
+           let open = libraryManager.selectedSongCollection,
+           ids.contains(open.id) {
+            libraryManager.clearSongSelection()
+        }
+
         progress.begin(.deleting, total: ids.count)
         current = Task { [weak self] in
             guard let self else { return }
@@ -131,10 +148,30 @@ final class LibraryTaskRunner {
                 onProgress: { [weak self] name, _ in self?.progress.startItem(name) },
                 isCancelled: { [weak self] in self?.progress.isCancelled ?? false }
             )
-            container.mainContext.rollback()
             lastNote = String(localized: "\(outcome.deleted) deleted.", comment: "Delete result")
             progress.end()
             NotificationCenter.default.post(name: .libraryDidChange, object: nil)
+        }
+    }
+
+    /// Wipe the song library. Same treatment as the Bibles: SQL, off the main
+    /// thread, reported in the strip.
+    func deleteAllSongs(clearing libraryManager: LibraryManager? = nil,
+                        onFinish: @escaping @MainActor (Bool) -> Void = { _ in }) {
+        guard !isBusy else { return }
+        libraryManager?.clearSongSelection()
+        progress.begin(.deleting, total: 3)
+        current = Task { [weak self] in
+            guard let self else { return }
+            let outcome = await makeMaintenance().deleteAllSongs(
+                onProgress: { [weak self] name, _ in self?.progress.startItem(name) }
+            )
+            lastNote = outcome.failures.isEmpty
+                ? String(localized: "All songs deleted.", comment: "Delete result")
+                : outcome.failures.joined(separator: "\n")
+            progress.end()
+            NotificationCenter.default.post(name: .libraryDidChange, object: nil)
+            onFinish(outcome.failures.isEmpty)
         }
     }
 

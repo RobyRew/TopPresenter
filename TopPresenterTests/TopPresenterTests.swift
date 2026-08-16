@@ -8429,3 +8429,169 @@ struct PresentationSlideSnapshot: Equatable {
     }
 }
 
+
+// MARK: - Bulk delete: does the SQL path honour cascade?
+
+/// The delete of seventy Bibles beach-balled even after it moved to its own
+/// actor, and the CoreData log said why: a `wal_checkpoint(TRUNCATE)` and an
+/// `incremental_vacuum` after EVERY save, each taking an exclusive store lock
+/// that stalls the main thread's next read.
+///
+/// The cure is to stop faulting two million objects into memory to delete them.
+/// `modelContext.delete(model:where:)` is an `NSBatchDeleteRequest` — it runs
+/// as SQL and never builds the objects. The question this suite answers, before
+/// any of it is relied on, is whether that SQL path still honours the
+/// `.cascade` delete rules four levels deep. If it does not, batch-deleting a
+/// module leaves 31 000 orphaned verses per Bible — a silently growing store,
+/// which is far worse than being slow.
+@Suite("Bulk delete")
+struct BulkDeleteSpike {
+
+    /// On DISK deliberately: batch delete is a store-level operation and an
+    /// in-memory store is not the thing being shipped.
+    private func makeDiskContainer() throws -> (ModelContainer, URL) {
+        let dir = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("tp-bulk-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let container = try ModelContainer(
+            for: Schema(versionedSchema: SchemaV2.self),
+            configurations: [ModelConfiguration(url: dir.appendingPathComponent("store.sqlite"))]
+        )
+        return (container, dir)
+    }
+
+    private func seedModule(_ ctx: ModelContext, name: String,
+                           books: Int = 3, chapters: Int = 4, verses: Int = 25) {
+        let module = BibleModule(name: name, abbreviation: name, sourceFormat: "test")
+        ctx.insert(module)
+        for b in 0..<books {
+            let book = BibleBook(name: "\(name) B\(b)", bookNumber: b, testament: "OT")
+            book.module = module
+            for c in 0..<chapters {
+                let chapter = BibleChapter(chapterNumber: c)
+                chapter.book = book
+                for v in 0..<verses {
+                    let verse = BibleVerse(verseNumber: v, text: "\(name) \(b):\(c):\(v)")
+                    verse.chapter = chapter
+                }
+            }
+        }
+    }
+
+    @Test func batchDeletingAModuleCascadesAllTheWayDownToVerses() throws {
+        let (container, dir) = try makeDiskContainer()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let ctx = ModelContext(container)
+
+        seedModule(ctx, name: "GONE")
+        seedModule(ctx, name: "KEPT")
+        try ctx.save()
+
+        #expect(try ctx.fetchCount(FetchDescriptor<BibleVerse>()) == 600)
+
+        let doomed = try #require(
+            try ctx.fetch(FetchDescriptor<BibleModule>(predicate: #Predicate { $0.name == "GONE" })).first
+        ).id
+        try ctx.delete(model: BibleModule.self, where: #Predicate { $0.id == doomed })
+        try ctx.save()
+
+        // A batch delete does not update the in-memory graph, so read through a
+        // context that never saw the rows.
+        let fresh = ModelContext(container)
+        #expect(try fresh.fetchCount(FetchDescriptor<BibleModule>()) == 1)
+        #expect(try fresh.fetchCount(FetchDescriptor<BibleBook>()) == 3,
+                "cascade stopped before books")
+        #expect(try fresh.fetchCount(FetchDescriptor<BibleChapter>()) == 12,
+                "cascade stopped before chapters")
+        #expect(try fresh.fetchCount(FetchDescriptor<BibleVerse>()) == 300,
+                "cascade stopped before verses — batch delete would orphan them")
+    }
+
+    /// Documented finding, not a live test: the bottom-up fallback is IMPOSSIBLE.
+    ///
+    /// `#Predicate<BibleVerse> { $0.chapter?.book?.module?.id == id }` compiles
+    /// and then **aborts the process** at fetch time — a three-hop optional
+    /// traversal is more than SwiftData's predicate backend can lower to SQL.
+    /// It is left written down because the obvious reaction to a cascade that
+    /// did not reach far enough would be to reach up from the leaves, and that
+    /// road ends in a crash rather than in a wrong number.
+
+    /// Does a context that is ALREADY holding a module notice the SQL delete?
+    ///
+    /// It does, and that is worth knowing precisely, because the two obvious
+    /// remedies are both unavailable or harmful: `ModelContext` has no
+    /// `reset()` (that is an NSManagedObjectContext API), and a blanket
+    /// `rollback()` would throw away any unsaved edit the user had in flight.
+    ///
+    /// Neither is needed. FETCHES go to the store, so `@Query` and every
+    /// descriptor-based read return the truth the moment the delete commits.
+    ///
+    /// What does NOT fix itself is a strong reference someone already holds —
+    /// `LibraryManager.selectedBibleModule` and friends. Those point at rows
+    /// that are gone, and clearing them is the caller's job. That is why
+    /// `LibraryTaskRunner` tears the selection down rather than trusting the
+    /// context to do it.
+    @Test func fetchesSeeTheBatchDeleteImmediately() throws {
+        let (container, dir) = try makeDiskContainer()
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        let writer = ModelContext(container)
+        seedModule(writer, name: "GONE")
+        seedModule(writer, name: "KEPT")
+        try writer.save()
+
+        // Stand in for the main context: fetch both, so both are materialized.
+        let live = ModelContext(container)
+        let before = try live.fetch(FetchDescriptor<BibleModule>(sortBy: [SortDescriptor(\.name)]))
+        #expect(before.count == 2)
+
+        let doomed = try #require(before.first).id      // "GONE" sorts before "KEPT"
+        try writer.delete(model: BibleModule.self, where: #Predicate { $0.id == doomed })
+        try writer.save()
+
+        #expect(try live.fetchCount(FetchDescriptor<BibleModule>()) == 1,
+                "the live context is still serving a module that no longer exists")
+        #expect(try live.fetch(FetchDescriptor<BibleModule>()).map(\.name) == ["KEPT"])
+        #expect(try live.fetchCount(FetchDescriptor<BibleVerse>()) == 300,
+                "the survivor's verses went with it, or the doomed module's did not")
+    }
+
+    /// What the fix is actually worth, on a Bible the size of a real one.
+    ///
+    /// Measured when this landed: **7.97 s via the object graph, 0.17 s via the
+    /// batch delete** — 47x, for one module. Seventy of them is the difference
+    /// between nine minutes and twelve seconds, which is exactly the complaint.
+    ///
+    /// The ratio is asserted rather than an absolute time, so the guard means
+    /// the same thing on a slower machine. It exists to catch a REGRESSION —
+    /// someone reinstating `context.delete(module)` — not to police the number.
+    @Test func batchDeleteIsOrdersOfMagnitudeFasterThanTheObjectGraph() throws {
+        let (container, dir) = try makeDiskContainer()
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        // ~31 000 verses: the size of an actual Bible.
+        let ctx = ModelContext(container)
+        seedModule(ctx, name: "GRAPH", books: 66, chapters: 20, verses: 24)
+        seedModule(ctx, name: "BATCH", books: 66, chapters: 20, verses: 24)
+        try ctx.save()
+
+        let graphStart = Date()
+        let viaGraph = try #require(
+            try ctx.fetch(FetchDescriptor<BibleModule>(predicate: #Predicate { $0.name == "GRAPH" })).first)
+        ctx.delete(viaGraph)
+        try ctx.save()
+        let graphSeconds = Date().timeIntervalSince(graphStart)
+
+        let batchStart = Date()
+        let doomed = try #require(
+            try ctx.fetch(FetchDescriptor<BibleModule>(predicate: #Predicate { $0.name == "BATCH" })).first).id
+        try ctx.delete(model: BibleModule.self, where: #Predicate { $0.id == doomed })
+        try ctx.save()
+        let batchSeconds = Date().timeIntervalSince(batchStart)
+
+        let fresh = ModelContext(container)
+        #expect(try fresh.fetchCount(FetchDescriptor<BibleVerse>()) == 0)
+        #expect(batchSeconds * 5 < graphSeconds,
+                "batch \(String(format: "%.2f", batchSeconds))s vs graph \(String(format: "%.2f", graphSeconds))s — expected far faster, so the bulk path has probably fallen back to faulting the whole graph again")
+    }
+}

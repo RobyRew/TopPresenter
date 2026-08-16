@@ -162,6 +162,16 @@ final class ImportService {
     /// on the passed context — call it from the main actor with the main context
     /// (single-file UI imports) or from BackgroundImportActor with ITS context
     /// (batch imports, fully off-main). Never mix contexts across isolations.
+    /// How many inserted rows to let pile up before saving during a Bible
+    /// import.
+    ///
+    /// Every save past CoreData's prune threshold costs a WAL checkpoint and a
+    /// vacuum, both under an exclusive store lock, so saves are the thing to be
+    /// stingy with — but letting the whole Bible accumulate is the giant
+    /// transaction that made deleting hurt. 20 000 puts a real Bible at two or
+    /// three saves.
+    nonisolated static let saveEveryRows = 20_000
+
     nonisolated static func importBible(
         fileURL: URL,
         format: SupportedBibleFormat,
@@ -273,6 +283,9 @@ final class ImportService {
         modelContext.insert(module)
 
         let totalBooks = result.books.count
+        // Rows written since the last save. See the save below for why this is
+        // counted rather than saving per book.
+        var pendingRows = 0
 
         for (index, importBook) in result.books.enumerated() {
             // autoreleasepool: the chapter/verse loops churn thousands of
@@ -313,13 +326,33 @@ final class ImportService {
                             extensionsJSON: importVerse.extensionsJSON
                         )
                         verse.chapter = chapter
+                        pendingRows += 1
                     }
+                    pendingRows += 1
                 }
+                pendingRows += 1
             }
 
-            // Chunked persistence: one save per book keeps the context's pending
-            // object graph small instead of one massive end-of-import save.
-            try modelContext.save()
+            // Chunked persistence — but chunked by ROW COUNT, not per book.
+            //
+            // This used to save after every book: 66 saves for one Bible, 4 600
+            // for a library of seventy. Every save on a store past CoreData's
+            // prune threshold drags a `wal_checkpoint(TRUNCATE)` and an
+            // `incremental_vacuum` behind it, and a TRUNCATE checkpoint takes an
+            // EXCLUSIVE lock on the store — so each one stalls the main thread
+            // the next time it reads. That is the wall of PostSaveMaintenance
+            // lines in the console, and it is why importing stayed slow after
+            // the work moved off the main thread.
+            //
+            // Books are also wildly uneven — Psalms is 2 461 verses, Obadiah is
+            // 21 — so "per book" was never a sensible unit of work anyway. At
+            // 20 000 rows a Bible saves two or three times instead of 66, and
+            // the pending graph still stays small enough not to bring back the
+            // heap trouble the autoreleasepool above is there for.
+            if pendingRows >= saveEveryRows {
+                try modelContext.save()
+                pendingRows = 0
+            }
 
             let progress = 0.5 + (Double(index + 1) / Double(totalBooks)) * 0.4
             await progressHandler?(progress, String(localized: "Importing \(importBook.name)...", comment: "Import progress"))

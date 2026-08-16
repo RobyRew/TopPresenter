@@ -170,37 +170,15 @@ struct BatchExportSheet: View {
         guard panel.runModal() == .OK, let folder = panel.url else { return }
 
         let selectedModules = modules.filter { selectedModuleIDs.contains($0.id) }
-        isExporting = true
-        exportedCount = 0
 
-        Task {
-            var succeeded = 0
-            var failed = 0
-
-            // Off the main thread, via the runner — serializing seventy
-            // Bibles is the same order of work as importing them, and doing it
-            // here froze the window exactly like the delete used to.
-            await MainActor.run {
-                libraryTasks.exportBibleModules(selectedModules, to: folder)
-                isExporting = false
-                dismiss()
-            }
-            return
-            await MainActor.run {
-                isExporting = false
-                if failed == 0 {
-                    appState.showSuccess(
-                        String(localized: "Batch Export Complete", comment: "Alert"),
-                        message: String(localized: "Successfully exported \(succeeded) module(s) to \(folder.lastPathComponent)/", comment: "Alert")
-                    )
-                } else {
-                    appState.showError(
-                        String(localized: "Batch Export Finished", comment: "Alert"),
-                        message: String(localized: "\(succeeded) succeeded, \(failed) failed.", comment: "Alert")
-                    )
-                }
-                dismiss()
-            }
-        }
+        // Off the main thread, via the runner — serializing seventy Bibles is
+        // the same order of work as importing them, and doing it here froze the
+        // window exactly like the delete used to.
+        //
+        // No completion alert: the job outlives this sheet now, so the result
+        // is reported where the job lives — the progress strip in the main
+        // window, which also carries the Stop button.
+        libraryTasks.exportBibleModules(selectedModules, to: folder)
+        dismiss()
     }
 }

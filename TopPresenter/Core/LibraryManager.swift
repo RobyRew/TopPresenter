@@ -33,6 +33,38 @@ final class LibraryManager {
         cachedSortedVerses = selectedChapter?.verses.sorted { $0.verseNumber < $1.verseNumber } ?? []
     }
 
+    // MARK: - Dropping selections before a bulk delete
+    //
+    // These exist because a bulk delete runs as SQL (`delete(model:where:)`),
+    // which never touches the objects it removes. Fetches see the change at
+    // once, so `@Query` and the sidebars are fine — but a selection held HERE
+    // is a strong reference to a row that no longer exists, and reading a
+    // property off it afterwards is undefined at best.
+    //
+    // Always call these BEFORE the delete starts, while the objects are still
+    // valid. `LibraryTaskRunner` does exactly that, so no call site has to
+    // remember to.
+
+    /// Forget whatever Bible passage is open.
+    func clearBibleSelection() {
+        selectedVerses = []
+        selectedChapter = nil
+        selectedBook = nil
+        selectedBibleModule = nil
+        isAutoFillActive = false
+    }
+
+    /// Forget whatever song is open, including anything the editor is holding.
+    func clearSongSelection() {
+        songToEdit = nil
+        songEditVersionID = nil
+        songEditSectionKey = nil
+        selectedSongVerse = nil
+        selectedSongVersion = nil
+        selectedSong = nil
+        selectedSongCollection = nil
+    }
+
     // MARK: - Song State
     var selectedSongCollection: SongCollection?
     var selectedSong: Song?
