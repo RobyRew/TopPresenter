@@ -28,6 +28,7 @@ jobs:
     timeout-minutes: 40
     outputs:
       version: ${{ steps.package.outputs.VERSION }}
+      build: ${{ steps.package.outputs.BUILD }}
       prerelease_tag: ${{ steps.package.outputs.PRERELEASE_TAG }}
       prerelease_version: ${{ steps.package.outputs.PRERELEASE_VERSION }}
 
@@ -128,17 +129,27 @@ jobs:
           VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$APP_PATH/Contents/Info.plist" 2>/dev/null || echo "1.0")
           BUILD=$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$APP_PATH/Contents/Info.plist" 2>/dev/null || echo "1")
 
-          # Alpha counter is PER VERSION: bumping MARKETING_VERSION restarts at alpha.1
+          # ONE rolling alpha, not one per commit.
+          #
+          # This counted existing tags and incremented, so every push to main
+          # left a permanent release behind — 72 of them accumulated before
+          # anyone looked, and deleting them by hand only bought an hour. The
+          # tag is fixed now (`v<version>-alpha`) and the release is overwritten
+          # in place, so "the latest build of main" is always exactly one entry.
+          #
+          # The build number still climbs (CFBundleVersion, from the run number)
+          # which is what Sparkle actually compares, so auto-update keeps
+          # working across overwrites.
           git fetch --tags --force --quiet
-          ALPHA_N=$(( $(git tag -l "v$VERSION-alpha.*" | wc -l | tr -d ' ') + 1 ))
 
           echo "VERSION=$VERSION" >> $GITHUB_ENV
           echo "BUILD=$BUILD" >> $GITHUB_ENV
-          echo "PRERELEASE_VERSION=$VERSION-alpha.${ALPHA_N}" >> $GITHUB_ENV
-          echo "PRERELEASE_TAG=v$VERSION-alpha.${ALPHA_N}" >> $GITHUB_ENV
+          echo "PRERELEASE_VERSION=$VERSION-alpha" >> $GITHUB_ENV
+          echo "PRERELEASE_TAG=v$VERSION-alpha" >> $GITHUB_ENV
           echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
-          echo "PRERELEASE_VERSION=$VERSION-alpha.${ALPHA_N}" >> $GITHUB_OUTPUT
-          echo "PRERELEASE_TAG=v$VERSION-alpha.${ALPHA_N}" >> $GITHUB_OUTPUT
+          echo "BUILD=$BUILD" >> $GITHUB_OUTPUT
+          echo "PRERELEASE_VERSION=$VERSION-alpha" >> $GITHUB_OUTPUT
+          echo "PRERELEASE_TAG=v$VERSION-alpha" >> $GITHUB_OUTPUT
 
           # Create ZIP
           cd "build/Build/Products/Release"
@@ -239,21 +250,35 @@ jobs:
       - name: Get short SHA
         run: echo "SHORT_SHA=${GITHUB_SHA::7}" >> $GITHUB_ENV
 
+      # The rolling tag has to MOVE, and the release action will not move one it
+      # did not create. Without this the release keeps updating its assets while
+      # its tag still points at whatever commit first created it — the download
+      # is right and the "source code" links are a lie.
+      - name: Move the rolling alpha tag to this commit
+        env:
+          TAG: ${{ needs.build.outputs.prerelease_tag }}
+        run: |
+          git tag -f "$TAG" "$GITHUB_SHA"
+          git push -f origin "refs/tags/$TAG"
+
       - name: Create alpha pre-release
         uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ needs.build.outputs.prerelease_tag }}
           name: "TopPresenter ${{ needs.build.outputs.prerelease_version }}"
           prerelease: true
-          generate_release_notes: true
+          # No generated notes on a rolling release: they would be the diff since
+          # the tag, and the tag is always the previous push.
+          generate_release_notes: false
           body: |
-            ### ⚡ Automatic Alpha Build
+            ### ⚡ Latest build of `main`
 
-            **Version:** `${{ needs.build.outputs.prerelease_version }}`
-            **Tag:** `${{ needs.build.outputs.prerelease_tag }}`
+            This release is **overwritten on every push**. It is always the tip
+            of `main`, never a fixed point in history — if you need a build that
+            stays put, use a tagged beta or stable release.
 
+            **Version:** `${{ needs.build.outputs.prerelease_version }}` (build ${{ needs.build.outputs.build }})
             **Commit:** `${{ github.sha }}`
-            **Branch:** `main`
             **Built:** ${{ github.event.head_commit.timestamp }}
 
             > ⚠️ This is an unsigned build. To open on macOS:
