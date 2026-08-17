@@ -8,7 +8,7 @@ luminous gold cross and presentation lines, on a deep indigo→violet gradient.
 |------|---------|
 | `TopPresenter.svg` | Master artwork (1024², flattened). Edit this, then re-render. |
 | `TopPresenter-1024.png` | 1024² raster master (rendered from the SVG). |
-| `AppIcon.iconset/` | All macOS sizes (16–1024, @1x/@2x). |
+| `DocumentIcons/` | Build scratch (gitignored) — `scripts/make_document_icons.swift` renders the `.iconset` folders here, `iconutil` turns them into the `.icns` that ship in `../TopPresenter/Resources/`. |
 | `icon-layers/background.svg` | Full-bleed gradient layer — Icon Composer background. |
 | `icon-layers/foreground.svg` | Glass panel + cross + lines (transparent) — Icon Composer foreground. |
 
@@ -38,10 +38,11 @@ hand-made `.icns` any more: `actool` generates one from the `.icon` at build tim
 ```bash
 cd Logo
 qlmanage -t -s 1024 -o . TopPresenter.svg && mv TopPresenter.svg.png TopPresenter-1024.png
-sips -z 256 256 TopPresenter-1024.png --out ../icon.png
+sips -z 256 256 TopPresenter-1024.png --out ../docs/icon.png
 ```
-The `AppIcon.iconset/` folder is legacy — kept only as a reference render. It no
-longer feeds the app.
+The old `AppIcon.iconset/` is gone. It was 5 MB of hand-rendered sizes that
+stopped feeding the app the moment `AppIcon.icon` took over, and nothing —
+not the project, not a script, not the workflow — referenced it any more.
 
 ## Editing the `.icon` (macOS Tahoe — Icon Composer)
 The bundle is authored in Apple's **Icon Composer** GUI (Xcode 26+) and cannot be

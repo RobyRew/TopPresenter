@@ -48,3 +48,8 @@ ExtraAssets/Themes/
 ExtraAssets/ThemesV2/
 # Icon Composer raster exports (regenerable from the .icon / .svg)
 Logo/Icon-Exports/
+# Icon intermediates. `scripts/make_document_icons.swift` renders these .iconset
+# folders and `iconutil` turns them into the .icns that actually ship in
+# TopPresenter/Resources/ — the folders themselves are build scratch.
+Logo/DocumentIcons/
+
