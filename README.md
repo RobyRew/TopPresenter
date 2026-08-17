@@ -182,7 +182,13 @@ The output window is transparent and borderless, opens on whichever screen you c
 
 ---
 
-## Songs in depth
+## Songs
+
+<p align="center">
+  <img src="docs/screenshots/songs.png" width="880" alt="The song library: an indexed list, the slides a song splits into, and a live preview rendered with the current theme">
+</p>
+
+Sections split into slides automatically, and the preview on the right is your actual theme — what you see is what the projector gets.
 
 <details>
 <summary><b>Versions, chords and the editor</b></summary>
@@ -193,7 +199,9 @@ A song is a group of renditions, not a single text. Each version carries its own
 
 The editor is two panes: section cards you can reorder, duplicate and mark `×N`, and a live preview rendered with your actual theme that follows whichever section you click. There is a **Verified** flag for songs you have checked, a filter for it, and a change log per song.
 
-Sections split into slides automatically at whatever line count you set, with repeat markers (`/: :/`, `‖: :‖`, `(×2)`, *bis*) drawn the way the theme says.
+Slides split at whatever line count you set, with repeat markers (`/: :/`, `‖: :‖`, `(×2)`, *bis*) drawn the way the theme says.
+
+The browser handles a real library — list or grid, indexed search, sort by title, artist, songbook, language or recency, and filters for collection, language, media and verified-only.
 
 </details>
 
