@@ -8698,3 +8698,62 @@ struct PDFMediaTests {
         #expect(ImportCatalog.importable.contains { $0.fileExtensions.contains("pdf") })
     }
 }
+
+// MARK: - Scanning a folder of .tptheme packages
+
+/// Selecting the unzipped theme pack must find the themes inside it.
+///
+/// This is what the themes-1 release tells people to do — "unzip, then Import →
+/// choose the folder" — and it came back with nothing when tried by hand.
+@Suite("Theme folder scanning")
+struct ThemeFolderScanTests {
+
+    /// A `.tptheme` is a DIRECTORY, so the fixture has to be one too.
+    private func makePack(at root: URL, names: [String]) throws {
+        for name in names {
+            let pkg = root.appendingPathComponent("\(name).tptheme")
+            try FileManager.default.createDirectory(at: pkg.appendingPathComponent("media"),
+                                                    withIntermediateDirectories: true)
+            let payload: [String: Any] = [
+                "name": name, "format": "all", "version": 1,
+                "themeID": UUID().uuidString, "assets": [], "payload": [:],
+            ]
+            try JSONSerialization.data(withJSONObject: payload)
+                .write(to: pkg.appendingPathComponent("theme.json"))
+        }
+    }
+
+    @Test func scanningTheParentFolderFindsEveryThemePackage() throws {
+        let root = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("tp-themes-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try makePack(at: root, names: ["Grafit", "Indigo", "Cer înstelat"])
+
+        let result = ImportScanner.scan([root])
+        let found = result.files.filter { $0.pathExtension == "tptheme" }
+        #expect(found.count == 3,
+                "found \(found.count) themes instead of 3; all files = \(result.files.map(\.lastPathComponent))")
+    }
+
+    /// And the package must be taken WHOLE, never walked into: its theme.json
+    /// and its media are parts of one document, not loose importable files.
+    @Test func aThemePackageIsNotWalkedIntoAsLooseFiles() throws {
+        let root = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("tp-themes-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try makePack(at: root, names: ["Grafit"])
+
+        let result = ImportScanner.scan([root])
+        #expect(!result.files.contains { $0.lastPathComponent == "theme.json" },
+                "the package was walked into and its theme.json picked up as a loose file")
+    }
+
+    /// `tptheme` has to be in the directory-source set, or the walk treats the
+    /// package as an ordinary folder.
+    @Test func themeIsRegisteredAsADirectorySource() {
+        #expect(ImportCatalog.directoryExtensions.contains("tptheme"),
+                "directoryExtensions = \(ImportCatalog.directoryExtensions.sorted())")
+    }
+}

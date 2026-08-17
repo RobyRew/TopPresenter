@@ -1,239 +1,245 @@
 <p align="center">
-  <img src="icon.png" width="150" alt="TopPresenter — Liquid Glass app icon">
+  <img src="icon.png" width="128" alt="TopPresenter">
 </p>
 
 <h1 align="center">TopPresenter</h1>
 
 <p align="center">
-  <strong>Professional Bible &amp; worship presentation for macOS</strong><br>
-  Project scripture, lyrics, media, and custom slides to any screen — with a full per-presenter theme engine, built in native SwiftUI &amp; SwiftData.
+  Bible and worship presentation for macOS.<br>
+  Native SwiftUI. No Electron, no subscription, no cloud account.
 </p>
+
 <p align="center">
-  <img src="https://img.shields.io/badge/macOS-15.7+-007AFF?logo=apple&logoColor=white" alt="macOS 15.7+">
-  <img src="https://img.shields.io/badge/Swift-5.0+-F05138?logo=swift&logoColor=white" alt="Swift 5.0+">
-  <img src="https://img.shields.io/badge/SwiftUI-Native-6C47FF" alt="SwiftUI">
-  <img src="https://img.shields.io/badge/SwiftData-Persistence-34C759" alt="SwiftData">
-  <img src="https://img.shields.io/badge/Version-0.1.0--alpha-orange" alt="0.1.0-alpha">
-  <img src="https://img.shields.io/badge/License-Apache%202.0-yellow" alt="License">
+  <a href="https://github.com/RobyRew/TopPresenter/releases/latest"><img src="https://img.shields.io/github/v/release/RobyRew/TopPresenter?include_prereleases&label=download&color=007AFF" alt="Latest release"></a>
+  <img src="https://img.shields.io/badge/macOS-15.7+-555" alt="macOS 15.7+">
+  <img src="https://img.shields.io/badge/license-Apache%202.0-555" alt="Apache 2.0">
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/bible.png" width="900" alt="The Bible module: books, chapters, verses, and a live preview of what the projector shows">
 </p>
 
 ---
 
-## Highlights
+## What it does
 
-- **100% native macOS** — SwiftUI interface, SwiftData persistence, no Electron, no web views
-- **Theme engine (Editor de Teme)** — a full design studio: per-presenter layouts, text boxes, media overlays, backgrounds, and a three-phase transition system
-- **Per-presenter profiles** — Bible, Songs, and Slides each have their own boxes, styles, backgrounds, and transitions; the output always renders the live content's profile
-- **Universal themes** — one theme snapshots the entire look of all presenters; portable `.tptheme` packages travel between machines with all media embedded
-- **Transparent output window** — invisible on the projector when idle; content fades in from transparency and back out
-- **Multi-window tabs** (⌘T) — different modules and Bible translations per tab, one shared output
-- **Multi-format import** — 6 Bible formats, 6 song formats (incl. the GOAT TopPresenter Song JSON with versions + chords), universal drag &amp; drop
-- **Chords &amp; live transpose** — a song-only *Acorduri* casetá renders chords over the lyrics with independent styling, plus on-the-fly transpose, capo suggestions, and combinable repeat markers
-- **Presentation history** — every song verse and Bible passage shown is tracked (per service, dwell-gated), with per-verse/book roll-ups and CSV/JSON export — kept in its own store
-- **Resolution adaptive** — layouts are defined in percentages and fonts scale from a 1080p reference; any projector resolution, aspect ratio, or PPI just works
+Put scripture, lyrics, images, video and PDF slides on a projector, and control how all of it looks from one place.
 
----
+- **Read and project any Bible.** 70 translations available as a free download, in 17 languages — or bring your own from OSIS, Zefania, MySword, USFM and Unbound.
+- **Sing from a real song library.** Multiple versions per song, inline chords, live transpose, bilingual lines, and imports from OpenSong, OpenLyrics, ChordPro, plain text and PowerPoint.
+- **Design the look once.** A theme covers every presenter at once — Bible, Songs, Slides, Media — and travels between machines as a single file.
+- **Nothing freezes.** Importing seventy Bibles or deleting them runs in the background with a progress bar you can cancel, while you keep working.
 
-## Starter Resources
+## Install
 
-Download from the [**Resurse** release](https://github.com/RobyRew/TopPresenter/releases/tag/resources-1):
+Download the latest `.dmg` from [**Releases**](https://github.com/RobyRew/TopPresenter/releases/latest), drag it to Applications, and open it. The app updates itself from then on.
 
-- **6 starter themes** (`.tptheme.zip`) — photo and video backgrounds with preconfigured layouts and transitions: *Cer Nepal, Flori, Galaxie, Minimal, Particule, Plaja*. Unzip, then import from the **Teme** gallery (⤓ button) — selecting the whole folder imports everything inside.
-- **Biblia EDC100** — Ediția Dumitru Cornilescu Centenară (Romanian, 66 books, 31,102 verses) in TopPresenter Bible JSON. Import from the Bible module or drag &amp; drop.
-  > © British and Foreign Bible Society (BFBS) &amp; Societatea Biblică Interconfesională din România (SBIR), 1924/2024. Distributed for personal and liturgical use.
+Then get the content:
 
----
+| | |
+|---|---|
+| [**Bible Library**](https://github.com/RobyRew/TopPresenter/releases/tag/bibles-1) | 70 translations, 17 languages, 1.7M verses |
+| [**Themes**](https://github.com/RobyRew/TopPresenter/releases/tag/themes-1) | 21 themes — photo, motion and plain-colour backgrounds |
 
-## Features
-
-### 🎨 Theme Engine — *Editor de Teme*
-
-The design studio behind everything you see on screen:
-
-- **Per-presenter layout profiles** — Biblie / Cântece / Slide-uri are edited independently (segmented picker in the editor header, with one-click copy between presenters). Songs have song boxes (*Versuri, Titlu Cântec, Etichetă Strofă, Acorduri*), not Bible ones.
-- **Chords casetá + live transpose** — *Acorduri* is a song-only box that renders the lyrics with chords above them (each chord aligned over its syllable, for any font). It ships hidden — turn it on for a stage/musician layout and it replaces the plain lyrics at the verse position. The chord **letters have their own independent style** (font, size, weight, color) separate from the lyrics, both edited in the box's Text tab. A transpose/capo control in the song header changes key on the fly (±semitone or pick any of 12 keys), with **capo suggestions** and the recommended keys from the song's metadata — all **display-only**, the saved chords are never touched.
-- **Repeat markers** — mark a repeated strofă/refren with a **bracket** (`/: :/`, `‖: :‖`, `|: :|`) and/or a **count** (`(×2)`, `bis/ter`) — the two combine (`‖: … :‖ (×2)`). They appear consistently on the filmstrip, previews, theme preview and the live output (including the chord chart, with chords kept aligned).
-- **Fixed text boxes** — boxes never move or resize with their content; text flows inside them. Drag/resize on the canvas, arrow-key nudge (⇧ = 5%), numeric X/Y/W/H fields, quick-align toggles.
-- **Custom text boxes &amp; media boxes** — add static text (church name, CCLI, "Amin."), live-fed boxes, clocks, slide counters, or image/GIF/video overlays with opacity, corner radius, edge feather, and fit/fill.
-- **Unified z-order** — one stacking order for every box; drag rows in the always-visible *Casete* list or use the Ordonare context menu. Boxes are recolorable (click the swatch), removable, hideable.
-- **Data sources per box** — every box can pull from any live field (lyrics, title, reference, translation, strofă label), static text, date, time, or slide number ("2 / 7"), with per-presenter source catalogs.
-- **Slide scope (Afișare)** — show a box on all/first/last slides; songs add **Refren** / **Strofe** (chorus detection from section labels). Song title on the first slide, "Amin." on the last — done.
-- **Complete text styling, twice** — Text Global and per-box *Personalizează* share the same 12 options in the same order: Font, Size (≤200pt), Weight, Color, Alignment, Vertical, Opacity, Line spacing, Letter spacing, Transform (MAJUSCULE/minuscule), Padding, Shadow (color + radius), Auto-fit. Every per-box option has a *Global* inherit.
-- **Backgrounds** — global + per-presenter overrides; photos, animated GIFs, or looping muted videos.
-- **Three-phase transitions** — *Intrare* (transparency → content), *Intermediar* (slide → slide), *Ieșire* (content → transparency on Hide/Clear/ESC). 14 effects (fade, zoom, slides, blur, blur+zoom, fall, 3D flip…), per-phase durations (0–3 s, 0 = instant), per-box overrides with stagger delay, and click-to-preview on the editor canvas.
-- **Undo/redo** for every layout change, coalesced per gesture.
-
-### 🖼 Themes
-
-- A theme snapshots the **entire look** — all three presenter profiles plus global text/background settings. Selecting one restyles every presenter at once.
-- **Thumbnail gallery** in every panel footer — click to apply, hover to live-preview (never while live), right-click to update/rename/export/delete. Drag sideways to pan.
-- **`.tptheme` packages** — directory bundles with `theme.json` + every referenced media file embedded. Export/import is fully portable across machines; importing a folder imports every package inside it.
-
-### 📖 Bible
-
-- **6 import formats** — TopPresenter Bible (`.tpbible`), OSIS XML, Zefania XML, MySword SQLite, USFM, Unbound Bible
-- **The GOAT format** — TopPresenter Bible JSON **v1.0.0** is a superset of every format: section headings, footnotes, cross-references, Strong's numbers, poetry, and **red-letter** (words of Christ) all round-trip through import → store → export. Fields are optional; nothing is lost importing OSIS/USFM and re-exporting.
-- **Red-letter theme** — highlight the words spoken by Jesus in any color, per theme (Editor de Teme ▸ Text ▸ *Cuvintele lui Isus*). Populated from OSIS/USFM Bibles that mark them.
-- **Smart duplicate handling** — importing a Bible whose code already exists prompts **Combină / Înlocuiește / Păstrează ambele / Anulează**; *Combină* fills in only the chapters/verses you're missing.
-- **Language auto-correction** — a Bible whose declared language contradicts its actual script (e.g. a Greek interlinear mistagged Romanian) is filed under the correct language group on import.
-- **Full-text &amp; reference search** — type `John 3:16` or `Gen 1:1-3` to jump directly
-- **List view &amp; Grid view** with color-coded book categories
-- **Multi-verse selection** (⌘+Click) and **auto-fill** that measures the actual verse box
-- **Block navigation** crossing chapter/book boundaries; double-click to go live
-- **Export** as TopPresenter Bible (`.tpbible`, full v2 schema) — lossless, and re-importable
-
-### 🎵 Songs &amp; Lyrics
-
-- **The GOAT format** — **TopPresenter Song JSON v2.0.0** is one file per song and a superset of every source: per-song versions, sections with **inline chords** (ChordPro positions) and **bilingual translation lines**, arrangement/play-order, section **repeat counts**, linked media, and rich metadata all round-trip through import → store → export. Source-specific extras (chord/capo charts, song analysis, external ids) ride along losslessly in `_extensions`.
-- **Multiple versions per song** — a song groups several renditions (e.g. 3 Romanian variants, an ES translation). Each version owns its own metadata (title shown, authors, language, key/capo/tempo, copyright, CCLI, songbook, style, themes, notes, repeat marker) and **inherits the original's by default**, with a per-version toggle to customize.
-- **6 import formats** — TopPresenter Song JSON, OpenSong XML, OpenLyrics XML (translations + chords), ChordPro, plain text, and PowerPoint (PPTX &amp; PPT — sandbox-safe, in-process parsing, with filename titles + chorus-reuse detection).
-- **Recursive folder import** for thousands of files, with progress, format auto-detection, and duplicate handling (add as new version / keep both / skip). Only TopPresenter-supported file types are scanned and the walk runs off the main thread, so picking a huge folder never freezes the app.
-- **Scalable browser** — list ⇄ grid with theme-rendered thumbnails, instant indexed search, sort header chips (A-Z · Artist · Carte · Limbă · Recente), and filters (collection, language, media, **verified-only**).
-- **Verified flag** — mark a song as checked &amp; good; a green seal shows in the list/grid/detail, you can filter to verified-only (or search `verificat`/`✓`), and it round-trips through GOAT export/import.
-- **Song studio editor** — two-pane visual editor with a live theme-rendered preview that follows the section you click, version tabs, color-coded section cards (drag-to-reorder, duplicate, ×N repeat, inline-chord mode), per-version metadata, a **Verifică** toggle, **Renunță** (revert all edits), and a per-song **change log** (what changed, when).
-- **Rendered slide filmstrip** — sections auto-split to fit the screen (configurable lines/slide); **Edit** button + song facts (CCLI, BPM, language, import source…) above it; click to project, double-click or ▶ to go live; each slide has a **PREVIEW** button and a delete (with confirm); bilingual + repeat markers (`/: :/`, `‖: :‖`, `|: :|`, `(×N)`, `bis/ter`) applied per the theme.
-- **Export** as TopPresenter Song JSON (one file per song or a whole folder), OpenLyrics XML, or Plain Text.
-
-### 🖥 Presentation Output
-
-- **Transparent, borderless, fullscreen overlay** — auto-opens on the target screen
-- **Single-screen mode** — the window hides after the exit transition and returns on Show
-- **Black screen** (⌘B), **Freeze** (⌘F), **Clear/ESC**, split Clear button with Force Touch
-- **Ieșire panel** in the right bar: screen, window level, disconnect behavior
-- Live clocks tick on screen; full-screen video playback with transport controls
-
-### 🪟 Multi-Window Tabs
-
-⌘T opens native tabs — each with its own module, Bible translation, and selection. Tabs are titled by **type + (lang) version + reference** (e.g. *Bible - (RO) EDC100 - Ioan 3:16*, *Songs — Înaintea Ta venim*), or rename any tab manually. One output, driven by whichever tab presses Show.
-
-### 🧭 Sidebar &amp; History
-
-- **Sidebar** — content sections (Bible, Songs, Media, Schedule, Custom Slides) up top, with **History · Settings · Account** pinned in a utility group at the bottom. **Account** opens a local profile/preferences screen (presenter name, church, defaults — no online login).
-- **Presentation History** (sidebar ▸ History, ⌘Y) — a record of everything shown to the audience: songs and Bible passages, how many times (per service/session), and when. Verses are logged only after a short on-screen dwell, so fast scrubbing doesn't pollute it. Drill into a song for its session timeline + per-verse counts; Bible passages roll up by translation → book → chapter. Stored in its **own** database (never part of the song/bible JSON) with its **own** CSV / JSON export. Each song's detail panel shows its history at a glance.
-
-### 📂 Universal Drag &amp; Drop, Media, Schedule, Quick Search
-
-- Drop any file — Bibles, songs, media auto-classify (mixed drops handled)
-- Media library with grid, type filter, thumbnails; audio player (speed, seek), video looping
-- Service schedules with running order and go-live; custom text slides
-- **⌘K Quick Search** across Bible, songs, and slides
+Unzip, then **Import** → choose the folder. Subfolders are scanned, and nothing is added until you confirm.
 
 ---
 
-## Keyboard Shortcuts
+## The theme editor
 
-| Shortcut | Action |
-|----------|--------|
-| `⌘K` | Quick search |
-| `⌘T` | New tab |
-| `⌘1`–`⌘5` | Jump to Bible / Songs / Media / Schedule / Custom Slides |
-| `⌘Y` | Presentation History |
-| `⌘B` | Black screen |
-| `⌘F` | Freeze / Unfreeze |
-| `Return` | Show / Hide content |
-| `← →` | Navigate verses / slides |
-| `Escape` | Clear output (plays the Ieșire transition) |
-| `⌘+Click` | Multi-select verses |
-| `⇧⌘Escape` | Clear All |
-| `Double-Click` | Instant present |
+<p align="center">
+  <img src="docs/screenshots/theme-editor.png" width="820" alt="The theme editor: a canvas with draggable text boxes, the box list, and layout controls">
+</p>
+
+Every box on screen is yours to place, style and stack. Boxes are **fixed** — text flows inside them, so a long verse never shoves your reference off the slide.
+
+<details>
+<summary><b>What you can put in a box, and how it can look</b></summary>
+
+<br>
+
+**Sources** — a box can show the live lyric or verse, the title, the reference, the translation name, the section label, a slide counter (`2 / 7`), a clock, a date, or static text you type once (church name, CCLI number, "Amin.").
+
+**Styling** — font, size up to 200pt, weight, colour, alignment, vertical alignment, opacity, line spacing, letter spacing, UPPERCASE/lowercase, padding, shadow colour and radius, and auto-fit. Set it globally, or override it per box.
+
+**Scope** — show a box on every slide, only the first, or only the last. Songs add *chorus* and *verses* as scopes, so a song title on slide one and "Amin." on the last is two clicks.
+
+**Media boxes** — images, animated GIFs or looping video as overlays, with opacity, corner radius, edge feather and fit/fill.
+
+**Chords** — a song-only box that renders chords above the lyrics, each aligned over its syllable, with typography independent of the lyric text. Transpose and capo are live and display-only: your saved chords are never touched.
+
+**Transitions** — three phases (in, between slides, out), 14 effects, per-phase durations, per-box overrides with stagger.
+
+Undo and redo cover every layout change, grouped per gesture.
+
+</details>
+
+<details>
+<summary><b>Per-presenter profiles</b></summary>
+
+<br>
+
+Bible, Songs, Custom Slides and Media each keep their own boxes, styles, backgrounds and transitions. The output always renders the profile belonging to whatever is live, so switching from a verse to a song restyles the screen without you touching anything.
+
+Copy a layout from one presenter to another with one click when you want them to match.
+
+</details>
 
 ---
 
-## Supported Formats
+## Import
+
+<p align="center">
+  <img src="docs/screenshots/import.png" width="760" alt="The import sheet: a drop zone, the six kinds of content it accepts, and buttons to browse">
+</p>
+
+One screen for everything. Drop a file, a folder, a folder of folders, or a mix of types — it tells you what it found before it imports anything, and lists what it skipped with the reason.
+
+<details>
+<summary><b>Every format it reads</b></summary>
+
+<br>
 
 | | Formats |
 |---|---|
-| **Bible import** | TopPresenter Bible (`.tpbible`) · OSIS XML · Zefania XML · MySword SQLite · USFM · Unbound Bible |
-| **Song import** | TopPresenter Song JSON · OpenSong XML · OpenLyrics XML · ChordPro (`.cho`, `.crd`, `.chordpro`) · Plain text (`.txt`) · PowerPoint (`.pptx`, `.ppt`) |
-| **Media** | Images (jpg, png, gif, heic, tiff, bmp, webp, svg) · Audio (mp3, wav, aac, m4a, flac, ogg, aiff) · Video (mp4, mov, avi, mkv, webm, m4v) |
-| **Themes** | `.tptheme` packages (theme.json + embedded media) |
-| **Export** | `.tpbible` · `.tpsong` · `.tpsongcollection` · `.tpslides` · `.tpschedule` · `.tptheme` — every one re-importable without loss |
+| **Bible** | TopPresenter Bible (`.tpbible`) · OSIS XML · Zefania XML · MySword SQLite · USFM (file or folder) · Unbound Bible |
+| **Songs** | TopPresenter Song (`.tpsong`, `.tpsongcollection`) · OpenSong XML · OpenLyrics XML · ChordPro (`.cho`, `.crd`, `.chordpro`) · Plain text · PowerPoint (`.pptx`, `.ppt`) |
+| **Media** | Images (jpg, png, gif, heic, tiff, bmp, webp, svg) · Audio (mp3, wav, aac, m4a, flac, ogg, aiff) · Video (mp4, mov, mkv, webm, m4v) · **PDF** |
+| **Documents** | Themes (`.tptheme`) · Sessions (`.tpschedule`) · Slides (`.tpslides`) |
+
+Everything TopPresenter writes, it can read back without losing a field — including the parts most formats drop: red-letter words of Christ, section headings, footnotes, cross-references, Strong's numbers, poetry indentation, song versions, chord positions and bilingual lines.
+
+</details>
+
+<details>
+<summary><b>Duplicates, and what happens on a second import</b></summary>
+
+<br>
+
+Importing the same file twice is a no-op. Every kind of content is matched on identity *and* on a fingerprint of its contents, because "you already have this exact file" and "you have something else with the same name" deserve different answers.
+
+- **Identical** → skipped silently, and counted in the summary.
+- **Same name, different content** → it asks, and tells you *how* they differ ("same abbreviation, 31,102 vs 31,086 verses").
+- **Bibles** can be merged, which fills in only the chapters you are missing.
+- **Songs** can be added as a new version of the song you already have.
+- **Duplicates inside one drop** are caught too: two copies of the same file under different names, and only the first is ticked.
+
+</details>
+
+<details>
+<summary><b>Why it no longer freezes</b></summary>
+
+<br>
+
+Importing and deleting run on a background actor with their own database context, and report into a strip at the bottom of the window with elapsed time, an estimate, and a Stop button. You can close the import sheet and keep working; the job carries on.
+
+Bulk deletes run as SQL rather than by loading every row into memory first — measured on a real Bible, that is **7.97s → 0.17s** per module.
+
+</details>
 
 ---
 
-## eBiblia.ro Exporter (userscript)
+## Presenting
 
-[`eBiblia-Scraper.user.js`](scrapers/eBiblia-Scraper.user.js) is a Tampermonkey/Violentmonkey userscript that exports complete Bible translations from [eBiblia.ro](https://ebiblia.ro) into the **TopPresenter Bible JSON** format.
+The output window is transparent and borderless, opens on whichever screen you choose, and shows nothing at all when idle — no logo, no placeholder, no chrome.
 
-It exports straight to **TopPresenter Bible JSON** — clean verse text plus red-letter (words of Christ), section headings, cross-references, footnotes, Strong's numbers, morphology, interlinear glosses, and full translation metadata (name, year, copyright, foreword). Toggle the rich-content groups to keep files lean. **⏬ Toate** exports every translation your account can open at once, organized into per-language folders. Works on Chrome, Firefox and Safari.
+<details>
+<summary><b>Controls and shortcuts</b></summary>
 
-> Please respect each translation's copyright — export only for personal and congregational use.
+<br>
 
----
+| Key | |
+|---|---|
+| `Return` | Show / hide |
+| `← →` | Previous / next verse or slide |
+| `Escape` | Clear the output |
+| `⌘B` | Black screen |
+| `⌘F` | Freeze |
+| `⌘⎋` | Panic — drop the output off the screen immediately |
+| `⌘K` | Quick search across Bible, songs and slides |
+| `⌘T` | New tab |
+| `⌘1`–`⌘5` | Bible · Songs · Media · Schedule · Custom Slides |
+| `⌘Y` | Presentation history |
+| `⌘+click` | Select multiple verses |
+| double-click | Present immediately |
 
-## Song Scrapers — melodia · ResurseCrestine · cantaricrestine · WorshipTogether
+**Single display?** The output hides itself whenever it would cover your own screen, and comes back on Show.
 
-Dependency-free scrapers that export worship songs (Romanian + English/Spanish/Portuguese) into **TopPresenter Song JSON** — one file per song, ready for recursive folder-import. Source-specific extras are preserved losslessly under each song's `_extensions`, surviving import → store → export. Every scraper's output is verified to import back into TopPresenter with its chords, keys, authors and metadata intact.
+</details>
 
-### melodia.ro
+<details>
+<summary><b>Tabs, history and search</b></summary>
 
-- **[`melodia-scraper.mjs`](scrapers/melodia-scraper.mjs)** (Node 18+, resumable) — enumerates the sitemap and exports every song: lyrics with **inline chords at exact character positions**, key, tempo (BPM) and time signature, authors (*Muzică / Versuri*), copyright, composed year, keyword tags, and the song structure as a play-order **arrangement** (identical re-rendered sections are de-duplicated and reused). melodia's *Anatomia Evangheliei* analysis, available keys and a computed per-instrument capo recommendation are kept under `_extensions.melodia`. Chords are stored **once** in the song's own key — every other key (C, C#, Db, D…) is derivable by transposition. Run: `node melodia-scraper.mjs --out ./songs`.
-- **[`melodia-scraper.user.js`](scrapers/melodia-scraper.user.js)** (Tampermonkey) — same export, but reads melodia's React-rendered capo charts to capture the **exact** guitar **and** ukulele fingerings (shape, capo, frets, fingers, barre). One-click ⬇ button (Alt+T).
+<br>
 
-### ResurseCrestine
+**Tabs** (`⌘T`) — each tab holds its own module, Bible translation and selection, and is titled by what it contains (*Bible - (RO) EDC100 - Ioan 3:16*). One output, driven by whichever tab presses Show.
 
-- **[`resursecrestine-scraper.mjs`](scrapers/resursecrestine-scraper.mjs)** / **[`.user.js`](scrapers/resursecrestine-scraper.user.js)** — crawl the full [resursecrestine.ro/cantece](https://www.resursecrestine.ro) catalog (~28k songs) into TopPresenter Song JSON: rich sections (verse/chorus + `/: :/` repeat markers), with author / album / theme metadata and bible reference carried across.
-- **[`resursecrestine-acorduri-scraper.mjs`](scrapers/resursecrestine-acorduri-scraper.mjs)** — the **chords** section (`/acorduri`, ~4.2k songs). Each acord page holds the full lyrics *with* chords, so every file is a complete song-with-chords: the chord-over-lyric charts are parsed into **positional chords** (`{sym, pos}`), with chorus detection, author, and an inferred key. A `matchKey` is carried so you can dedupe against the lyrics-only `/cantece` songs.
+**History** (`⌘Y`) — a record of everything the congregation actually saw: which songs, which passages, how many times, in which service. Verses are only logged after a few seconds on screen, so scrubbing does not pollute it. Kept in its own database, with its own CSV and JSON export.
 
-### cantaricrestine.ro — "Cântări Creștine în PowerPoint"
+**Quick search** (`⌘K`) — Bible, songs and slides at once. Type `John 3:16` or `Gen 1:1-3` to jump straight to a passage. Everything is indexed in Spotlight too.
 
-- **[`cantaricrestine-scraper.mjs`](scrapers/cantaricrestine-scraper.mjs)** (Node 18+, resumable) — uses the site's public JSON API (`api.php`; `token` is just a random anti-bot value) to export all **~9.5k songs**, organized into **per-book folders**. Each song carries its lyrics (parsed into sections with `//: ://` repeats), book/number, and `_extensions.cantaricrestine` (id, date added, downloads/views, PowerPoint URL). It also **downloads every PowerPoint** (`.ppt`/`.pptx`) next to the song file, and writes a `_completeness.json` (which songs have lyrics vs are PowerPoint-only). Run `--no-ppt` for song files only. Disk-full-resilient (always writes the JSON; flags any PowerPoint it couldn't save).
-- **[`cantaricrestine-scraper.user.js`](scrapers/cantaricrestine-scraper.user.js)** (Tampermonkey) — pick a book (or *Toate*) and download a single importable TopPresenter Songs bundle, straight from the API.
-
-### worshiptogether.com — modern worship (EN / ES / PT)
-
-- **[`worshiptogether-scraper.mjs`](scrapers/worshiptogether-scraper.mjs)** (Node 18+, resumable) — enumerates the per-language sitemaps (`sitemap-{en,es,pt}.xml`, ~4.7k songs) and parses each song's ChordPro markup into **positional chords** (`{sym, pos}`) with section detection and play-order **arrangement** (`REPEAT CHORUS` → reuse). The richest source: it captures **CCLI #**, original + recommended keys, BPM, tempo, **themes**, **scripture references** and writers/copyright (under `_extensions.worshipTogether`). Organized into `en/`, `es/`, `pt/` folders.
-- **[`worshiptogether-scraper.user.js`](scrapers/worshiptogether-scraper.user.js)** (Tampermonkey) — exports the current song from your **logged-in** session by reading the rendered ChordPro DOM. ⬇ button / Alt+T.
-
-> These are copyrighted modern worship songs — for personal/congregational use; projecting the lyrics still requires your church's **CCLI** license.
-
-### Keeping your library up to date
-
-Re-running a scraper into the **same output folder** fetches only the songs you don't already have — it skips every song file already present (`--resume`, on by default). So `node melodia-scraper.mjs --out ./songs` next month grabs just the newly-added songs; the existing thousands skip in seconds. Keep the output folder as your archive so the scraper knows what's missing.
-
-How each source signals change (so you know what a re-run can and can't catch):
-
-| Source | What exists (enumerate) | New items | Edited items |
-|---|---|---|---|
-| **melodia.ro** | `sitemap.xml` (per-song `<lastmod>`) | ✅ new slug | ✅ via `<lastmod>` |
-| **cantaricrestine.ro** | `api.php` (per-song `data_adaugare`) | ✅ new id | ✅ via `data_adaugare` |
-| **worshiptogether.com** | `sitemap-{en,es,pt}.xml` (per-song `<lastmod>`) | ✅ new slug | ✅ via `<lastmod>` |
-| **resursecrestine** | alphabetical index pages | ✅ new slug/id | ❌ no timestamps — re-fetch manually |
-| **eBiblia** | live catalog `window.app.BIBLES` | ✅ new code | ❌ no version field — re-export manually |
-
-A plain re-run (`--resume`) always tops up **new** songs. Detecting **edits** to songs you already have is possible where the source carries a timestamp (melodia's `<lastmod>`, cantaricrestine's `data_adaugare`); for resursecrestine/eBiblia you'd re-fetch the specific item by hand.
-
-> Scraped corpora are kept local (git-ignored), not committed. Please respect each song's copyright — export only for personal and congregational use.
+</details>
 
 ---
 
-## Roadmap
+## Songs in depth
 
-**Shipped**
-- [x] Native SwiftUI + SwiftData app — Bible, Songs, Slides, Media, Schedules
-- [x] Per-presenter theme engine: layouts, transitions, custom & media boxes, portable `.tptheme`
-- [x] 6 Bible + 6 song import formats; lossless TopPresenter Bible **and** Song JSON (GOAT) round-trip — songs carry versions, chords, bilingual lines, arrangement &amp; repeats
-- [x] Red-letter, footnotes, cross-references, headings, Strong's & morphology stored in the DB
-- [x] Three-column Bible reader (Books · Chapters · Verses) with language groups & canon badges
-- [x] Drag-and-drop batch import (files *and* folders, recursive); eBiblia exporter
-- [x] Liquid Glass app icon (Icon Composer `.icon` + `.icns` fallback)
+<details>
+<summary><b>Versions, chords and the editor</b></summary>
 
-**Planned**
-- [ ] Stage / monitor display — next slide, clock, speaker notes
-- [ ] Remote control from phone or tablet
-- [ ] Schedules → full service planning & running order
-- [ ] Interlinear + Strong's display in the Bible reader (data already captured)
-- [ ] NDI / Syphon output for video mixers
-- [ ] Cloud sync for themes & libraries
+<br>
+
+A song is a group of renditions, not a single text. Each version carries its own title, authors, language, key, capo, tempo, copyright, CCLI number, songbook, style, themes and notes — inheriting the original's values until you decide otherwise.
+
+The editor is two panes: section cards you can reorder, duplicate and mark `×N`, and a live preview rendered with your actual theme that follows whichever section you click. There is a **Verified** flag for songs you have checked, a filter for it, and a change log per song.
+
+Sections split into slides automatically at whatever line count you set, with repeat markers (`/: :/`, `‖: :‖`, `(×2)`, *bis*) drawn the way the theme says.
+
+</details>
+
+<details>
+<summary><b>Getting songs in</b></summary>
+
+<br>
+
+Point it at a folder of thousands of files and it will work through them with progress and duplicate handling. Four userscripts are included for building a library from the web:
+
+| Script | Site |
+|---|---|
+| [`eBiblia-Scraper.user.js`](scrapers/eBiblia-Scraper.user.js) | ebiblia.ro — exports whole Bible translations |
+| [`melodia-scraper.user.js`](scrapers) | melodia.ro |
+| [`cantaricrestine-scraper.user.js`](scrapers) | cantaricrestine.ro |
+| [`worshiptogether-scraper.user.js`](scrapers) | worshiptogether.com (EN / ES / PT) |
+
+They run in Tampermonkey or Violentmonkey on Chrome, Firefox and Safari, and export straight into TopPresenter's own formats.
+
+> Respect each translation's and each song's copyright — export for personal and congregational use.
+
+</details>
 
 ---
 
-## Translations
+## Everything else
 
-TopPresenter follows your macOS language automatically. You can also pin one in
-**Settings ▸ Interface ▸ Language** — useful on a shared church machine whose system
-language isn't the operator's. That setting takes effect after a restart, because macOS
-reads the preferred language once at launch.
+<details>
+<summary><b>Media, PDF, schedules and slides</b></summary>
+
+<br>
+
+**Media** is referenced where it lives, never copied into a library folder, so nothing is duplicated on disk. Grid with thumbnails, type filter, audio player with speed and seek, video looping, and *Reveal in Finder*.
+
+**PDF** is presented a page at a time. The arrows beside Present turn pages on the live output instead of skipping to the next file. Export slides from Keynote or PowerPoint as PDF to show them here.
+
+**Schedules** hold a service running order you can go live from. **Custom slides** are free text, with tokens that can pull in live or even remote content — a dead network can never fail a presentation, only fall back to the last good value.
+
+</details>
+
+<details>
+<summary><b>Languages, files and updates</b></summary>
+
+<br>
+
+Contributions welcome — see below.
 
 <!-- i18n-coverage:start -->
 
@@ -250,91 +256,33 @@ reads the preferred language once at launch.
 
 <!-- i18n-coverage:end -->
 
-### Helping out
+Six document types are registered with macOS, each with its own Finder icon and openable by double-click: `.tpbible` `.tpsong` `.tpsongcollection` `.tpslides` `.tpschedule` `.tptheme`. They are all JSON underneath, so you can read, diff and edit them with ordinary tools.
 
-You don't need Xcode, and you don't need to touch Swift. Everything lives in one JSON
-file: [`TopPresenter/Localizable.xcstrings`](TopPresenter/Localizable.xcstrings).
+The app updates itself, with an opt-in beta channel.
 
-**Filling gaps in a language that already exists** — find keys where your language is
-missing or marked `needs_review`, and add the entry:
+</details>
 
-```json
-"Clear Output" : {
-  "comment" : "Menu item",
-  "localizations" : {
-    "es" : { "stringUnit" : { "state" : "translated", "value" : "Limpiar salida" } }
-  }
-}
-```
+<details>
+<summary><b>Roadmap</b></summary>
 
-**Adding a new language** — two steps:
+<br>
 
-1. Add its code to `knownRegions` in `TopPresenter.xcodeproj/project.pbxproj`.
-2. Add `"<code>"` entries to the catalog. Start with the menu bar and the sidebar; a
-   partial language is fine and ships safely — anything untranslated falls back to
-   English, never to a blank.
+- Stage display — next slide, clock, speaker notes
+- Remote control from a phone or tablet
+- Interlinear and Strong's in the Bible reader (the data is already stored)
+- NDI / Syphon output for video mixers
+- Cloud sync for themes and libraries
 
-Then open a PR. If you'd rather work in Xcode, opening the catalog gives you a proper
-side-by-side editor and writes the same JSON.
-
-### Three things that will bite you
-
-**Placeholders must match the key exactly.** A key like `%lld verses` needs `%lld` in
-your translation, in the same order — `%@` and `%lld` are not interchangeable. A
-mismatch is a crash at runtime, not a typo, so double-check any string with a `%`.
-
-**Interpolated keys are format strings.** In the source, `"\(count) verses"` becomes the
-key `%lld verses`. Match what's in the catalog, not what's in the Swift file.
-
-**A green build proves nothing.** A catalog with a key that matches no source string
-compiles happily and silently ships no translation. Verify against the built app:
-
-```bash
-APP=~/Library/Developer/Xcode/DerivedData/TopPresenter-*/Build/Products/Debug/TopPresenter.app
-plutil -p "$APP"/Contents/Resources/es.lproj/Localizable.strings | grep "Clear Output"
-```
-
-### Keeping the table honest
-
-The table above is generated by [`scripts/i18n_coverage.py`](scripts/i18n_coverage.py)
-and refreshed automatically whenever a commit touches the catalog:
-
-```bash
-./scripts/install-hooks.sh     # once, after cloning
-```
-
-Every key stores an entry for its own source language as well, rather than relying on
-fallback. That's what makes a plain entry count trustworthy — without it English would
-report ~70% and send contributors chasing a gap that isn't there.
+</details>
 
 ---
 
-## Architecture
+## Contributing
 
-```
-TopPresenter/
-├── Core/                        # PresentationManager (state, profiles, themes,
-│                                #   transitions), commands, constants, migration
-├── Models/                      # BibleModule, Song, MediaItem, Schedule, LiveContent
-├── Services/
-│   ├── Import/                  # 9 importers, in-process ZIP reader, drag-drop
-│   ├── Export/                  # Multi-format export service
-│   ├── Audio/ & Video/          # AVFoundation wrappers
-├── Views/
-│   ├── Main/                    # Window, toolbar, sidebar, preview panels, tabs
-│   ├── Bible/ Songs/ Media/     # Modules
-│   ├── Schedule/ CustomSlides/
-│   ├── Presentation/            # Output window, Editor de Teme, text-box engine,
-│   │                            #   media boxes, theme gallery
-│   └── Settings/                # Preferences, projection, shortcuts
-└── TopPresenterApp.swift        # @main entry point
-```
+<details>
+<summary><b>Building from source</b></summary>
 
-Key design decisions live in [`AGENTS.md`](AGENTS.md) — fixed text boxes (content never moves a box), per-presenter `LayoutProfile`s, snapshot-based undo, resilient Codable everywhere (stored data survives model growth), and a sandbox-safe bookmark layer.
-
----
-
-## Building
+<br>
 
 ```bash
 git clone https://github.com/RobyRew/TopPresenter.git
@@ -342,24 +290,58 @@ cd TopPresenter
 open TopPresenter.xcodeproj
 ```
 
-Select the **TopPresenter** scheme → Build and Run (`⌘R`).
-
-**Requirements:** macOS 15.7+, Xcode 16.3+, Swift 5.0+
-
-Run the unit suite (70+ tests) with:
+Select the **TopPresenter** scheme and run (`⌘R`). Requires macOS 15.7+ and Xcode 16.3+.
 
 ```bash
 xcodebuild -scheme TopPresenter -destination 'platform=macOS' test -only-testing:TopPresenterTests
 ```
 
-## Releases
+Design decisions and the rules that are easy to break live in [`AGENTS.md`](AGENTS.md).
 
-- Every push to `main` publishes an **alpha pre-release**; the alpha number counts **per version**, so bumping `MARKETING_VERSION` restarts the series (e.g. `v0.1.0-alpha.1`).
-- Stable releases come from final tags (`v1.0.0`): bump `MARKETING_VERSION`, push, then `git tag v1.0.0 && git push origin v1.0.0`.
-- The [Resurse release](https://github.com/RobyRew/TopPresenter/releases/tag/resources-1) hosts the starter themes and the EDC100 Bible.
-- The [Bible Library release](https://github.com/RobyRew/TopPresenter/releases/tag/bibles-1) bundles **all 70 Bible translations** (17 languages) as `.tpbible` — red-letter, Strong's, headings, cross-references and metadata included.
-- The [Themes release](https://github.com/RobyRew/TopPresenter/releases/tag/themes-1) bundles the starter `.tptheme` pack (Default, Cer Nepal, Galaxie, Minimal) with backgrounds embedded.
+</details>
 
-## License
+<details>
+<summary><b>Translating</b></summary>
 
-Apache 2.0 — see [LICENSE](LICENSE) and [NOTICE](NOTICE) for details.
+<br>
+
+Strings live in `TopPresenter/Localizable.xcstrings`, editable in Xcode's String Catalog editor. English is the base language: a key with no English entry falls through to the raw key text for *everyone*, so fill that in first.
+
+```bash
+python3 scripts/i18n_coverage.py          # regenerate the coverage table
+python3 scripts/i18n_coverage.py --check  # fails if the table is stale
+```
+
+</details>
+
+<details>
+<summary><b>Project layout</b></summary>
+
+<br>
+
+```
+TopPresenter/
+├── Core/          PresentationManager (state, profiles, themes, transitions),
+│                  commands, search, Spotlight, updates
+├── Models/        BibleModule, Song, MediaItem, Schedule, LiveContent
+├── Services/
+│   ├── Import/    the format catalog, scanner, duplicate resolver, coordinator,
+│   │              and one importer per format
+│   ├── Export/    the native formats and their naming
+│   ├── Library/   background delete, export and progress
+│   ├── Media/     import, presenting, PDF rendering
+│   └── Sessions/  service schedules
+├── Views/
+│   ├── Main/      window, sidebar, preview panels, tabs, import sheet
+│   ├── Presentation/  output window, theme editor, text and media boxes
+│   └── …          one folder per module
+└── scripts/       theme pack builder, background generator, i18n coverage
+```
+
+</details>
+
+---
+
+<p align="center">
+  <sub>Apache 2.0 — see <a href="LICENSE">LICENSE</a> and <a href="NOTICE">NOTICE</a>.</sub>
+</p>

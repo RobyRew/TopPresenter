@@ -219,6 +219,24 @@ struct MainControlView: View {
                 // After the system mounts the window, drop any restored duplicate.
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                     presentationManager.dedupePresentationWindows()
+                    // …and get the screen back if the output landed on top of the
+                    // operator's own UI.
+                    //
+                    // `clearOutput()` already hides the window in exactly this
+                    // situation, but a launch is not a clear, so nothing ran that
+                    // rule and the window stayed up. On a single display that is
+                    // an always-on-top window covering the whole app — and with a
+                    // theme whose background is opaque and set to stay on hide
+                    // (the shipped Default is both), it is an opaque black sheet
+                    // over everything, from launch, with no hint that ⌘⎋ is the
+                    // way out.
+                    //
+                    // The window is only ORDERED OUT, never closed: Show brings it
+                    // straight back with no staging frame.
+                    if presentationManager.isOutputOnOperatorScreen,
+                       !presentationManager.liveContent.isLive {
+                        presentationManager.hidePresentationWindow()
+                    }
                 }
             }
             // Start monitoring screen connect/disconnect
