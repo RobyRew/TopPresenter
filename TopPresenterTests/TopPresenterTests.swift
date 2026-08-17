@@ -3861,19 +3861,234 @@ struct BookAbbreviationTests {
     @Test func aModuleSuppliedAbbreviationWins() {
         // When the source format DID carry one, it is authoritative — the
         // translator's own short form beats anything derived from the name.
+        // Language is explicit: the abbreviation has to match the name shown
+        // beside it, so it only wins while the module's own name is displayed.
         let book = BibleBook(name: "Cântarea Cântărilor", bookNumber: 22,
                              testament: "OT", abbreviation: "Cânt.C")
-        #expect(book.displayAbbreviation == "Cânt.C")
+        #expect(book.displayAbbreviation(language: "ro") == "Cânt.C")
 
         let untagged = BibleBook(name: "Cântarea Cântărilor", bookNumber: 22, testament: "OT")
-        #expect(untagged.displayAbbreviation == "Cânt")
+        #expect(untagged.displayAbbreviation(language: "ro") == "Cânt")
     }
 
     @Test func aBlankAbbreviationFallsBackRatherThanShowingNothing() {
         // Some importers write "" or "   " into the field; an empty grid cell
         // would be worse than a derived label.
         let book = BibleBook(name: "Geneza", bookNumber: 1, testament: "OT", abbreviation: "   ")
-        #expect(book.displayAbbreviation == "Gene")
+        #expect(book.displayAbbreviation(language: "ro") == "Gene")
+    }
+
+    @Test func aTranslationAbbreviationIsDroppedWhenTheNameIsLocalized() {
+        // „Cânt.C" beside "Song of Solomon" is a mismatch the operator has to
+        // decode; a derived short form at least matches the label above it.
+        let book = BibleBook(name: "Cântarea Cântărilor", bookNumber: 22,
+                             testament: "OT", abbreviation: "Cânt.C")
+        #expect(book.displayAbbreviation(language: "en") == "Solo")
+    }
+
+    @Test func anAbbreviationThatStillFitsTheLocalizedNameIsKept() {
+        // The published KJV module names its books in Romanian but abbreviates
+        // them "Gen", "Ex", "1Sam" — which read perfectly beside the English
+        // names, and beat anything derived.
+        let genesis = BibleBook(name: "Geneza", bookNumber: 1, testament: "OT",
+                                abbreviation: "Gen")
+        #expect(genesis.displayAbbreviation(language: "en") == "Gen")
+
+        // Dots and spaces fold away, so an ordinal short form still fits.
+        let samuel = BibleBook(name: "1 Samuel", bookNumber: 9, testament: "OT",
+                               abbreviation: "1Sam")
+        #expect(samuel.displayAbbreviation(language: "en") == "1Sam")
+
+        // A short form from the other language does not fit and is dropped.
+        let facerea = BibleBook(name: "Geneza", bookNumber: 1, testament: "OT",
+                                abbreviation: "Fac")
+        #expect(facerea.displayAbbreviation(language: "en") == "Gene")
+    }
+
+    @Test func germanOrdinalsKeepTheirNumber() {
+        // Without stripping the ordinal's dot, 1.–5. Mose all abbreviated to
+        // "Mose" — five identical cells in the grid.
+        #expect(BibleBook.deriveAbbreviation(from: "1. Mose") == "1Mos")
+        #expect(BibleBook.deriveAbbreviation(from: "2. Korinther") == "2Kor")
+        #expect(BibleBook.deriveAbbreviation(from: "1 Ioan") == "1Ioa")
+    }
+}
+
+// MARK: - Book Names In The App's Language
+
+/// A module carries the book names its source file used. The library has to read
+/// in the operator's language whatever translation is loaded — and must never
+/// rename a book it cannot positively identify.
+struct BibleBookLocalizationTests {
+
+    @Test func everyLanguageHasAllSixtySixBooks() {
+        for language in ["en", "ro", "es", "fr", "de", "ru"] {
+            #expect(BibleBookLocalization.name(number: 1, language: language) != nil,
+                    "\(language) is missing Genesis")
+            #expect(BibleBookLocalization.name(number: 66, language: language) != nil,
+                    "\(language) is missing Revelation")
+            for number in 1...66 {
+                let name = BibleBookLocalization.name(number: number, language: language) ?? ""
+                #expect(!name.isEmpty, "\(language) book \(number) is blank")
+            }
+        }
+        // Outside the canon there is no table — deuterocanonical books keep the
+        // module's own wording rather than being renamed into a guess.
+        #expect(BibleBookLocalization.name(number: 0) == nil)
+        #expect(BibleBookLocalization.name(number: 67) == nil)
+    }
+
+    @Test func noTwoBooksShareAName() {
+        // The whole table is one flat name→number index. If two DIFFERENT books
+        // fold to the same key, which one a name resolves to depends on
+        // dictionary order — silently, and differently per launch.
+        let duplicates = BibleBookLocalization.duplicateNameKeys
+        #expect(duplicates.isEmpty,
+                "these names claim more than one book: \(duplicates.keys.sorted())")
+    }
+
+    @Test func aBookIsIdentifiedFromAnyLanguage() {
+        for name in ["Genesis", "Geneza", "Génesis", "Genèse", "1. Mose", "Бытие", "Facerea"] {
+            #expect(BibleBookLocalization.canonicalNumber(forName: name) == 1, "\(name) → 1")
+        }
+        for name in ["Revelation", "Apocalipsa", "Apocalipsis", "Apocalypse",
+                     "Offenbarung", "Откровение"] {
+            #expect(BibleBookLocalization.canonicalNumber(forName: name) == 66, "\(name) → 66")
+        }
+        // Case and diacritics fold away; ordinal dots do too.
+        #expect(BibleBookLocalization.canonicalNumber(forName: "CÂNTAREA CÂNTĂRILOR") == 22)
+        #expect(BibleBookLocalization.canonicalNumber(forName: "cantarea cantarilor") == 22)
+        #expect(BibleBookLocalization.canonicalNumber(forName: "2. Korinther") == 47)
+        // Nonsense stays unidentified rather than resolving to something near.
+        #expect(BibleBookLocalization.canonicalNumber(forName: "Cartea Mormonilor") == nil)
+        #expect(BibleBookLocalization.canonicalNumber(forName: "") == nil)
+    }
+
+    @Test func anUnknownBookKeepsItsOwnName() {
+        // The safety property the whole feature rests on.
+        #expect(BibleBookLocalization.localizedName(for: "Înțelepciunea lui Solomon",
+                                                    language: "en")
+                == "Înțelepciunea lui Solomon")
+        #expect(BibleBookLocalization.localizedName(for: "Sirach", language: "ro") == "Sirach")
+    }
+
+    @Test func namesCrossOverBetweenLanguages() {
+        #expect(BibleBookLocalization.localizedName(for: "Geneza", language: "en") == "Genesis")
+        #expect(BibleBookLocalization.localizedName(for: "Genesis", language: "ro") == "Geneza")
+        #expect(BibleBookLocalization.localizedName(for: "Faptele Apostolilor", language: "es")
+                == "Hechos")
+        #expect(BibleBookLocalization.localizedName(for: "1 Ioan", language: "de")
+                == "1. Johannes")
+        #expect(BibleBookLocalization.localizedName(for: "Song of Solomon", language: "fr")
+                == "Cantique des Cantiques")
+    }
+
+    @Test func ambiguousEditionsAreLeftAlone() {
+        // Orthodox Romanian editions number 1–4 Regi from 1 Samuel; others start
+        // at 1 Kings. Guessing would put the wrong book name on the screen, so
+        // „Regi" is not in the table at all.
+        #expect(BibleBookLocalization.canonicalNumber(forName: "1 Regi") == nil)
+        #expect(BibleBookLocalization.localizedName(for: "1 Regi", language: "en") == "1 Regi")
+        // The unambiguous Cornilescu wording still resolves.
+        #expect(BibleBookLocalization.localizedName(for: "1 Împărați", language: "en") == "1 Kings")
+    }
+
+    @Test func aBookNumberedByACounterIsNotRenamed() {
+        // `OSISBibleImporter` numbers books with a running counter, so an NT-only
+        // file has Matthew at 1. Resolving by NAME is what keeps that honest —
+        // this is the test that would fail if anyone switched to the number.
+        let matthew = BibleBook(name: "Matthew", bookNumber: 1, testament: "NT")
+        #expect(matthew.displayName(language: "ro") == "Matei")
+
+        // And in a file whose numbering we DO trust, a name that lands somewhere
+        // else is an edition naming books its own way — Douay-Rheims calls
+        // 1 Samuel "1 Kings". Renaming that would show the wrong book.
+        let douay = BibleBook(name: "1 Kings", bookNumber: 9, testament: "OT")
+        #expect(douay.displayName(language: "ro") == "1 Kings")
+    }
+
+    @Test func englishNameWinsOverTheDisplayName() {
+        // TopPresenter's own format carries `nameEnglish`; it is the most
+        // reliable field in the record, so it is consulted first.
+        let book = BibleBook(name: "Ps", bookNumber: 19, testament: "OT",
+                             nameEnglish: "Psalms")
+        #expect(book.displayName(language: "ro") == "Psalmii")
+    }
+
+    @Test func aNumberedBookFallsBackOnItsPositionOnlyWhenTheTestamentAgrees() {
+        // Last resort for a module whose names we cannot read at all (a
+        // transliterated or abbreviated file).
+        let readable = BibleBook(name: "Kniha Genezis", bookNumber: 1, testament: "OT")
+        #expect(readable.displayName(language: "en") == "Genesis")
+        // Counter-numbered NT-only file: position 1 says Genesis, testament says
+        // NT. Contradiction → keep the file's own name.
+        let counter = BibleBook(name: "Evangelium podľa Matúša", bookNumber: 1, testament: "NT")
+        #expect(counter.displayName(language: "en") == "Evangelium podľa Matúša")
+    }
+
+    @Test func storedReferencesAreRestatedWithoutTouchingTheNumbers() {
+        // History rows and session items persist one string in the translation's
+        // language. The chapter/verse tail must survive exactly.
+        #expect(BibleBookLocalization.localizedReference("Geneza 1:1", language: "en")
+                == "Genesis 1:1")
+        #expect(BibleBookLocalization.localizedReference("Faptele Apostolilor 2:1-4",
+                                                         language: "en")
+                == "Acts 2:1-4")
+        #expect(BibleBookLocalization.localizedReference("1 Ioan 4:7,9", language: "es")
+                == "1 Juan 4:7,9")
+        #expect(BibleBookLocalization.localizedReference("Psalmii 23", language: "de")
+                == "Psalmen 23")
+        // Unidentifiable book, no numeric tail, empty — all returned untouched.
+        #expect(BibleBookLocalization.localizedReference("Sirah 2:1", language: "en")
+                == "Sirah 2:1")
+        #expect(BibleBookLocalization.localizedReference("Geneza", language: "en") == "Geneza")
+        #expect(BibleBookLocalization.localizedReference("", language: "en") == "")
+    }
+
+    @Test func theProjectedReferenceFollowsTheTranslationNotTheFile() {
+        // The published KJV module carries ROMANIAN book names, so it projected
+        // „Geneza 1:6" over English verses. The module declares its language;
+        // that is what the congregation is reading, so that is what wins.
+        let kjv = BibleModule(name: "King James Version", abbreviation: "KJV",
+                              language: "en", sourceFormat: "toppresenter")
+        let genesis = BibleBook(name: "Geneza", bookNumber: 1, testament: "OT")
+        genesis.module = kjv
+        #expect(genesis.presentationName == "Genesis")
+
+        let cornilescu = BibleModule(name: "Cornilescu", abbreviation: "VDC",
+                                     language: "ro", sourceFormat: "toppresenter")
+        let geneza = BibleBook(name: "Genesis", bookNumber: 1, testament: "OT")
+        geneza.module = cornilescu
+        #expect(geneza.presentationName == "Geneza")
+    }
+
+    @Test func aTranslationInALanguageWeHaveNoTableForKeepsItsOwnNames() {
+        // 17 languages ship in the Bible library; six have a table. Answering
+        // "Genesis" for a Dutch module would be worse than leaving it alone.
+        let hetBoek = BibleModule(name: "Het Boek", abbreviation: "HTB",
+                                  language: "nl", sourceFormat: "zefania")
+        let genesis = BibleBook(name: "Genesis", bookNumber: 1, testament: "OT")
+        genesis.module = hetBoek
+        #expect(genesis.presentationName == "Genesis")
+
+        let dutch = BibleBook(name: "Spreuken", bookNumber: 20, testament: "OT")
+        dutch.module = hetBoek
+        #expect(dutch.presentationName == "Spreuken")
+        // …while the operator's own list still reads in the app's language,
+        // because the book is identifiable even though Dutch is not a UI option.
+        #expect(dutch.displayName(language: "en") == "Proverbs")
+    }
+
+    @Test func aBookWithNoModuleFallsBackRatherThanCrashing() {
+        // Verses reached through a broken relationship still have to render.
+        let orphan = BibleBook(name: "Geneza", bookNumber: 1, testament: "OT")
+        #expect(orphan.presentationName == "Geneza")
+    }
+
+    @Test func theUILanguageIsAlwaysOneWeHaveATableFor() {
+        // A Catalan or Polish system localization must not leave book names nil.
+        #expect(BibleBookLocalization.name(number: 1,
+                                           language: BibleBookLocalization.uiLanguage) != nil)
     }
 }
 
@@ -3951,6 +4166,58 @@ struct BibleReferenceParserTests {
         #expect(clamped?.verseEnd == 21)
         // Valid verses untouched.
         #expect(BibleReferenceParser.parse("apocalipsa 22:20", books: counted)?.verseEnd == 20)
+    }
+
+    // MARK: Cross-language queries
+
+    @Test func aRomanianModuleAnswersToEnglishNames() {
+        // The operator reads "John" in the book list, so "john 3:16" has to work
+        // even though the module says "Ioan".
+        let match = BibleReferenceParser.parse("john 3:16", books: books)
+        #expect(match?.bookNumber == 43)
+        // The MODULE's name is what goes to the output — the audience is reading
+        // this translation.
+        #expect(match?.bookName == "Ioan")
+        // …and the app's name is what the palette row shows.
+        #expect(match?.bookDisplayName == BibleBookLocalization.localizedName(for: "Ioan"))
+
+        #expect(BibleReferenceParser.parse("1 corinthians 13:4", books: books)?.bookNumber == 46)
+        #expect(BibleReferenceParser.parse("salmos 23", books: books)?.bookNumber == 19)
+        #expect(BibleReferenceParser.parse("psalmen 23", books: books)?.bookNumber == 19)
+    }
+
+    @Test func standardAbbreviationsWorkWithoutTheModuleDeclaringThem() {
+        // Most source formats carry no abbreviation at all, so these come from
+        // the shared table rather than the file.
+        let untagged: [BookIndexEntry] = [
+            .init(moduleID: UUID(), bookNumber: 44, name: "Faptele Apostolilor",
+                  folded: "faptele apostolilor", abbreviationFolded: "", chapterCount: 28)
+        ]
+        #expect(BibleReferenceParser.parse("fap 2:1", books: untagged)?.bookNumber == 44)
+        #expect(BibleReferenceParser.parse("acts 2:1", books: untagged)?.bookNumber == 44)
+        #expect(BibleReferenceParser.parse("hechos 2", books: untagged)?.bookNumber == 44)
+    }
+
+    @Test func germanOrdinalReferencesParse() {
+        // "1. Mose 1" used to fall through the regex to the bare-book path and
+        // match nothing at all.
+        let german: [BookIndexEntry] = [
+            .init(moduleID: UUID(), bookNumber: 1, name: "1. Mose", folded: "1. mose",
+                  abbreviationFolded: "", chapterCount: 50)
+        ]
+        #expect(BibleReferenceParser.parse("1. mose 1:1", books: german)?.bookNumber == 1)
+        #expect(BibleReferenceParser.parse("genesis 1:1", books: german)?.bookNumber == 1)
+    }
+
+    @Test func shortAliasesNeedAChapterToCountAsAReference() {
+        // With a chapter number the intent is unambiguous; bare, a two-letter
+        // alias would turn ordinary palette queries into Bible references.
+        let amos: [BookIndexEntry] = [
+            .init(moduleID: UUID(), bookNumber: 30, name: "Amos", folded: "amos",
+                  abbreviationFolded: "", chapterCount: 9)
+        ]
+        #expect(BibleReferenceParser.parse("am 5", books: amos)?.bookNumber == 30)
+        #expect(BibleReferenceParser.parse("am", books: amos) == nil)
     }
 }
 

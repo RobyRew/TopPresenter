@@ -3982,7 +3982,7 @@ final class PresentationManager {
             .joined(separator: separator)
         let range = first.verseNumber == last.verseNumber
             ? "\(first.verseNumber)" : "\(first.verseNumber)-\(last.verseNumber)"
-        let reference = "\(book.name) \(targetChapter.chapterNumber):\(range)"
+        let reference = "\(book.presentationName) \(targetChapter.chapterNumber):\(range)"
         if mv.customEnabled, slice.count > 1 {
             let template = mv.customText.trimmingCharacters(in: .whitespacesAndNewlines)
             if !template.isEmpty {

@@ -73,7 +73,9 @@ struct MainControlView: View {
             let versionBase = !abbr.isEmpty ? abbr : name
             // Bible - (RO) EDC100 - <Book Ch:Vv>  (lang prefix + reference when selected)
             let version = lang.isEmpty ? versionBase : "(\(lang)) \(versionBase)"
-            let ref = libraryManager.selectedVersesReference.trimmingCharacters(in: .whitespaces)
+            let ref = BibleBookLocalization
+                .localizedReference(libraryManager.selectedVersesReference)
+                .trimmingCharacters(in: .whitespaces)
             let detail = ref.isEmpty ? version : "\(version) - \(ref)"
             return titled(detail)
         case .songs:

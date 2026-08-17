@@ -389,7 +389,7 @@ struct BibleBooksGridPane: View {
         return Button {
             selectBookOpeningFirstChapter(book, in: libraryManager)
         } label: {
-            Text(abbreviated ? book.displayAbbreviation : book.name)
+            Text(abbreviated ? book.displayAbbreviation : book.displayName)
                 .font(.system(size: largeText ? 17 : 11, weight: abbreviated ? .semibold : .medium))
                 .lineLimit(1)
                 .minimumScaleFactor(0.65)
@@ -405,7 +405,9 @@ struct BibleBooksGridPane: View {
                 .foregroundStyle(isSelected ? .white : .primary)
         }
         .buttonStyle(.plain)
-        .help(book.name)
+        // The module's own wording earns its place in the tooltip: it is what
+        // the live output will show, and how the printed Bible reads.
+        .help(book.displayName == book.name ? book.name : "\(book.displayName) · \(book.name)")
     }
 }
 
@@ -474,13 +476,13 @@ struct BibleNavigationPanel: View {
         // has nowhere to go. Truncating ("Cântarea Cântă…") tells the operator
         // less than an abbreviation does in the same pixels.
         ViewThatFits(in: .horizontal) {
-            bookRowContent(book, label: book.name, showsCategoryLabel: true)
-            bookRowContent(book, label: book.name, showsCategoryLabel: false)
+            bookRowContent(book, label: book.displayName, showsCategoryLabel: true)
+            bookRowContent(book, label: book.displayName, showsCategoryLabel: false)
             bookRowContent(book, label: book.displayAbbreviation, showsCategoryLabel: false)
         }
         .tag(book.id)
         .contentShape(Rectangle())
-        .help(book.name)
+        .help(book.displayName == book.name ? book.name : "\(book.displayName) · \(book.name)")
     }
 
     private func bookRowContent(_ book: BibleBook, label: String, showsCategoryLabel: Bool) -> some View {
@@ -736,7 +738,7 @@ struct BibleContentPanel: View {
                 .controlSize(.small)
 
                 if let book = libraryManager.selectedBook {
-                    Text("\(book.name) \(chapter.chapterNumber)")
+                    Text("\(book.displayName) \(chapter.chapterNumber)")
                         .font(.headline)
                         .lineLimit(1)
                 }
@@ -998,7 +1000,8 @@ struct BibleVerseRow: View {
         let numbers = verses.map(\.verseNumber).sorted()
         guard let first = numbers.first, let last = numbers.last else { return nil }
         let range = first == last ? "\(first)" : "\(first)-\(last)"
-        let reference = "\(book.name) \(chapter.chapterNumber):\(range)"
+        // Saved into the session and projected from it — translation's language.
+        let reference = "\(book.presentationName) \(chapter.chapterNumber):\(range)"
         let text = verses.sorted { $0.verseNumber < $1.verseNumber }.map(\.text).joined(separator: " ")
         return .bible(translation: module.abbreviation, bookNumber: book.bookNumber,
                       bookName: book.name, chapter: chapter.chapterNumber,

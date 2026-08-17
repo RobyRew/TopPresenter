@@ -758,7 +758,9 @@ struct VerseSlideControlsBar: View {
                         .font(.caption)
                         .foregroundStyle(appAccent)
 
-                    Text(libraryManager.selectedVersesReference)
+                    // Operator chrome, not the output mirror below it — the app's
+                    // language belongs here, the translation's down there.
+                    Text(BibleBookLocalization.localizedReference(libraryManager.selectedVersesReference))
                         .font(.caption.bold())
                         .foregroundStyle(appAccent)
                         .lineLimit(1)

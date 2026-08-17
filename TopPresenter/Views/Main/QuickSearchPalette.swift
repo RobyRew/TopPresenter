@@ -106,13 +106,15 @@ extension PaletteResult {
     fileprivate var titleText: String {
         switch self {
         case .reference(let r):
-            if r.isBookOnly { return r.bookName }
+            let book = r.bookDisplayName
+            if r.isBookOnly { return book }
             if let vs = r.verseStart, let ve = r.verseEnd {
-                return vs == ve ? "\(r.bookName) \(r.chapter):\(vs)" : "\(r.bookName) \(r.chapter):\(vs)-\(ve)"
+                return vs == ve ? "\(book) \(r.chapter):\(vs)" : "\(book) \(r.chapter):\(vs)-\(ve)"
             }
-            return "\(r.bookName) \(r.chapter)"
+            return "\(book) \(r.chapter)"
         case .song(let e): return e.title
-        case .verse(let v): return "\(v.bookName) \(v.chapter):\(v.verse)"
+        case .verse(let v):
+            return "\(BibleBookLocalization.localizedName(for: v.bookName)) \(v.chapter):\(v.verse)"
         case .media(let m): return m.name
         case .session(let s): return s.name
         case .recent(let r): return r.title
@@ -702,11 +704,12 @@ struct QuickSearchPalette: View {
     // MARK: Reference helpers (read the in-memory verse index — no SwiftData)
 
     private func referenceLabel(_ r: BibleReferenceMatch) -> String {
-        if r.isBookOnly { return r.bookName }
+        let book = r.bookDisplayName
+        if r.isBookOnly { return book }
         if let vs = r.verseStart, let ve = r.verseEnd {
-            return vs == ve ? "\(r.bookName) \(r.chapter):\(vs)" : "\(r.bookName) \(r.chapter):\(vs)-\(ve)"
+            return vs == ve ? "\(book) \(r.chapter):\(vs)" : "\(book) \(r.chapter):\(vs)-\(ve)"
         }
-        return "\(r.bookName) \(r.chapter)"
+        return "\(book) \(r.chapter)"
     }
 
     private func referenceVerses(_ r: BibleReferenceMatch) -> [VerseIndexEntry] {
@@ -804,8 +807,13 @@ struct QuickSearchPalette: View {
             .map { mv.showNumbers ? "(\($0.verse)) \($0.text)" : $0.text }
             .joined(separator: separator)
         let range = first.verse == last.verse ? "\(first.verse)" : "\(first.verse)-\(last.verse)"
-        let abbrev = libraryManager.selectedBibleModule?.abbreviation ?? ""
-        pm.showBibleVerse(text: text, reference: "\(bookName) \(chapter):\(range)",
+        let module = libraryManager.selectedBibleModule
+        let abbrev = module?.abbreviation ?? ""
+        // The projected reference follows the TRANSLATION's language, not the
+        // app's and not whatever the source file happened to name its books.
+        let projected = BibleBookLocalization.localizedName(for: bookName,
+                                                           language: module?.language ?? "")
+        pm.showBibleVerse(text: text, reference: "\(projected) \(chapter):\(range)",
                           translationName: abbrev,
                           bookNumber: first.bookNumber, bookName: bookName, chapter: chapter,
                           verseStart: first.verse, verseEnd: last.verse, translation: abbrev)
@@ -996,9 +1004,13 @@ struct QuickSearchPalette: View {
 
     private func bibleDraft(verses: [VerseIndexEntry]) -> SessionItemDraft? {
         guard let first = verses.first, let last = verses.last else { return nil }
+        // `displayReference` is what a saved session projects — the translation's
+        // language, same rule as `presentVerses`.
+        let book = BibleBookLocalization.localizedName(
+            for: first.bookName, language: libraryManager.selectedBibleModule?.language ?? "")
         let reference = first.verse == last.verse
-            ? "\(first.bookName) \(first.chapter):\(first.verse)"
-            : "\(first.bookName) \(first.chapter):\(first.verse)-\(last.verse)"
+            ? "\(book) \(first.chapter):\(first.verse)"
+            : "\(book) \(first.chapter):\(first.verse)-\(last.verse)"
         let snapshot = verses.map { "(\($0.verse)) \($0.text)" }.joined(separator: " ")
         return .bible(translation: libraryManager.selectedBibleModule?.abbreviation ?? "",
                       bookNumber: first.bookNumber, bookName: first.bookName,

@@ -141,6 +141,72 @@ final class BibleBook {
         chapters.sorted { $0.chapterNumber < $1.chapterNumber }
     }
 
+    /// This book named in the APP's language — what every list, grid and header
+    /// in the library shows.
+    ///
+    /// `name` is whatever the source file said, so a Cornilescu module read
+    /// "Geneza" to an operator running the app in English. The library is the
+    /// operator's tool; the live output is the one that keeps the translation's
+    /// own wording.
+    ///
+    /// Three tries, most trustworthy first, and every one of them goes through
+    /// the NAME rather than `bookNumber`: OSIS files number books with a running
+    /// counter, so an NT-only module has Matthew at 1. The number is consulted
+    /// last and only when `testament` agrees with it, which is exactly the case
+    /// that counter cannot produce.
+    var displayName: String { displayName(language: BibleBookLocalization.uiLanguage) }
+
+    /// `language` is explicit so tests do not depend on the machine's locale.
+    func displayName(language: String) -> String {
+        if !nameEnglish.isEmpty,
+           let number = BibleBookLocalization.canonicalNumber(forName: nameEnglish),
+           let localized = BibleBookLocalization.name(number: number, language: language) {
+            return localized
+        }
+        if let number = BibleBookLocalization.canonicalNumber(forName: name) {
+            // A name that resolves to a different book than the file placed it at,
+            // in a file whose numbering we DO trust, means an edition that names
+            // books differently — Douay-Rheims calls 1 Samuel "1 Kings". Renaming
+            // it would put the wrong book on screen, so leave it as written.
+            if bookNumberIsCanonical && number != bookNumber { return name }
+            if let localized = BibleBookLocalization.name(number: number, language: language) {
+                return localized
+            }
+        }
+        // Last resort, for a file whose names we cannot read at all.
+        if bookNumberIsCanonical,
+           let localized = BibleBookLocalization.name(number: bookNumber, language: language) {
+            return localized
+        }
+        return name
+    }
+
+    /// This book named in the TRANSLATION's language — the reference the LIVE
+    /// OUTPUT shows, because the congregation is reading this edition.
+    ///
+    /// Not the same as `name`, and the difference is not academic: the published
+    /// English KJV module carries Romanian book names, so it projected
+    /// „Geneza 1:6" over English verses. The module declares its language, so
+    /// that is what the reference follows — and for a language with no table
+    /// (Dutch, Hungarian, Greek…) the file's own wording stands.
+    /// `displayName` already returns `name` untouched for a language it has no
+    /// table for, so an unrecognised code needs no special case here.
+    var presentationName: String { displayName(language: module?.language ?? "") }
+
+    /// Whether `bookNumber` is a canonical position rather than a running import
+    /// counter: inside 1…66 and on the side of the canon `testament` claims.
+    ///
+    /// This is the whole trust model. `OSISBibleImporter` numbers books as it
+    /// meets them, so an NT-only file has Matthew at 1 — a number that says OT
+    /// about a book that says NT, which is exactly what this catches.
+    private var bookNumberIsCanonical: Bool {
+        switch testament {
+        case "OT": return (1...39).contains(bookNumber)
+        case "NT": return (40...66).contains(bookNumber)
+        default: return false
+        }
+    }
+
     /// A short label for this book, for grids and columns too narrow for the
     /// full name.
     ///
@@ -149,10 +215,34 @@ final class BibleBook {
     /// compact views usable on every module rather than only on well-tagged ones.
     /// Ordinal prefixes are kept ("1 Împărați" → "1Împ", not "Împ"), because
     /// dropping them would collide 1/2 Samuel, 1/2/3 Ioan and the rest.
+    ///
+    /// The file's own abbreviation is kept while it still reads as a short form of
+    /// what is on screen: "Gen" beside "Genesis" is fine, „Cânt.C" beside
+    /// "Song of Solomon" is a puzzle.
     var displayAbbreviation: String {
+        displayAbbreviation(language: BibleBookLocalization.uiLanguage)
+    }
+
+    func displayAbbreviation(language: String) -> String {
+        let localized = displayName(language: language)
         let trimmed = abbreviation.trimmingCharacters(in: .whitespaces)
-        if !trimmed.isEmpty { return trimmed }
-        return Self.deriveAbbreviation(from: name)
+        if !trimmed.isEmpty, localized == name || Self.abbreviationFits(trimmed, localized) {
+            return trimmed
+        }
+        return Self.deriveAbbreviation(from: localized)
+    }
+
+    /// Whether a file-supplied short form still belongs beside `name`.
+    ///
+    /// Prefix match after folding case, diacritics, dots and spaces away, so
+    /// "1Sam" fits "1 Samuel" and "Gen" fits "Genesis", while „Fac" (Facerea)
+    /// does not fit "Genesis".
+    nonisolated static func abbreviationFits(_ abbreviation: String, _ name: String) -> Bool {
+        let compact = { (s: String) in
+            BibleBookLocalization.matchKey(s).replacingOccurrences(of: " ", with: "")
+        }
+        let short = compact(abbreviation)
+        return !short.isEmpty && compact(name).hasPrefix(short)
     }
 
     /// nonisolated: called from @Model accessors, which are nonisolated under
@@ -160,9 +250,12 @@ final class BibleBook {
     nonisolated static func deriveAbbreviation(from name: String) -> String {
         let words = name.split(separator: " ", omittingEmptySubsequences: true)
         guard let last = words.last else { return name }
-        // A leading ordinal ("1", "2", "III") stays glued to the stem.
-        let ordinal = words.count > 1 && words[0].allSatisfy({ $0.isNumber || $0 == "I" || $0 == "V" })
-            ? String(words[0])
+        // A leading ordinal ("1", "2", "III", German "1.") stays glued to the
+        // stem — without it 1.–5. Mose would all abbreviate to "Mose".
+        let head = words[0].hasSuffix(".") ? words[0].dropLast() : words[0]
+        let ordinal = words.count > 1 && !head.isEmpty
+            && head.allSatisfy({ $0.isNumber || $0 == "I" || $0 == "V" })
+            ? String(head)
             : ""
         let stem = last.prefix(ordinal.isEmpty ? 4 : 3)
         return ordinal + stem
@@ -263,12 +356,13 @@ final class BibleVerse {
         return decoded
     }
 
-    /// Full reference string e.g. "Genesis 1:1"
+    /// Full reference string e.g. "Genesis 1:1" — in the TRANSLATION's language,
+    /// since this is what goes on the screen the congregation reads.
     var fullReference: String {
         guard let chapter = chapter, let book = chapter.book else {
             return "\(verseNumber)"
         }
-        return "\(book.name) \(chapter.chapterNumber):\(verseNumber)"
+        return "\(book.presentationName) \(chapter.chapterNumber):\(verseNumber)"
     }
 }
 

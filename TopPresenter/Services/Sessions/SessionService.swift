@@ -142,7 +142,8 @@ private struct BibleItemResolver: SessionItemResolving {
         }
         let text = verses.map(\.text).joined(separator: " ")
         let range = p.verseStart == end ? "\(p.verseStart)" : "\(p.verseStart)-\(end)"
-        let reference = "\(book.name) \(p.chapter):\(range)"
+        // The translation's language — this is projected, not read by the operator.
+        let reference = "\(book.presentationName) \(p.chapter):\(range)"
         return .bible(text: text, reference: reference, translationName: module.abbreviation)
     }
 }

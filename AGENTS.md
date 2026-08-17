@@ -521,6 +521,40 @@ That matters because roughly 44% of the ~1400 `String(localized:)` **keys are wr
 
 Normalizing the Romanian keys to English is optional cleanup, worth doing module by module — never as one sweep.
 
+### Bible book names have THREE forms — pick the right one
+
+`BibleBook.name` is whatever the source file said, and it is very often not the
+language you want. The published KJV module carries **Romanian** book names, so it
+used to read „Geneza" in an English UI *and* project „Geneza 1:6" over English
+verses. `BibleBookLocalization` (66 books × en/ro/es/fr/de/ru) resolves all three
+forms:
+
+| Use | Property | Language |
+|---|---|---|
+| Library UI the OPERATOR reads — book lists, grids, chapter headers, ⌘K rows, history, schedule labels, window titles | `book.displayName` | the **app's** |
+| The reference on the LIVE OUTPUT, and anything saved that will be projected (`displayReference`, session items, slide tokens) | `book.presentationName` | the **translation's** (`module.language`) |
+| Exports and stored payloads (`.tpbible`, `.tpsong`, history rows) | `book.name` | the **file's**, untouched, so documents round-trip |
+
+`BibleBookLocalization.localizedReference(_:)` restates a stored reference string
+("Geneza 1:1" → "Genesis 1:1") for the operator without rewriting what was saved.
+
+Three rules that are load-bearing, each with a test that fails if they are broken:
+
+1. **Identify by NAME, never by `bookNumber`.** `OSISBibleImporter` numbers books
+   with a running counter, so an NT-only file has Matthew at **1**. The number is
+   a last resort and only when `testament` agrees with it.
+2. **A book that cannot be positively identified keeps its own name.** No fuzzy
+   matching, no near misses. Deuterocanonical books and languages with no table
+   (Dutch, Hungarian, Greek — 11 of the 17 in the library) fall through untouched.
+3. **Ambiguous names stay out of the table.** Romanian „1 Regi" is 1 Samuel in
+   Orthodox editions and 1 Kings in others; Douay-Rheims calls 1 Samuel
+   "1 Kings". Guessing puts the wrong book on the screen, so `displayName` keeps
+   the file's wording when a resolved name contradicts a trustworthy number.
+
+Book names are **data, not UI copy** — hardcoded tables, not `String(localized:)`.
+That is deliberate: fr/de/ru sit at 16% catalog coverage, and a Bible book list
+must be complete in every language regardless.
+
 ---
 
 ## What NOT To Do

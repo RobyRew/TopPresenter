@@ -199,12 +199,28 @@ struct BibleTokenProvider: SlideDataProvider {
                                       modelContext: modelContext)
         }
         return Self.resolve(reference: token.argument, field: token.field,
-                            books: context.index.books, verses: context.index.verses)
+                            books: context.index.books, verses: context.index.verses,
+                            language: Self.activeLanguage(context))
+    }
+
+    /// The active translation's language code — a slide is projected, so its
+    /// reference follows the translation, not the app's UI.
+    private static func activeLanguage(_ context: SlideTokenContext) -> String {
+        guard let id = context.index.activeVerseModuleID, let modelContext = context.modelContext
+        else { return "" }
+        var descriptor = FetchDescriptor<BibleModule>(predicate: #Predicate { $0.id == id })
+        descriptor.fetchLimit = 1
+        descriptor.propertiesToFetch = [\.language]
+        return (try? modelContext.fetch(descriptor))?.first?.language ?? ""
     }
 
     /// Pure resolution over index projections — unit-tested directly.
+    /// `language` is the TRANSLATION's code — the reference is restated in it, so
+    /// a slide never carries a book name from the wrong language. Empty (the
+    /// default, and every existing test) leaves the index's names as they are.
     nonisolated static func resolve(reference: String, field: String,
-                                    books: [BookIndexEntry], verses: [VerseIndexEntry]) -> String? {
+                                    books: [BookIndexEntry], verses: [VerseIndexEntry],
+                                    language: String = "") -> String? {
         guard let match = BibleReferenceParser.parse(reference, books: books) else { return nil }
         let picked = verses.filter {
             $0.bookNumber == match.bookNumber && $0.chapter == match.chapter
@@ -212,9 +228,10 @@ struct BibleTokenProvider: SlideDataProvider {
                     || ($0.verse >= match.verseStart! && $0.verse <= (match.verseEnd ?? match.verseStart!)))
         }
         guard let first = picked.first, let last = picked.last else { return nil }
+        let book = BibleBookLocalization.localizedName(for: first.bookName, language: language)
         let ref = first.verse == last.verse
-            ? "\(first.bookName) \(first.chapter):\(first.verse)"
-            : "\(first.bookName) \(first.chapter):\(first.verse)-\(last.verse)"
+            ? "\(book) \(first.chapter):\(first.verse)"
+            : "\(book) \(first.chapter):\(first.verse)-\(last.verse)"
         let text = picked.count == 1
             ? picked[0].text
             : picked.map { "(\($0.verse)) \($0.text)" }.joined(separator: " ")
@@ -256,9 +273,10 @@ struct BibleTokenProvider: SlideDataProvider {
                             text: $0.text, folded: "")
         }
         guard let first = verses.first, let last = verses.last else { return nil }
+        // Pinned to |ABBREV, so the module is in hand — its own language wins.
         let ref = first.verse == last.verse
-            ? "\(first.bookName) \(first.chapter):\(first.verse)"
-            : "\(first.bookName) \(first.chapter):\(first.verse)-\(last.verse)"
+            ? "\(book.presentationName) \(first.chapter):\(first.verse)"
+            : "\(book.presentationName) \(first.chapter):\(first.verse)-\(last.verse)"
         let text = verses.count == 1
             ? verses[0].text
             : verses.map { "(\($0.verse)) \($0.text)" }.joined(separator: " ")

@@ -563,7 +563,8 @@ final class LibraryManager {
         if verseNumbers.isEmpty { return "" }
 
         let rangeString = formatVerseRange(verseNumbers)
-        return "\(book.name) \(chapter.chapterNumber):\(rangeString)"
+        // The translation's own language — this string is what gets projected.
+        return "\(book.presentationName) \(chapter.chapterNumber):\(rangeString)"
     }
 
     // MARK: - Song Navigation

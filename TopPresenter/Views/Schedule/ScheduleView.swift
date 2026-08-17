@@ -381,7 +381,12 @@ struct ScheduleItemRow: View {
                 .frame(width: 20)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(item.title)
+                // Bible items persist their reference in the translation's
+                // language; show it in the app's. Gated on the type on purpose —
+                // a song called „Iona 2" must not become „Jonah 2".
+                Text(item.itemType == "bible"
+                     ? BibleBookLocalization.localizedReference(item.title)
+                     : item.title)
                     .font(.body)
                     .lineLimit(1)
                 if !item.subtitle.isEmpty {
@@ -682,12 +687,19 @@ struct ScheduleContentPicker: View {
         searchField
         let verses = referenceVerses
         if let first = verses.first, let last = verses.last {
+            // Saved into the session and projected from it — translation's
+            // language, whatever the source file named its books.
+            let book = BibleBookLocalization.localizedName(
+                for: first.bookName, language: libraryManager.selectedBibleModule?.language ?? "")
             let reference = first.verse == last.verse
-                ? "\(first.bookName) \(first.chapter):\(first.verse)"
-                : "\(first.bookName) \(first.chapter):\(first.verse)-\(last.verse)"
+                ? "\(book) \(first.chapter):\(first.verse)"
+                : "\(book) \(first.chapter):\(first.verse)-\(last.verse)"
             VStack(alignment: .leading, spacing: 6) {
                 HStack {
-                    Text(reference).font(.callout.weight(.semibold))
+                    // `reference` itself is what gets SAVED and presented, so it
+                    // keeps the translation's wording — only the label localizes.
+                    Text(BibleBookLocalization.localizedReference(reference))
+                        .font(.callout.weight(.semibold))
                     Text(String(localized: "\(verses.count) versete", comment: "Composer verse count"))
                         .font(.caption).foregroundStyle(.secondary)
                     Spacer()

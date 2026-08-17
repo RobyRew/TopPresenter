@@ -163,15 +163,25 @@ struct HistoryView: View {
 
     // MARK: Bible
 
+    /// Filters against BOTH wordings: a row saved as „Geneza 1:1" has to be
+    /// findable by typing either "geneza" or "genesis", whichever the operator
+    /// is reading on screen.
     private var filteredBible: [BibleHistorySummary] {
         query.isEmpty ? bible : bible.filter {
-            $0.reference.localizedCaseInsensitiveContains(query) || $0.translation.localizedCaseInsensitiveContains(query)
+            $0.reference.localizedCaseInsensitiveContains(query)
+                || BibleBookLocalization.localizedReference($0.reference)
+                    .localizedCaseInsensitiveContains(query)
+                || $0.translation.localizedCaseInsensitiveContains(query)
         }
     }
 
     private var biblePane: some View {
         Table(filteredBible) {
-            TableColumn(String(localized: "Reference", comment: "History column")) { Text($0.reference) }
+            // Rows persist the reference in the translation's language; the
+            // operator reads it in the app's.
+            TableColumn(String(localized: "Reference", comment: "History column")) {
+                Text(BibleBookLocalization.localizedReference($0.reference))
+            }
             TableColumn(String(localized: "Translation", comment: "History column")) { Text($0.translation) }.width(110)
             TableColumn(String(localized: "Times", comment: "History column")) { Text("\($0.timesPresented)×") }.width(70)
             TableColumn(String(localized: "Shows", comment: "History column")) { Text("\($0.shows)") }.width(70)
