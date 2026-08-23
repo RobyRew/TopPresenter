@@ -3914,6 +3914,55 @@ struct BookAbbreviationTests {
     }
 }
 
+// MARK: - Click-Outside Dismiss
+
+/// Which click abandons the import sheet.
+struct SheetDismissRuleTests {
+    // Stand-ins for four distinct NSWindows.
+    private final class Win {}
+    private let sheetWin = Win(), parentWin = Win(), panelWin = Win()
+
+    private func dismisses(_ clicked: Win?, parent: Win?, blocked: Bool = false) -> Bool {
+        SheetDismissRule.dismisses(clicked: clicked.map(ObjectIdentifier.init),
+                                   sheet: ObjectIdentifier(sheetWin),
+                                   parent: parent.map(ObjectIdentifier.init),
+                                   isBlocked: blocked)
+    }
+
+    @Test func clickingTheWindowBehindDismisses() {
+        #expect(dismisses(parentWin, parent: parentWin))
+    }
+
+    @Test func choosingAFileInTheOpenPanelDoesNot() {
+        // THE BUG: the sheet opens an NSOpenPanel, the operator clicks a file in
+        // it, and the import sheet standing behind vanishes. The panel is this
+        // app's window, so "anything that is not the sheet" caught it.
+        #expect(!dismisses(panelWin, parent: parentWin))
+    }
+
+    @Test func clicksInsideTheSheetNeverDismiss() {
+        #expect(!dismisses(sheetWin, parent: parentWin))
+    }
+
+    @Test func nothingDismissesWhileSomethingIsLayeredOnTop() {
+        // A panel or alert is up: even a click that lands on the parent belongs
+        // to it, not to us.
+        #expect(!dismisses(parentWin, parent: parentWin, blocked: true))
+        #expect(!dismisses(panelWin, parent: parentWin, blocked: true))
+    }
+
+    @Test func anUnattachedSheetKeepsTheOldRule() {
+        // Presented as a plain window rather than a real sheet — better to keep
+        // the gesture working loosely than to lose it silently.
+        #expect(dismisses(panelWin, parent: nil))
+        #expect(!dismisses(sheetWin, parent: nil))
+    }
+
+    @Test func anEventWithNoWindowIsIgnored() {
+        #expect(!dismisses(nil, parent: parentWin))
+    }
+}
+
 // MARK: - Book Names In The App's Language
 
 /// A module carries the book names its source file used. The library has to read

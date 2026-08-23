@@ -644,6 +644,29 @@
         }
       }
     },
+    "%@ — other layout" : {
+      "comment" : "Box source belonging to a different presenter",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ — other layout"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ — alt layout"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ — otro diseño"
+          }
+        }
+      }
+    },
     "%@ / %@" : {
       "comment" : "",
       "localizations" : {

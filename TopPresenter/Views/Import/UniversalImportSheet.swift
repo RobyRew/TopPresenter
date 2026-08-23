@@ -492,7 +492,7 @@ struct UniversalImportSheet: View {
 
 // MARK: - Click outside to dismiss
 
-/// Closes the sheet when a click lands anywhere but on it.
+/// Closes the sheet when a click lands on the window BEHIND it.
 ///
 /// A macOS sheet is window-modal and deliberately swallows clicks on its parent
 /// — the system's own answer is to bounce the sheet at you, which is fine for
@@ -502,6 +502,29 @@ struct UniversalImportSheet: View {
 /// with a dimmed backdrop. The overlay version would have to re-implement
 /// modality, and it would still leave the window's TOOLBAR live behind the
 /// scrim, so the "modal" panel would sit there while you pressed Import again.
+/// Pure decision behind `ClickOutsideDismiss` — which left-click counts as
+/// "outside the sheet".
+///
+/// "Anything that is not the sheet" was the first answer and it was wrong: an
+/// `NSOpenPanel` is this app's window too, so choosing a file in the picker the
+/// sheet had just opened dismissed the import standing behind it. Only the
+/// window the sheet is ATTACHED to is outside; a panel, an alert or another
+/// tab's window is not.
+///
+/// Split out from the monitor so the rule can be tested without an NSWindow.
+nonisolated enum SheetDismissRule {
+    static func dismisses(clicked: ObjectIdentifier?, sheet: ObjectIdentifier,
+                          parent: ObjectIdentifier?, isBlocked: Bool) -> Bool {
+        // Something is layered on top of the sheet — the click is its business.
+        guard !isBlocked else { return false }
+        guard let clicked, clicked != sheet else { return false }
+        // No parent means this was not presented as a real sheet; fall back to
+        // the original rule rather than silently losing the gesture.
+        guard let parent else { return true }
+        return clicked == parent
+    }
+}
+
 /// The real sheet keeps all of that correct; this only adds the one missing
 /// gesture.
 private struct ClickOutsideDismiss: NSViewRepresentable {
@@ -538,7 +561,16 @@ private struct ClickOutsideDismiss: NSViewRepresentable {
             // the sheet, since they come through here too.
             monitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown]) { [weak self] event in
                 guard let self, let sheet = self.sheet, sheet.isVisible else { return event }
-                if event.window !== sheet { action() }
+                // A panel or alert layered on top owns the interaction. The
+                // sheet itself never counts as blocking itself.
+                let modal = NSApp.modalWindow
+                let blocked = sheet.attachedSheet != nil || (modal != nil && modal !== sheet)
+                if SheetDismissRule.dismisses(clicked: event.window.map(ObjectIdentifier.init),
+                                              sheet: ObjectIdentifier(sheet),
+                                              parent: sheet.sheetParent.map(ObjectIdentifier.init),
+                                              isBlocked: blocked) {
+                    action()
+                }
                 return event
             }
         }
