@@ -58,18 +58,33 @@ final class LibraryTaskRunner {
     // MARK: - Import
 
     /// Start an import. Returns immediately; watch `progress`.
+    /// `roots` are the URLs the operator actually chose — the folder from the
+    /// open panel, not the files found inside it.
+    ///
+    /// They have to be held for the whole import, and this is the only place
+    /// that can do it: the import OUTLIVES the sheet by design, so a scope
+    /// opened by the sheet would be released the moment it closes. A URL
+    /// restored from a bookmark grants nothing until its scope is open, so
+    /// without this the walk finds every file in the folder and then every
+    /// single one fails to open with "you don't have permission to view it".
     func startImport(
         files: [PendingImportFile],
         collectionName: String,
         policies: [ImportKind: DuplicatePolicy],
         presentationManager: PresentationManager?,
+        roots: [URL] = [],
         onUpdate: @escaping @MainActor @Sendable (UUID, ImportFileStatus) -> Void = { _, _ in }
     ) {
         guard !isBusy else { return }
         lastSummary = nil
         progress.begin(.importing, total: files.count)
 
+        let opened = roots.filter { $0.startAccessingSecurityScopedResource() }
+
         current = Task { [weak self] in
+            // Balanced on every exit, including cancellation — an unbalanced
+            // stop is what silently revokes access for the NEXT import.
+            defer { for root in opened { root.stopAccessingSecurityScopedResource() } }
             guard let self else { return }
             let coordinator = ImportCoordinator(
                 modelContext: container.mainContext,

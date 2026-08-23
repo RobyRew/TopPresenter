@@ -68,6 +68,13 @@ final class ImportPlanModel {
     /// Preselect a kind when the sheet is opened from a specific library.
     var preselectedKinds: Set<ImportKind> = []
 
+    /// What the operator actually chose — the folder, not the files inside it.
+    ///
+    /// Kept because access is granted for THESE urls, not for the ones the walk
+    /// discovers underneath them. The scan holds them itself; the import is
+    /// handed them so it can hold them too, since it outlives this model.
+    private(set) var roots: [URL] = []
+
     var mode: Mode { modeOverride ?? autoMode }
 
     /// Advanced pays for itself only when there is something to decide: several
@@ -118,8 +125,11 @@ final class ImportPlanModel {
     /// Documents-sized tree would otherwise block the UI while it is scanned.
     func load(_ urls: [URL]) async {
         stage = .scanning
+        roots = urls
         let scan = await Task.detached(priority: .userInitiated) {
-            ImportScanner.scan(urls)
+            // A bookmark-restored folder grants nothing until its scope is
+            // open, so the walk has to run inside it or it finds nothing.
+            ImportScanner.withScopedRoots(urls) { ImportScanner.scan(urls) }
         }.value
         let classified = await Task.detached(priority: .userInitiated) { [files = scan.files] in
             DragDropImportHandler.classify(files)
@@ -223,7 +233,8 @@ final class ImportPlanModel {
             files: selected,
             collectionName: songCollectionName,
             policies: policies,
-            presentationManager: presentationManager
+            presentationManager: presentationManager,
+            roots: roots
         ) { [weak self] id, status in
             // Rows stay mounted while this runs and their statuses animate in
             // place, so the list never jumps out from under the operator.
@@ -239,6 +250,7 @@ final class ImportPlanModel {
     }
 
     func reset() {
+        roots = []
         rows = []
         unsupported = []
         truncations = []

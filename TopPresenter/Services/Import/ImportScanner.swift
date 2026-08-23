@@ -33,17 +33,22 @@ nonisolated enum ImportScanner {
         /// The selected folder is depth 0. Eight covers every plausible library
         /// tree while still refusing to walk a whole home directory.
         var maxDepth = 8
-        /// Enough for a full songbook collection; past this, the operator is
-        /// almost certainly pointing at the wrong folder.
-        var maxCandidates = 5_000
+        /// A real scraped song corpus is tens of thousands of files — 5 000 was
+        /// sized for "a songbook", and turned a 27 000-song import into a
+        /// truncation notice. The scan itself is directory enumeration plus an
+        /// extension test, so the ceiling costs almost nothing to raise; what
+        /// it still buys is a stop when someone points at their home folder.
+        var maxCandidates = 100_000
         /// Entries LOOKED AT, importable or not. This is the one that stops a
         /// node_modules or a Photos library, where the file count dwarfs
         /// anything we would keep.
-        var maxVisitedEntries = 200_000
+        var maxVisitedEntries = 1_000_000
 
         /// Extensionless files are the only ones the scanner OPENS, so this is
-        /// the one that keeps a stray tree cheap.
-        var maxProbes = 400
+        /// the one that keeps a stray tree cheap. Raised with the rest: a
+        /// corpus of extensionless OpenSong files is a real thing, and 400
+        /// silently skipped everything past the first few hundred.
+        var maxProbes = 20_000
         /// An OpenSong file is a few KB of XML. Anything past this is not one,
         /// and reading it would be pure cost.
         var maxProbeBytes = 2 * 1024 * 1024
