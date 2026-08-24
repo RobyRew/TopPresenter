@@ -567,7 +567,8 @@ struct SongListPanel: View {
         libraryManager.selectSongSlide(text: first.text, label: first.label, index: 0, count: first.total)
         presentationManager.showSongVerse(
             text: first.text, title: song.title, verseLabel: first.label,
-            slideIndex: 0, slideCount: first.total, song: song, version: version, lines: first.lines
+            slideIndex: 0, slideCount: first.total, song: song, version: version,
+            sectionType: first.type, lines: first.lines
         )
     }
 
@@ -1068,7 +1069,7 @@ struct SongSlideFilmstrip: View {
         presentationManager.showSongVerse(
             text: slide.text, title: song.title, verseLabel: slide.label,
             slideIndex: slide.index, slideCount: slide.total,
-            song: song, version: version, lines: slide.lines
+            song: song, version: version, sectionType: slide.type, lines: slide.lines
         )
     }
 }
@@ -1109,7 +1110,17 @@ struct SongSlideThumbnail: View {
                 .padding(5)
             }
 
-            HStack {
+            HStack(spacing: 4) {
+                // The section KIND, in the editor's own colour. The label alone
+                // was all this showed, and a label is free text — so changing a
+                // section's type to Refren left the filmstrip reading
+                // "Strofa 2", which is what "the change isn't reflected" meant.
+                if !slide.type.isEmpty {
+                    Circle()
+                        .fill(songTypeColor(slide.type))
+                        .frame(width: 6, height: 6)
+                        .help(songTypeLabel(slide.type))
+                }
                 Text(slide.label).font(.caption2.weight(.medium)).lineLimit(1)
                 Spacer()
                 Text("\(slide.index + 1)/\(slide.total)")

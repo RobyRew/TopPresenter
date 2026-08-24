@@ -794,7 +794,8 @@ struct QuickSearchPalette: View {
             libraryManager.selectSongSlide(text: first.text, label: first.label, index: 0, count: first.total)
             pm.showSongVerse(text: first.text, title: song.title, verseLabel: first.label,
                              slideIndex: 0, slideCount: first.total,
-                             song: song, version: version, lines: first.lines)
+                             song: song, version: version,
+                             sectionType: first.type, lines: first.lines)
         }
     }
 

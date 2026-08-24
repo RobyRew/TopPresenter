@@ -456,13 +456,29 @@ final class ImportService {
     /// Returns the detected format, or nil if unknown.
     /// nonisolated: pure file inspection (Data/FileManager reads) — called from the
     /// background classification walk (Task.detached), so it must not hop to MainActor.
+    /// A decoded window from the head of a file, for format sniffing.
+    ///
+    /// `String(data:encoding: .utf8)` returns NIL when the byte cut lands inside
+    /// a multi-byte character. For Romanian text — ă, î, ș, ț on nearly every
+    /// line — whether that happens is pure luck of the offset, so one `.tpsong`
+    /// sniffed fine and the next was "not recognised" with no visible reason.
+    /// `String(decoding:as:)` substitutes U+FFFD instead of failing.
+    ///
+    /// The window is also far bigger than the 1–4 KB it replaced: a native file
+    /// with a long `aboutText` or copyright block pushed `"books"` / `"versions"`
+    /// past the end of the old one, and the marker check then failed on a file
+    /// whose extension was right all along.
+    nonisolated static func probeHead(_ fileURL: URL, bytes: Int = 64_000) -> String? {
+        guard let data = try? Data(contentsOf: fileURL, options: .mappedIfSafe) else { return nil }
+        return String(decoding: data.prefix(bytes), as: UTF8.self)
+    }
+
     nonisolated static func detectBibleFormat(fileURL: URL) -> SupportedBibleFormat? {
         let ext = fileURL.pathExtension.lowercased()
 
         // Check for the native format first (priority format)
         if ext == TopPresenterFormat.bible.fileExtension {
-            if let data = try? Data(contentsOf: fileURL, options: .mappedIfSafe),
-               let header = String(data: data.prefix(1000), encoding: .utf8) {
+            if let header = probeHead(fileURL) {
                 if header.contains("\"TopPresenter Bible\"") || header.contains("\"format\"") && header.contains("\"books\"") {
                     return .topPresenter
                 }
@@ -506,8 +522,7 @@ final class ImportService {
         }
 
         // Read text content for XML and text-based formats
-        guard let data = try? Data(contentsOf: fileURL, options: .mappedIfSafe) else { return nil }
-        guard let header = String(data: data.prefix(4000), encoding: .utf8) else { return nil }
+        guard let header = probeHead(fileURL) else { return nil }
 
         // OSIS XML detection
         if header.contains("<osis") || header.contains("<osisText") || header.contains("osis.xsd") {
@@ -887,8 +902,7 @@ final class ImportService {
             return .chordPro
         }
 
-        guard let data = try? Data(contentsOf: fileURL, options: .mappedIfSafe) else { return nil }
-        guard let content = String(data: data.prefix(2000), encoding: .utf8) else { return nil }
+        guard let content = probeHead(fileURL) else { return nil }
 
         // The native song document (one song) or collection (a bundle).
         let nativeSongExtensions = [TopPresenterFormat.song.fileExtension,

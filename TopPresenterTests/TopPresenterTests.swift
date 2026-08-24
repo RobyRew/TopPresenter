@@ -3914,6 +3914,102 @@ struct BookAbbreviationTests {
     }
 }
 
+// MARK: - Format Sniffing Survives Diacritics And Long Headers
+
+/// Why some `.tpsong` / `.tpbible` files were "not recognised" and others,
+/// same format, were fine.
+struct FormatProbeTests {
+
+    private func write(_ text: String, _ name: String) throws -> URL {
+        let url = FileManager.default.temporaryDirectory
+            .appending(path: "probe-\(UUID().uuidString)-\(name)")
+        try Data(text.utf8).write(to: url)
+        return url
+    }
+
+    @Test func aDiacriticStraddlingTheCutNoLongerKillsDetection() throws {
+        // The old probe took `data.prefix(2000)` and decoded it with
+        // `String(data:encoding:.utf8)`, which returns nil when the cut lands
+        // inside a multi-byte character. Padding is sized so a „ș" (2 bytes)
+        // sits exactly across byte 2000, and the marker comes after it.
+        var json = "{\"format\": \"TopPresenter Song\", \"pad\": \""
+        let head = json.utf8.count
+        json += String(repeating: "a", count: 2000 - head - 1)   // one byte short
+        json += "ș"                                              // straddles 2000
+        json += "\", \"versions\": [], \"verses\": []}"
+
+        let url = try write(json, "diacritic.tpsong")
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let raw = try Data(contentsOf: url)
+        #expect(String(data: raw.prefix(2000), encoding: .utf8) == nil,
+                "fixture must actually straddle the old cut, or it proves nothing")
+        #expect(ImportService.detectSongFormat(fileURL: url) == .topPresenterJSON)
+    }
+
+    @Test func aMarkerPastTheOldWindowIsStillFound() throws {
+        // A native file with a long copyright / aboutText block pushed the
+        // marker past the old 1–4 KB window, and the file was refused on
+        // content even though its extension was right.
+        let filler = String(repeating: "Cuvânt înainte. ", count: 900)   // ~14 KB
+        let json = "{\"format\": \"TopPresenter Bible\", \"aboutText\": \"\(filler)\", \"books\": []}"
+        let url = try write(json, "long.tpbible")
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        #expect(json.utf8.count > 4000, "fixture must exceed the old window")
+        #expect(ImportService.detectBibleFormat(fileURL: url) == .topPresenter)
+    }
+
+    @Test func foreignJSONIsStillRefused() throws {
+        // The window got bigger, not laxer — a stray JSON must not be adopted.
+        let url = try write("{\"name\": \"something else\", \"items\": [1, 2, 3]}", "foreign.json")
+        defer { try? FileManager.default.removeItem(at: url) }
+        #expect(ImportService.detectSongFormat(fileURL: url) == nil)
+        #expect(ImportService.detectBibleFormat(fileURL: url) == nil)
+    }
+}
+
+// MARK: - Section Type Reaches The Output
+
+/// Setting a section's type in the editor has to change what the slide IS, not
+/// just what the editor draws.
+@MainActor
+struct SectionTypeTests {
+
+    @Test func theDeclaredTypeDecidesTheChorusScope() {
+        // The theme's Refren / Strofe scope used to be judged by sniffing the
+        // LABEL for "refren"/"chorus"/"cor". A section typed as a chorus but
+        // labelled "Strofa 2" was styled as a verse, and nothing the operator
+        // did in the type picker changed it.
+        let live = LiveContent()
+        live.setSongVerse(text: "…", title: "T", verseLabel: "Strofa 2", sectionType: "chorus")
+        #expect(live.isChorusSlide)
+
+        live.setSongVerse(text: "…", title: "T", verseLabel: "Refren", sectionType: "verse")
+        #expect(!live.isChorusSlide, "a declared verse is not a chorus, whatever it is called")
+    }
+
+    @Test func labelSniffingStaysForSongsWithNoType() {
+        // Songs imported before the version model have no sections and no type.
+        // Guessing from the label is all there is, so it has to keep working.
+        let live = LiveContent()
+        live.setSongVerse(text: "…", title: "T", verseLabel: "Refren 2", sectionType: "")
+        #expect(live.isChorusSlide)
+
+        live.setSongVerse(text: "…", title: "T", verseLabel: "Strofa 1", sectionType: "")
+        #expect(!live.isChorusSlide)
+    }
+
+    @Test func clearingResetsTheType() {
+        // A stale type would style the NEXT thing shown as a chorus.
+        let live = LiveContent()
+        live.setSongVerse(text: "…", title: "T", verseLabel: "R", sectionType: "chorus")
+        live.clear()
+        #expect(live.sectionType.isEmpty)
+        #expect(!live.isChorusSlide)
+    }
+}
+
 // MARK: - Click-Outside Dismiss
 
 /// Which click abandons the import sheet.

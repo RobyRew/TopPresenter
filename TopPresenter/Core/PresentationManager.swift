@@ -4051,8 +4051,12 @@ final class PresentationManager {
         }
     }
 
+    /// `sectionType` is the kind the operator set in the editor ("chorus",
+    /// "verse"…). It decides the theme's Refren / Strofe scope; without it the
+    /// output falls back to guessing from the label.
     func showSongVerse(text: String, title: String, verseLabel: String, slideIndex: Int = 0, slideCount: Int = 1,
-                       song: Song? = nil, version: SongVersion? = nil, lines: [SongLine] = []) {
+                       song: Song? = nil, version: SongVersion? = nil,
+                       sectionType: String = "", lines: [SongLine] = []) {
         guard !isFrozen else { return }
         let sKey = HistoryStore.songKey(ccli: song?.ccliNumber ?? "", title: song?.title ?? title,
                                         source: song?.collection?.sourceFormat ?? "")
@@ -4080,6 +4084,7 @@ final class PresentationManager {
                 style: pick(meta?.style, song?.style),
                 key: pick(meta?.key, song?.key),
                 tempo: pick(meta?.tempo, song?.tempo),
+                sectionType: sectionType,
                 lines: lines
             )
             lastLiveProfileKey = "song"

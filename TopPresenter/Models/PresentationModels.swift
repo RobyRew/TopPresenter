@@ -292,11 +292,23 @@ final class LiveContent {
     /// output window never has to re-open the sandboxed file itself.
     var mediaImage: NSImage? = nil
 
+    /// The section kind the operator SET in the editor ("chorus", "verse",
+    /// "bridge"…). Empty for a song with no version — the flattened-cache path.
+    var sectionType: String = ""
+
     var isFirstSlide: Bool { slideIndex <= 0 }
     var isLastSlide: Bool { slideIndex >= slideCount - 1 }
-    /// Whether the current slide is a chorus, judged by its section label
-    /// ("Refren", "Refren 2", "Chorus", "Cor" — case/diacritic-insensitive).
+
+    /// Whether the current slide is a chorus.
+    ///
+    /// The declared type wins. This used to sniff the LABEL for "refren" /
+    /// "chorus" / "cor" and nothing else, so setting a section's type to Refren
+    /// in the editor changed nothing on the output: the label still said
+    /// "Strofa 2", and the theme's Refren scope never matched. Guessing from the
+    /// label stays as the fallback, for songs that predate the version model and
+    /// have no type at all.
     var isChorusSlide: Bool {
+        if !sectionType.isEmpty { return sectionType == "chorus" }
         let label = subtitle
             .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: nil)
             .trimmingCharacters(in: .whitespaces)
@@ -316,6 +328,7 @@ final class LiveContent {
     func clear() {
         mainText = ""
         subtitle = ""
+        sectionType = ""
         reference = ""
         translationName = ""
         contentType = .blank
@@ -362,10 +375,11 @@ final class LiveContent {
     func setSongVerse(text: String, title: String, verseLabel: String, slideIndex: Int = 0, slideCount: Int = 1,
                       author: String = "", copyright: String = "", ccli: String = "",
                       songbook: String = "", style: String = "", key: String = "", tempo: String = "",
-                      lines: [SongLine] = []) {
+                      sectionType: String = "", lines: [SongLine] = []) {
         self.mainText = text
         self.reference = title
         self.subtitle = verseLabel
+        self.sectionType = sectionType
         self.translationName = ""
         self.contentType = .song
         self.mainRuns = []
