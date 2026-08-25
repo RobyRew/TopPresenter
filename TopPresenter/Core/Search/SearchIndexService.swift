@@ -511,8 +511,34 @@ actor SearchIndexBuilder {
     }
 
     /// Verse full-text index for ONE translation (the active one) — ~31k rows,
-    /// built once per module switch, off-main.
+    /// built once per module switch.
+    ///
+    /// `buildVerses` says "off-main" and was not: a sample of a cold module
+    /// switch put 10 714 of 12 944 MAIN-THREAD samples in here, 9 758 of them
+    /// sorting verses. Being on a `@ModelActor` does not put a `nonisolated`
+    /// callee anywhere in particular — the caller's executor does, and the
+    /// chain starts on `@MainActor`. `detachedBuildVerses` is the one that
+    /// actually runs elsewhere; this stays for callers already on the actor.
     func buildVerses(moduleID: UUID) -> (books: [BookIndexEntry], verses: [VerseIndexEntry], tokens: TokenIndex) {
+        Self.buildVerses(moduleID: moduleID, in: modelContext)
+    }
+
+    /// The same walk on a context of its own, off every actor.
+    ///
+    /// Everything it returns is already `Sendable` — `BookIndexEntry`,
+    /// `VerseIndexEntry` and `TokenIndex` are plain `Codable` values, which is
+    /// why this needed no new types, only a place to run.
+    nonisolated static func detachedBuildVerses(
+        moduleID: UUID, container: ModelContainer
+    ) async -> (books: [BookIndexEntry], verses: [VerseIndexEntry], tokens: TokenIndex) {
+        await Task.detached(priority: .userInitiated) {
+            buildVerses(moduleID: moduleID, in: ModelContext(container))
+        }.value
+    }
+
+    nonisolated static func buildVerses(
+        moduleID: UUID, in modelContext: ModelContext
+    ) -> (books: [BookIndexEntry], verses: [VerseIndexEntry], tokens: TokenIndex) {
         var d = FetchDescriptor<BibleModule>(predicate: #Predicate { $0.id == moduleID })
         d.fetchLimit = 1
         guard let module = (try? modelContext.fetch(d))?.first else { return ([], [], .empty) }
@@ -570,6 +596,8 @@ final class SearchIndex {
     private(set) var generation = 0
 
     @ObservationIgnored private var builder: SearchIndexBuilder?
+    /// Kept so the verse walk can be handed a context of its own, off any actor.
+    @ObservationIgnored private var container: ModelContainer?
     @ObservationIgnored private weak var historyStore: HistoryStore?
     @ObservationIgnored private var rebuildTask: Task<Void, Never>?
     @ObservationIgnored private var verseTask: Task<Void, Never>?
@@ -588,6 +616,7 @@ final class SearchIndex {
     func configure(container: ModelContainer, history: HistoryStore? = nil) {
         guard builder == nil else { return }
         builder = SearchIndexBuilder(modelContainer: container)
+        self.container = container
         historyStore = history
         observer = NotificationCenter.default.addObserver(
             forName: .libraryDidChange, object: nil, queue: .main
@@ -707,8 +736,11 @@ final class SearchIndex {
                 return
             }
             // 2. First time for this module: build from SwiftData, persist.
-            guard let builder = self?.builder else { return }
-            let payload = await builder.buildVerses(moduleID: moduleID)
+            //    Detached, on a context of its own — going through the actor ran
+            //    the whole walk on the main thread (see `detachedBuildVerses`).
+            guard let container = self?.container else { return }
+            let payload = await SearchIndexBuilder.detachedBuildVerses(
+                moduleID: moduleID, container: container)
             guard !Task.isCancelled, self?.activeVerseModuleID == moduleID else { return }
             let cache = VerseIndexCache(moduleID: moduleID, books: payload.books,
                                         verses: payload.verses, tokens: payload.tokens)
