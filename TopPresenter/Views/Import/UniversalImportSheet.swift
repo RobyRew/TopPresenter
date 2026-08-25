@@ -27,6 +27,8 @@ struct UniversalImportSheet: View {
 
     @State private var plan = ImportPlanModel()
     @State private var isDropTargeted = false
+    @FocusState private var isNamingNewCollection: Bool
+    @Query(sort: \SongCollection.name) private var songCollections: [SongCollection]
 
     /// Files the sheet was opened with (a drop, or a picked selection).
     var initialURLs: [URL] = []
@@ -397,10 +399,44 @@ struct UniversalImportSheet: View {
                     NSPasteboard.general.setString(plan.summary?.report ?? "", forType: .string)
                 }
             } else if plan.stage == .planning, plan.rows.contains(where: { $0.kind == .song }) {
-                TextField(String(localized: "Collection", comment: "Field label"),
+                // A bare text field with a placeholder was all this used to be:
+                // it read as an unlabelled box the moment anything was typed in
+                // it, and it could only ever CREATE a name — there was no way to
+                // point an import at a collection already in the library, which
+                // is the common case for a corpus imported in batches.
+                Text(String(localized: "În colecția:", comment: "Field label"))
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                Menu {
+                    ForEach(songCollections) { col in
+                        Button(col.name) { plan.songCollectionName = col.name }
+                    }
+                    if !songCollections.isEmpty { Divider() }
+                    Button(String(localized: "Colecție nouă…", comment: "Menu")) {
+                        plan.songCollectionName = ""
+                        isNamingNewCollection = true
+                    }
+                } label: {
+                    Image(systemName: "chevron.up.chevron.down")
+                        .font(.caption2)
+                }
+                .menuStyle(.borderlessButton)
+                .menuIndicator(.hidden)
+                .fixedSize()
+                .help(String(localized: "Alege o colecție existentă", comment: "Tooltip"))
+
+                TextField(String(localized: "Nume colecție", comment: "Field placeholder"),
                           text: $plan.songCollectionName)
                     .textFieldStyle(.roundedBorder)
-                    .frame(width: 200)
+                    .frame(width: 190)
+                    .focused($isNamingNewCollection)
+                // Naming a collection that already exists ADDS to it rather than
+                // making a second one with the same name, so say which it will be.
+                Text(songCollections.contains { $0.name == plan.songCollectionName }
+                     ? String(localized: "existentă", comment: "Collection status")
+                     : String(localized: "nouă", comment: "Collection status"))
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
             }
             Spacer()
             switch plan.stage {

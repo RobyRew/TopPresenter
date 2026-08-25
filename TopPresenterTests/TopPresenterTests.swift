@@ -3915,6 +3915,84 @@ struct BookAbbreviationTests {
     }
 }
 
+// MARK: - Collections Can Be Managed
+
+struct CollectionManagementTests {
+
+    private func container() throws -> ModelContainer {
+        try ModelContainer(for: Song.self, SongCollection.self, Songbook.self,
+                           configurations: ModelConfiguration(isStoredInMemoryOnly: true))
+    }
+
+    @Test func movingSongsEmptiesTheSourceAndKeepsThem() async throws {
+        let c = try container()
+        let ctx = ModelContext(c)
+        let from = SongCollection(name: "Scraped", sourceFormat: "mixed")
+        let to = SongCollection(name: "Cantări", sourceFormat: "mixed")
+        ctx.insert(from); ctx.insert(to)
+        for i in 0..<25 {
+            let song = Song(title: "Cântec \(i)")
+            song.collection = from
+            ctx.insert(song)
+        }
+        try ctx.save()
+
+        let actor = LibraryMaintenanceActor(modelContainer: c)
+        let moved = await actor.moveSongs(fromCollection: from.id, toCollection: to.id)
+        #expect(moved == 25)
+
+        // Read back on a fresh context — the actor saved on its own.
+        let check = ModelContext(c)
+        let all = try check.fetch(FetchDescriptor<Song>())
+        #expect(all.count == 25, "moving must never lose a song")
+        #expect(all.allSatisfy { $0.collection?.name == "Cantări" })
+
+        let source = try check.fetch(FetchDescriptor<SongCollection>(
+            predicate: #Predicate { $0.name == "Scraped" })).first
+        #expect(source != nil, "the source collection stays — deleting it is a separate decision")
+        #expect(source?.songs.isEmpty == true)
+    }
+
+    @Test func movingToAMissingCollectionChangesNothing() async throws {
+        let c = try container()
+        let ctx = ModelContext(c)
+        let from = SongCollection(name: "A", sourceFormat: "mixed")
+        ctx.insert(from)
+        let song = Song(title: "One")
+        song.collection = from
+        ctx.insert(song)
+        try ctx.save()
+
+        let actor = LibraryMaintenanceActor(modelContainer: c)
+        let moved = await actor.moveSongs(fromCollection: from.id, toCollection: UUID())
+        #expect(moved == 0)
+
+        let check = ModelContext(c)
+        #expect(try check.fetch(FetchDescriptor<Song>()).first?.collection?.name == "A")
+    }
+
+    @Test func deletingACollectionTakesItsSongsWithIt() throws {
+        // The relationship is `.cascade`, which is WHY the confirmation names
+        // the song count: "delete the collection" and "delete these 4 930 songs"
+        // are the same gesture, and the operator has to be told that.
+        let c = try container()
+        let ctx = ModelContext(c)
+        let col = SongCollection(name: "Doomed", sourceFormat: "mixed")
+        ctx.insert(col)
+        for i in 0..<5 {
+            let song = Song(title: "S\(i)")
+            song.collection = col
+            ctx.insert(song)
+        }
+        try ctx.save()
+        #expect(try ctx.fetch(FetchDescriptor<Song>()).count == 5)
+
+        ctx.delete(col)
+        try ctx.save()
+        #expect(try ctx.fetch(FetchDescriptor<Song>()).isEmpty)
+    }
+}
+
 // MARK: - The Open Panel Must Allow Every Native Format
 
 struct ImportPanelTypeTests {

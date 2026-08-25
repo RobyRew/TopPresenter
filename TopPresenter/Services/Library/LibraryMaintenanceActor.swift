@@ -117,6 +117,32 @@ actor LibraryMaintenanceActor {
         return outcome
     }
 
+    /// Move every song out of one collection and into another.
+    ///
+    /// Off-main and in one save, for the same reason the deletes are: a
+    /// scraped collection is thousands of songs, and reassigning each of them
+    /// on the main context is thousands of observed property writes with the
+    /// UI waiting on every one.
+    ///
+    /// The source collection is left in place, empty. Deleting it is a separate
+    /// decision, and a separate command — it cascades to its songs, so the two
+    /// must never be one gesture.
+    func moveSongs(fromCollection source: UUID, toCollection target: UUID) async -> Int {
+        let targetDescriptor = FetchDescriptor<SongCollection>(predicate: #Predicate { $0.id == target })
+        guard let destination = try? modelContext.fetch(targetDescriptor).first else { return 0 }
+        let songDescriptor = FetchDescriptor<Song>(
+            predicate: #Predicate { $0.collection?.id == source })
+        guard let songs = try? modelContext.fetch(songDescriptor), !songs.isEmpty else { return 0 }
+        for song in songs { song.collection = destination }
+        do {
+            try modelContext.save()
+            return songs.count
+        } catch {
+            modelContext.rollback()
+            return 0
+        }
+    }
+
     /// Wipe the whole song library — collections, orphan songs, songbooks.
     ///
     /// The old version of this did it on the MAIN context: three fetch-all

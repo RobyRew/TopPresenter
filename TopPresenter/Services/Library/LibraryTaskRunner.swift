@@ -151,6 +151,27 @@ final class LibraryTaskRunner {
         }
     }
 
+    /// Move every song from one collection into another, off the main thread.
+    func moveSongs(from source: SongCollection, to target: SongCollection,
+                   onFinish: @escaping @MainActor (Int) -> Void = { _ in }) {
+        guard !isBusy else { return }
+        let sourceID = source.id, targetID = target.id, name = target.name
+        progress.begin(.importing, total: 1)
+        current = Task { [weak self] in
+            guard let self else { return }
+            progress.startItem(name)
+            let moved = await makeMaintenance().moveSongs(fromCollection: sourceID,
+                                                          toCollection: targetID)
+            progress.finishItem()
+            lastNote = String(localized: "\(moved) moved to \(name).", comment: "Move result")
+            progress.end()
+            NotificationCenter.default.post(
+                name: .libraryDidChange, object: nil,
+                userInfo: [Notification.Name.changedKindsKey: [ImportKind.song.rawValue]])
+            onFinish(moved)
+        }
+    }
+
     func deleteSongCollections(_ collections: [SongCollection],
                                clearing libraryManager: LibraryManager? = nil) {
         guard !isBusy, !collections.isEmpty else { return }

@@ -137,8 +137,11 @@ struct SongListPanel: View {
     @Environment(PresentationManager.self) private var presentationManager
     @Environment(PinStore.self) private var pinStore
     @Environment(SearchIndex.self) private var index
+    @Environment(LibraryTaskRunner.self) private var libraryTasks
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \SongCollection.name) private var collections: [SongCollection]
+    /// Set from the collection menu; the alert below is the only way it is acted on.
+    @State private var collectionToDelete: SongCollection?
     @AppStorage("song_maxLinesPerSlide") private var maxLines: Int = 6
     @AppStorage("song_repeatBracket") private var repeatBracket = "none"
     @AppStorage("song_repeatCount") private var repeatCount = "times"
@@ -237,6 +240,25 @@ struct SongListPanel: View {
             name: { $0.title },
             perform: { deleteSong($0) }
         )
+        // Its own alert rather than `confirmDestructive`: the generic message
+        // says only "this cannot be undone", and deleting a collection CASCADES
+        // to every song in it. That has to be said out loud, with the count.
+        .alert(String(localized: "Șterge colecția?", comment: "Alert title"),
+               isPresented: Binding(get: { collectionToDelete != nil },
+                                    set: { if !$0 { collectionToDelete = nil } }),
+               presenting: collectionToDelete) { col in
+            Button(String(localized: "Șterge", comment: "Alert button"), role: .destructive) {
+                if collectionFilter == col.id { collectionFilter = nil }
+                libraryTasks.deleteSongCollections([col], clearing: libraryManager)
+                collectionToDelete = nil
+            }
+            Button(String(localized: "Cancel", comment: "Alert button"), role: .cancel) {
+                collectionToDelete = nil
+            }
+        } message: { col in
+            Text(String(localized: "„\(col.name)” și cele \(col.songs.count) cântece ale ei dispar definitiv. Mută-le întâi în altă colecție dacă vrei să le păstrezi.",
+                        comment: "Delete collection message"))
+        }
     }
 
     /// Fetch the real @Model for an entry ON DEMAND (selection, menu actions).
@@ -288,8 +310,29 @@ struct SongListPanel: View {
             Menu {
                 Button(String(localized: "Toate", comment: "All collections")) { collectionFilter = nil }
                 Divider()
+                // Each collection is a submenu: pick it to filter, or act on it.
+                // Managing collections had no home at all — the delete command
+                // in the menu bar read `selectedSongCollection`, which this
+                // browser never sets, so it always deleted nothing.
                 ForEach(collections) { col in
-                    Button(col.name) { collectionFilter = col.id }
+                    Menu(col.name) {
+                        Button(String(localized: "Arată doar această colecție", comment: "Menu")) {
+                            collectionFilter = col.id
+                        }
+                        Divider()
+                        Menu(String(localized: "Mută toate cântecele în", comment: "Menu")) {
+                            ForEach(collections.filter { $0.id != col.id }) { target in
+                                Button(target.name) { libraryTasks.moveSongs(from: col, to: target) }
+                            }
+                        }
+                        .disabled(collections.count < 2 || col.songs.isEmpty)
+                        Divider()
+                        Button(role: .destructive) {
+                            collectionToDelete = col
+                        } label: {
+                            Label(String(localized: "Șterge colecția…", comment: "Menu"), systemImage: "trash")
+                        }
+                    }
                 }
             } label: {
                 LibraryChipLabel(label: activeCollectionName,
@@ -543,6 +586,22 @@ struct SongListPanel: View {
                   systemImage: entry.verified ? "checkmark.seal.fill" : "checkmark.seal")
         }
         Divider()
+        Menu {
+            ForEach(collections.filter { $0.id != entry.collectionID }) { target in
+                Button(target.name) {
+                    withSong(entry.id) { song in
+                        song.collection = target
+                        try? modelContext.save()
+                        NotificationCenter.default.post(
+                            name: .libraryDidChange, object: nil,
+                            userInfo: [Notification.Name.changedKindsKey: [ImportKind.song.rawValue]])
+                    }
+                }
+            }
+        } label: {
+            Label(String(localized: "Mută în colecția", comment: "Menu"), systemImage: "folder")
+        }
+        .disabled(collections.count < 2)
         Button { withSong(entry.id) { exportSong($0) } } label: {
             Label(String(localized: "Exportă JSON…", comment: "Menu"), systemImage: "square.and.arrow.up")
         }

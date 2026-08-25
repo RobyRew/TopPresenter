@@ -251,16 +251,16 @@ Contributions welcome — see below.
 
 <!-- i18n-coverage:start -->
 
-**1319 translatable strings.** Regenerated on every commit — do not edit by hand.
+**1332 translatable strings.** Regenerated on every commit — do not edit by hand.
 
 | | Language | Progress | Done |
 |---|---|---|---|
 | 🇬🇧 | **English** (`en`) | `████████████████████████` 100% | ✅ |
 | 🇷🇴 | **Română** (`ro`) | `████████████████████████` 100% | ✅ |
 | 🇪🇸 | **Español** (`es`) | `████████████████████████` 100% | ✅ |
-| 🇫🇷 | **Français** (`fr`) | `████░░░░░░░░░░░░░░░░░░░░` 15% | 210/1319 |
-| 🇩🇪 | **Deutsch** (`de`) | `████░░░░░░░░░░░░░░░░░░░░` 15% | 210/1319 |
-| 🇷🇺 | **Русский** (`ru`) | `████░░░░░░░░░░░░░░░░░░░░` 15% | 210/1319 |
+| 🇫🇷 | **Français** (`fr`) | `████░░░░░░░░░░░░░░░░░░░░` 15% | 210/1332 |
+| 🇩🇪 | **Deutsch** (`de`) | `████░░░░░░░░░░░░░░░░░░░░` 15% | 210/1332 |
+| 🇷🇺 | **Русский** (`ru`) | `████░░░░░░░░░░░░░░░░░░░░` 15% | 210/1332 |
 
 <!-- i18n-coverage:end -->
 

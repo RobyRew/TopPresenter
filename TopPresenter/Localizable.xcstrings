@@ -34971,6 +34971,305 @@
           }
         }
       }
+    },
+    "În colecția:" : {
+      "comment" : "Field label",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Into collection:"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "În colecția:"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "En la colección:"
+          }
+        }
+      }
+    },
+    "Colecție nouă…" : {
+      "comment" : "Menu",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "New collection…"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Colecție nouă…"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Colección nueva…"
+          }
+        }
+      }
+    },
+    "Nume colecție" : {
+      "comment" : "Field placeholder",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Collection name"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nume colecție"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nombre de la colección"
+          }
+        }
+      }
+    },
+    "Alege o colecție existentă" : {
+      "comment" : "Tooltip",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choose an existing collection"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alege o colecție existentă"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Elegir una colección existente"
+          }
+        }
+      }
+    },
+    "existentă" : {
+      "comment" : "Collection status",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "existing"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "existentă"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "existente"
+          }
+        }
+      }
+    },
+    "nouă" : {
+      "comment" : "Collection status",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "new"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "nouă"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "nueva"
+          }
+        }
+      }
+    },
+    "Arată doar această colecție" : {
+      "comment" : "Menu",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show only this collection"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Arată doar această colecție"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mostrar solo esta colección"
+          }
+        }
+      }
+    },
+    "Mută toate cântecele în" : {
+      "comment" : "Menu",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Move all songs to"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mută toate cântecele în"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mover todas las canciones a"
+          }
+        }
+      }
+    },
+    "Mută în colecția" : {
+      "comment" : "Menu",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Move to collection"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mută în colecția"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mover a la colección"
+          }
+        }
+      }
+    },
+    "Șterge colecția…" : {
+      "comment" : "Menu",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delete collection…"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Șterge colecția…"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eliminar la colección…"
+          }
+        }
+      }
+    },
+    "Șterge colecția?" : {
+      "comment" : "Alert title",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delete collection?"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Șterge colecția?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Eliminar la colección?"
+          }
+        }
+      }
+    },
+    "„%@” și cele %lld cântece ale ei dispar definitiv. Mută-le întâi în altă colecție dacă vrei să le păstrezi." : {
+      "comment" : "Delete collection message",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "“%@” and its %lld songs are gone for good. Move them to another collection first if you want to keep them."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "„%@” și cele %lld cântece ale ei dispar definitiv. Mută-le întâi în altă colecție dacă vrei să le păstrezi."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "«%@» y sus %lld canciones desaparecen definitivamente. Muévelas antes a otra colección si quieres conservarlas."
+          }
+        }
+      }
+    },
+    "%lld moved to %@." : {
+      "comment" : "Move result",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld moved to %@."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld moved to %@."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld movidas a %@."
+          }
+        }
+      }
     }
   },
   "version" : "1.0"
