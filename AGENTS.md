@@ -527,16 +527,21 @@ Measured, not assumed. `ManagedObjectModelBridgeTests` and `BibleBulkWriterTests
 pin all of it.
 
 A SwiftData store **is** a Core Data store, and Core Data is the faster way to
-write into it. On a real 22 MB Bible (EDC100, 66 books, 31 102 verses), start to
-finish including parsing the JSON:
+write into it. Measured on a real 22 MB Bible (EDC100, 66 books, 31 102 verses),
+start to finish including parsing the JSON:
 
-| path | one Bible | the 70-Bible library |
+| path | into an empty store | into the real 500 MB library |
 |---|---|---|
-| SwiftData | 7.31s | ~8.5 min |
-| Core Data (`BibleBulkWriter`) | **1.77s** | **~2 min** |
+| SwiftData | 7.09s | 7.68s |
+| Core Data (`BibleBulkWriter`) | **1.67s** | **2.47s** |
 
-Writing alone goes from ~6.2s to ~0.65s — 4 982 rows/s to 37 000. Parsing is now
-the larger half of an import, so that is where any further gain has to come from.
+The second column is the one that matters — 820 733 verses already present, which
+is what index maintenance and the uniqueness check actually cost. Seventy Bibles
+go from roughly nine minutes to three.
+
+Where the 1.67s goes: **0.47s** parsing the JSON, **0.18s** re-encoding rich data
+(cross-references, on 20 774 of the verses), **1.19s** in the database. The write
+still dominates; parsing does not.
 
 **`SwiftDataModelBridge` derives the `NSManagedObjectModel` from SwiftData's own
 `Schema`.** `Schema` is public and complete — entity names, stored properties,
@@ -581,6 +586,19 @@ verse an orphan. Batch update refuses outright with
 propertiesToUpdate`, which is an ObjC exception, so it **aborts the process** and
 cannot be pinned by a test. Do not try. The silent one is pinned in
 `batchInsertSilentlyDropsRelationships`.
+
+Two things measured and rejected, so nobody re-measures them:
+
+* **Sharing one `JSONEncoder`** instead of allocating per call: 0.159s → 0.150s
+  over 20 774 payloads. Not worth a shared-mutable-state problem.
+* **Caching the coordinator** between imports: opening one costs **1.7 ms**, which
+  is 0.12s across the whole library, against a stale-cache risk on every store
+  that gets deleted and recreated.
+
+One that worked: attaching a chapter's verses as **one `NSSet`** rather than
+setting `verse.chapter` thirty times took a real Bible from 1.31s to 1.19s, all
+of it out of the save — Core Data maintains the inverse incrementally and
+re-dirties the chapter on every single link.
 
 The whole Bible is **one transaction**. That is not only faster than chunked
 saves — every save past CoreData's prune threshold drags a TRUNCATE checkpoint
