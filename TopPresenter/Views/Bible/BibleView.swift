@@ -796,6 +796,20 @@ struct BibleContentPanel: View {
                 .onChange(of: scrollTarget) { _, target in
                     if let target { proxy.scrollTo(target, anchor: nil) }
                 }
+                // Follow a selection made from OUTSIDE this list — ⌘K, the
+                // schedule, history, a slide token. Those all set the selection
+                // and nothing scrolled to it, so the verse was highlighted
+                // somewhere off screen and had to be hunted for by hand.
+                //
+                // `.center` rather than the arrow keys' free anchor: arriving
+                // from a search there is no reading position to preserve, and a
+                // hit pinned to the top edge reads as if the chapter starts
+                // there. Deferred a turn so the row exists when the chapter
+                // changed in the same breath as the verse.
+                .onChange(of: libraryManager.selectedVerses.first?.id) { _, id in
+                    guard let id, versesFocused == false else { return }
+                    DispatchQueue.main.async { proxy.scrollTo(id, anchor: .center) }
+                }
             }
             // Keyboard flow (click a verse to arm it): ↑↓ move the selection,
             // ←→ step chapters, Enter presents. The ⌘K overlay owns the keys

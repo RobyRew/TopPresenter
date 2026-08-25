@@ -1743,6 +1743,58 @@ struct StyleQuickSettings: View {
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             }
+
+            // The two Bible knobs that get reached for mid-service. Everything
+            // else stays in the Layout Editor on purpose — these are here
+            // because "the text is too small from the back" and "turn the red
+            // letters off" are decisions made while people are watching, and
+            // walking to the editor for them is the wrong shape of trip.
+            // No content check needed: `.general` is only ever passed by
+            // `BiblePreviewPanel`.
+            Group {
+                Divider().padding(.vertical, 2)
+
+                HStack {
+                    Text(String(localized: "Mărime text", comment: "Setting label"))
+                        .settingsRowLabel()
+                    Slider(value: Binding(
+                        get: {
+                            // 0 means "section default"; show the resolved size
+                            // so the handle does not sit at the far left.
+                            let size = pm.verseStyle.fontSize
+                            return size > 0 ? size : pm.fontSize
+                        },
+                        set: { newValue in
+                            var style = pm.verseStyle
+                            style.isCustomized = true
+                            style.fontSize = newValue
+                            pm.verseStyle = style
+                        }
+                    ), in: PresentationDefaults.minFontSize...PresentationDefaults.maxFontSize)
+                    .controlSize(.small)
+                    Text("\(Int(pm.verseStyle.fontSize > 0 ? pm.verseStyle.fontSize : pm.fontSize))")
+                        .font(.caption2.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                        .frame(width: 26, alignment: .trailing)
+                }
+
+                HStack {
+                    Text("")
+                        .settingsRowLabel()
+                    Toggle(String(localized: "Cuvintele lui Isus în roșu", comment: "Setting label"),
+                           isOn: Binding(get: { pm.wocStyleEnabled },
+                                         set: { pm.wocStyleEnabled = $0 }))
+                        .font(.caption)
+                        .controlSize(.small)
+                    ColorPicker("", selection: Binding(
+                        get: { pm.wocColor },
+                        set: { pm.wocColorHex = $0.toHex() }
+                    ), supportsOpacity: false)
+                    .labelsHidden()
+                    .disabled(!pm.wocStyleEnabled)
+                    .frame(width: 34)
+                }
+            }
         }
 
         // Link to full settings

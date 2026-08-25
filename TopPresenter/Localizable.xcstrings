@@ -34603,6 +34603,374 @@
           }
         }
       }
+    },
+    "Numele cărților" : {
+      "comment" : "Settings section",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Book names"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Numele cărților"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nombres de los libros"
+          }
+        }
+      }
+    },
+    "Afișează cărțile în" : {
+      "comment" : "Setting label",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show books in"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Afișează cărțile în"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mostrar los libros en"
+          }
+        }
+      }
+    },
+    "Limba traducerii" : {
+      "comment" : "Book name language option",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The translation's language"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Limba traducerii"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El idioma de la traducción"
+          }
+        }
+      }
+    },
+    "Limba aplicației" : {
+      "comment" : "Book name language option",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The app's language"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Limba aplicației"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El idioma de la aplicación"
+          }
+        }
+      }
+    },
+    "„Limba traducerii” potrivește lista cu textul de lângă ea și cu referința de pe ecran. Alege limba aplicației dacă nu citești limba traducerii. Referința proiectată urmează întotdeauna traducerea." : {
+      "comment" : "Setting hint",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "“The translation's language” matches the list to the text beside it and to the reference on screen. Choose the app's language if you don't read the translation's. The projected reference always follows the translation."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "„Limba traducerii” potrivește lista cu textul de lângă ea și cu referința de pe ecran. Alege limba aplicației dacă nu citești limba traducerii. Referința proiectată urmează întotdeauna traducerea."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "«El idioma de la traducción» hace que la lista coincida con el texto que tiene al lado y con la referencia en pantalla. Elige el idioma de la aplicación si no lees el de la traducción. La referencia proyectada sigue siempre a la traducción."
+          }
+        }
+      }
+    },
+    "Nicio temă salvată." : {
+      "comment" : "Advanced empty",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No saved themes."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nicio temă salvată."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ningún tema guardado."
+          }
+        }
+      }
+    },
+    "activă" : {
+      "comment" : "Active theme badge",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "active"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "activă"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "activo"
+          }
+        }
+      }
+    },
+    "Șterge temele bifate (%lld)" : {
+      "comment" : "Advanced button",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delete checked themes (%lld)"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Șterge temele bifate (%lld)"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eliminar los temas marcados (%lld)"
+          }
+        }
+      }
+    },
+    "Deselectează" : {
+      "comment" : "Advanced button",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deselect"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deselectează"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deseleccionar"
+          }
+        }
+      }
+    },
+    "Încă folosite de: %@" : {
+      "comment" : "Advanced note",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Still used by: %@"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Încă folosite de: %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Todavía en uso por: %@"
+          }
+        }
+      }
+    },
+    "Șterge teme salvate fără să treci prin galeria din editor. O temă folosită de un prezentator nu se șterge — îți spune care." : {
+      "comment" : "Advanced footer",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delete saved themes without going through the editor's gallery. A theme a presenter still uses is kept — it tells you which."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Șterge teme salvate fără să treci prin galeria din editor. O temă folosită de un prezentator nu se șterge — îți spune care."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Elimina temas guardados sin pasar por la galería del editor. Un tema que un presentador todavía usa no se elimina: te dice cuál."
+          }
+        }
+      }
+    },
+    "Șterge %lld teme?" : {
+      "comment" : "Advanced confirm title",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delete %lld themes?"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Șterge %lld teme?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Eliminar %lld temas?"
+          }
+        }
+      }
+    },
+    "Temele dispar din galerie. Layout-urile care le-au folosit rămân neschimbate — o temă este o fotografie salvată, nu o legătură vie." : {
+      "comment" : "Advanced confirm message",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The themes disappear from the gallery. Layouts that used them are unchanged — a theme is a saved snapshot, not a live link."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Temele dispar din galerie. Layout-urile care le-au folosit rămân neschimbate — o temă este o fotografie salvată, nu o legătură vie."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los temas desaparecen de la galería. Los diseños que los usaron no cambian: un tema es una instantánea guardada, no un vínculo vivo."
+          }
+        }
+      }
+    },
+    "Temele bifate au fost șterse." : {
+      "comment" : "Advanced note",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The checked themes were deleted."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Temele bifate au fost șterse."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los temas marcados se eliminaron."
+          }
+        }
+      }
+    },
+    "Mărime text" : {
+      "comment" : "Setting label",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Text size"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mărime text"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tamaño del texto"
+          }
+        }
+      }
+    },
+    "Cuvintele lui Isus în roșu" : {
+      "comment" : "Setting label",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Jesus's words in red"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cuvintele lui Isus în roșu"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Las palabras de Jesús en rojo"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

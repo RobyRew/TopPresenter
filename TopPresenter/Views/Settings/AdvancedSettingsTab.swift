@@ -18,6 +18,14 @@ struct AdvancedSettingsTab: View {
     @Environment(HistoryStore.self) private var history
     @Environment(AppState.self) private var appState
     @Environment(LibraryTaskRunner.self) private var libraryTasks
+    @Environment(PresentationManager.self) private var presentationManager
+
+    /// Themes ticked for deletion. Deleting is one confirmed action over a
+    /// selection rather than a row of individual buttons, because clearing out
+    /// a bad import means removing a dozen at once.
+    @State private var themesToDelete: Set<UUID> = []
+    @State private var confirmThemeDelete = false
+    @State private var themeDeleteBlockers: [String] = []
 
     @State private var pendingAction: DestructiveAction?
     @State private var isWorking = false
@@ -87,6 +95,62 @@ struct AdvancedSettingsTab: View {
             }
 
             Section {
+                if presentationManager.themes.isEmpty {
+                    Text(String(localized: "Nicio temă salvată.", comment: "Advanced empty"))
+                        .font(.callout).foregroundStyle(.secondary)
+                } else {
+                    ForEach(presentationManager.themes) { theme in
+                        Toggle(isOn: Binding(
+                            get: { themesToDelete.contains(theme.id) },
+                            set: { on in
+                                if on { themesToDelete.insert(theme.id) }
+                                else { themesToDelete.remove(theme.id) }
+                            }
+                        )) {
+                            HStack(spacing: 6) {
+                                Text(theme.name)
+                                if presentationManager.activeThemeID == theme.id {
+                                    Text(String(localized: "activă", comment: "Active theme badge"))
+                                        .font(.caption2)
+                                        .padding(.horizontal, 5).padding(.vertical, 1)
+                                        .background(Capsule().fill(.tint.opacity(0.18)))
+                                }
+                            }
+                        }
+                    }
+
+                    HStack {
+                        Button(role: .destructive) {
+                            confirmThemeDelete = true
+                        } label: {
+                            Label(String(localized: "Șterge temele bifate (\(themesToDelete.count))",
+                                         comment: "Advanced button"),
+                                  systemImage: "trash")
+                        }
+                        .disabled(themesToDelete.isEmpty)
+
+                        Button(String(localized: "Deselectează", comment: "Advanced button")) {
+                            themesToDelete = []
+                        }
+                        .disabled(themesToDelete.isEmpty)
+                        Spacer()
+                    }
+
+                    if !themeDeleteBlockers.isEmpty {
+                        Text(String(localized: "Încă folosite de: \(themeDeleteBlockers.joined(separator: ", "))",
+                                    comment: "Advanced note"))
+                            .font(.caption).foregroundStyle(.orange)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            } header: {
+                Text(String(localized: "Teme", comment: "Advanced section"))
+            } footer: {
+                Text(String(localized: "Șterge teme salvate fără să treci prin galeria din editor. O temă folosită de un prezentator nu se șterge — îți spune care.", comment: "Advanced footer"))
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+
+            Section {
                 destructiveRow(String(localized: "Șterge toate cântecele", comment: "Advanced button"),
                                icon: "music.note", action: .deleteSongs)
                 destructiveRow(String(localized: "Șterge toate Bibliile", comment: "Advanced button"),
@@ -136,6 +200,35 @@ struct AdvancedSettingsTab: View {
             Button(String(localized: "Cancel", comment: "Alert button"), role: .cancel) {}
         } message: { action in
             Text(action.message)
+        }
+        .alert(String(localized: "Șterge \(themesToDelete.count) teme?", comment: "Advanced confirm title"),
+               isPresented: $confirmThemeDelete) {
+            Button(String(localized: "Șterge", comment: "Alert button"), role: .destructive) {
+                deleteSelectedThemes()
+            }
+            Button(String(localized: "Cancel", comment: "Alert button"), role: .cancel) {}
+        } message: {
+            Text(String(localized: "Temele dispar din galerie. Layout-urile care le-au folosit rămân neschimbate — o temă este o fotografie salvată, nu o legătură vie.", comment: "Advanced confirm message"))
+        }
+    }
+
+    /// Deletes what is ticked, keeping any theme a presenter still points at.
+    ///
+    /// `deleteTheme` refuses those and names the presenters; a refusal leaves
+    /// the theme ticked so the reason stays attached to something visible.
+    private func deleteSelectedThemes() {
+        var blockers: [String] = []
+        for id in themesToDelete {
+            let refused = presentationManager.deleteTheme(id: id)
+            if refused.isEmpty {
+                themesToDelete.remove(id)
+            } else {
+                blockers.append(contentsOf: refused)
+            }
+        }
+        themeDeleteBlockers = Array(Set(blockers)).sorted()
+        if blockers.isEmpty {
+            lastActionNote = String(localized: "Temele bifate au fost șterse.", comment: "Advanced note")
         }
     }
 

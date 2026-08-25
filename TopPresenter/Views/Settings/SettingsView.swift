@@ -364,6 +364,8 @@ struct BibleSettingsTab: View {
     @AppStorage("showBookCategoryLabels") private var showBookCategoryLabels: Bool = true
     @AppStorage("bibleBooksAbbreviated") private var booksAbbreviated: Bool = false
     @AppStorage("bibleBooksLargeText") private var booksLargeText: Bool = false
+    @AppStorage(BibleBookLocalization.NameMode.settingKey)
+    private var bookNameMode: String = BibleBookLocalization.NameMode.translation.rawValue
 
     var body: some View {
         Form {
@@ -388,6 +390,22 @@ struct BibleSettingsTab: View {
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
+            }
+
+            Section(String(localized: "Numele cărților", comment: "Settings section")) {
+                Picker(String(localized: "Afișează cărțile în", comment: "Setting label"),
+                       selection: $bookNameMode) {
+                    Text(String(localized: "Limba traducerii", comment: "Book name language option"))
+                        .tag(BibleBookLocalization.NameMode.translation.rawValue)
+                    Text(String(localized: "Limba aplicației", comment: "Book name language option"))
+                        .tag(BibleBookLocalization.NameMode.app.rawValue)
+                }
+                .pickerStyle(.radioGroup)
+
+                Text(String(localized: "„Limba traducerii” potrivește lista cu textul de lângă ea și cu referința de pe ecran. Alege limba aplicației dacă nu citești limba traducerii. Referința proiectată urmează întotdeauna traducerea.", comment: "Setting hint"))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
             Section(String(localized: "Conținut", comment: "Settings section")) {

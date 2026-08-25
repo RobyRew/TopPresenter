@@ -4230,6 +4230,43 @@ struct BibleBookLocalizationTests {
         #expect(orphan.presentationName == "Geneza")
     }
 
+    @Test func theLibraryLanguageIsASettingWithASafeDefault() {
+        // Default is the translation's own language: the list then matches the
+        // text beside it and the reference on the projector.
+        let stored = UserDefaults.standard.string(forKey: BibleBookLocalization.NameMode.settingKey)
+        defer { UserDefaults.standard.set(stored, forKey: BibleBookLocalization.NameMode.settingKey) }
+
+        UserDefaults.standard.removeObject(forKey: BibleBookLocalization.NameMode.settingKey)
+        #expect(BibleBookLocalization.nameMode == .translation)
+
+        // Junk in the slot must not leave the library nameless.
+        UserDefaults.standard.set("nonsense", forKey: BibleBookLocalization.NameMode.settingKey)
+        #expect(BibleBookLocalization.nameMode == .translation)
+
+        UserDefaults.standard.set("app", forKey: BibleBookLocalization.NameMode.settingKey)
+        #expect(BibleBookLocalization.nameMode == .app)
+    }
+
+    @Test func theSettingSwitchesWhatTheLibraryShows() {
+        let stored = UserDefaults.standard.string(forKey: BibleBookLocalization.NameMode.settingKey)
+        defer { UserDefaults.standard.set(stored, forKey: BibleBookLocalization.NameMode.settingKey) }
+
+        // A Romanian module whose file happens to name its books in English.
+        let cornilescu = BibleModule(name: "Cornilescu", abbreviation: "VDC",
+                                     language: "ro", sourceFormat: "toppresenter")
+        let book = BibleBook(name: "Genesis", bookNumber: 1, testament: "OT")
+        book.module = cornilescu
+
+        UserDefaults.standard.set("translation", forKey: BibleBookLocalization.NameMode.settingKey)
+        #expect(book.displayName == "Geneza")
+
+        UserDefaults.standard.set("app", forKey: BibleBookLocalization.NameMode.settingKey)
+        #expect(book.displayName == book.displayName(language: BibleBookLocalization.uiLanguage))
+
+        // Either way the projector follows the translation.
+        #expect(book.presentationName == "Geneza")
+    }
+
     @Test func theUILanguageIsAlwaysOneWeHaveATableFor() {
         // A Catalan or Polish system localization must not leave book names nil.
         #expect(BibleBookLocalization.name(number: 1,

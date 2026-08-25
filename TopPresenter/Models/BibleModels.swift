@@ -141,22 +141,27 @@ final class BibleBook {
         chapters.sorted { $0.chapterNumber < $1.chapterNumber }
     }
 
-    /// This book named in the APP's language — what every list, grid and header
-    /// in the library shows.
+    /// What the LIBRARY shows, honouring the Bible ▸ „Numele cărților" setting.
     ///
-    /// `name` is whatever the source file said, so a Cornilescu module read
-    /// "Geneza" to an operator running the app in English. The library is the
-    /// operator's tool; the live output is the one that keeps the translation's
-    /// own wording.
-    ///
-    /// Three tries, most trustworthy first, and every one of them goes through
-    /// the NAME rather than `bookNumber`: OSIS files number books with a running
-    /// counter, so an NT-only module has Matthew at 1. The number is consulted
-    /// last and only when `testament` agrees with it, which is exactly the case
-    /// that counter cannot produce.
-    var displayName: String { displayName(language: BibleBookLocalization.uiLanguage) }
+    /// Defaults to the translation's own language, so the book list matches the
+    /// text beside it and the reference on the projector. Set to the app's
+    /// language for an operator who does not read the translation.
+    var displayName: String {
+        switch BibleBookLocalization.nameMode {
+        case .translation: return presentationName
+        case .app: return displayName(language: BibleBookLocalization.uiLanguage)
+        }
+    }
 
-    /// `language` is explicit so tests do not depend on the machine's locale.
+    /// This book named in a GIVEN language.
+    ///
+    /// `name` is whatever the source file said. Three tries, most trustworthy
+    /// first, and every one goes through the NAME rather than `bookNumber`:
+    /// OSIS files number books with a running counter, so an NT-only module has
+    /// Matthew at 1. The number is consulted last and only when `testament`
+    /// agrees with it, which is exactly the case that counter cannot produce.
+    ///
+    /// The language is explicit so tests do not depend on the machine's locale.
     func displayName(language: String) -> String {
         if !nameEnglish.isEmpty,
            let number = BibleBookLocalization.canonicalNumber(forName: nameEnglish),

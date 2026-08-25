@@ -2,19 +2,22 @@
 //  BibleBookLocalization.swift
 //  TopPresenter
 //
-//  Book names in the language of the APP, not of the translation.
+//  Book names, restated in whichever language the situation calls for.
 //
-//  A module carries the book names its source file happened to use: a Cornilescu
-//  file says "Geneza", a Reina-Valera file says "Génesis". Displaying those raw
-//  meant an operator running the app in English read a Romanian book list — the
-//  library is the operator's tool, and it has to speak the operator's language
-//  whatever translation is loaded.
+//  A module carries the book names its source file happened to use, and those
+//  are not always the translation's own: the published KJV module carries
+//  ROMANIAN book names, so it read "Geneza" in the list AND projected
+//  "Geneza 1:6" over English verses.
 //
-//  What this does NOT touch, deliberately:
-//   • the reference on the LIVE OUTPUT — the congregation is reading the
-//     translation, so "Geneza 1:1" belongs over Romanian text
-//   • anything exported or stored (session items, history rows, `.tpbible`) —
-//     those keep the module's own names so files round-trip byte-for-byte
+//  Three answers, three audiences:
+//   • the LIVE OUTPUT always follows the TRANSLATION — the congregation is
+//     reading this edition, so "Geneza 1:1" belongs over Romanian text and
+//     "Genesis 1:1" over English
+//   • the LIBRARY follows the Bible ▸ „Numele cărților" setting: the
+//     translation's language by default, so the list matches the text beside it,
+//     or the app's for an operator who does not read that language
+//   • anything exported or stored (session items, history rows, `.tpbible`)
+//     keeps the module's own names so files round-trip byte-for-byte
 //
 //  Identification is by NAME, not by book number. Book numbers cannot be
 //  trusted: `OSISBibleImporter` numbers books with a running counter, so an
@@ -318,6 +321,27 @@ nonisolated enum BibleBookLocalization {
     }()
 
     // MARK: - API
+
+    /// Which language the LIBRARY lists books in. The live output always
+    /// follows the translation and is not affected by this.
+    nonisolated enum NameMode: String, CaseIterable, Sendable {
+        /// The translation's own language — a Romanian Bible reads „Geneza",
+        /// an English one "Genesis", side by side in the same window.
+        case translation
+        /// One language for everything, whatever is loaded.
+        case app
+
+        static let settingKey = "bibleBookNameLanguage"
+    }
+
+    /// Default is `.translation`: the names then match the text on screen and
+    /// the reference the projector shows, which is what an operator is reading
+    /// against. `.app` is for someone who does not read the translation's
+    /// language and needs the list in their own.
+    static var nameMode: NameMode {
+        NameMode(rawValue: UserDefaults.standard.string(forKey: NameMode.settingKey) ?? "")
+            ?? .translation
+    }
 
     /// The localization the bundle actually resolved at launch, reduced to a
     /// bare language code. Read once — `AppleLanguages` only takes effect on a
