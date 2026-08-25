@@ -97,7 +97,31 @@ final class ImportService {
         let action: BibleImportAction
     }
 
-    /// The identity of a module already in the library.
+    /// Identity WITHOUT touching the object graph — stored attributes only.
+    ///
+    /// `identityMatch` only ever reads these four, and `differences(from:)` —
+    /// the sole consumer of the expensive fields — runs for the ONE candidate
+    /// that already matched. Building the FULL identity for every module up
+    /// front walked every chapter and every verse of all of them: with thirteen
+    /// Bibles loaded, importing a fourteenth faulted several hundred thousand
+    /// objects before doing any work at all. A sample of a live import put 28%
+    /// of main-thread time in here, and it grew with the library.
+    nonisolated static func cheapIdentity(of module: BibleModule) -> BibleIdentity {
+        BibleIdentity(contentID: module.contentID,
+                      abbreviation: module.abbreviation,
+                      language: module.language,
+                      name: module.name)
+    }
+
+    nonisolated static func cheapIdentity(of result: BibleImportResult) -> BibleIdentity {
+        BibleIdentity(contentID: result.contentID,
+                      abbreviation: result.abbreviation,
+                      language: result.language,
+                      name: result.moduleName)
+    }
+
+    /// The identity of a module already in the library. EXPENSIVE — walks the
+    /// whole chapter/verse graph. Only ever for a module that already matched.
     nonisolated static func identity(of module: BibleModule) -> BibleIdentity {
         var verses = 0
         var shape: [String] = []
@@ -207,9 +231,21 @@ final class ImportService {
         // answer to a conflict dialog is the right response to it. This is what
         // makes importing the same file twice a no-op.
         let existingModules = (try? modelContext.fetch(FetchDescriptor<BibleModule>())) ?? []
-        let incoming = identity(of: result)
-        let verdict = DuplicateResolver.verdict(for: incoming,
-                                                against: existingModules.map(identity(of:)))
+        // Two phases on purpose. The cheap pass reads stored attributes only and
+        // decides WHETHER anything matches; the expensive graph walk then runs
+        // for at most one module, to decide how. A genuinely new Bible — the
+        // common case — now walks nothing at all.
+        let incomingCheap = cheapIdentity(of: result)
+        let matchIndex = existingModules.firstIndex {
+            incomingCheap.identityMatch(with: cheapIdentity(of: $0)) != nil
+        }
+        let verdict: DuplicateVerdict = matchIndex.map { index in
+            // Re-run the full comparison against the single candidate, then put
+            // its real index back — the resolver saw a one-element array.
+            DuplicateResolver.verdict(for: identity(of: result),
+                                      against: [identity(of: existingModules[index])])
+                .reindexed(to: index)
+        } ?? .unique
         if case .identical(let match) = verdict {
             await progressHandler?(1.0, String(localized: "Already in the library", comment: "Import progress"))
             return BibleImportOutcome(module: existingModules[match.existingIndex],

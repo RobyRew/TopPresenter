@@ -70,6 +70,23 @@ nonisolated enum DuplicateVerdict: Sendable, Equatable {
 
     var existingIndex: Int? { match?.existingIndex }
     var isDuplicate: Bool { match != nil }
+
+    /// The same verdict pointing at a different index.
+    ///
+    /// For a two-phase check: a cheap pass picks the one candidate worth the
+    /// expensive comparison, the resolver then sees a one-element array, and the
+    /// caller has to put the real index back before it means anything.
+    func reindexed(to index: Int) -> DuplicateVerdict {
+        guard let old = match else { return self }
+        let m = DuplicateMatch(existingIndex: index, confidence: old.confidence,
+                               matchedOn: old.matchedOn, differences: old.differences)
+        switch self {
+        case .unique: return .unique
+        case .identical: return .identical(m)
+        case .sameIdentityDifferentContent: return .sameIdentityDifferentContent(m)
+        case .probable: return .probable(m)
+        }
+    }
 }
 
 // MARK: - Policy

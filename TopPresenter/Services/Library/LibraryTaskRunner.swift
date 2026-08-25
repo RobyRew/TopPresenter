@@ -97,7 +97,12 @@ final class LibraryTaskRunner {
             lastSummary = summary
             lastNote = summary.headline
             progress.end()
-            NotificationCenter.default.post(name: .libraryDidChange, object: nil)
+            // Name what actually changed, so the search index rebuilds only that.
+            // Importing Bibles used to re-walk the whole song library afterwards.
+            let kinds = Set(files.compactMap { $0.category.kind?.rawValue })
+            NotificationCenter.default.post(
+                name: .libraryDidChange, object: nil,
+                userInfo: [Notification.Name.changedKindsKey: Array(kinds)])
         }
     }
 
@@ -140,7 +145,9 @@ final class LibraryTaskRunner {
                 : String(localized: "\(outcome.deleted) deleted, \(outcome.failures.count) failed.",
                          comment: "Delete result")
             progress.end()
-            NotificationCenter.default.post(name: .libraryDidChange, object: nil)
+            NotificationCenter.default.post(
+                name: .libraryDidChange, object: nil,
+                userInfo: [Notification.Name.changedKindsKey: [ImportKind.bible.rawValue]])
         }
     }
 

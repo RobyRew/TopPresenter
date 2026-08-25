@@ -591,8 +591,9 @@ final class SearchIndex {
         historyStore = history
         observer = NotificationCenter.default.addObserver(
             forName: .libraryDidChange, object: nil, queue: .main
-        ) { [weak self] _ in
-            MainActor.assumeIsolated { self?.scheduleRebuild() }
+        ) { [weak self] note in
+            let kinds = note.userInfo?[Notification.Name.changedKindsKey] as? [String]
+            MainActor.assumeIsolated { self?.scheduleRebuild(changed: kinds.map(Set.init)) }
         }
         scheduleRebuild(after: .zero)
     }
@@ -601,8 +602,24 @@ final class SearchIndex {
         if let observer { NotificationCenter.default.removeObserver(observer) }
     }
 
-    /// Debounced full background rebuild (imports fire many change events).
-    func scheduleRebuild(after delay: Duration = .seconds(1)) {
+    /// Kinds whose change has not been folded into the index yet.
+    ///
+    /// Coalesced across a debounce window: five notifications naming different
+    /// kinds must rebuild the union of them, not just the last one's.
+    @ObservationIgnored private var pendingKinds: Set<String>?
+
+    /// Debounced background rebuild (imports fire many change events).
+    ///
+    /// `changed` is the kinds that actually changed; nil means "everything",
+    /// which is what an un-annotated poster gets. Importing thirty Bibles used
+    /// to re-walk all 9 643 SONGS afterwards, every time — the work was
+    /// unconditional and had nothing to do with what was imported.
+    func scheduleRebuild(after delay: Duration = .seconds(1), changed: Set<String>? = nil) {
+        if let changed, pendingKinds != nil {
+            pendingKinds?.formUnion(changed)
+        } else {
+            pendingKinds = changed
+        }
         rebuildTask?.cancel()
         rebuildTask = Task { [weak self] in
             try? await Task.sleep(for: delay)
@@ -613,14 +630,25 @@ final class SearchIndex {
 
     func rebuildNow() async {
         guard let builder else { return }
+        let changed = pendingKinds
+        pendingKinds = nil
+        // Songs are the expensive projection; media and sessions are small.
+        let songsChanged = changed == nil || changed!.contains(ImportKind.song.rawValue)
+        let extrasChanged = changed == nil
+            || !changed!.isDisjoint(with: [ImportKind.media.rawValue, ImportKind.session.rawValue])
+
         isBuilding = true
-        let songsPayload = await builder.buildSongs()
-        let extra = await builder.buildMediaAndSessions()
-        songs = songsPayload.entries
-        songTokens = songsPayload.tokens
-        availableLanguages = songsPayload.languages
-        media = extra.media
-        sessions = extra.sessions
+        if songsChanged {
+            let songsPayload = await builder.buildSongs()
+            songs = songsPayload.entries
+            songTokens = songsPayload.tokens
+            availableLanguages = songsPayload.languages
+        }
+        if extrasChanged {
+            let extra = await builder.buildMediaAndSessions()
+            media = extra.media
+            sessions = extra.sessions
+        }
         if let historyStore {
             presentCounts = Dictionary(uniqueKeysWithValues:
                 historyStore.songSummaries().map { ($0.songKey, $0.timesPresented) })
@@ -628,8 +656,11 @@ final class SearchIndex {
         sortCache.removeAll()
         generation += 1
         isBuilding = false
-        // System Spotlight mirrors the same projections (find songs outside the app).
-        SpotlightIndexer.reindex(songs: songs, sessions: sessions)
+        // Spotlight mirrors the same projections — only worth re-pushing when
+        // one of them actually moved.
+        if songsChanged || extrasChanged {
+            SpotlightIndexer.reindex(songs: songs, sessions: sessions)
+        }
         // NO verse re-index here: verses only change via bible import/delete
         // (import re-selects its module, delete goes through moduleDeleted).
         // Song edits fire .libraryDidChange constantly — re-walking 31k verse

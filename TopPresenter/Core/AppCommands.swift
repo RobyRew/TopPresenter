@@ -283,6 +283,11 @@ nonisolated extension Notification.Name {
     /// SearchIndex listens and schedules a debounced background rebuild.
     static let libraryDidChange = Notification.Name("TopPresenter.libraryDidChange")
 
+    /// `userInfo` key on `.libraryDidChange`: the `ImportKind` raw values that
+    /// actually changed. Absent means "assume everything", which is what every
+    /// poster did before and what any future one gets for free.
+    static let changedKindsKey = "TopPresenter.changedKinds"
+
     // Content area toolbar actions
     static let importMedia = Notification.Name("TopPresenter.importMedia")
     static let addScheduleItem = Notification.Name("TopPresenter.addScheduleItem")
