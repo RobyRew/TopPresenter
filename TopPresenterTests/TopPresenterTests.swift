@@ -4230,26 +4230,25 @@ struct BibleBookLocalizationTests {
         #expect(orphan.presentationName == "Geneza")
     }
 
-    @Test func theLibraryLanguageIsASettingWithASafeDefault() {
+    /// One test, not two, and deliberately so: both halves drive the SAME
+    /// `UserDefaults` key, and Swift Testing runs tests in parallel — as two
+    /// tests they raced and one read the other's value.
+    @Test func theLibraryNameLanguageIsASettingWithASafeDefault() {
+        let key = BibleBookLocalization.NameMode.settingKey
+        let stored = UserDefaults.standard.string(forKey: key)
+        defer { UserDefaults.standard.set(stored, forKey: key) }
+
         // Default is the translation's own language: the list then matches the
         // text beside it and the reference on the projector.
-        let stored = UserDefaults.standard.string(forKey: BibleBookLocalization.NameMode.settingKey)
-        defer { UserDefaults.standard.set(stored, forKey: BibleBookLocalization.NameMode.settingKey) }
-
-        UserDefaults.standard.removeObject(forKey: BibleBookLocalization.NameMode.settingKey)
+        UserDefaults.standard.removeObject(forKey: key)
         #expect(BibleBookLocalization.nameMode == .translation)
 
         // Junk in the slot must not leave the library nameless.
-        UserDefaults.standard.set("nonsense", forKey: BibleBookLocalization.NameMode.settingKey)
+        UserDefaults.standard.set("nonsense", forKey: key)
         #expect(BibleBookLocalization.nameMode == .translation)
 
-        UserDefaults.standard.set("app", forKey: BibleBookLocalization.NameMode.settingKey)
+        UserDefaults.standard.set("app", forKey: key)
         #expect(BibleBookLocalization.nameMode == .app)
-    }
-
-    @Test func theSettingSwitchesWhatTheLibraryShows() {
-        let stored = UserDefaults.standard.string(forKey: BibleBookLocalization.NameMode.settingKey)
-        defer { UserDefaults.standard.set(stored, forKey: BibleBookLocalization.NameMode.settingKey) }
 
         // A Romanian module whose file happens to name its books in English.
         let cornilescu = BibleModule(name: "Cornilescu", abbreviation: "VDC",
@@ -4257,11 +4256,10 @@ struct BibleBookLocalizationTests {
         let book = BibleBook(name: "Genesis", bookNumber: 1, testament: "OT")
         book.module = cornilescu
 
-        UserDefaults.standard.set("translation", forKey: BibleBookLocalization.NameMode.settingKey)
-        #expect(book.displayName == "Geneza")
-
-        UserDefaults.standard.set("app", forKey: BibleBookLocalization.NameMode.settingKey)
         #expect(book.displayName == book.displayName(language: BibleBookLocalization.uiLanguage))
+
+        UserDefaults.standard.set("translation", forKey: key)
+        #expect(book.displayName == "Geneza")
 
         // Either way the projector follows the translation.
         #expect(book.presentationName == "Geneza")

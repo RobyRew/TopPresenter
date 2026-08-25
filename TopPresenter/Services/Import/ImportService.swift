@@ -89,6 +89,17 @@ final class ImportService {
         case merged
     }
 
+    /// What an import produced, with nothing in it that belongs to a context.
+    ///
+    /// This is what lets the whole import run somewhere else: `BibleImportOutcome`
+    /// carries a `BibleModule`, so it can never leave the context that made it,
+    /// and that single fact pinned the work to the caller's isolation. Callers
+    /// only ever wanted the name and the verdict.
+    nonisolated struct BibleImportSummary: Sendable, Equatable {
+        let moduleName: String
+        let action: BibleImportAction
+    }
+
     /// Not Sendable: it carries a `BibleModule`, which belongs to the context
     /// it was made in. It crosses back to the caller's isolation the same way
     /// the bare module always did.
@@ -195,6 +206,37 @@ final class ImportService {
     /// transaction that made deleting hurt. 20 000 puts a real Bible at two or
     /// three saves.
     nonisolated static let saveEveryRows = 20_000
+
+    /// Import one Bible on a context of its OWN, detached from every actor.
+    ///
+    /// A sample of a live import found `NSManagedObjectContext.performAndWait`
+    /// and `BibleVerse.chapter.setter` running on the MAIN THREAD, through
+    /// `BackgroundImportActor` — 35 000 of 40 000 main-thread samples. A
+    /// `nonisolated async` function runs on its CALLER's executor, so being
+    /// "off the main actor" is not something the callee can assert; it is
+    /// decided by whoever calls it, all the way up. `Task.detached` has no
+    /// isolation to inherit, which is the one way to be certain.
+    ///
+    /// A fresh context per file also keeps the pending-object graph from one
+    /// Bible out of the next one's, and nothing observes it, so autosave is
+    /// pure overhead across a 31 000-row insert.
+    nonisolated static func importBibleDetached(
+        fileURL: URL,
+        format: SupportedBibleFormat,
+        container: ModelContainer,
+        resolution: BibleConflictResolution = .keepBoth,
+        progressHandler: (@MainActor @Sendable (Double, String) -> Void)? = nil
+    ) async throws -> BibleImportSummary {
+        try await Task.detached(priority: .userInitiated) {
+            let context = ModelContext(container)
+            context.autosaveEnabled = false
+            let outcome = try await importBible(fileURL: fileURL, format: format,
+                                                modelContext: context,
+                                                resolution: resolution,
+                                                progressHandler: progressHandler)
+            return BibleImportSummary(moduleName: outcome.module.name, action: outcome.action)
+        }.value
+    }
 
     nonisolated static func importBible(
         fileURL: URL,
