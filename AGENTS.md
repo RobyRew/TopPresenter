@@ -521,47 +521,85 @@ That matters because roughly 44% of the ~1400 `String(localized:)` **keys are wr
 
 Normalizing the Romanian keys to English is optional cleanup, worth doing module by module — never as one sweep.
 
-### The store is a Core Data SQLite file, and that is usable
+### Bibles are imported through Core Data, not SwiftData
 
-Measured, not assumed. `TopPresenterTests` ▸ `BulkInsertContractTests` pins it.
+Measured, not assumed. `ManagedObjectModelBridgeTests` and `BibleBulkWriterTests`
+pin all of it.
 
-SwiftData inserts the Bible object graph at about **4 700 rows/s** — 6.6s for one
-31 103-verse Bible, ~8 minutes for the 70-Bible library. The cost is the object
-layer, not SQLite: the same rows written directly into the same file, with the
-real schema and both of its indexes, take **0.147s (212 000/s)** — 45x.
+A SwiftData store **is** a Core Data store, and Core Data is the faster way to
+write into it. On a real 22 MB Bible (EDC100, 66 books, 31 102 verses), start to
+finish including parsing the JSON:
 
-Rows written that way are read back by SwiftData as ordinary objects, including
-through relationships. Three facts make that safe, all verified in the test:
+| path | one Bible | the 70-Bible library |
+|---|---|---|
+| SwiftData | 7.31s | ~8.5 min |
+| Core Data (`BibleBulkWriter`) | **1.77s** | **~2 min** |
 
-| | |
-|---|---|
-| a UUID attribute | a bare **16-byte blob**, byte-identical to `UUID.uuid` |
-| a to-one relationship | the destination's `Z_PK` in the FK column (`ZCHAPTER`) |
-| **`Z_PRIMARYKEY`** | Core Data's key allocator — **advance `Z_MAX` in the same transaction** |
+Writing alone goes from ~6.2s to ~0.65s — 4 982 rows/s to 37 000. Parsing is now
+the larger half of an import, so that is where any further gain has to come from.
 
-That last one is the landmine. Write rows without advancing it and Core Data
-later hands out primary keys that already exist: corruption that surfaces far
-from its cause.
+**`SwiftDataModelBridge` derives the `NSManagedObjectModel` from SwiftData's own
+`Schema`.** `Schema` is public and complete — entity names, stored properties,
+value types, optionality, relationship destinations, cardinality, delete rules,
+uniqueness constraints — and it is the same value the app hands `ModelContainer`.
+Deriving from it rather than hand-writing an `.xcdatamodeld` is what stops the
+two drifting: add a property to a `@Model` and the bridge picks it up.
 
-**Why raw SQL and not `NSBatchInsertRequest`,** which would be the nicer API:
+Every stored property in this app's schema is a plain scalar (`String`, `Int`,
+`Bool`, `Double`, `Date`, `UUID`, `Data` and their optionals) — rich values are
+already encoded into `…JSON: String` columns and the SwiftUI types are
+`@Transient`. The bridge maps that closed list and **throws** on anything else
+rather than guessing.
 
-* A hand-built `NSManagedObjectModel` **cannot open a SwiftData store** — Core
-  Data compares version hashes across every entity and refuses a partial model.
-  Batch insert would need a complete, exactly-matching second schema, kept in
-  step with the `@Model` types by hand. That is the maintenance trap.
-* SwiftData does not expose its own `NSManagedObjectModel` (nothing reachable by
-  reflection), so it cannot be borrowed.
-* `libsqlite3` is Apple's, ships in macOS, and is what Core Data itself calls.
-  No model, no second schema.
+Traps, all of which cost a day each:
 
-Only **verses** are worth this. Per Bible: 66 books, 1 189 chapters, 31 103
-verses — the verses are 96% of the rows. Books and chapters stay on SwiftData,
-where their relationships stay ordinary and correct.
+* **Version hashes are compared across every entity, and they are strict.**
+  Uniqueness constraints count: dropping them to speed up saves makes the store
+  refuse the model outright (`NSCocoaErrorDomain 134100`). So does missing
+  `@Attribute(.externalStorage)` — that one is invisible in the value type and is
+  the only thing that separated `MediaItem` from the other 14 entities.
+* **Persistent history tracking is mandatory.** SwiftData turns it on for every
+  store it creates, and a second connection that opens without
+  `NSPersistentHistoryTrackingKey` gets a **read-only** store:
+  `NSCocoaErrorDomain 513 — "File is in Read Only mode due to Persistent History
+  being detected"`. It is invisible on a store nothing has written yet, so it
+  survives a spike and appears on the first real import.
+* **`@Query` does not notice.** It re-runs when a SwiftData context saves, and a
+  write on another coordinator posts nothing it listens to. The import therefore
+  ends with a real SwiftData save (stamping `importDate`), or the Bible lands in
+  the store and never appears in the sidebar until relaunch.
+* **A materialised object keeps its stale relationship.** `rollback()` does not
+  clear it and neither does re-fetching on the same context — only a different
+  `ModelContext` does. That is why the module row is written by the bulk writer
+  too, so the importing context meets it for the first time afterwards.
 
-Anything built on this owes two things: the SwiftData path kept as a fallback so
-no import ever fails because of an optimisation, and a `schemaMetadata` coverage
-test — the one `ModelFieldCoverageTests` already uses — so a new field on
-`BibleVerse` fails the build instead of silently not being written.
+**Why not `NSBatchInsertRequest`,** which is faster again (87 000 rows/s):
+Core Data's batch operations **cannot write relationships**. Batch insert accepts
+one in the dictionary, reports success, and writes a null foreign key — every
+verse an orphan. Batch update refuses outright with
+`NSInvalidArgumentException: Invalid relationship (… name chapter …) passed to
+propertiesToUpdate`, which is an ObjC exception, so it **aborts the process** and
+cannot be pinned by a test. Do not try. The silent one is pinned in
+`batchInsertSilentlyDropsRelationships`.
+
+The whole Bible is **one transaction**. That is not only faster than chunked
+saves — every save past CoreData's prune threshold drags a TRUNCATE checkpoint
+and its EXCLUSIVE lock behind it — it is what makes the fallback safe: if
+anything throws, nothing was committed.
+
+**The SwiftData path is still there and still correct.** Every reason the fast
+path might not work — an in-memory store (every test), a schema the bridge cannot
+map, a model the store rejects — throws, and `ImportService` imports the old way.
+`ImportService.usesBulkBibleWriter` switches it off outright. A decline is
+recorded in `BibleBulkWriter.lastDeclineReason`, because an import that is seven
+times slower for an invisible reason is exactly what goes unnoticed for a year.
+
+Two tests are load-bearing and must not be weakened:
+`theDerivedModelIsTheOneTheStoreWasCreatedWith` fails the moment the bridge stops
+reproducing an entity — usually a new property type or `@Attribute` option — and
+`bothWritePathsProduceTheSameBible` imports the same file down both paths and
+compares the result whole, so a field the writer forgets is a red test rather
+than data quietly lost.
 
 ### Bible book names have THREE forms — pick the right one
 

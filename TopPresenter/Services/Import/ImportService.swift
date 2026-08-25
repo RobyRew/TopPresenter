@@ -7,6 +7,7 @@
 
 import Foundation
 import SwiftData
+import Synchronization
 
 /// Central service that coordinates all import operations.
 /// Uses the importer registry pattern to support multiple formats modularly.
@@ -207,6 +208,20 @@ final class ImportService {
     /// three saves.
     nonisolated static let saveEveryRows = 20_000
 
+    /// Kill switch for the Core Data fast path in `importBible`.
+    ///
+    /// Off means every Bible is written the way it was before `BibleBulkWriter`
+    /// existed — slower, and otherwise identical. It is here for two reasons:
+    /// so a store that turns out to disagree with the bridge can be worked
+    /// around without shipping a build, and so `BibleBulkWriterTests` can import
+    /// the same file down both paths and compare the rows field by field.
+    nonisolated private static let bulkWriterEnabled = Mutex<Bool>(true)
+
+    nonisolated static var usesBulkBibleWriter: Bool {
+        get { bulkWriterEnabled.withLock { $0 } }
+        set { bulkWriterEnabled.withLock { $0 = newValue } }
+    }
+
     /// Import one Bible on a context of its OWN, detached from every actor.
     ///
     /// A sample of a live import found `NSManagedObjectContext.performAndWait`
@@ -358,14 +373,75 @@ final class ImportService {
             // module landing in two libraries stays one module.
             contentID: result.contentID.isEmpty ? UUID().uuidString : result.contentID
         )
-        modelContext.insert(module)
-
         let totalBooks = result.books.count
+
+        // ── The fast path ──
+        //
+        // `BibleBulkWriter` writes the same rows through Core Data instead of
+        // SwiftData: 37 000 verses/s against 4 982, which is 0.8s per
+        // translation instead of 6.2s and turns a seventy-Bible library from
+        // eight minutes into one.
+        //
+        // Everything about it is declinable. An in-memory store (every test), a
+        // schema the bridge cannot map, a model the store rejects — all throw,
+        // and the SwiftData loop below runs exactly as it always has. The writer
+        // commits in one transaction, so a failure leaves nothing behind and
+        // falling back cannot double-write a book.
+        //
+        // `module` above was built but NOT inserted. If the bulk path takes it,
+        // that object is discarded and the real one is fetched back from the
+        // store; a module this context had already materialised would keep its
+        // `books` relationship cached as empty for the rest of its life.
+        var bulkWritten: BibleModule?
+        do {
+            guard usesBulkBibleWriter else { throw BulkWriterDisabled() }
+            // Commit whatever is pending — a `.replace` deletion, most of all —
+            // so the second connection reads the same store this one sees.
+            if modelContext.hasChanges { try modelContext.save() }
+
+            let moduleID = module.id
+            _ = try BibleBulkWriter.write(
+                module: BibleBulkWriter.ModuleFields(module),
+                books: result.books,
+                container: modelContext.container,
+                onBookFinished: { index, importBook in
+                    guard let progressHandler else { return }
+                    let progress = 0.5 + (Double(index + 1) / Double(max(totalBooks, 1))) * 0.4
+                    let name = importBook.name
+                    Task { @MainActor in
+                        let text = String(localized: "Importing \(name)...", comment: "Import progress")
+                        progressHandler(progress, text)
+                    }
+                }
+            )
+            var descriptor = FetchDescriptor<BibleModule>(predicate: #Predicate { $0.id == moduleID })
+            descriptor.fetchLimit = 1
+            let fetched = try modelContext.fetch(descriptor).first
+
+            // `@Query` re-runs when a SwiftData context saves. The rows above
+            // were written through a different coordinator, which posts nothing
+            // SwiftData listens to — so without a real save here the new Bible
+            // would sit in the store, fetchable, and simply not appear in the
+            // library until the next launch.
+            //
+            // Stamping the import date is that save. It is not a trick: this IS
+            // when this library imported the module, and one attribute on one
+            // row is the smallest honest way to say so. Do not remove it because
+            // the value looks redundant.
+            fetched?.importDate = Date()
+            bulkWritten = fetched
+        } catch {
+            BibleBulkWriter.noteDecline(error)
+        }
+
+        let wroteInBulk = bulkWritten != nil
+        if !wroteInBulk { modelContext.insert(module) }
+
         // Rows written since the last save. See the save below for why this is
         // counted rather than saving per book.
         var pendingRows = 0
 
-        for (index, importBook) in result.books.enumerated() {
+        for (index, importBook) in result.books.enumerated() where !wroteInBulk {
             // autoreleasepool: the chapter/verse loops churn thousands of
             // transient Foundation objects — drain them per book so a whole-Bible
             // import can't balloon the heap (the malloc-corruption crash class).
@@ -437,10 +513,10 @@ final class ImportService {
         }
 
         await progressHandler?(0.95, String(localized: "Saving...", comment: "Import progress"))
-        try modelContext.save()
+        if modelContext.hasChanges { try modelContext.save() }
         await progressHandler?(1.0, String(localized: "Complete!", comment: "Import progress"))
 
-        return BibleImportOutcome(module: module,
+        return BibleImportOutcome(module: bulkWritten ?? module,
                                   action: resolution == .replace && verdict.isDuplicate ? .replaced : .imported)
     }
 

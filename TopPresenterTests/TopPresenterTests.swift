@@ -3915,148 +3915,340 @@ struct BookAbbreviationTests {
     }
 }
 
-// MARK: - Bulk Insert Contract
+// MARK: - The Fast Bible-Import Path
 //
-// The SwiftData store is a plain Core Data SQLite file, and rows written into
-// it directly are read back as ordinary objects. This test is what makes the
-// fast Bible-import path legitimate rather than a hope — it is the contract,
-// pinned.
+// A Bible is ~31 000 verses and SwiftData writes them at ~5 000/s, which is 6.2s
+// a translation and over eight minutes for a seventy-Bible library. These suites
+// pin the two things that make the fast path legitimate rather than a hope: that
+// the Core Data model derived from SwiftData's own `Schema` is the very model
+// the store was created with, and that a Bible written through it is
+// indistinguishable from one SwiftData wrote.
 //
-// Phase-0 findings, kept because they cost a day to learn:
-//  • A hand-built NSManagedObjectModel CANNOT open a SwiftData store: Core Data
-//    compares version hashes across every entity and refuses a partial model.
-//    `NSBatchInsertRequest` therefore needs a complete, exactly-matching second
-//    schema — the maintenance trap this avoids.
-//  • SwiftData does not expose its own NSManagedObjectModel (nothing via
-//    reflection), so it cannot be borrowed either.
-//  • Raw SQL through libsqlite3 — Apple's, and what Core Data itself uses —
-//    needs no model at all, and measured 45x faster than the object graph.
+// Findings kept because they cost a day to learn:
+//  • A hand-built NSManagedObjectModel is refused: Core Data compares version
+//    hashes across EVERY entity, and uniqueness constraints count too — dropping
+//    them for speed makes the store reject the model outright.
+//  • SwiftData does not expose its own NSManagedObjectModel by reflection, so it
+//    cannot be borrowed. It does expose `Schema`, which is public and complete,
+//    and `SwiftDataModelBridge` derives the model from that instead.
+//  • Core Data's batch operations cannot write relationships. Batch insert drops
+//    them silently (pinned below); batch update raises NSInvalidArgumentException
+//    — "Invalid relationship (… name chapter …) passed to propertiesToUpdate" —
+//    which is an ObjC exception, so it aborts the process rather than throwing
+//    and CANNOT be pinned by a test. Do not try.
 
 import CoreData
-import SQLite3
 
-struct BulkInsertContractTests {
+struct ManagedObjectModelBridgeTests {
+
+    private func tempStore(_ name: String) -> URL {
+        FileManager.default.temporaryDirectory
+            .appending(path: "bridge-\(UUID().uuidString)-\(name).store")
+    }
+    private func remove(_ url: URL) {
+        for suffix in ["", "-wal", "-shm"] {
+            try? FileManager.default.removeItem(at: URL(fileURLWithPath: url.path + suffix))
+        }
+    }
+
+    /// THE guard. Core Data will not open a store whose recorded version hashes
+    /// disagree with the model handed to it, so this failing means the fast path
+    /// has silently switched itself off for every user — an import that is seven
+    /// times slower for a reason nobody would think to look for.
+    ///
+    /// The usual cause is a new `@Model` property whose type or `@Attribute`
+    /// option `SwiftDataModelBridge` does not map yet. The fix is in the bridge,
+    /// and the entity named below says where to look.
+    @Test func theDerivedModelIsTheOneTheStoreWasCreatedWith() throws {
+        let schema = Schema(versionedSchema: SchemaV2.self)
+        let url = tempStore("hashes")
+        defer { remove(url) }
+        _ = try ModelContainer(for: schema, configurations: ModelConfiguration(url: url))
+
+        let metadata = try NSPersistentStoreCoordinator.metadataForPersistentStore(type: .sqlite, at: url)
+        let recorded = try #require(metadata[NSStoreModelVersionHashesKey] as? [String: Data])
+        let derived = try SwiftDataModelBridge.managedObjectModel(for: schema).entityVersionHashesByName
+
+        let mismatched = Set(recorded.keys).union(derived.keys)
+            .filter { recorded[$0] == nil || recorded[$0] != derived[$0] }
+            .sorted()
+        #expect(mismatched.isEmpty, """
+            SwiftDataModelBridge no longer reproduces \(mismatched.joined(separator: ", ")). \
+            Every Bible import has fallen back to the slow path. Check what changed \
+            in those @Model types — most likely a property type or an @Attribute \
+            option the bridge does not map.
+            """)
+        #expect(recorded.count == 15, "the app's schema has 15 entities; got \(recorded.count)")
+    }
+
+    /// The end-to-end version of the same claim: Core Data opens, and can read,
+    /// the file SwiftData wrote.
+    @Test func theCoordinatorOpensAStoreSwiftDataCreated() throws {
+        let url = tempStore("open")
+        defer { remove(url) }
+        let container = try ModelContainer(
+            for: BibleModule.self, BibleBook.self, BibleChapter.self, BibleVerse.self,
+            configurations: ModelConfiguration(url: url))
+        let ctx = ModelContext(container)
+        ctx.insert(BibleModule(name: "Opened", abbreviation: "OPN", sourceFormat: "test"))
+        try ctx.save()
+
+        let coordinator = try SwiftDataModelBridge.coordinator(for: container)
+        let context = NSManagedObjectContext(concurrencyType: .privateQueueConcurrencyType)
+        context.persistentStoreCoordinator = coordinator
+        let names: [String] = try context.performAndWait {
+            try context.fetch(NSFetchRequest<NSManagedObject>(entityName: "BibleModule"))
+                .compactMap { $0.value(forKey: "name") as? String }
+        }
+        #expect(names == ["Opened"])
+    }
+
+    /// Tests and previews run in memory, and an in-memory store has no file for
+    /// a second coordinator to open. Declining is the correct answer, not a bug —
+    /// and it is what keeps every other suite in this file on the SwiftData path.
+    @Test func inMemoryContainersDeclineTheBridge() throws {
+        let container = try ModelContainer(
+            for: BibleModule.self,
+            configurations: ModelConfiguration(isStoredInMemoryOnly: true))
+        #expect(throws: SwiftDataModelBridge.StoreAccessError.self) {
+            _ = try SwiftDataModelBridge.coordinator(for: container)
+        }
+    }
+}
+
+/// Counts notifications from whatever queue delivers them.
+final class Counter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var count = 0
+    func bump() { lock.lock(); count += 1; lock.unlock() }
+    var value: Int { lock.lock(); defer { lock.unlock() }; return count }
+}
+
+@MainActor struct BibleBulkWriterTests {
 
     private func tempStore(_ name: String) -> URL {
         FileManager.default.temporaryDirectory
             .appending(path: "bulk-\(UUID().uuidString)-\(name).store")
     }
+    private func remove(_ url: URL) {
+        for suffix in ["", "-wal", "-shm"] {
+            try? FileManager.default.removeItem(at: URL(fileURLWithPath: url.path + suffix))
+        }
+    }
+    private func fileBackedContext(_ url: URL) throws -> ModelContext {
+        let container = try ModelContainer(
+            for: BibleModule.self, BibleBook.self, BibleChapter.self, BibleVerse.self,
+            configurations: ModelConfiguration(url: url))
+        let ctx = ModelContext(container)
+        ctx.autosaveEnabled = false
+        return ctx
+    }
 
-    /// The decisive one: write verses with raw SQL, read them back THROUGH
-    /// SwiftData, and see whether they are indistinguishable from native rows.
-    @Test func swiftDataReadsRowsWrittenByRawSQL() throws {
-        let url = tempStore("rawsql")
-        defer { for suffix in ["", "-wal", "-shm"] {
-            try? FileManager.default.removeItem(at: URL(fileURLWithPath: url.path + suffix)) } }
+    /// The one that means "without losing anything".
+    ///
+    /// The same exported Bible is imported into two file-backed stores — once
+    /// through Core Data, once through SwiftData — and the two are compared with
+    /// `BibleModuleSnapshot`, the same whole-object snapshot the round-trip
+    /// suite uses. New `@Model` properties are dragged into this comparison
+    /// automatically, because `ModelFieldCoverageTests` refuses to let a
+    /// persisted field stay out of the snapshot.
+    @Test func bothWritePathsProduceTheSameBible() async throws {
+        let fixtureStore = try ModelContainer(
+            for: BibleModule.self, BibleBook.self, BibleChapter.self, BibleVerse.self,
+            configurations: ModelConfiguration(isStoredInMemoryOnly: true))
+        let source = ModelContext(fixtureStore)
+        let module = BibleRoundTripTests().fullyPopulatedModule(in: source)
 
-        let N = 31_103
-        var chapterPK: Int64 = 0
-        var verseENT: Int64 = 0
-        var referenceID = UUID()
+        let file = FileManager.default.temporaryDirectory
+            .appending(path: "bulk_equiv_\(UUID().uuidString).tpbible")
+        try await ExportService.exportBible(module: module, format: .topPresenter, to: file)
+        defer { try? FileManager.default.removeItem(at: file) }
 
-        // 1. A normal SwiftData store with one reference verse.
+        let slowURL = tempStore("slow"), fastURL = tempStore("fast")
+        defer { remove(slowURL); remove(fastURL) }
+
+        let previous = ImportService.usesBulkBibleWriter
+        defer { ImportService.usesBulkBibleWriter = previous }
+
+        ImportService.usesBulkBibleWriter = false
+        let slow = try await ImportService.importBible(
+            fileURL: file, format: .topPresenter,
+            modelContext: try fileBackedContext(slowURL), resolution: .keepBoth).module
+        let slowSnapshot = BibleModuleSnapshot(slow)
+
+        ImportService.usesBulkBibleWriter = true
+        let fast = try await ImportService.importBible(
+            fileURL: file, format: .topPresenter,
+            modelContext: try fileBackedContext(fastURL), resolution: .keepBoth).module
+
+        #expect(BibleBulkWriter.lastDeclineReason == nil,
+                "the fast path declined (\(BibleBulkWriter.lastDeclineReason ?? "")) — this test then proves nothing")
+        #expect(BibleModuleSnapshot(fast) == slowSnapshot,
+                "a Bible written through Core Data differs from one written through SwiftData")
+    }
+
+    /// After the bulk write the importing context has to see the books, because
+    /// callers read `outcome.module.books` straight afterwards — and that context
+    /// cached the module while its relationship was still empty.
+    @Test func theImportingContextSeesTheBulkWrittenBooks() async throws {
+        let fixtureStore = try ModelContainer(
+            for: BibleModule.self, BibleBook.self, BibleChapter.self, BibleVerse.self,
+            configurations: ModelConfiguration(isStoredInMemoryOnly: true))
+        let module = BibleRoundTripTests().fullyPopulatedModule(in: ModelContext(fixtureStore))
+        let file = FileManager.default.temporaryDirectory
+            .appending(path: "bulk_ctx_\(UUID().uuidString).tpbible")
+        try await ExportService.exportBible(module: module, format: .topPresenter, to: file)
+        defer { try? FileManager.default.removeItem(at: file) }
+
+        let url = tempStore("ctx"); defer { remove(url) }
+        let previous = ImportService.usesBulkBibleWriter
+        defer { ImportService.usesBulkBibleWriter = previous }
+        ImportService.usesBulkBibleWriter = true
+
+        let imported = try await ImportService.importBible(
+            fileURL: file, format: .topPresenter,
+            modelContext: try fileBackedContext(url), resolution: .keepBoth).module
+
+        #expect(BibleBulkWriter.lastDeclineReason == nil)
+        #expect(!imported.books.isEmpty, "the module came back with no books — the context kept its stale, empty relationship")
+        let verses = imported.books.reduce(0) { $0 + $1.chapters.reduce(0) { $0 + $1.verses.count } }
+        #expect(verses > 0, "no verses reachable from the module")
+    }
+
+    /// The library list is a `@Query`, and `@Query` re-runs when a SwiftData
+    /// context saves — not when some other coordinator writes the file. Without
+    /// a real SwiftData save at the end of the fast path, an imported Bible is
+    /// in the store, fetchable, and invisible in the sidebar until relaunch.
+    ///
+    /// This watches for the save itself rather than for the row, because the row
+    /// is there either way; the notification is the part that can go missing.
+    @Test func theFastPathStillNotifiesSwiftDataThatTheLibraryChanged() async throws {
+        let fixtureStore = try ModelContainer(
+            for: BibleModule.self, BibleBook.self, BibleChapter.self, BibleVerse.self,
+            configurations: ModelConfiguration(isStoredInMemoryOnly: true))
+        let module = BibleRoundTripTests().fullyPopulatedModule(in: ModelContext(fixtureStore))
+        let file = FileManager.default.temporaryDirectory
+            .appending(path: "bulk_notify_\(UUID().uuidString).tpbible")
+        try await ExportService.exportBible(module: module, format: .topPresenter, to: file)
+        defer { try? FileManager.default.removeItem(at: file) }
+
+        let url = tempStore("notify"); defer { remove(url) }
+        let previous = ImportService.usesBulkBibleWriter
+        defer { ImportService.usesBulkBibleWriter = previous }
+        ImportService.usesBulkBibleWriter = true
+
+        let saves = Counter()
+        let token = NotificationCenter.default.addObserver(
+            forName: ModelContext.didSave, object: nil, queue: nil) { _ in saves.bump() }
+        defer { NotificationCenter.default.removeObserver(token) }
+
+        _ = try await ImportService.importBible(
+            fileURL: file, format: .topPresenter,
+            modelContext: try fileBackedContext(url), resolution: .keepBoth).module
+
+        #expect(BibleBulkWriter.lastDeclineReason == nil)
+        #expect(saves.value > 0, """
+            the fast path finished without a single SwiftData save, so nothing told             the library's @Query to re-run — the Bible is in the store and absent             from the sidebar.
+            """)
+    }
+
+    /// WHY the writer builds objects instead of calling `NSBatchInsertRequest`,
+    /// which is three times faster again. Batch insert accepts a relationship in
+    /// the dictionary, reports success, and writes a null foreign key: every
+    /// verse an orphan, in a Bible that looks imported.
+    ///
+    /// If this ever fails, Apple has started honouring relationships in batch
+    /// inserts and the writer is worth revisiting.
+    @Test func batchInsertSilentlyDropsRelationships() throws {
+        let url = tempStore("batch"); defer { remove(url) }
+        let container = try ModelContainer(
+            for: BibleModule.self, BibleBook.self, BibleChapter.self, BibleVerse.self,
+            configurations: ModelConfiguration(url: url))
+        var chapterUUID = UUID()
         do {
-            let container = try ModelContainer(
-                for: BibleModule.self, BibleBook.self, BibleChapter.self, BibleVerse.self,
-                configurations: ModelConfiguration(url: url))
             let ctx = ModelContext(container)
-            let module = BibleModule(name: "Raw", abbreviation: "RAW", sourceFormat: "test")
+            let module = BibleModule(name: "Batch", abbreviation: "BAT", sourceFormat: "test")
             ctx.insert(module)
             let book = BibleBook(name: "Genesis", bookNumber: 1, testament: "OT")
             book.module = module
             let chapter = BibleChapter(chapterNumber: 1)
             chapter.book = book
-            let reference = BibleVerse(verseNumber: 1, text: "In the beginning",
-                                       runsJSON: "[]", hasWordsOfChrist: true, gloss: "g")
-            reference.chapter = chapter
-            referenceID = reference.id
+            chapterUUID = chapter.id
             try ctx.save()
         }
 
-        // 2. Raw SQL: learn the layout, then bulk insert.
-        var db: OpaquePointer?
-        #expect(sqlite3_open(url.path, &db) == SQLITE_OK)
-        defer { sqlite3_close(db) }
+        let coordinator = try SwiftDataModelBridge.coordinator(for: container)
+        let context = NSManagedObjectContext(concurrencyType: .privateQueueConcurrencyType)
+        context.persistentStoreCoordinator = coordinator
 
-        func scalar(_ sql: String) -> Int64 {
-            var st: OpaquePointer?
-            sqlite3_prepare_v2(db, sql, -1, &st, nil)
-            defer { sqlite3_finalize(st) }
-            return sqlite3_step(st) == SQLITE_ROW ? sqlite3_column_int64(st, 0) : -1
+        let inserted: Int = try context.performAndWait {
+            let fetch = NSFetchRequest<NSManagedObject>(entityName: "BibleChapter")
+            fetch.predicate = NSPredicate(format: "id == %@", chapterUUID as CVarArg)
+            let chapterID = try #require(try context.fetch(fetch).first?.objectID)
+
+            var index = 0
+            let request = NSBatchInsertRequest(entityName: "BibleVerse", dictionaryHandler: { dict in
+                if index >= 50 { return true }
+                dict["id"] = UUID()
+                dict["verseNumber"] = index + 1
+                dict["text"] = "Verse \(index + 1)"
+                dict["hasWordsOfChrist"] = false
+                dict["gloss"] = ""
+                dict["chapter"] = chapterID     // accepted, and ignored
+                index += 1
+                return false
+            })
+            request.resultType = .count
+            return ((try context.execute(request) as? NSBatchInsertResult)?.result as? Int) ?? -1
         }
-        chapterPK = scalar("SELECT Z_PK FROM ZBIBLECHAPTER LIMIT 1")
-        verseENT = scalar("SELECT Z_ENT FROM ZBIBLEVERSE LIMIT 1")
-        let maxBefore = scalar("SELECT Z_MAX FROM Z_PRIMARYKEY WHERE Z_NAME='BibleVerse'")
-        #expect(chapterPK > 0 && verseENT > 0 && maxBefore >= 1)
+        #expect(inserted == 50, "batch insert reports success")
 
-        // How does SwiftData store a UUID? Compare bytes to the known value.
-        var idStmt: OpaquePointer?
-        sqlite3_prepare_v2(db, "SELECT ZID, length(ZID) FROM ZBIBLEVERSE LIMIT 1", -1, &idStmt, nil)
-        var idBytes = 0, idMatches = false
-        if sqlite3_step(idStmt) == SQLITE_ROW {
-            idBytes = Int(sqlite3_column_int(idStmt, 1))
-            if let raw = sqlite3_column_blob(idStmt, 0), idBytes == 16 {
-                var expected = referenceID.uuid
-                idMatches = withUnsafeBytes(of: &expected) { memcmp(raw, $0.baseAddress, 16) == 0 }
-            }
-        }
-        sqlite3_finalize(idStmt)
+        let check = ModelContext(try ModelContainer(
+            for: BibleModule.self, BibleBook.self, BibleChapter.self, BibleVerse.self,
+            configurations: ModelConfiguration(url: url)))
+        let orphans = try check.fetch(FetchDescriptor<BibleVerse>()).filter { $0.chapter == nil }
+        #expect(orphans.count == 50, """
+            batch insert now honours relationships — it dropped \(50 - orphans.count) fewer than before. \
+            Revisit BibleBulkWriter: batch insert measured three times faster than the object path.
+            """)
+    }
 
-        let SQLITE_TRANSIENT = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
-        var stmt: OpaquePointer?
-        sqlite3_prepare_v2(db, """
-        INSERT INTO ZBIBLEVERSE (Z_PK, Z_ENT, Z_OPT, ZVERSENUMBER, ZCHAPTER, ZTEXT, ZID,
-                                 ZHASWORDSOFCHRIST, ZGLOSS, ZRUNSJSON)
-        VALUES (?,?,?,?,?,?,?,?,?,?)
-        """, -1, &stmt, nil)
-
-        let start = Date()
-        sqlite3_exec(db, "BEGIN", nil, nil, nil)
-        for i in 0..<N {
-            var uuid = UUID().uuid
-            sqlite3_bind_int64(stmt, 1, maxBefore + 1 + Int64(i))
-            sqlite3_bind_int64(stmt, 2, verseENT)
-            sqlite3_bind_int64(stmt, 3, 1)
-            sqlite3_bind_int64(stmt, 4, Int64(i + 2))
-            sqlite3_bind_int64(stmt, 5, chapterPK)
-            sqlite3_bind_text(stmt, 6, "Verse \(i + 2) written by SQL", -1, SQLITE_TRANSIENT)
-            _ = withUnsafeBytes(of: &uuid) { sqlite3_bind_blob(stmt, 7, $0.baseAddress, 16, SQLITE_TRANSIENT) }
-            sqlite3_bind_int64(stmt, 8, 0)
-            sqlite3_bind_text(stmt, 9, "", -1, SQLITE_TRANSIENT)
-            sqlite3_bind_text(stmt, 10, "[]", -1, SQLITE_TRANSIENT)
-            sqlite3_step(stmt); sqlite3_reset(stmt)
-        }
-        // THE landmine: advance Core Data's key allocator in the same transaction.
-        sqlite3_exec(db, "UPDATE Z_PRIMARYKEY SET Z_MAX = \(maxBefore + Int64(N)) WHERE Z_NAME='BibleVerse'", nil, nil, nil)
-        sqlite3_exec(db, "COMMIT", nil, nil, nil)
-        let elapsed = Date().timeIntervalSince(start)
-        sqlite3_finalize(stmt)
-
-        // 3. Read back THROUGH SwiftData on a brand new container.
+    /// The whole Bible is one transaction, so a failure has to leave the store
+    /// exactly as it was — that is what makes falling back to SwiftData safe
+    /// rather than a way to write some books twice.
+    ///
+    /// The failure is real rather than injected: a module whose `id` already
+    /// exists violates the entity's uniqueness constraint, and Core Data raises
+    /// it at `save()` — after every book, chapter and verse has been built.
+    @Test func afailedWriteLeavesNothingBehind() throws {
+        let url = tempStore("fail"); defer { remove(url) }
         let container = try ModelContainer(
             for: BibleModule.self, BibleBook.self, BibleChapter.self, BibleVerse.self,
             configurations: ModelConfiguration(url: url))
         let ctx = ModelContext(container)
-        let chapters = try ctx.fetch(FetchDescriptor<BibleChapter>())
-        let verses = try ctx.fetch(FetchDescriptor<BibleVerse>())
-        let viaRelationship = chapters.first?.verses.count ?? -1
-        let sample = verses.first { $0.verseNumber == 500 }
+        let squatter = BibleModule(name: "Already here", abbreviation: "AH", sourceFormat: "test")
+        ctx.insert(squatter)
+        try ctx.save()
 
-        // Elapsed is not asserted — a machine under load must not fail a
-        // correctness test. It is measured because speed is the whole point:
-        // 31 103 rows landed in 0.147s here, against 6.6s through SwiftData.
-        _ = elapsed
+        let clash = BibleModule(name: "Doomed", abbreviation: "DMD", sourceFormat: "test")
+        clash.id = squatter.id
+        let books = [BibleImportBook(name: "Genesis", bookNumber: 1, testament: "OT",
+                                     chapters: [BibleImportChapter(chapterNumber: 1,
+                                         verses: [BibleImportVerse(verseNumber: 1, text: "x")])])]
+        #expect(throws: (any Error).self) {
+            _ = try BibleBulkWriter.write(module: BibleBulkWriter.ModuleFields(clash),
+                                          books: books, container: container)
+        }
 
-        #expect(verses.count == N + 1, "SwiftData must see every SQL-written row")
-        #expect(viaRelationship == N + 1, "and reach them through the relationship")
-        #expect(idBytes == 16, "a UUID is stored as a bare 16-byte blob")
-        #expect(idMatches, "and byte-identical to `UUID.uuid` — the bulk writer must match")
-        #expect(sample?.text == "Verse 500 written by SQL")
-        #expect(sample?.chapter?.chapterNumber == 1, "the foreign key resolves as a real relationship")
-        #expect(scalar("SELECT Z_MAX FROM Z_PRIMARYKEY WHERE Z_NAME='BibleVerse'") == maxBefore + Int64(N),
-                "Z_PRIMARYKEY must be advanced or Core Data later reuses keys that exist")
+        let check = ModelContext(container)
+        #expect(try check.fetch(FetchDescriptor<BibleBook>()).isEmpty,
+                "a write that threw still left books in the store")
+        #expect(try check.fetch(FetchDescriptor<BibleVerse>()).isEmpty)
+        #expect(try check.fetch(FetchDescriptor<BibleModule>()).count == 1,
+                "and it left a second module behind")
     }
 }
+
 
 // MARK: - Collections Can Be Managed
 
@@ -7907,7 +8099,7 @@ struct BibleVerseSnapshot: Equatable {
     /// - heading `beforeVerse`/`level` are 2, not the decoder's defaults of 1
     /// - footnote `marker` is non-empty and cross-ref `label` is non-nil, both
     ///   of which the decoders happily default
-    private func fullyPopulatedModule(in ctx: ModelContext) -> BibleModule {
+    fileprivate func fullyPopulatedModule(in ctx: ModelContext) -> BibleModule {
         let module = BibleModule(
             name: "Biblia Ortodoxă Sinodală",
             abbreviation: "BOS",
