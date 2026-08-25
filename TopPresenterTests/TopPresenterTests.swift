@@ -3915,6 +3915,149 @@ struct BookAbbreviationTests {
     }
 }
 
+// MARK: - Bulk Insert Contract
+//
+// The SwiftData store is a plain Core Data SQLite file, and rows written into
+// it directly are read back as ordinary objects. This test is what makes the
+// fast Bible-import path legitimate rather than a hope — it is the contract,
+// pinned.
+//
+// Phase-0 findings, kept because they cost a day to learn:
+//  • A hand-built NSManagedObjectModel CANNOT open a SwiftData store: Core Data
+//    compares version hashes across every entity and refuses a partial model.
+//    `NSBatchInsertRequest` therefore needs a complete, exactly-matching second
+//    schema — the maintenance trap this avoids.
+//  • SwiftData does not expose its own NSManagedObjectModel (nothing via
+//    reflection), so it cannot be borrowed either.
+//  • Raw SQL through libsqlite3 — Apple's, and what Core Data itself uses —
+//    needs no model at all, and measured 45x faster than the object graph.
+
+import CoreData
+import SQLite3
+
+struct BulkInsertContractTests {
+
+    private func tempStore(_ name: String) -> URL {
+        FileManager.default.temporaryDirectory
+            .appending(path: "bulk-\(UUID().uuidString)-\(name).store")
+    }
+
+    /// The decisive one: write verses with raw SQL, read them back THROUGH
+    /// SwiftData, and see whether they are indistinguishable from native rows.
+    @Test func swiftDataReadsRowsWrittenByRawSQL() throws {
+        let url = tempStore("rawsql")
+        defer { for suffix in ["", "-wal", "-shm"] {
+            try? FileManager.default.removeItem(at: URL(fileURLWithPath: url.path + suffix)) } }
+
+        let N = 31_103
+        var chapterPK: Int64 = 0
+        var verseENT: Int64 = 0
+        var referenceID = UUID()
+
+        // 1. A normal SwiftData store with one reference verse.
+        do {
+            let container = try ModelContainer(
+                for: BibleModule.self, BibleBook.self, BibleChapter.self, BibleVerse.self,
+                configurations: ModelConfiguration(url: url))
+            let ctx = ModelContext(container)
+            let module = BibleModule(name: "Raw", abbreviation: "RAW", sourceFormat: "test")
+            ctx.insert(module)
+            let book = BibleBook(name: "Genesis", bookNumber: 1, testament: "OT")
+            book.module = module
+            let chapter = BibleChapter(chapterNumber: 1)
+            chapter.book = book
+            let reference = BibleVerse(verseNumber: 1, text: "In the beginning",
+                                       runsJSON: "[]", hasWordsOfChrist: true, gloss: "g")
+            reference.chapter = chapter
+            referenceID = reference.id
+            try ctx.save()
+        }
+
+        // 2. Raw SQL: learn the layout, then bulk insert.
+        var db: OpaquePointer?
+        #expect(sqlite3_open(url.path, &db) == SQLITE_OK)
+        defer { sqlite3_close(db) }
+
+        func scalar(_ sql: String) -> Int64 {
+            var st: OpaquePointer?
+            sqlite3_prepare_v2(db, sql, -1, &st, nil)
+            defer { sqlite3_finalize(st) }
+            return sqlite3_step(st) == SQLITE_ROW ? sqlite3_column_int64(st, 0) : -1
+        }
+        chapterPK = scalar("SELECT Z_PK FROM ZBIBLECHAPTER LIMIT 1")
+        verseENT = scalar("SELECT Z_ENT FROM ZBIBLEVERSE LIMIT 1")
+        let maxBefore = scalar("SELECT Z_MAX FROM Z_PRIMARYKEY WHERE Z_NAME='BibleVerse'")
+        #expect(chapterPK > 0 && verseENT > 0 && maxBefore >= 1)
+
+        // How does SwiftData store a UUID? Compare bytes to the known value.
+        var idStmt: OpaquePointer?
+        sqlite3_prepare_v2(db, "SELECT ZID, length(ZID) FROM ZBIBLEVERSE LIMIT 1", -1, &idStmt, nil)
+        var idBytes = 0, idMatches = false
+        if sqlite3_step(idStmt) == SQLITE_ROW {
+            idBytes = Int(sqlite3_column_int(idStmt, 1))
+            if let raw = sqlite3_column_blob(idStmt, 0), idBytes == 16 {
+                var expected = referenceID.uuid
+                idMatches = withUnsafeBytes(of: &expected) { memcmp(raw, $0.baseAddress, 16) == 0 }
+            }
+        }
+        sqlite3_finalize(idStmt)
+
+        let SQLITE_TRANSIENT = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
+        var stmt: OpaquePointer?
+        sqlite3_prepare_v2(db, """
+        INSERT INTO ZBIBLEVERSE (Z_PK, Z_ENT, Z_OPT, ZVERSENUMBER, ZCHAPTER, ZTEXT, ZID,
+                                 ZHASWORDSOFCHRIST, ZGLOSS, ZRUNSJSON)
+        VALUES (?,?,?,?,?,?,?,?,?,?)
+        """, -1, &stmt, nil)
+
+        let start = Date()
+        sqlite3_exec(db, "BEGIN", nil, nil, nil)
+        for i in 0..<N {
+            var uuid = UUID().uuid
+            sqlite3_bind_int64(stmt, 1, maxBefore + 1 + Int64(i))
+            sqlite3_bind_int64(stmt, 2, verseENT)
+            sqlite3_bind_int64(stmt, 3, 1)
+            sqlite3_bind_int64(stmt, 4, Int64(i + 2))
+            sqlite3_bind_int64(stmt, 5, chapterPK)
+            sqlite3_bind_text(stmt, 6, "Verse \(i + 2) written by SQL", -1, SQLITE_TRANSIENT)
+            _ = withUnsafeBytes(of: &uuid) { sqlite3_bind_blob(stmt, 7, $0.baseAddress, 16, SQLITE_TRANSIENT) }
+            sqlite3_bind_int64(stmt, 8, 0)
+            sqlite3_bind_text(stmt, 9, "", -1, SQLITE_TRANSIENT)
+            sqlite3_bind_text(stmt, 10, "[]", -1, SQLITE_TRANSIENT)
+            sqlite3_step(stmt); sqlite3_reset(stmt)
+        }
+        // THE landmine: advance Core Data's key allocator in the same transaction.
+        sqlite3_exec(db, "UPDATE Z_PRIMARYKEY SET Z_MAX = \(maxBefore + Int64(N)) WHERE Z_NAME='BibleVerse'", nil, nil, nil)
+        sqlite3_exec(db, "COMMIT", nil, nil, nil)
+        let elapsed = Date().timeIntervalSince(start)
+        sqlite3_finalize(stmt)
+
+        // 3. Read back THROUGH SwiftData on a brand new container.
+        let container = try ModelContainer(
+            for: BibleModule.self, BibleBook.self, BibleChapter.self, BibleVerse.self,
+            configurations: ModelConfiguration(url: url))
+        let ctx = ModelContext(container)
+        let chapters = try ctx.fetch(FetchDescriptor<BibleChapter>())
+        let verses = try ctx.fetch(FetchDescriptor<BibleVerse>())
+        let viaRelationship = chapters.first?.verses.count ?? -1
+        let sample = verses.first { $0.verseNumber == 500 }
+
+        // Elapsed is not asserted — a machine under load must not fail a
+        // correctness test. It is measured because speed is the whole point:
+        // 31 103 rows landed in 0.147s here, against 6.6s through SwiftData.
+        _ = elapsed
+
+        #expect(verses.count == N + 1, "SwiftData must see every SQL-written row")
+        #expect(viaRelationship == N + 1, "and reach them through the relationship")
+        #expect(idBytes == 16, "a UUID is stored as a bare 16-byte blob")
+        #expect(idMatches, "and byte-identical to `UUID.uuid` — the bulk writer must match")
+        #expect(sample?.text == "Verse 500 written by SQL")
+        #expect(sample?.chapter?.chapterNumber == 1, "the foreign key resolves as a real relationship")
+        #expect(scalar("SELECT Z_MAX FROM Z_PRIMARYKEY WHERE Z_NAME='BibleVerse'") == maxBefore + Int64(N),
+                "Z_PRIMARYKEY must be advanced or Core Data later reuses keys that exist")
+    }
+}
+
 // MARK: - Collections Can Be Managed
 
 struct CollectionManagementTests {

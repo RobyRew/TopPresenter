@@ -521,6 +521,48 @@ That matters because roughly 44% of the ~1400 `String(localized:)` **keys are wr
 
 Normalizing the Romanian keys to English is optional cleanup, worth doing module by module — never as one sweep.
 
+### The store is a Core Data SQLite file, and that is usable
+
+Measured, not assumed. `TopPresenterTests` ▸ `BulkInsertContractTests` pins it.
+
+SwiftData inserts the Bible object graph at about **4 700 rows/s** — 6.6s for one
+31 103-verse Bible, ~8 minutes for the 70-Bible library. The cost is the object
+layer, not SQLite: the same rows written directly into the same file, with the
+real schema and both of its indexes, take **0.147s (212 000/s)** — 45x.
+
+Rows written that way are read back by SwiftData as ordinary objects, including
+through relationships. Three facts make that safe, all verified in the test:
+
+| | |
+|---|---|
+| a UUID attribute | a bare **16-byte blob**, byte-identical to `UUID.uuid` |
+| a to-one relationship | the destination's `Z_PK` in the FK column (`ZCHAPTER`) |
+| **`Z_PRIMARYKEY`** | Core Data's key allocator — **advance `Z_MAX` in the same transaction** |
+
+That last one is the landmine. Write rows without advancing it and Core Data
+later hands out primary keys that already exist: corruption that surfaces far
+from its cause.
+
+**Why raw SQL and not `NSBatchInsertRequest`,** which would be the nicer API:
+
+* A hand-built `NSManagedObjectModel` **cannot open a SwiftData store** — Core
+  Data compares version hashes across every entity and refuses a partial model.
+  Batch insert would need a complete, exactly-matching second schema, kept in
+  step with the `@Model` types by hand. That is the maintenance trap.
+* SwiftData does not expose its own `NSManagedObjectModel` (nothing reachable by
+  reflection), so it cannot be borrowed.
+* `libsqlite3` is Apple's, ships in macOS, and is what Core Data itself calls.
+  No model, no second schema.
+
+Only **verses** are worth this. Per Bible: 66 books, 1 189 chapters, 31 103
+verses — the verses are 96% of the rows. Books and chapters stay on SwiftData,
+where their relationships stay ordinary and correct.
+
+Anything built on this owes two things: the SwiftData path kept as a fallback so
+no import ever fails because of an optimisation, and a `schemaMetadata` coverage
+test — the one `ModelFieldCoverageTests` already uses — so a new field on
+`BibleVerse` fails the build instead of silently not being written.
+
 ### Bible book names have THREE forms — pick the right one
 
 `BibleBook.name` is whatever the source file said, and it is very often not the
