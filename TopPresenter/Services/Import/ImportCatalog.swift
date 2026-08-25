@@ -99,7 +99,14 @@ nonisolated enum ImportCatalog {
     static func contentTypes(for kinds: Set<ImportKind> = Set(ImportKind.allCases)) -> [UTType] {
         let extensions = Set(importable.filter { kinds.contains($0.kind) }
             .flatMap { $0.fileExtensions.map { $0.lowercased() } })
-        return extensions.compactMap { UTType(filenameExtension: $0) }
+        // `.item`, not the default. `UTType(filenameExtension:)` means
+        // `conformingTo: .data`, and a `.tptheme` is a PACKAGE — it conforms to
+        // `public.directory`, never to `public.data`. So the declared type was
+        // skipped, the extension fell back to a dynamic `dyn.…` identifier that
+        // matches nothing real, and the open panel greyed out every theme:
+        // "Choose Files…" could not select one at all. `.item` is the root of
+        // both branches and resolves files and packages alike.
+        return extensions.compactMap { UTType(filenameExtension: $0, conformingTo: .item) }
     }
 
     /// What the scanner should do with a file it met.

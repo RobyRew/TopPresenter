@@ -7,6 +7,7 @@
 
 import Testing
 import Foundation
+import UniformTypeIdentifiers
 import Compression
 import SwiftUI
 import SwiftData
@@ -3911,6 +3912,38 @@ struct BookAbbreviationTests {
         #expect(BibleBook.deriveAbbreviation(from: "1. Mose") == "1Mos")
         #expect(BibleBook.deriveAbbreviation(from: "2. Korinther") == "2Kor")
         #expect(BibleBook.deriveAbbreviation(from: "1 Ioan") == "1Ioa")
+    }
+}
+
+// MARK: - The Open Panel Must Allow Every Native Format
+
+struct ImportPanelTypeTests {
+
+    @Test func everyNativeExtensionResolvesToItsDeclaredType() {
+        // `UTType(filenameExtension:)` means `conformingTo: .data`. A `.tptheme`
+        // is a PACKAGE — `public.directory`, never `public.data` — so the
+        // declared type was skipped and the extension resolved to a dynamic
+        // `dyn.…` identifier that matches nothing real. The open panel greyed
+        // out every theme: "Choose Files…" could not select one at all.
+        for ext in ["tptheme", "tpbible", "tpsong", "tpsongcollection", "tpslides", "tpschedule"] {
+            let resolved = UTType(filenameExtension: ext, conformingTo: .item)
+            #expect(resolved?.identifier.hasPrefix("com.robyrew.toppresenter") == true,
+                    "\(ext) resolved to \(resolved?.identifier ?? "nil")")
+        }
+    }
+
+    @Test func theOpenPanelAcceptsThemesAndBibles() {
+        let types = ImportCatalog.contentTypes()
+        #expect(types.contains { $0.identifier == "com.robyrew.toppresenter.theme" },
+                "a theme package must be selectable in the import panel")
+        #expect(types.contains { $0.identifier == "com.robyrew.toppresenter.bible" })
+        // A dynamic type is fine for an extension nobody registered (`.cho`,
+        // `.usfm`): the file gets the same dynamic type, so they match. It is
+        // wrong only where a REAL type exists and was missed — then the panel
+        // filters out the very files it is meant to offer. So: every one of our
+        // own types is present, by name.
+        let native = types.filter { $0.identifier.hasPrefix("com.robyrew.toppresenter") }
+        #expect(native.count == 6, "expected all six native types, got \(native.map(\.identifier).sorted())")
     }
 }
 
