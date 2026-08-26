@@ -3592,8 +3592,10 @@ final class PresentationManager {
     }
 
     // MARK: - Init (restore from UserDefaults)
-    init(defaults: UserDefaults = .standard) {
+    init(defaults: UserDefaults = .standard,
+         presentationWindowSource: @escaping @MainActor () -> [NSWindow] = { NSApplication.shared.windows }) {
         self.defaults = defaults
+        self.presentationWindowSource = presentationWindowSource
         let d = defaults
         self.fontSize = d.object(forKey: "pm_fontSize") as? Double ?? PresentationDefaults.fontSize
         self.fontName = d.string(forKey: "pm_fontName") ?? PresentationDefaults.fontName
@@ -4246,10 +4248,25 @@ final class PresentationManager {
         movePresentationWindow(to: screen)
     }
 
+    /// Where to look for the output window. Production reads the application's
+    /// own window list; tests supply their own.
+    ///
+    /// This is injected because the lookup is PROCESS-GLOBAL, which is fine when
+    /// there is one manager and a real app around it, and quietly wrong the
+    /// moment there are 151 of them. Every `PresentationManager` a test built
+    /// was driving the test host's real output window: one test hiding it — to
+    /// exercise the 60 ms staged-show path below — put every other test running
+    /// in PARALLEL onto that same staged path, where content lands 60 ms after
+    /// the call instead of immediately. That is what made
+    /// `liveContentCarriesVerseRuns` fail about one run in five, from a hazard
+    /// nothing in its own body could see.
+    @ObservationIgnored
+    private let presentationWindowSource: @MainActor () -> [NSWindow]
+
     /// ALL windows carrying the presentation identifier. Normally one; more than one
     /// means a stale/duplicate (state restoration + auto-open) — see `dedupe…`.
     private var presentationWindows: [NSWindow] {
-        NSApplication.shared.windows.filter { $0.identifier?.rawValue == WindowIdentifiers.presentation }
+        presentationWindowSource().filter { $0.identifier?.rawValue == WindowIdentifiers.presentation }
     }
 
     /// The presentation NSWindow, found by its identifier.

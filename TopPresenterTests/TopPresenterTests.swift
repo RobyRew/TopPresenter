@@ -20,8 +20,36 @@ import SwiftData
 /// themes and settings. That corrupted real data on every run, and left tests
 /// depending on whatever the previous run happened to leave behind. Each manager
 /// now gets its own empty domain and therefore its own clean defaults.
+/// A manager with NO output window, which is what a test almost always wants.
+///
+/// The window lookup inside `PresentationManager` is process-global, so before
+/// this every test manager drove the test HOST's real presentation window. Tests
+/// that hide it (to exercise the staged-show path) then changed the behaviour of
+/// every test running in parallel: `presentContent` defers its apply by 60 ms
+/// when the window exists and is hidden, so an assertion made right after a show
+/// read stale content. `liveContentCarriesVerseRuns` failed about one run in
+/// five that way, and nothing in its body hinted why.
+///
+/// Headless also means `presentContent` always takes its immediate path, so a
+/// test can assert on `liveContent` the moment it returns.
 @MainActor func makeTestManager(_ store: UserDefaults? = nil) -> PresentationManager {
-    PresentationManager(defaults: store ?? makeTestDefaults())
+    PresentationManager(defaults: store ?? makeTestDefaults(), presentationWindowSource: { [] })
+}
+
+/// A manager wired to a presentation window this test OWNS, for the two tests
+/// that are about staging itself. It starts hidden, which is the condition that
+/// makes `presentContent` stage.
+///
+/// Owning the window is the point: the staging tests used to borrow the host
+/// app's, which is what leaked staging into everyone else's tests.
+@MainActor func makeStagingTestManager() -> (PresentationManager, NSWindow) {
+    let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 320, height: 240),
+                          styleMask: [.borderless], backing: .buffered, defer: true)
+    window.isReleasedWhenClosed = false
+    window.identifier = NSUserInterfaceItemIdentifier(WindowIdentifiers.presentation)
+    let manager = PresentationManager(defaults: makeTestDefaults(),
+                                      presentationWindowSource: { [window] })
+    return (manager, window)
 }
 
 /// An empty settings domain. Pass the SAME one to two managers to test that a
@@ -1197,42 +1225,54 @@ struct PresentationManagerTests {
     /// after a staged one takes the immediate path and lands FIRST. Without a
     /// generation token the staged apply then overwrites the projector with stale
     /// content 60 ms after the operator already moved on.
-    @Test func newerShowSupersedesAStagedOne() async {
+    /// The whole suite leans on this. A test manager that can see the host app's
+    /// output window takes `presentContent`'s staged path whenever that window
+    /// happens to be hidden, applying content 60 ms LATE — so any test asserting
+    /// right after a show reads stale content, intermittently, depending on what
+    /// else is running in parallel. That is exactly how
+    /// `liveContentCarriesVerseRuns` failed about one run in five.
+    @Test func atestManagerIsHeadlessSoEveryShowAppliesImmediately() {
         let pm = makeTestManager()
-        // Staging only exists where there IS an output window; a headless CI
-        // runner has none, and the race cannot occur there either. Asserting the
-        // equivalence keeps this honest in both environments instead of passing
-        // vacuously on one and failing on the other.
-        let stages = pm.hasPresentationWindow
-        pm.hidePresentationWindow()     // force the staged (was-hidden) path
+        #expect(pm.hasPresentationWindow == false,
+                "makeTestManager is seeing a real window — presentContent will stage, and shows will land 60 ms late")
+        pm.showBibleVerse(text: "Imediat", reference: "Gen 1:1")
+        #expect(pm.hasStagedShow == false)
+        #expect(pm.liveContent.mainText == "Imediat",
+                "the show was deferred instead of applied")
+    }
+
+    @Test func newerShowSupersedesAStagedOne() async {
+        // This one is ABOUT staging, so it owns a window instead of borrowing the
+        // host's — which is what used to leak the staged path into every test
+        // running alongside it. Hidden window ⇒ `presentContent` stages.
+        let (pm, window) = makeStagingTestManager()
+        defer { window.orderOut(nil); window.close() }
+        #expect(pm.hasPresentationWindow, "the staged path needs a window to stage for")
 
         pm.showBibleVerse(text: "Verset A", reference: "Gen 1:1")
-        #expect(pm.hasStagedShow == stages)
+        #expect(pm.hasStagedShow)
         pm.showBibleVerse(text: "Verset B", reference: "Gen 1:2")
 
         try? await Task.sleep(for: .milliseconds(200))
         #expect(pm.liveContent.mainText == "Verset B")   // A must not come back
 
         pm.clearOutput()
-        pm.showPresentationWindow()     // restore the shared host window
     }
 
     /// Same hazard in the other direction: Show while hidden, then Escape.
     @Test func clearCancelsAStagedShow() async {
-        let pm = makeTestManager()
-        pm.hidePresentationWindow()
+        let (pm, window) = makeStagingTestManager()
+        defer { window.orderOut(nil); window.close() }
+        #expect(pm.hasPresentationWindow, "the staged path needs a window to stage for")
 
-        let stages = pm.hasPresentationWindow
         pm.showBibleVerse(text: "Verset A", reference: "Gen 1:1")
-        #expect(pm.hasStagedShow == stages)
+        #expect(pm.hasStagedShow)
         pm.clearOutput()
         #expect(pm.hasStagedShow == false)   // dropped outright, not left to no-op
 
         try? await Task.sleep(for: .milliseconds(200))
         #expect(pm.liveContent.isLive == false)
         #expect(pm.liveContent.mainText == "")
-
-        pm.showPresentationWindow()
     }
 
     // MARK: - Screen changes must never lock the operator out
@@ -1253,11 +1293,6 @@ struct PresentationManagerTests {
         // full-screen always-on-top overlay.
         #expect(pm.presentationScreenIndex == 99)
 
-        // The output NSWindow belongs to the test host and is shared by the whole
-        // suite: leaving it ordered out makes the next `presentContent` take its
-        // "was hidden" staged path, so tests that read `contentChangeKind` right
-        // after a show would see a stale value.
-        pm.showPresentationWindow()
     }
 
     @Test func goBlackOnDisconnectActsWithoutPrompting() {
@@ -1333,7 +1368,6 @@ struct PresentationManagerTests {
         #expect(pm.liveContent.isLive == true)
         #expect(pm.liveContent.mainText == "Test")
 
-        pm.showPresentationWindow()  // restore the shared host window (see above)
     }
 
     @Test func showBibleVerseBlockedWhenFrozen() {
@@ -3341,7 +3375,6 @@ struct SessionTests {
         try context.save()
 
         let pm = makeTestManager()
-        pm.showPresentationWindow()     // visible → presentContent takes the immediate path
         let runner = SessionRunner()
         runner.pm = pm
 
@@ -5289,7 +5322,6 @@ struct RemoteExtractionTests {
 
     @Test func showingMediaSwitchesTheOutputProfile() {
         let pm = makeTestManager()
-        pm.showPresentationWindow()
 
         pm.showBibleVerse(text: "Test", reference: "Gen 1:1")
         #expect(pm.outputProfileKey == "bible")
@@ -6722,7 +6754,6 @@ struct RemoteExtractionTests {
 
     @Test func goingLiveWithMediaCarriesItsTitle() {
         let pm = makeTestManager()
-        pm.showPresentationWindow()
         pm.showMedia(kind: "video", url: URL(fileURLWithPath: "/tmp/Worship Loop.MP4"))
 
         // „Titlu media (live)" reads `reference`. It used to be blanked, so every
@@ -6733,7 +6764,6 @@ struct RemoteExtractionTests {
 
     @Test func theTitleCaseteResolvesAgainstTheLiveClip() {
         let pm = makeTestManager()
-        pm.showPresentationWindow()
         pm.showMedia(kind: "image", url: URL(fileURLWithPath: "/tmp/Anunț.png"))
 
         pm.setSourceRaw("reference", for: .reference, in: "media")
