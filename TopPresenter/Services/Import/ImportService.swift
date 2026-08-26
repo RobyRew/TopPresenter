@@ -882,6 +882,34 @@ final class ImportService {
     /// `normalizedSongKey`, `upsertSongbook`, the importer factory. That is the
     /// refactor, and it is worth it: thousands of inserts on the context that
     /// draws the window is what made the app unusable while songs imported.
+/// Per-run state for a BATCH song import — the things a single import does once
+/// and a batch would otherwise repeat per song.
+///
+/// Importing 5 000 songs took 4m48s and was O(n²): the per-song cost grew from
+/// 5.3ms to 25.8ms as the run went on. With this it is 10.7s and flat at ~2.1ms.
+/// The song editor passes nothing and behaves exactly as it did.
+nonisolated final class SongImportRun: @unchecked Sendable {
+
+    /// Name → `Songbook`, filled from ONE fetch of what is already in the store.
+    ///
+    /// `upsertSongbook` used to fetch per song. A fetch has to merge the
+    /// context's pending inserts before it can answer, so its cost grew with
+    /// every song already imported — and 3 236 of the 5 000 test songs name a
+    /// songbook. This was the dominant term by a wide margin: caching it alone
+    /// took 2 000 songs from 51.6s to 6.6s.
+    fileprivate var songbooksByName: [String: Songbook]?
+
+    /// Songs to attach to the collection, linked in one assignment at the end.
+    ///
+    /// Setting `song.collection` per song makes Core Data grow the collection's
+    /// to-many one element at a time, and it goes superlinear: keeping it cost
+    /// 21.3s against 10.7s over 5 000 songs. Bibles hit the same wall — see
+    /// `BibleBulkWriter`, where a chapter's verses are attached as one set.
+    fileprivate var pendingCollectionMembers: [Song] = []
+
+    fileprivate init() {}
+}
+
     nonisolated static func importSongItems(
         urls: [URL],
         collectionName: String,
@@ -891,6 +919,7 @@ final class ImportService {
         progressHandler: (@Sendable (Double, String) -> Void)? = nil
     ) async -> SongBatchResult {
         var result = SongBatchResult()
+        let run = SongImportRun()
 
         // E6 — the scope has to stay open for the whole import (files are read
         // one at a time, well after this loop) and then actually be CLOSED.
@@ -968,7 +997,8 @@ final class ImportService {
                     let key = normalizedSongKey(parsed.title)
 
                     func makeNew(updateIndex: Bool) {
-                        let song = createSongFromResult(parsed, collection: col, modelContext: modelContext)
+                        let song = createSongFromResult(parsed, collection: col,
+                                                        modelContext: modelContext, run: run)
                         applyFolderTag(item.parent, to: song)
                         if updateIndex { index[key] = song }
                         result.importedTitles.append(parsed.title)
@@ -994,6 +1024,12 @@ final class ImportService {
             } catch {
                 result.failures.append((name, error.localizedDescription))
             }
+        }
+
+        // One assignment instead of thousands of individual appends — see
+        // `SongImportRun.pendingCollectionMembers`.
+        if let col = result.collection, !run.pendingCollectionMembers.isEmpty {
+            col.songs = col.songs + run.pendingCollectionMembers
         }
 
         if result.collection != nil {
@@ -1088,7 +1124,8 @@ final class ImportService {
     nonisolated private static func createSongFromResult(
         _ result: SongImportResult,
         collection: SongCollection,
-        modelContext: ModelContext
+        modelContext: ModelContext,
+        run: SongImportRun? = nil
     ) -> Song {
         let song = Song(
             title: result.title,
@@ -1100,8 +1137,14 @@ final class ImportService {
             songNumber: result.songNumber,
             tags: result.tags
         )
-        song.collection = collection
-        applyResult(result, to: song, modelContext: modelContext)
+        if let run {
+            // Attached to the collection in one go once the run finishes.
+            run.pendingCollectionMembers.append(song)
+            modelContext.insert(song)
+        } else {
+            song.collection = collection
+        }
+        applyResult(result, to: song, modelContext: modelContext, run: run)
         return song
     }
 
@@ -1125,7 +1168,8 @@ final class ImportService {
         to song: Song,
         modelContext: ModelContext,
         preservesTimestamps: Bool = false,
-        preservingVersionIDs: Bool = false
+        preservingVersionIDs: Bool = false,
+        run: SongImportRun? = nil
     ) {
         // Snapshot identity BEFORE the graph is torn down.
         let previousModifiedDate = song.modifiedDate
@@ -1158,7 +1202,7 @@ final class ImportService {
             SongMediaRef(role: $0.role, kind: $0.kind, filename: $0.filename, bookmark: $0.bookmark)
         }
         if let sb = result.songbook, !sb.name.isEmpty {
-            song.songbook = upsertSongbook(sb, modelContext: modelContext)
+            song.songbook = upsertSongbook(sb, modelContext: modelContext, run: run)
         }
 
         // Clear the existing graph (cascade deletes sections) before rebuilding.
@@ -1205,7 +1249,11 @@ final class ImportService {
         // It is parsed and kept on the result because Phase 3's duplicate
         // resolver needs it to answer "is the incoming copy newer than mine?".
         if preservesTimestamps { song.modifiedDate = previousModifiedDate }
-        NotificationCenter.default.post(name: .libraryDidChange, object: nil)
+        // A batch posts this ONCE when it finishes. Per song it is both wasteful
+        // and a lie: the library has not settled until the import has.
+        if run == nil {
+            NotificationCenter.default.post(name: .libraryDidChange, object: nil)
+        }
     }
 
     // MARK: - Edit-log diff (coarse, human-readable change summaries)
@@ -1266,8 +1314,27 @@ final class ImportService {
     }
 
     /// Reuse an existing Songbook with the same name, or create and insert a new one.
-    nonisolated private static func upsertSongbook(_ sb: SongImportSongbook, modelContext: ModelContext) -> Songbook {
+    nonisolated private static func upsertSongbook(_ sb: SongImportSongbook,
+                                                   modelContext: ModelContext,
+                                                   run: SongImportRun?) -> Songbook {
         let name = sb.name
+
+        // Batch import: one fetch for the whole run, then a dictionary. See
+        // `SongImportRun.songbooksByName` for what the per-song fetch cost.
+        if let run {
+            if run.songbooksByName == nil {
+                let all = (try? modelContext.fetch(FetchDescriptor<Songbook>())) ?? []
+                run.songbooksByName = Dictionary(all.map { ($0.name, $0) },
+                                                 uniquingKeysWith: { first, _ in first })
+            }
+            if let hit = run.songbooksByName?[name] { return hit }
+            let book = Songbook(name: sb.name, publisher: sb.publisher,
+                                language: sb.language, year: sb.year)
+            modelContext.insert(book)
+            run.songbooksByName?[name] = book
+            return book
+        }
+
         let descriptor = FetchDescriptor<Songbook>(predicate: #Predicate { $0.name == name })
         if let existing = try? modelContext.fetch(descriptor).first {
             return existing

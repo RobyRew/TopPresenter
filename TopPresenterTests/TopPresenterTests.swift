@@ -4250,6 +4250,135 @@ final class Counter: @unchecked Sendable {
 }
 
 
+// MARK: - Batch Song Import
+//
+// Importing 5 000 songs took 4m48s and was O(n^2) — per-song cost climbed from
+// 5.3ms to 25.8ms as the run went on, so the 73 397-song library would have
+// taken over an hour. `SongImportRun` made it 14.8s and flat at ~3ms.
+//
+// The speed is not asserted here: a loaded machine must not fail a correctness
+// test. What IS asserted is the behaviour the two fixes could break — a
+// songbook fetched once per run instead of once per song, and a collection
+// linked at the end instead of per song.
+
+@MainActor struct BatchSongImportTests {
+
+    private func makeContext() throws -> ModelContext {
+        let container = try ModelContainer(
+            for: Song.self, SongCollection.self, Songbook.self, SongVersion.self,
+                SongSection.self, SongVerse.self,
+            configurations: ModelConfiguration(isStoredInMemoryOnly: true))
+        let ctx = ModelContext(container)
+        ctx.autosaveEnabled = false
+        return ctx
+    }
+
+    /// Writes `count` TopPresenter songs, every one naming the same songbook.
+    private func writeSongs(count: Int, songbook: String, titlePrefix: String = "Cântecul",
+                            into dir: URL) throws {
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        for i in 0..<count {
+            let payload: [String: Any] = [
+                "schemaVersion": "1.0.0",
+                "format": "TopPresenter Song",
+                "song": [
+                    "title": "\(titlePrefix) \(i)",
+                    "language": "ro",
+                    "songbook": ["name": songbook, "publisher": "Editura", "year": "1990"],
+                    "versions": [[
+                        "name": "Original",
+                        "sections": [["id": "v1", "type": "verse", "label": "1",
+                                      "lines": [["text": "Rând unu al cântecului \(i)"]]]],
+                    ]],
+                ],
+            ]
+            let data = try JSONSerialization.data(withJSONObject: payload)
+            try data.write(to: dir.appending(path: "song\(i).tpsong"))
+        }
+    }
+
+    /// The songbook cache must behave exactly like the per-song fetch it
+    /// replaced: one row for one name, however many songs mention it.
+    @Test func abatchNamingOneSongbookCreatesExactlyOne() async throws {
+        let dir = FileManager.default.temporaryDirectory.appending(path: "sb-\(UUID().uuidString)")
+        try writeSongs(count: 40, songbook: "Imnuri Creștine", into: dir)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        let ctx = try makeContext()
+        let result = await ImportService.importSongItems(
+            urls: [dir], collectionName: "Test", modelContext: ctx)
+
+        #expect(result.importedTitles.count == 40)
+        let books = try ctx.fetch(FetchDescriptor<Songbook>())
+        #expect(books.count == 1, "got \(books.map(\.name)) — the cache must dedupe by name")
+        #expect(books.first?.publisher == "Editura")
+        #expect(try ctx.fetch(FetchDescriptor<Song>()).allSatisfy { $0.songbook?.name == "Imnuri Creștine" })
+    }
+
+    /// And it must find the songbooks already in the store, not shadow them with
+    /// a second copy — the cache is seeded from one fetch, and if that fetch
+    /// were skipped this is what would break.
+    @Test func abatchReusesASongbookAlreadyInTheLibrary() async throws {
+        let ctx = try makeContext()
+        let existing = Songbook(name: "Imnuri Creștine", publisher: "Veche")
+        ctx.insert(existing)
+        try ctx.save()
+
+        let dir = FileManager.default.temporaryDirectory.appending(path: "sb2-\(UUID().uuidString)")
+        try writeSongs(count: 10, songbook: "Imnuri Creștine", into: dir)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        _ = await ImportService.importSongItems(
+            urls: [dir], collectionName: "Test", modelContext: ctx)
+
+        let books = try ctx.fetch(FetchDescriptor<Songbook>())
+        #expect(books.count == 1, "a second songbook was created alongside the existing one")
+        #expect(books.first?.id == existing.id)
+        #expect(books.first?.publisher == "Veche", "the existing row must win, not be overwritten")
+    }
+
+    /// The collection is linked once at the end rather than per song. If that
+    /// assignment were ever dropped, every imported song would be orphaned —
+    /// present in the library and in no collection — which is exactly the kind
+    /// of thing a speed change breaks quietly.
+    @Test func everySongInABatchEndsUpInTheCollection() async throws {
+        let dir = FileManager.default.temporaryDirectory.appending(path: "col-\(UUID().uuidString)")
+        try writeSongs(count: 30, songbook: "Diverse", into: dir)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        let ctx = try makeContext()
+        let result = await ImportService.importSongItems(
+            urls: [dir], collectionName: "Colecția mea", modelContext: ctx)
+
+        let collection = try #require(result.collection)
+        #expect(collection.songs.count == 30, "\(collection.songs.count) of 30 songs made it into the collection")
+        let songs = try ctx.fetch(FetchDescriptor<Song>())
+        #expect(songs.count == 30)
+        #expect(songs.allSatisfy { $0.collection?.name == "Colecția mea" },
+                "\(songs.filter { $0.collection == nil }.count) songs came out with no collection")
+    }
+
+    /// A second batch has to join the songs already there, not replace them.
+    @Test func asecondBatchAddsToTheCollectionInsteadOfReplacingIt() async throws {
+        let ctx = try makeContext()
+        for round in 0..<2 {
+            let dir = FileManager.default.temporaryDirectory
+                .appending(path: "col\(round)-\(UUID().uuidString)")
+            // Distinct titles per round: identical ones are correctly merged as
+            // extra versions of one song, which is a different test.
+            try writeSongs(count: 5, songbook: "Diverse \(round)",
+                           titlePrefix: "Runda \(round)", into: dir)
+            defer { try? FileManager.default.removeItem(at: dir) }
+            _ = await ImportService.importSongItems(
+                urls: [dir], collectionName: "Aceeași", modelContext: ctx)
+        }
+        let collections = try ctx.fetch(FetchDescriptor<SongCollection>())
+        #expect(collections.count == 1)
+        #expect(collections.first?.songs.count == 10,
+                "the second batch replaced the first instead of joining it")
+    }
+}
+
 // MARK: - Collections Can Be Managed
 
 struct CollectionManagementTests {

@@ -521,6 +521,38 @@ That matters because roughly 44% of the ~1400 `String(localized:)` **keys are wr
 
 Normalizing the Romanian keys to English is optional cleanup, worth doing module by module — never as one sweep.
 
+### A fetch inside an import loop is quadratic
+
+Song import was **O(n²)** and nobody could see it, because the per-song cost only
+becomes visible at scale: 5.3ms at 250 songs, 25.8ms at 2 000. Importing 5 000
+songs took **4m48s**, so the 73 397-song library would have taken over an hour.
+It is **14.8s** now, flat at ~3ms a song — the whole library in under four
+minutes.
+
+Nothing about it was a database problem. Three things repeated per song that
+should happen once per run, all held by `SongImportRun`:
+
+| what | why it was quadratic | cost at 2 000 songs |
+|---|---|---|
+| `upsertSongbook` fetched per song | **a fetch must merge the context's pending inserts before it can answer**, so it got slower with every song already imported — and 3 236 of 5 000 test songs name a songbook | 51.6s → 6.6s on its own |
+| `song.collection = col` per song | Core Data grows the to-many one element at a time | 21.3s → 10.7s at 5 000 |
+| `.libraryDidChange` posted per song | every observer re-ran, per song | the rest |
+
+**The first one is the general lesson: never fetch inside a loop that is also
+inserting.** It is not the fetch that costs, it is the pending set it has to
+reconcile — which is invisible in the code, invisible at test scale, and grows
+with exactly the thing you are looping over. Build the lookup once, before the
+loop, and keep it in a dictionary.
+
+The second is the same wall Bibles hit — see `BibleBulkWriter`, where a chapter's
+verses are attached as one set rather than linked one at a time.
+
+`BatchSongImportTests` guards the behaviour, not the speed: one songbook row per
+name, existing songbooks reused rather than shadowed, and every song in the batch
+actually landing in the collection. That last one is the one that matters —
+linking at the end is exactly the kind of change that silently orphans every
+imported song, and the test goes red if the assignment is dropped.
+
 ### Bibles are imported through Core Data, not SwiftData
 
 Measured, not assumed. `ManagedObjectModelBridgeTests` and `BibleBulkWriterTests`
