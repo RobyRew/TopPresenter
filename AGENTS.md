@@ -522,6 +522,37 @@ That matters because roughly 44% of the ~1400 `String(localized:)` **keys are wr
 
 Normalizing the Romanian keys to English is optional cleanup, worth doing module by module — never as one sweep.
 
+### "theme.json is missing" — what it is NOT
+
+A report that some `.tptheme` packages failed to import while others succeeded,
+with diacritics as the apparent pattern. Investigated and **not reproduced**.
+Eliminated, with evidence, so nobody spends the day again:
+
+* **Diacritics are not the cause.** A theme, its package and its media file all
+  named with `ă` — precomposed (NFC), decomposed (NFD) and with emoji — export
+  and re-import intact. Pinned by `diacriticsInEveryNameRoundTrip`.
+* **The published archives are correct.** All 21 packages in `themes-1` contain
+  `theme.json` and `media/`, and both `unzip` and `ditto` extract them with the
+  file in place.
+* **The scanner does not walk into packages.** `ImportScanner` adds a `.tptheme`
+  as a leaf (`ImportCatalog.directoryExtensions`), so its parts are never offered
+  as loose files.
+
+What was actually wrong was the **message**: `.invalidPackage` said only "it is
+missing", which is the one thing every cause shares. A `.zip` renamed to
+`.tptheme`, a folder the sandbox refuses, an empty or truncated download, and a
+double-wrapped package all produced the same sentence.
+`PresentationManager.diagnosePackage` now says which, and
+`ThemePackageDiagnosisTests` pins each case. **The likeliest explanation is the
+first one** — the release ships `.tptheme.zip`, and an unextracted or
+flattened package is a file where a folder is expected.
+
+One real wart found on the way, deliberately not fixed: the published theme zips
+carry UTF-8 filename bytes **without the UTF-8 flag** (bit 11), because they were
+made with Info-ZIP's `zip`, which does not set it. Both macOS extractors get the
+names right anyway, and the app is macOS-only, so it costs nothing today — it
+would only bite a tool that honours the flag, which nothing in this pipeline is.
+
 ### Re-reading the library per file is quadratic — it was in ALL FIVE importers
 
 Every importer answered "is this already here?" by reading the library and

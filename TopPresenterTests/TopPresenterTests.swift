@@ -4412,6 +4412,105 @@ final class Counter: @unchecked Sendable {
     }
 }
 
+// MARK: - Why A Theme Package Would Not Open
+//
+// A report of "Pachetul de temă este invalid (lipsește theme.json)" on some
+// themes and not others could not be reproduced. Eliminated, with evidence:
+// diacritics in the theme name, the package name and the media name all import
+// fine (including NFC, NFD and emoji); the published archives are structurally
+// correct and both `unzip` and `ditto` extract them with theme.json in place;
+// and `ImportScanner` treats a `.tptheme` as a leaf rather than walking into it.
+//
+// What was left was a message that could not tell those causes apart — a `.zip`
+// under a package's name, a folder the sandbox refuses, an empty or truncated
+// download all produced the same sentence. So the failure now says which it is.
+
+@MainActor struct ThemePackageDiagnosisTests {
+
+    private func tempDir() throws -> URL {
+        let dir = FileManager.default.temporaryDirectory.appending(path: "tpd-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir
+    }
+
+    /// The likeliest explanation, and the one the old message hid completely:
+    /// the release ships `.tptheme.zip`, and a `.zip` renamed to `.tptheme` — or
+    /// one that travelled through something that flattened the package — is a
+    /// FILE where a folder is expected.
+    @Test func azipUnderAPackageNameSaysToUnarchiveIt() throws {
+        let dir = try tempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let fake = dir.appending(path: "Auroră.tptheme")
+        try Data("PK\u{03}\u{04}not really a package".utf8).write(to: fake)
+
+        #expect(PresentationManager.diagnosePackage(at: fake, underlying: nil) == .notAPackage)
+
+        let pm = makeTestManager()
+        #expect(throws: PresentationManager.ThemeIOError.self) {
+            _ = try pm.importTheme(from: fake)
+        }
+    }
+
+    @Test func amissingPackageSaysSo() throws {
+        let dir = try tempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        #expect(PresentationManager.diagnosePackage(
+            at: dir.appending(path: "Nu există.tptheme"), underlying: nil) == .missing)
+    }
+
+    @Test func anemptyPackageSaysSo() throws {
+        let dir = try tempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let pkg = dir.appending(path: "Goală.tptheme")
+        try FileManager.default.createDirectory(at: pkg, withIntermediateDirectories: true)
+        #expect(PresentationManager.diagnosePackage(at: pkg, underlying: nil) == .empty)
+    }
+
+    /// A package with contents but no `theme.json` names what it DOES hold —
+    /// which is how a double-wrapped folder ("Auroră.tptheme/Auroră.tptheme/…")
+    /// becomes obvious instead of mysterious.
+    @Test func apackageWithoutThemeJsonListsWhatItHolds() throws {
+        let dir = try tempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let pkg = dir.appending(path: "Auroră.tptheme")
+        try FileManager.default.createDirectory(at: pkg.appending(path: "media"),
+                                                withIntermediateDirectories: true)
+        try Data("x".utf8).write(to: pkg.appending(path: "readme.txt"))
+
+        let diagnosis = PresentationManager.diagnosePackage(at: pkg, underlying: nil)
+        #expect(diagnosis == .noThemeJSON(contents: ["media", "readme.txt"]),
+                "got: \(diagnosis)")
+        // The operator has to be able to READ it too, in whatever language.
+        #expect(diagnosis.localizedReason.contains("theme.json"))
+    }
+
+    /// Diacritics were the reported pattern and are NOT the cause. Kept so the
+    /// elimination stays proven rather than remembered — every form of the name
+    /// that macOS can produce round-trips.
+    @Test func diacriticsInEveryNameRoundTrip() throws {
+        let dir = try tempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let names = [
+            "Abstract",
+            "Auror\u{0103}",                 // ă precomposed (NFC)
+            "Auror\u{0061}\u{0306}",         // a + combining breve (NFD)
+            "Cerneal\u{0103} 🌅",
+        ]
+        for name in names {
+            let pm = makeTestManager()
+            pm.fontSize = 44
+            let theme = pm.saveCurrentAsTheme(named: name, formatRaw: "all")
+            let pkg = dir.appending(path: "\(name).tptheme")
+            try pm.exportTheme(id: theme.id, to: pkg)
+
+            let fresh = makeTestManager()
+            let imported = try fresh.importTheme(from: pkg)
+            #expect(imported.payload.fontSize == 44,
+                    "\(name) did not survive the round trip")
+        }
+    }
+}
+
 // MARK: - Batch Import Caches
 //
 // Every importer answered "is this already in the library?" by re-reading the

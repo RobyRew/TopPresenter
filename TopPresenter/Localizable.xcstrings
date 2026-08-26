@@ -35270,6 +35270,167 @@
           }
         }
       }
+    },
+    "Pachetul de temă nu a putut fi citit: %@" : {
+      "comment" : "Theme IO error",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The theme package could not be read: %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudo leer el paquete de tema: %@"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pachetul de temă nu a putut fi citit: %@"
+          }
+        }
+      }
+    },
+    "nu există la calea dată" : {
+      "comment" : "Theme diagnosis",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "it is not at that path"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "no está en esa ruta"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "nu există la calea dată"
+          }
+        }
+      }
+    },
+    "este un fișier, nu un pachet — dezarhivează-l întâi" : {
+      "comment" : "Theme diagnosis",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "it is a file, not a package — unarchive it first"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "es un archivo, no un paquete — descomprímelo primero"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "este un fișier, nu un pachet — dezarhivează-l întâi"
+          }
+        }
+      }
+    },
+    "dosarul nu poate fi citit (permisiuni)" : {
+      "comment" : "Theme diagnosis",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "the folder cannot be read (permissions)"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "no se puede leer la carpeta (permisos)"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "dosarul nu poate fi citit (permisiuni)"
+          }
+        }
+      }
+    },
+    "pachetul este gol" : {
+      "comment" : "Theme diagnosis",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "the package is empty"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "el paquete está vacío"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "pachetul este gol"
+          }
+        }
+      }
+    },
+    "nu conține theme.json (conține: %@)" : {
+      "comment" : "Theme diagnosis",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "it has no theme.json (it holds: %@)"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "no contiene theme.json (contiene: %@)"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "nu conține theme.json (conține: %@)"
+          }
+        }
+      }
+    },
+    "theme.json există dar nu poate fi deschis (%@)" : {
+      "comment" : "Theme diagnosis",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "theme.json is there but will not open (%@)"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "theme.json existe pero no se abre (%@)"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "theme.json există dar nu poate fi deschis (%@)"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

@@ -3090,6 +3090,12 @@ final class PresentationManager {
     enum ThemeIOError: LocalizedError {
         case themeNotFound
         case invalidPackage
+        /// `theme.json` could not be READ, with what was actually found in its
+        /// place. `.invalidPackage` said only "it is missing", which is the one
+        /// thing every cause has in common and tells the operator nothing: a
+        /// package that is really a zip, a folder the sandbox will not let us
+        /// into, and an interrupted download all produced the same sentence.
+        case unreadablePackage(reason: String)
 
         var errorDescription: String? {
             switch self {
@@ -3097,8 +3103,69 @@ final class PresentationManager {
                 return String(localized: "Tema nu a fost găsită.", comment: "Theme IO error")
             case .invalidPackage:
                 return String(localized: "Pachetul de temă este invalid (lipsește theme.json).", comment: "Theme IO error")
+            case .unreadablePackage(let reason):
+                return String(localized: "Pachetul de temă nu a putut fi citit: \(reason)", comment: "Theme IO error")
             }
         }
+    }
+
+    /// What is actually wrong with a package whose `theme.json` would not read.
+    ///
+    /// A CASE, not a sentence. The message an operator sees is localized, so a
+    /// test that matched on its text passed only in Romanian and broke the
+    /// moment the strings were translated — and the thing worth asserting was
+    /// never the wording, it was which cause was detected.
+    ///
+    /// Written after a report of "lipsește theme.json" that could not be
+    /// reproduced: the packages were valid, extracted correctly, and imported
+    /// fine here. Every remaining explanation — a `.zip` under a package's name,
+    /// the sandbox refusing the folder, a half-finished download — was
+    /// indistinguishable in the message the operator saw.
+    nonisolated enum PackageDiagnosis: Equatable {
+        case missing
+        /// The overwhelmingly likely one: a `.tptheme.zip` renamed, or a package
+        /// that travelled through something that flattened it.
+        case notAPackage
+        case unreadableDirectory
+        case empty
+        case noThemeJSON(contents: [String])
+        case themeJSONWillNotOpen(detail: String)
+
+        var localizedReason: String {
+            switch self {
+            case .missing:
+                return String(localized: "nu există la calea dată", comment: "Theme diagnosis")
+            case .notAPackage:
+                return String(localized: "este un fișier, nu un pachet — dezarhivează-l întâi",
+                              comment: "Theme diagnosis")
+            case .unreadableDirectory:
+                return String(localized: "dosarul nu poate fi citit (permisiuni)", comment: "Theme diagnosis")
+            case .empty:
+                return String(localized: "pachetul este gol", comment: "Theme diagnosis")
+            case .noThemeJSON(let contents):
+                let listed = contents.prefix(4).joined(separator: ", ")
+                return String(localized: "nu conține theme.json (conține: \(listed))",
+                              comment: "Theme diagnosis")
+            case .themeJSONWillNotOpen(let detail):
+                return String(localized: "theme.json există dar nu poate fi deschis (\(detail))",
+                              comment: "Theme diagnosis")
+            }
+        }
+    }
+
+    nonisolated static func diagnosePackage(at packageURL: URL, underlying: Error?) -> PackageDiagnosis {
+        let fm = FileManager.default
+        var isDirectory: ObjCBool = false
+        guard fm.fileExists(atPath: packageURL.path, isDirectory: &isDirectory) else { return .missing }
+        guard isDirectory.boolValue else { return .notAPackage }
+        guard let children = try? fm.contentsOfDirectory(atPath: packageURL.path) else {
+            return .unreadableDirectory
+        }
+        if children.isEmpty { return .empty }
+        if !children.contains("theme.json") { return .noThemeJSON(contents: children.sorted()) }
+        // It is right there and still would not open — sandbox, or a broken
+        // file. Carry the real error rather than paraphrasing it.
+        return .themeJSONWillNotOpen(detail: underlying.map { String(describing: $0) } ?? "-")
     }
 
     /// Exports a theme as a .tptheme package at `packageURL` (a directory).
@@ -3203,8 +3270,12 @@ final class PresentationManager {
         defer { if accessing { packageURL.stopAccessingSecurityScopedResource() } }
 
         let jsonURL = packageURL.appendingPathComponent("theme.json")
-        guard let data = try? Data(contentsOf: jsonURL) else {
-            throw ThemeIOError.invalidPackage
+        let data: Data
+        do {
+            data = try Data(contentsOf: jsonURL)
+        } catch {
+            throw ThemeIOError.unreadablePackage(
+                reason: Self.diagnosePackage(at: packageURL, underlying: error).localizedReason)
         }
         let archive = try JSONDecoder().decode(ThemeArchive.self, from: data)
 
