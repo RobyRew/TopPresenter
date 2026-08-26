@@ -127,8 +127,10 @@ enum SessionArchiveService {
     /// Import a .tpschedule: recreates the session + items, re-linking media
     /// payloads to the LOCAL library (by id, else by name). Returns the new
     /// session and the media names that did NOT resolve (for the user alert).
+    /// - Parameter run: shared caches for a BATCH. Without one this reads every
+    ///   session AND the entire media library per file — see `ImportRun`.
     @discardableResult
-    static func importSession(_ data: Data, context: ModelContext)
+    static func importSession(_ data: Data, context: ModelContext, run: ImportRun? = nil)
         throws -> (schedule: ServiceSchedule, unresolvedMedia: [String]) {
         // Identity check FIRST, strictly: the resilient archive decoder defaults
         // missing keys, so it would happily "decode" foreign JSON. The format
@@ -148,7 +150,22 @@ enum SessionArchiveService {
         // Is this session already here? `context.insert(schedule)` used to run
         // unconditionally, with no identity check of ANY kind, so opening the
         // same .tpschedule twice simply gave you it twice — and nothing said so.
-        let existing = (try? context.fetch(FetchDescriptor<ServiceSchedule>())) ?? []
+        // Primed once per run and maintained below, so the second copy of a
+        // session in one batch is recognised as the duplicate it is.
+        if let run, run.knownSessions == nil {
+            let all = (try? context.fetch(FetchDescriptor<ServiceSchedule>())) ?? []
+            run.knownSessions = all
+            run.knownSessionIdentities = all.map(identity(of:))
+        }
+        let existing: [ServiceSchedule]
+        let existingIdentities: [SessionIdentity]
+        if let run, let cached = run.knownSessions {
+            existing = cached
+            existingIdentities = run.knownSessionIdentities
+        } else {
+            existing = (try? context.fetch(FetchDescriptor<ServiceSchedule>())) ?? []
+            existingIdentities = existing.map(identity(of:))
+        }
         let incoming = SessionIdentity(
             sessionID: archive.sessionID,
             name: archive.name,
@@ -156,7 +173,7 @@ enum SessionArchiveService {
             itemCount: archive.items.count,
             itemTypes: archive.items.sorted { $0.order < $1.order }.map(\.itemType)
         )
-        let verdict = DuplicateResolver.verdict(for: incoming, against: existing.map(identity(of:)))
+        let verdict = DuplicateResolver.verdict(for: incoming, against: existingIdentities)
         if case .identical(let match) = verdict {
             return (existing[match.existingIndex], [])
         }
@@ -172,7 +189,10 @@ enum SessionArchiveService {
         )
         context.insert(schedule)
 
-        let localMedia = (try? context.fetch(FetchDescriptor<MediaItem>())) ?? []
+        if let run, run.localMedia == nil {
+            run.localMedia = (try? context.fetch(FetchDescriptor<MediaItem>())) ?? []
+        }
+        let localMedia = run?.localMedia ?? (try? context.fetch(FetchDescriptor<MediaItem>())) ?? []
         var unresolved: [String] = []
 
         for archived in archive.items.sorted(by: { $0.order < $1.order }) {
@@ -198,6 +218,15 @@ enum SessionArchiveService {
             item.payloadJSON = payload.encodedJSON()
             item.schedule = schedule
             context.insert(item)
+        }
+
+        // Maintain the cache, or the next file in the batch compares against a
+        // library that predates this session and imports it a second time. The
+        // identity has to be taken HERE, after the items are attached: it counts
+        // them and lists their types.
+        if let run {
+            run.knownSessions?.append(schedule)
+            run.knownSessionIdentities.append(identity(of: schedule))
         }
 
         try context.save()

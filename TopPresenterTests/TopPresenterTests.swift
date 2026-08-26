@@ -4412,6 +4412,188 @@ final class Counter: @unchecked Sendable {
     }
 }
 
+// MARK: - Batch Import Caches
+//
+// Every importer answered "is this already in the library?" by re-reading the
+// library, per FILE. All five were quadratic:
+//
+//     slides    16.6 ms/deck at 50  →  125.7 at 400   (50.3s)  →  1.05s
+//     sessions  25.0 ms/file at 50  →  111.3 at 400   (44.5s)  →  0.68s
+//     themes    10.4 ms/file at 25  →   70.7 at 200   (14.1s)  →  0.38s
+//     media      2.03 ms/file at 250 →   3.44 at 2000  (6.9s)  →  4.72s
+//
+// `ImportRun` holds that work once per batch. Speed is NOT asserted here — a
+// loaded machine must not fail a correctness test. What is asserted is the one
+// thing a cache can get wrong and a benchmark will never notice: the second file
+// in a batch has to see what the first one imported. Miss that and duplicates
+// sail straight through the check that exists to stop them.
+
+@MainActor struct BatchImportRunTests {
+
+    private func store(_ types: [any PersistentModel.Type]) throws -> ModelContext {
+        let ctx = ModelContext(try ModelContainer(for: Schema(types),
+                                                  configurations: ModelConfiguration(isStoredInMemoryOnly: true)))
+        ctx.autosaveEnabled = false
+        return ctx
+    }
+
+    @Test func asecondCopyOfADeckInOneRunIsRecognised() throws {
+        let ctx = try store([PresentationSlide.self])
+        let deck = try SlideDeckArchiveService.export((0..<4).map {
+            PresentationSlide(title: "Slide \($0)", content: "C\($0)",
+                              subtitle: "s", slideType: "text", order: $0)
+        })
+        let run = ImportRun()
+        let first = try SlideDeckArchiveService.importDeck(deck, context: ctx, run: run)
+        let second = try SlideDeckArchiveService.importDeck(deck, context: ctx, run: run)
+
+        #expect(first.imported.count == 4)
+        #expect(second.imported.isEmpty, "the cache did not see the first deck — \(second.imported.count) slides imported twice")
+        #expect(second.skipped.count == 4)
+        #expect(try ctx.fetch(FetchDescriptor<PresentationSlide>()).count == 4)
+    }
+
+    @Test func slidesFromTwoDecksInOneRunGetDistinctOrders() throws {
+        let ctx = try store([PresentationSlide.self])
+        let run = ImportRun()
+        for deck in 0..<3 {
+            let data = try SlideDeckArchiveService.export((0..<3).map {
+                PresentationSlide(title: "D\(deck)S\($0)", content: "c\(deck)\($0)",
+                                  subtitle: "", slideType: "text", order: $0)
+            })
+            _ = try SlideDeckArchiveService.importDeck(data, context: ctx, run: run)
+        }
+        let orders = try ctx.fetch(FetchDescriptor<PresentationSlide>()).map(\.order)
+        #expect(orders.count == 9)
+        #expect(Set(orders).count == 9, "orders collided across decks: \(orders.sorted())")
+    }
+
+    @Test func asecondCopyOfASessionInOneRunIsRecognised() throws {
+        let ctx = try store([ServiceSchedule.self, ScheduleItem.self, MediaItem.self])
+        let session = SessionService.createSession(name: "Duminică", context: ctx)
+        SessionService.append(.text(title: "Bun venit", content: "Salut"), to: session, context: ctx)
+        try ctx.save()
+        let data = try SessionArchiveService.export(session)
+        ctx.delete(session)
+        try ctx.save()
+
+        let run = ImportRun()
+        let first = try SessionArchiveService.importSession(data, context: ctx, run: run)
+        let second = try SessionArchiveService.importSession(data, context: ctx, run: run)
+
+        #expect(first.schedule.id == second.schedule.id,
+                "the cache did not see the first session — it was imported twice")
+        #expect(try ctx.fetch(FetchDescriptor<ServiceSchedule>()).count == 1)
+    }
+
+    /// The media library is fetched once per run and used to re-link session
+    /// items. A session imported LATER in the batch must still resolve its clip.
+    @Test func sessionsLaterInARunStillResolveTheirMedia() throws {
+        let ctx = try store([ServiceSchedule.self, ScheduleItem.self, MediaItem.self])
+        let clip = MediaItem(name: "Worship Loop.mp4", filePath: "/tmp/Worship Loop.mp4", mediaType: "video")
+        ctx.insert(clip)
+        try ctx.save()
+
+        var archives: [Data] = []
+        for i in 0..<3 {
+            let s = SessionService.createSession(name: "Sesiunea \(i)", context: ctx)
+            SessionService.append(.media(clip), to: s, context: ctx)
+            try ctx.save()
+            archives.append(try SessionArchiveService.export(s))
+            ctx.delete(s)
+            try ctx.save()
+        }
+
+        let run = ImportRun()
+        for data in archives {
+            let result = try SessionArchiveService.importSession(data, context: ctx, run: run)
+            #expect(result.unresolvedMedia.isEmpty,
+                    "a session lost its clip: \(result.unresolvedMedia)")
+        }
+    }
+
+    @Test func asecondCopyOfAThemeInOneRunIsRecognised() throws {
+        let pm = makeTestManager()
+        pm.fontSize = 42
+        let theme = pm.saveCurrentAsTheme(named: "Galaxie", formatRaw: "all")
+        let pkg = FileManager.default.temporaryDirectory.appending(path: "t-\(UUID().uuidString).tptheme")
+        try pm.exportTheme(id: theme.id, to: pkg)
+        defer { try? FileManager.default.removeItem(at: pkg) }
+
+        let fresh = makeTestManager()
+        let run = ImportRun()
+        fresh.suspendThemePersistence()
+        defer { fresh.flushThemes() }
+        _ = try fresh.importTheme(from: pkg, run: run)
+        _ = try fresh.importTheme(from: pkg, run: run)
+
+        #expect(fresh.themes.count == 1,
+                "the cache did not see the first theme — the gallery has \(fresh.themes.count)")
+    }
+
+    /// Suspended and never flushed means the gallery lives in memory and is gone
+    /// on the next launch. That is the failure this pairing can produce, so it is
+    /// asserted through a SECOND manager reading the same settings store.
+    @Test func abatchOfThemesIsActuallyPersisted() throws {
+        let defaults = makeTestDefaults()
+        let source = makeTestManager()
+        source.fontSize = 33
+        let theme = source.saveCurrentAsTheme(named: "Persistată", formatRaw: "all")
+        let pkg = FileManager.default.temporaryDirectory.appending(path: "tp-\(UUID().uuidString).tptheme")
+        try source.exportTheme(id: theme.id, to: pkg)
+        defer { try? FileManager.default.removeItem(at: pkg) }
+
+        do {
+            let importer = makeTestManager(defaults)
+            importer.suspendThemePersistence()
+            defer { importer.flushThemes() }
+            _ = try importer.importTheme(from: pkg, run: ImportRun())
+            #expect(importer.themes.count == 1)
+        }
+
+        // A fresh manager on the SAME store is what "survives a relaunch" means.
+        let relaunched = makeTestManager(defaults)
+        #expect(relaunched.themes.count == 1,
+                "the batch was never written — the themes were in memory only")
+        #expect(relaunched.themes.first?.name == "Persistată")
+    }
+
+    @Test func asecondCopyOfAMediaFileInOneRunIsSkipped() throws {
+        let png = Data(base64Encoded:
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==")!
+        let dir = FileManager.default.temporaryDirectory.appending(path: "m-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let file = dir.appending(path: "photo.png")
+        try png.write(to: file)
+        // A different path with the same name and size — the resolver's second
+        // rule, which the superset pre-check must not hide.
+        let twin = dir.appending(path: "copy/photo.png")
+        try FileManager.default.createDirectory(at: dir.appending(path: "copy"), withIntermediateDirectories: true)
+        try png.write(to: twin)
+
+        let ctx = try store([MediaItem.self])
+        let outcome = MediaImportService.importMedia(urls: [file, file, twin], modelContext: ctx,
+                                                    run: ImportRun())
+        #expect(outcome.imported.count == 1, "imported \(outcome.imported.count) — duplicates got through")
+        #expect(outcome.skipped.count == 2)
+        #expect(try ctx.fetch(FetchDescriptor<MediaItem>()).count == 1)
+    }
+
+    /// Without a run every importer must behave exactly as it always did, or the
+    /// fast path has quietly become a second implementation of the rules.
+    @Test func importersWithoutARunAreUnchanged() throws {
+        let ctx = try store([PresentationSlide.self])
+        let deck = try SlideDeckArchiveService.export([
+            PresentationSlide(title: "Solo", content: "C", subtitle: "", slideType: "text", order: 0),
+        ])
+        _ = try SlideDeckArchiveService.importDeck(deck, context: ctx)
+        let second = try SlideDeckArchiveService.importDeck(deck, context: ctx)
+        #expect(second.imported.isEmpty)
+        #expect(try ctx.fetch(FetchDescriptor<PresentationSlide>()).count == 1)
+    }
+}
+
 // MARK: - Collections Can Be Managed
 
 struct CollectionManagementTests {

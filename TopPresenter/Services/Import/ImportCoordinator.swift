@@ -109,6 +109,9 @@ final class ImportCoordinator {
         onUpdate: @escaping @MainActor @Sendable (UUID, ImportFileStatus) -> Void = { _, _ in }
     ) async -> Summary {
         var summary = Summary()
+        // One set of caches for the whole batch. Every importer below used to
+        // re-read the library per FILE; see `ImportRun` for what that cost.
+        let run = ImportRun()
         let byKind = Dictionary(grouping: files) { $0.category.kind }
 
         for kind in Self.kindOrder {
@@ -118,7 +121,8 @@ final class ImportCoordinator {
                 let outcome = MediaImportService.importMedia(
                     urls: group.map(\.url),
                     modelContext: modelContext,
-                    policy: policies[.media] ?? .skip
+                    policy: policies[.media] ?? .skip,
+                    run: run
                 ) { url, status in
                     guard let file = group.first(where: { $0.url == url }) else { return }
                     onUpdate(file.id, status)
@@ -210,13 +214,17 @@ final class ImportCoordinator {
                 for file in group { onUpdate(file.id, .success(file.fileName)) }
 
             case .theme:
+                // One write of the gallery for the whole batch instead of one
+                // per package — persisting re-encodes every theme's payload.
+                presentationManager?.suspendThemePersistence()
+                defer { presentationManager?.flushThemes() }
                 for file in group {
                     progress?.startItem(file.fileName)
                     defer { progress?.finishItem() }
                     onUpdate(file.id, .importing)
                     do {
                         let before = presentationManager?.themes.count ?? 0
-                        guard let theme = try presentationManager?.importTheme(from: file.url) else {
+                        guard let theme = try presentationManager?.importTheme(from: file.url, run: run) else {
                             summary.results.append(.failed(name: file.fileName,
                                                            reason: String(localized: "No presentation manager available.",
                                                                           comment: "Import error")))
@@ -245,10 +253,15 @@ final class ImportCoordinator {
                     defer { progress?.finishItem() }
                     onUpdate(file.id, .importing)
                     do {
-                        let before = (try? modelContext.fetch(FetchDescriptor<ServiceSchedule>()))?.count ?? 0
+                        // Was a session actually added, or recognised as one we
+                        // already had? Counted off the run's own cache rather
+                        // than two more full fetches per file.
+                        let before = run.knownSessions?.count
+                            ?? (try? modelContext.fetch(FetchDescriptor<ServiceSchedule>()))?.count ?? 0
                         let data = try Data(contentsOf: file.url)
-                        let result = try SessionArchiveService.importSession(data, context: modelContext)
-                        let after = (try? modelContext.fetch(FetchDescriptor<ServiceSchedule>()))?.count ?? 0
+                        let result = try SessionArchiveService.importSession(data, context: modelContext, run: run)
+                        let after = run.knownSessions?.count
+                            ?? (try? modelContext.fetch(FetchDescriptor<ServiceSchedule>()))?.count ?? 0
                         if after == before {
                             summary.results.append(.skippedDuplicate(
                                 name: result.schedule.name,
@@ -276,7 +289,7 @@ final class ImportCoordinator {
                     onUpdate(file.id, .importing)
                     do {
                         let data = try Data(contentsOf: file.url)
-                        let result = try SlideDeckArchiveService.importDeck(data, context: modelContext)
+                        let result = try SlideDeckArchiveService.importDeck(data, context: modelContext, run: run)
                         summary.results += result.imported.map { .imported($0.title) }
                         // A deck is a loose collection someone adds to over
                         // months, so identity is per SLIDE: re-importing a deck

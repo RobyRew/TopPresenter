@@ -522,6 +522,41 @@ That matters because roughly 44% of the ~1400 `String(localized:)` **keys are wr
 
 Normalizing the Romanian keys to English is optional cleanup, worth doing module by module — never as one sweep.
 
+### Re-reading the library per file is quadratic — it was in ALL FIVE importers
+
+Every importer answered "is this already here?" by reading the library and
+mapping it to identities. Done once that is nothing. Done once per FILE, inside a
+loop over files, it is O(n²) — and the per-file cost only becomes visible at
+scale, which is why none of it was noticed:
+
+| importer | before | after | what it re-read per file |
+|---|---|---|---|
+| songs | 4m48s / 5 000 | **14.8s** | a `Songbook` fetch **per song** |
+| slides | 50.3s / 400 decks | **1.05s** | every slide, re-digested |
+| sessions | 44.5s / 400 files | **0.68s** | every session **and the whole media library** |
+| themes | 14.1s / 200 files | **0.38s** | every theme's payload, digested — plus the gallery re-encoded to `UserDefaults` on every append |
+| media | 6.9s / 2 000 | **4.7s** | a linear scan of everything imported so far |
+
+`ImportRun` holds that work once per batch and is threaded through by
+`ImportCoordinator`. Each importer takes `run: ImportRun? = nil` and behaves
+exactly as before without one, so a single import is unchanged and the fast path
+never becomes a second implementation of the rules.
+
+**Two things it is easy to get wrong, both guarded by `BatchImportRunTests`:**
+
+1. **A cache must be updated when the run inserts something.** Otherwise file two
+   compares against a library that predates file one, and the duplicate check
+   that exists to stop double-imports waves them through. Removing the
+   maintenance turns three of those tests red — check that it still does before
+   trusting a change here.
+2. **`suspendThemePersistence()` must be paired with `defer { flushThemes() }`.**
+   Suspended and never flushed means the gallery is in memory and gone on the
+   next launch.
+
+The `themes` `didSet` is worth calling out separately: it re-encodes **every**
+theme's full payload to `UserDefaults` on any mutation, so it is O(n) per append
+for anything that adds themes in bulk — not only import.
+
 ### A fetch inside an import loop is quadratic
 
 Song import was **O(n²)** and nobody could see it, because the per-song cost only

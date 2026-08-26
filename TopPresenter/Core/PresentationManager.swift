@@ -2736,10 +2736,40 @@ final class PresentationManager {
 
     var themes: [Theme] {
         didSet {
-            if let data = try? JSONEncoder().encode(themes) {
-                defaults.set(data, forKey: "pm_themes")
-            }
+            guard !themePersistenceSuspended else { return }
+            persistThemes()
         }
+    }
+
+    /// Set while a BATCH is adding themes. Persisting re-encodes the whole
+    /// gallery — every theme's entire payload — so importing n packages wrote it
+    /// n times and cost O(n²): 200 packages spent 6.6s almost entirely here,
+    /// after the digest cache had already taken care of the other half.
+    @ObservationIgnored
+    private var themePersistenceSuspended = false
+
+    private func persistThemes() {
+        if let data = try? JSONEncoder().encode(themes) {
+            defaults.set(data, forKey: "pm_themes")
+        }
+    }
+
+    /// Stops persisting the gallery until `flushThemes()`.
+    ///
+    /// **Always pair it with `defer { flushThemes() }` on the very next line.**
+    /// Suspended and never flushed means the themes live in memory and vanish on
+    /// the next launch — the worst shape this bug could take — so the `defer` is
+    /// not a style preference, it is what makes an early `return` or a thrown
+    /// error safe.
+    func suspendThemePersistence() {
+        themePersistenceSuspended = true
+    }
+
+    /// Resumes persistence and writes the gallery once. Safe to call unpaired.
+    func flushThemes() {
+        guard themePersistenceSuspended else { return }
+        themePersistenceSuspended = false
+        persistThemes()
     }
     var activeThemeID: UUID? {
         didSet { defaults.set(activeThemeID?.uuidString ?? "", forKey: "pm_activeThemeID") }
@@ -3165,7 +3195,9 @@ final class PresentationManager {
     /// Imports a .tptheme package: media files are copied into the app
     /// container and re-bookmarked, then the theme is added to the library.
     @discardableResult
-    func importTheme(from packageURL: URL) throws -> Theme {
+    /// - Parameter run: shared caches for a BATCH. Without one, every package
+    ///   re-digests every theme already in the gallery — see `ImportRun`.
+    func importTheme(from packageURL: URL, run: ImportRun? = nil) throws -> Theme {
         lastThemeImportSkippedAssets = []
         let accessing = packageURL.startAccessingSecurityScopedResource()
         defer { if accessing { packageURL.stopAccessingSecurityScopedResource() } }
@@ -3189,7 +3221,8 @@ final class PresentationManager {
             name: archive.name,
             payloadDigest: Self.digest(of: archive.payload)
         )
-        let verdict = DuplicateResolver.verdict(for: incoming, against: themes.map(Self.identity(of:)))
+        let verdict = DuplicateResolver.verdict(for: incoming,
+                                                against: themes.map { Self.identity(of: $0, run: run) })
         if case .identical(let match) = verdict {
             return themes[match.existingIndex]
         }
@@ -3267,6 +3300,10 @@ final class PresentationManager {
             : archive.name
         let theme = Theme(id: themeID, name: name, formatRaw: archive.format, payload: payload)
         if let replacingIndex {
+            // The replacement keeps the id and changes the payload, so a cached
+            // digest for it is now a lie — and a lie in the direction that makes
+            // a genuinely different theme look identical.
+            run?.themeDigests[themes[replacingIndex].id] = nil
             themes[replacingIndex] = theme
         } else {
             themes.append(theme)
@@ -3275,8 +3312,19 @@ final class PresentationManager {
     }
 
     /// The identity of a theme already in the gallery.
-    static func identity(of theme: Theme) -> ThemeIdentity {
-        ThemeIdentity(id: theme.id.uuidString, name: theme.name, payloadDigest: digest(of: theme.payload))
+    ///
+    /// The digest is the expensive half — it JSON-encodes and hashes the whole
+    /// payload — so a batch memoises it per theme id rather than recomputing the
+    /// gallery on every package.
+    static func identity(of theme: Theme, run: ImportRun? = nil) -> ThemeIdentity {
+        let payloadDigest: String
+        if let cached = run?.themeDigests[theme.id] {
+            payloadDigest = cached
+        } else {
+            payloadDigest = digest(of: theme.payload)
+            run?.themeDigests[theme.id] = payloadDigest
+        }
+        return ThemeIdentity(id: theme.id.uuidString, name: theme.name, payloadDigest: payloadDigest)
     }
 
     /// A digest of the look itself. Bookmarks are stripped first: export

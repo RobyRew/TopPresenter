@@ -92,8 +92,12 @@ enum SlideDeckArchiveService {
         return try encoder.encode(archive)
     }
 
+    /// - Parameter run: shared caches for a BATCH. Without one this fetches every
+    ///   slide in the library and re-digests it, which is fine for a single deck
+    ///   and quadratic over four hundred — see `ImportRun`.
     @discardableResult
-    static func importDeck(_ data: Data, context: ModelContext) throws -> ImportResult {
+    static func importDeck(_ data: Data, context: ModelContext,
+                           run: ImportRun? = nil) throws -> ImportResult {
         // Identity check FIRST and strictly: the resilient decoder defaults
         // every missing key, so it would happily "decode" a stranger's JSON
         // into an empty deck and report success.
@@ -107,11 +111,24 @@ enum SlideDeckArchiveService {
         }
         let archive = try JSONDecoder().decode(SlideDeckArchive.self, from: data)
 
-        let existing = (try? context.fetch(FetchDescriptor<PresentationSlide>())) ?? []
-        var existingDigests = Set(existing.map {
-            SlideDeckArchive.Slide($0).contentDigest
-        })
-        var nextOrder = (existing.map(\.order).max() ?? -1) + 1
+        // Primed once per run, then maintained below as slides are added — a
+        // deck later in the batch has to see what an earlier one imported, or
+        // the same slide lands twice.
+        if let run, run.slideDigests == nil {
+            let existing = (try? context.fetch(FetchDescriptor<PresentationSlide>())) ?? []
+            run.slideDigests = Set(existing.map { SlideDeckArchive.Slide($0).contentDigest })
+            run.nextSlideOrder = (existing.map(\.order).max() ?? -1) + 1
+        }
+        var existingDigests: Set<String>
+        var nextOrder: Int
+        if let run, let cached = run.slideDigests {
+            existingDigests = cached
+            nextOrder = run.nextSlideOrder
+        } else {
+            let existing = (try? context.fetch(FetchDescriptor<PresentationSlide>())) ?? []
+            existingDigests = Set(existing.map { SlideDeckArchive.Slide($0).contentDigest })
+            nextOrder = (existing.map(\.order).max() ?? -1) + 1
+        }
 
         var result = ImportResult()
         for archived in archive.slides.sorted(by: { $0.order < $1.order }) {
@@ -127,6 +144,10 @@ enum SlideDeckArchiveService {
             nextOrder += 1
             context.insert(slide)
             result.imported.append(slide)
+        }
+        if let run {
+            run.slideDigests = existingDigests
+            run.nextSlideOrder = nextOrder
         }
         try context.save()
         return result

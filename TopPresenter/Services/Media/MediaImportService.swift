@@ -52,12 +52,23 @@ enum MediaImportService {
         urls: [URL],
         modelContext: ModelContext,
         policy: DuplicatePolicy = .skip,
+        run: ImportRun? = nil,
         onUpdate: (URL, ImportFileStatus) -> Void = { _, _ in }
     ) -> Outcome {
         var outcome = Outcome()
         // Built once: the library's identities do not change while we import,
         // except for what we add, which is appended as we go.
-        var existing = (try? modelContext.fetch(FetchDescriptor<MediaItem>()))?.map(identity(of:)) ?? []
+        //
+        // The list is right but reading it is a walk over everything imported so
+        // far, per file — 2.03 ms a file at 250 and 3.44 ms at 2 000. `run` adds
+        // a hash-set superset test so the usual answer, "nothing matches", costs
+        // one lookup; when it might match, the real scan below still decides.
+        let batch = run ?? ImportRun()
+        if batch.mediaIdentities == nil {
+            let library = (try? modelContext.fetch(FetchDescriptor<MediaItem>()))?.map(identity(of:)) ?? []
+            batch.mediaIdentities = []
+            for item in library { batch.noteMedia(item) }
+        }
 
         for url in urls {
             guard let kind = MediaKind.classify(extension: url.pathExtension) else {
@@ -67,8 +78,9 @@ enum MediaImportService {
             onUpdate(url, .importing)
 
             let incoming = identity(of: url)
-            if policy != .keepBoth {
-                let verdict = DuplicateResolver.verdict(for: incoming, against: existing)
+            if policy != .keepBoth, !batch.mediaCannotMatch(incoming) {
+                let verdict = DuplicateResolver.verdict(for: incoming,
+                                                       against: batch.mediaIdentities ?? [])
                 if case .identical(let match) = verdict {
                     outcome.skipped.append(SkippedItem(url: url, matchedOn: match.matchedOn))
                     onUpdate(url, .success(String(localized: "\(url.lastPathComponent) — already in the library",
@@ -89,7 +101,7 @@ enum MediaImportService {
             }
             MediaPresenter.backfillDurationIfNeeded(item, url: url)
 
-            existing.append(incoming)
+            batch.noteMedia(incoming)
             outcome.imported.append(item)
             onUpdate(url, .success(url.lastPathComponent))
         }
