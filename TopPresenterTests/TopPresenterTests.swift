@@ -4412,6 +4412,80 @@ final class Counter: @unchecked Sendable {
     }
 }
 
+// MARK: - Legacy .json Bibles
+
+@MainActor struct LegacyBibleJSONTests {
+
+    private func write(_ payload: [String: Any], _ name: String) throws -> URL {
+        let url = FileManager.default.temporaryDirectory
+            .appending(path: "legacy-\(UUID().uuidString)-\(name)")
+        try JSONSerialization.data(withJSONObject: payload).write(to: url)
+        return url
+    }
+
+    /// The Bible Library shipped `.json` before `.tpbible` existed, and plenty
+    /// of those files are still on people's disks. `detectSongFormat` claims
+    /// every `.json` it is shown, so one of them used to classify as a SONG and
+    /// fail with "No song or songs key" — about a file that is a perfectly good
+    /// Bible. Found by importing a real 22 MB one.
+    @Test func alegacyBibleJSONIsRecognisedAsABible() throws {
+        let url = try write([
+            "schemaVersion": "1.0.0",
+            "format": "TopPresenter Bible",
+            "translation": ["code": "LEG", "name": "Legacy", "language": "ro"],
+            "books": [["number": 1, "name": "Geneza", "testament": "OT",
+                       "chapters": [["number": 1, "verses": [["number": 1, "text": "La început..."]]]]]],
+        ], "bible.json")
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        #expect(ImportService.detectBibleFormat(fileURL: url) == .topPresenter)
+        if case .bible(let format) = DragDropImportHandler.classify(url) {
+            #expect(format == .topPresenter)
+        } else {
+            Issue.record("classified as \(DragDropImportHandler.classify(url)) — a legacy Bible must not go down the song path")
+        }
+    }
+
+    /// And it must actually import, not merely classify.
+    @Test func alegacyBibleJSONImportsItsVerses() async throws {
+        let url = try write([
+            "schemaVersion": "1.0.0",
+            "format": "TopPresenter Bible",
+            "translation": ["code": "LEG2", "name": "Legacy Two", "language": "ro"],
+            "books": [["number": 1, "name": "Geneza", "testament": "OT",
+                       "chapters": [["number": 1, "verses": [
+                           ["number": 1, "text": "La început a făcut Dumnezeu cerul."],
+                           ["number": 2, "text": "Și pământul era netocmit."]]]]]],
+        ], "bible2.json")
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let ctx = ModelContext(try ModelContainer(
+            for: BibleModule.self, BibleBook.self, BibleChapter.self, BibleVerse.self,
+            configurations: ModelConfiguration(isStoredInMemoryOnly: true)))
+        let module = try await ImportService.importBible(
+            fileURL: url, format: .topPresenter, modelContext: ctx, resolution: .keepBoth).module
+        #expect(ImportService.verseCount(of: module) == 2)
+        #expect(module.abbreviation == "LEG2")
+    }
+
+    /// The strict marker is what keeps this from stealing song files: a song
+    /// `.json` must still classify as a song.
+    @Test func asongJSONIsStillASong() throws {
+        let url = try write([
+            "schemaVersion": "1.0.0",
+            "format": "TopPresenter Song",
+            "song": ["title": "Cântec", "versions": [["name": "Original", "sections": []]]],
+        ], "song.json")
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        #expect(ImportService.detectBibleFormat(fileURL: url) == nil,
+                "a song payload must never probe as a Bible")
+        if case .song = DragDropImportHandler.classify(url) {} else {
+            Issue.record("song .json classified as \(DragDropImportHandler.classify(url))")
+        }
+    }
+}
+
 // MARK: - Why A Theme Package Would Not Open
 //
 // A report of "Pachetul de temă este invalid (lipsește theme.json)" on some

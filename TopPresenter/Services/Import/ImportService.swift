@@ -639,6 +639,21 @@ final class ImportService {
             }
         }
 
+        // A legacy `.json` — what the Bible Library shipped before `.tpbible`
+        // existed, and what a lot of people still have on disk.
+        //
+        // Accepted on the STRICT marker only. `detectSongFormat` claims every
+        // `.json` it is shown, so without this a legacy Bible was classified as
+        // a SONG and the operator was told "No song or songs key" about a file
+        // that is a perfectly good Bible — found by importing a real one. The
+        // strict marker cannot appear in a song payload, so this cannot steal
+        // one; the loose `format`+`books` test above stays limited to `.tpbible`,
+        // where the extension has already vouched for the file.
+        if ext == "json", let header = probeHead(fileURL),
+           header.contains("\"TopPresenter Bible\"") {
+            return .topPresenter
+        }
+
         // Check for MySword SQLite databases by extension
         if ext == "mybible" || fileURL.lastPathComponent.lowercased().contains(".bbl.") {
             return .mySword
