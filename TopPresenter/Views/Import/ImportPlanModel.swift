@@ -176,7 +176,10 @@ final class ImportPlanModel {
         }
     }
 
-    private static func reason(unsupported url: URL) -> String {
+    /// Internal rather than private so the messages can be pinned: this is the
+    /// only thing an operator sees about a file the app would not take, and the
+    /// `.json` case exists precisely because "unrecognised" was not enough.
+    static func reason(unsupported url: URL) -> String {
         let ext = url.pathExtension.lowercased()
         var isDirectory: ObjCBool = false
         if FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory),

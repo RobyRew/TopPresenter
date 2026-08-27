@@ -1016,7 +1016,7 @@ import SwiftData
                       song("Cântec Doi", "Linia doi"),
                       song("Cântec Trei", "Linia trei")]
         ]
-        let bundleURL = dir.appendingPathComponent("litera-c.json")
+        let bundleURL = dir.appendingPathComponent("litera-c.tpsongcollection")
         try JSONSerialization.data(withJSONObject: bundle, options: .prettyPrinted).write(to: bundleURL)
 
         // A single-song doc still yields exactly one song.
@@ -1024,7 +1024,7 @@ import SwiftData
             "schemaVersion": "1.0.0", "format": "TopPresenter Song",
             "song": song("Singur", "O linie")
         ]
-        let singleURL = dir.appendingPathComponent("singur.json")
+        let singleURL = dir.appendingPathComponent("singur.tpsong")
         try JSONSerialization.data(withJSONObject: single, options: .prettyPrinted).write(to: singleURL)
 
         let result = await ImportService.importSongItems(
@@ -2769,7 +2769,7 @@ struct BibleLanguageDetectionTests {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("mel-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: dir) }
-        let file = dir.appendingPathComponent("Voi-canta-bunatatea-Ta.json")
+        let file = dir.appendingPathComponent("Voi-canta-bunatatea-Ta.tpsong")
         try Data(json.utf8).write(to: file)
 
         let ctx = try makeContext()
@@ -2811,7 +2811,7 @@ struct BibleLanguageDetectionTests {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("scrape-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: dir) }
-        let file = dir.appendingPathComponent("song.json")
+        let file = dir.appendingPathComponent("song.tpsong")
         try Data(json.utf8).write(to: file)
         let ctx = try makeContext()
         let res = await ImportService.importSongItems(urls: [file], collectionName: "scrape", modelContext: ctx)
@@ -4412,9 +4412,9 @@ final class Counter: @unchecked Sendable {
     }
 }
 
-// MARK: - Legacy .json Bibles
+// MARK: - .json Is Not A TopPresenter Format
 
-@MainActor struct LegacyBibleJSONTests {
+@MainActor struct LegacyJSONRefusalTests {
 
     private func write(_ payload: [String: Any], _ name: String) throws -> URL {
         let url = FileManager.default.temporaryDirectory
@@ -4423,66 +4423,71 @@ final class Counter: @unchecked Sendable {
         return url
     }
 
-    /// The Bible Library shipped `.json` before `.tpbible` existed, and plenty
-    /// of those files are still on people's disks. `detectSongFormat` claims
-    /// every `.json` it is shown, so one of them used to classify as a SONG and
-    /// fail with "No song or songs key" — about a file that is a perfectly good
-    /// Bible. Found by importing a real 22 MB one.
-    @Test func alegacyBibleJSONIsRecognisedAsABible() throws {
-        let url = try write([
+    private var legacyBible: [String: Any] {
+        [
             "schemaVersion": "1.0.0",
             "format": "TopPresenter Bible",
             "translation": ["code": "LEG", "name": "Legacy", "language": "ro"],
             "books": [["number": 1, "name": "Geneza", "testament": "OT",
                        "chapters": [["number": 1, "verses": [["number": 1, "text": "La început..."]]]]]],
-        ], "bible.json")
+        ]
+    }
+
+    /// The Bible Library shipped `.json` before `.tpbible` existed, and those
+    /// files are still on disk. `detectSongFormat` claimed every `.json` it was
+    /// shown — a Bible's chapters contain "verses", which was enough — so one
+    /// classified as a SONG and failed with "Invalid file format: No song or
+    /// songs key" about a valid 31 102-verse Bible. Found by importing a real one.
+    ///
+    /// `.json` is not a TopPresenter format. It must be refused as UNKNOWN, which
+    /// is what routes it to the message that says what to do about it.
+    @Test func alegacyBibleJSONIsNotClaimedByAnyImporter() throws {
+        let url = try write(legacyBible, "bible.json")
         defer { try? FileManager.default.removeItem(at: url) }
 
-        #expect(ImportService.detectBibleFormat(fileURL: url) == .topPresenter)
-        if case .bible(let format) = DragDropImportHandler.classify(url) {
-            #expect(format == .topPresenter)
-        } else {
-            Issue.record("classified as \(DragDropImportHandler.classify(url)) — a legacy Bible must not go down the song path")
+        #expect(ImportService.detectSongFormat(fileURL: url) == nil,
+                "a legacy Bible .json was claimed as a song")
+        #expect(ImportService.detectBibleFormat(fileURL: url) == nil,
+                ".json is not a supported Bible format")
+        if case .unknown = DragDropImportHandler.classify(url) {} else {
+            Issue.record("classified as \(DragDropImportHandler.classify(url)) — expected .unknown")
         }
     }
 
-    /// And it must actually import, not merely classify.
-    @Test func alegacyBibleJSONImportsItsVerses() async throws {
-        let url = try write([
-            "schemaVersion": "1.0.0",
-            "format": "TopPresenter Bible",
-            "translation": ["code": "LEG2", "name": "Legacy Two", "language": "ro"],
-            "books": [["number": 1, "name": "Geneza", "testament": "OT",
-                       "chapters": [["number": 1, "verses": [
-                           ["number": 1, "text": "La început a făcut Dumnezeu cerul."],
-                           ["number": 2, "text": "Și pământul era netocmit."]]]]]],
-        ], "bible2.json")
+    /// And the operator is told something they can act on.
+    @Test func thereasonNamesTheFix() throws {
+        let url = try write(legacyBible, "bible.json")
         defer { try? FileManager.default.removeItem(at: url) }
-
-        let ctx = ModelContext(try ModelContainer(
-            for: BibleModule.self, BibleBook.self, BibleChapter.self, BibleVerse.self,
-            configurations: ModelConfiguration(isStoredInMemoryOnly: true)))
-        let module = try await ImportService.importBible(
-            fileURL: url, format: .topPresenter, modelContext: ctx, resolution: .keepBoth).module
-        #expect(ImportService.verseCount(of: module) == 2)
-        #expect(module.abbreviation == "LEG2")
+        let reason = ImportPlanModel.reason(unsupported: url)
+        #expect(reason.contains("extension") || reason.contains("rename") || reason.contains("Re-export"),
+                "got: \(reason)")
     }
 
-    /// The strict marker is what keeps this from stealing song files: a song
-    /// `.json` must still classify as a song.
-    @Test func asongJSONIsStillASong() throws {
+    /// A song-shaped `.json` is refused too — the rule is the extension, not the
+    /// payload, so both halves of the old ambiguity are gone.
+    @Test func asongShapedJSONIsRefusedAsWell() throws {
         let url = try write([
             "schemaVersion": "1.0.0",
             "format": "TopPresenter Song",
             "song": ["title": "Cântec", "versions": [["name": "Original", "sections": []]]],
         ], "song.json")
         defer { try? FileManager.default.removeItem(at: url) }
+        #expect(ImportService.detectSongFormat(fileURL: url) == nil)
+    }
 
-        #expect(ImportService.detectBibleFormat(fileURL: url) == nil,
-                "a song payload must never probe as a Bible")
-        if case .song = DragDropImportHandler.classify(url) {} else {
-            Issue.record("song .json classified as \(DragDropImportHandler.classify(url))")
-        }
+    /// The native extensions must keep working — this is the control.
+    @Test func thenativeExtensionsStillImport() throws {
+        let song = try write([
+            "schemaVersion": "1.0.0",
+            "format": "TopPresenter Song",
+            "song": ["title": "Cântec", "versions": [["name": "Original", "sections": []]]],
+        ], "song.tpsong")
+        defer { try? FileManager.default.removeItem(at: song) }
+        #expect(ImportService.detectSongFormat(fileURL: song) == .topPresenterJSON)
+
+        let bible = try write(legacyBible, "bible.tpbible")
+        defer { try? FileManager.default.removeItem(at: bible) }
+        #expect(ImportService.detectBibleFormat(fileURL: bible) == .topPresenter)
     }
 }
 

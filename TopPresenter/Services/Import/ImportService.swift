@@ -639,21 +639,6 @@ final class ImportService {
             }
         }
 
-        // A legacy `.json` — what the Bible Library shipped before `.tpbible`
-        // existed, and what a lot of people still have on disk.
-        //
-        // Accepted on the STRICT marker only. `detectSongFormat` claims every
-        // `.json` it is shown, so without this a legacy Bible was classified as
-        // a SONG and the operator was told "No song or songs key" about a file
-        // that is a perfectly good Bible — found by importing a real one. The
-        // strict marker cannot appear in a song payload, so this cannot steal
-        // one; the loose `format`+`books` test above stays limited to `.tpbible`,
-        // where the extension has already vouched for the file.
-        if ext == "json", let header = probeHead(fileURL),
-           header.contains("\"TopPresenter Bible\"") {
-            return .topPresenter
-        }
-
         // Check for MySword SQLite databases by extension
         if ext == "mybible" || fileURL.lastPathComponent.lowercased().contains(".bbl.") {
             return .mySword
@@ -1078,6 +1063,17 @@ final class ImportService {
         if ["cho", "crd", "chordpro", "chopro"].contains(ext) {
             return .chordPro
         }
+
+        // `.json` is not a TopPresenter format. The native documents have their
+        // own extensions, and the content probe below claimed every `.json` it
+        // was shown — including a legacy `.json` BIBLE, whose chapters contain
+        // "verses". One of those used to be imported as a song and fail with
+        // "No song or songs key", which says nothing an operator can act on.
+        //
+        // Refusing here is what routes it to `ImportPlanModel.unsupportedReason`
+        // and its actual answer: "TopPresenter files use their own extensions
+        // now. Re-export it, or rename it."
+        if ext == "json" { return nil }
 
         guard let content = probeHead(fileURL) else { return nil }
 

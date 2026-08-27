@@ -4,7 +4,16 @@
 // ──────────────────────────────────────────────────────────────────────────────
 // Scrapes cantaricrestine.ro ("Cântări Creștine în PowerPoint") into TopPresenter
 // "TopPresenter Song" GOAT JSON — one file per song — and downloads each song's
-// PowerPoint (.ppt/.pptx), organized into per-book folders.
+// PowerPoint (.ppt/.pptx), organized into per-book folders under TWO roots:
+//
+//   <out>/TopPresenter Songs/<book>/<name>.tpsong
+//   <out>/PowerPoint/<book>/<name>.ppt
+//
+// Separate on purpose. Both files describe the SAME song, so a folder holding
+// both imports every song twice — TopPresenter reads .ppt as a song format, so
+// 9 557 songs came in as 19 114 and merged into 9 674 songs with two versions
+// each. Keeping them apart means "import the songs folder" means what it says,
+// and the PowerPoints are still there for anyone who wants the originals.
 //
 // It uses the site's public JSON API (api.php) — no HTML scraping. `token` is just
 // a random anti-bot value (no real auth); `limita=500` is honored. The whole
@@ -210,14 +219,19 @@ async function main() {
   const songs = await fetchAllSongs(o);
   if (!songs.length) { console.error('No songs.'); process.exit(1); }
 
-  // Per-book existing-file sets (for resume).
+  // The two output roots — see the header for why they are separate.
+  const SONGS_ROOT = 'TopPresenter Songs';
+  const PPT_ROOT = 'PowerPoint';
+
+  // Per-directory existing-file sets (for resume). Keyed by the RELATIVE
+  // directory, so the songs and the PowerPoints keep their own sets.
   const existingByFolder = new Map();
-  async function existsIn(folder, file) {
-    if (!existingByFolder.has(folder)) {
-      const dir = path.join(o.out, folder);
-      existingByFolder.set(folder, new Set(await readdir(dir).catch(() => [])));
+  async function existsIn(relDir, file) {
+    if (!existingByFolder.has(relDir)) {
+      const dir = path.join(o.out, relDir);
+      existingByFolder.set(relDir, new Set(await readdir(dir).catch(() => [])));
     }
-    return existingByFolder.get(folder).has(file);
+    return existingByFolder.get(relDir).has(file);
   }
 
   const stats = {};   // per categoria
@@ -234,7 +248,8 @@ async function main() {
       const folder = bookFolder(s);
       const base = sanitize(s.denumire || `cantare-${s.id}`);
       const jsonName = `${base}.tpsong`;
-      await mkdir(path.join(o.out, folder), { recursive: true });
+      const songDir = path.join(SONGS_ROOT, folder);
+      await mkdir(path.join(o.out, songDir), { recursive: true });
 
       const doc = buildSong(s);
       const ce = doc.song._extensions.cantaricrestine;
@@ -242,8 +257,8 @@ async function main() {
       if (ce.hasLyrics) bump(cat, 'withLyrics'); else bump(cat, 'pptxOnly');
 
       // JSON (always — small, written first so a full disk still preserves metadata).
-      const jsonPath = path.join(o.out, folder, jsonName);
-      if (o.resume && await existsIn(folder, jsonName)) {
+      const jsonPath = path.join(o.out, songDir, jsonName);
+      if (o.resume && await existsIn(songDir, jsonName)) {
         skipped++;
       } else {
         try { await writeFile(jsonPath, JSON.stringify(doc, null, 2), 'utf8'); written++; }
@@ -254,12 +269,14 @@ async function main() {
       // PowerPoint.
       if (!o.noPpt && ce.pptUrl) {
         const pptName = ce.pptFile;
-        if (o.resume && await existsIn(folder, pptName)) { bump(cat, 'pptxDownloaded'); }
+        const pptDir = path.join(PPT_ROOT, folder);
+        if (o.resume && await existsIn(pptDir, pptName)) { bump(cat, 'pptxDownloaded'); }
         else {
           const buf = await fetchBuffer(ce.pptUrl, o.retries);
           if (!buf) { bump(cat, 'pptxMissing'); }
           else {
-            try { await writeFile(path.join(o.out, folder, pptName), buf); bump(cat, 'pptxDownloaded'); }
+            await mkdir(path.join(o.out, pptDir), { recursive: true });
+            try { await writeFile(path.join(o.out, pptDir, pptName), buf); bump(cat, 'pptxDownloaded'); }
             catch (e) { bump(cat, 'pptxMissing'); if (e.code === 'ENOSPC') { diskFull = true; process.stderr.write(`⚠ DISK FULL — keeping JSON, skipping PowerPoints\n`); } }
           }
           await sleep(o.delay);
