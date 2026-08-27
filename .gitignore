@@ -38,6 +38,8 @@ Pods/
 ExtraAssets/Bibles/
 # Scraped song corpora — kept local, not committed (melodia.ro, ResurseCrestine)
 ExtraAssets/Songs/
+# The 263 MB zip of the folder above, made for a release upload.
+ExtraAssets/Songs.zip
 resursecrestine-songs/
 # Theme packs — distributed as a GitHub release, not committed (~106 MB of
 # backgrounds and clips). Everything here is REGENERABLE: the generated art
@@ -52,4 +54,5 @@ Logo/Icon-Exports/
 # folders and `iconutil` turns them into the .icns that actually ship in
 # TopPresenter/Resources/ — the folders themselves are build scratch.
 Logo/DocumentIcons/
+Logo/AppIcon.iconset/
 
