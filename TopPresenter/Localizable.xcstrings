@@ -35431,6 +35431,167 @@
           }
         }
       }
+    },
+    "Biblioteca a fost reparată" : {
+      "comment" : "Store recovery title",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The library was repaired"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Se reparó la biblioteca"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Biblioteca a fost reparată"
+          }
+        }
+      }
+    },
+    "Biblioteca nu a putut fi deschisă" : {
+      "comment" : "Store recovery title",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The library could not be opened"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudo abrir la biblioteca"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Biblioteca nu a putut fi deschisă"
+          }
+        }
+      }
+    },
+    "Nu se poate scrie pe disc" : {
+      "comment" : "Store recovery title",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cannot write to disk"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se puede escribir en el disco"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nu se poate scrie pe disc"
+          }
+        }
+      }
+    },
+    "Un fișier auxiliar rămas după o închidere bruscă a împiedicat deschiderea. A fost mutat deoparte și biblioteca s-a deschis. Ultimele modificări dinaintea închiderii ar putea lipsi." : {
+      "comment" : "Store recovery message",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A helper file left behind by an abrupt shutdown blocked the library from opening. It has been moved aside and the library opened. The last changes before the shutdown may be missing."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Un archivo auxiliar que quedó tras un cierre brusco impidió abrir la biblioteca. Se apartó y la biblioteca se abrió. Puede que falten los últimos cambios anteriores al cierre."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Un fișier auxiliar rămas după o închidere bruscă a împiedicat deschiderea. A fost mutat deoparte și biblioteca s-a deschis. Ultimele modificări dinaintea închiderii ar putea lipsi."
+          }
+        }
+      }
+    },
+    "TopPresenter a pornit cu o bibliotecă goală. Cea veche NU a fost ștearsă — este păstrată intactă în dosarul de mai jos, iar importul o poate reface." : {
+      "comment" : "Store recovery message",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "TopPresenter started with an empty library. The old one was NOT deleted — it is kept intact in the folder below, and importing can rebuild from it."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "TopPresenter se inició con una biblioteca vacía. La anterior NO se eliminó: se conserva intacta en la carpeta de abajo y se puede reconstruir importándola."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "TopPresenter a pornit cu o bibliotecă goală. Cea veche NU a fost ștearsă — este păstrată intactă în dosarul de mai jos, iar importul o poate reface."
+          }
+        }
+      }
+    },
+    "Biblioteca nu poate fi citită sau scrisă (%@). TopPresenter funcționează, dar NIMIC din ce faci acum nu se salvează. Verifică spațiul liber pe disc și repornește." : {
+      "comment" : "Store recovery message",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The library cannot be read or written (%@). TopPresenter works, but NOTHING you do now is saved. Check free disk space and restart."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se puede leer ni escribir la biblioteca (%@). TopPresenter funciona, pero NADA de lo que hagas ahora se guarda. Comprueba el espacio libre en disco y reinicia."
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Biblioteca nu poate fi citită sau scrisă (%@). TopPresenter funcționează, dar NIMIC din ce faci acum nu se salvează. Verifică spațiul liber pe disc și repornește."
+          }
+        }
+      }
+    },
+    "Arată fișierele" : {
+      "comment" : "Store recovery button",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show the files"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mostrar los archivos"
+          }
+        },
+        "ro" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Arată fișierele"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

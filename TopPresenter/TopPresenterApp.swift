@@ -66,25 +66,20 @@ struct TopPresenterApp: App {
 
     /// Static so `init()` can build the task runner from it. A stored property
     /// with a default cannot be read while `self` is still being initialized.
-    static let container: ModelContainer = {
-        let schema = Schema(versionedSchema: SchemaV2.self)
-        let modelConfiguration = ModelConfiguration(
-            schema: schema,
-            isStoredInMemoryOnly: false
-        )
+    static let container: ModelContainer = { storeOutcome.container }()
 
-        do {
-            // No staged migration plan: the SchemaV1→V2 change is purely additive
-            // (new song entities + new Song attributes). SwiftData's automatic lightweight
-            // inference handles adding entities/relationships, which the staged
-            // `.lightweight`/`.custom` APIs reject at stage construction.
-            return try ModelContainer(
-                for: schema,
-                configurations: [modelConfiguration]
-            )
-        } catch {
-            fatalError("Could not create ModelContainer: \(error)")
-        }
+    /// How the library opened. Read by `MainWindowRoot` so a recovery is SHOWN
+    /// rather than discovered later by an operator wondering where everything
+    /// went. See `StoreRecovery` for why this cannot be a `fatalError`.
+    static let storeOutcome: StoreRecovery.Outcome = {
+        let schema = Schema(versionedSchema: SchemaV2.self)
+        // No staged migration plan: the SchemaV1→V2 change is purely additive
+        // (new song entities + new Song attributes). SwiftData's automatic lightweight
+        // inference handles adding entities/relationships, which the staged
+        // `.lightweight`/`.custom` APIs reject at stage construction.
+        let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
+        return StoreRecovery.open(schema: schema, configuration: modelConfiguration,
+                                  label: "library")
     }()
 
     var body: some Scene {
@@ -149,10 +144,37 @@ struct MainWindowRoot: View {
     @State private var appState = AppState()
     @State private var libraryManager = LibraryManager()
 
+    /// Shown once, when the library had to be recovered on launch.
+    @State private var recoveryToShow: StoreRecovery.Result?
+
     var body: some View {
         MainControlView()
             .environment(appState)
             .environment(libraryManager)
+            // A recovery has to be SEEN. An operator who opens TopPresenter to
+            // an empty library and no explanation has every reason to think the
+            // app lost their work — the whole point of quarantining rather than
+            // deleting is that they can be told where it went.
+            .task {
+                let result = TopPresenterApp.storeOutcome.result
+                if !result.isClean { recoveryToShow = result }
+            }
+            .alert(recoveryToShow?.title ?? "",
+                   isPresented: Binding(get: { recoveryToShow != nil },
+                                        set: { if !$0 { recoveryToShow = nil } }),
+                   presenting: recoveryToShow) { result in
+                if let folder = result.recoveredFolder {
+                    Button(String(localized: "Arată fișierele", comment: "Store recovery button")) {
+                        NSWorkspace.shared.activateFileViewerSelecting([folder])
+                        recoveryToShow = nil
+                    }
+                }
+                Button(String(localized: "OK", comment: "Alert button"), role: .cancel) {
+                    recoveryToShow = nil
+                }
+            } message: { result in
+                Text(result.message)
+            }
             // App-wide accent: native controls (pickers, toggles, list
             // selection) follow the chosen accent; custom views read the
             // same value via the global `appAccent`. On „Sistem” the tint is

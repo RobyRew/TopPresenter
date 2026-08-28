@@ -154,6 +154,8 @@ struct SearchHistorySummary: Identifiable, Hashable {
 @Observable
 final class HistoryStore {
     let container: ModelContainer
+    /// How the history store opened — `.opened` unless it had to be recovered.
+    private(set) var recovery: StoreRecovery.Result = .opened
     /// Our own context (NOT `container.mainContext`, which is `@MainActor`-isolated
     /// and can't be reached from this non-isolated class). Used on the main thread.
     let context: ModelContext
@@ -161,11 +163,13 @@ final class HistoryStore {
     init(inMemory: Bool = false) {
         let schema = Schema([PresentationEvent.self, SearchEvent.self])
         let config = ModelConfiguration("History", schema: schema, isStoredInMemoryOnly: inMemory)
-        do {
-            container = try ModelContainer(for: schema, configurations: [config])
-        } catch {
-            fatalError("Could not create History ModelContainer: \(error)")
-        }
+        // History is worth far less than the library, but it used to take the
+        // whole app down with it — a corrupt history file meant TopPresenter
+        // would not start at all. See `StoreRecovery`.
+        let outcome = StoreRecovery.open(schema: schema, configuration: config,
+                                         label: "history")
+        container = outcome.container
+        recovery = outcome.result
         context = ModelContext(container)
     }
 

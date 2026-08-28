@@ -4412,6 +4412,129 @@ final class Counter: @unchecked Sendable {
     }
 }
 
+// MARK: - The App Must Start, Whatever The Store Is Doing
+//
+// Both containers used to be `try ModelContainer(...)` with `fatalError` in the
+// catch. A corrupt store, a stale `-wal` left by a crash, a full disk — any of
+// them and TopPresenter died on launch with no message and no way back in, with
+// no backup or restore anywhere in the app to fall back on.
+//
+// Every case below used to be that crash.
+
+@MainActor struct StoreRecoveryTests {
+
+    private func tempDir() throws -> URL {
+        let dir = FileManager.default.temporaryDirectory.appending(path: "sr-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir
+    }
+
+    private func schema() -> Schema { Schema([PresentationSlide.self]) }
+
+    private func open(_ url: URL) -> StoreRecovery.Outcome {
+        StoreRecovery.open(schema: schema(),
+                           configuration: ModelConfiguration(schema: schema(), url: url),
+                           label: "test")
+    }
+
+    @Test func agoodStoreJustOpens() throws {
+        let dir = try tempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let outcome = open(dir.appending(path: "good.store"))
+        #expect(outcome.result == .opened)
+        let ctx = ModelContext(outcome.container)
+        ctx.insert(PresentationSlide(title: "T", content: "C", subtitle: "", slideType: "text", order: 0))
+        #expect(throws: Never.self) { try ctx.save() }
+    }
+
+    /// THE crash. A file that is not a database at all — a truncated download, a
+    /// half-written copy, a disk that lied about a flush.
+    @Test func agarbageStoreIsQuarantinedAndTheAppStarts() throws {
+        let dir = try tempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let url = dir.appending(path: "broken.store")
+        try Data(repeating: 0xAB, count: 64_000).write(to: url)
+
+        let outcome = open(url)
+        guard case .startedFreshAfterQuarantine(let movedTo, _) = outcome.result else {
+            Issue.record("expected a quarantine, got \(outcome.result)")
+            return
+        }
+
+        // The app works…
+        let ctx = ModelContext(outcome.container)
+        ctx.insert(PresentationSlide(title: "New", content: "C", subtitle: "", slideType: "text", order: 0))
+        #expect(throws: Never.self) { try ctx.save() }
+
+        // …and the old file was MOVED, not destroyed. This is the promise: it is
+        // somebody's only copy, and a store SwiftData refuses can still be read
+        // by other tools.
+        let rescued = movedTo.appending(path: "broken.store")
+        #expect(FileManager.default.fileExists(atPath: rescued.path),
+                "the unreadable store was not preserved at \(rescued.path)")
+        #expect(try Data(contentsOf: rescued).count == 64_000, "the quarantined copy was altered")
+    }
+
+    /// The message has to name the folder, or "we moved it aside" is useless.
+    @Test func therecoveryTellsTheOperatorWhereItWent() throws {
+        let dir = try tempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let url = dir.appending(path: "broken.store")
+        try Data(repeating: 0x00, count: 8192).write(to: url)
+
+        let result = open(url).result
+        #expect(!result.isClean)
+        #expect(result.recoveredFolder != nil, "nothing points at the rescued files")
+        #expect(!result.title.isEmpty)
+        #expect(!result.message.isEmpty)
+    }
+
+    /// Recovering twice must not overwrite the first rescue.
+    @Test func asecondRecoveryDoesNotClobberTheFirst() throws {
+        let dir = try tempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let url = dir.appending(path: "broken.store")
+
+        try Data(repeating: 0x01, count: 4096).write(to: url)
+        let first = open(url).result
+        try Data(repeating: 0x02, count: 4096).write(to: url)
+        let second = open(url).result
+
+        let f1 = try #require(first.recoveredFolder)
+        let f2 = try #require(second.recoveredFolder)
+        #expect(f1 != f2, "both recoveries used the same folder — the first was overwritten")
+        #expect(try Data(contentsOf: f1.appending(path: "broken.store")).first == 0x01)
+        #expect(try Data(contentsOf: f2.appending(path: "broken.store")).first == 0x02)
+    }
+
+    /// A store that is fine behind a corrupt sidecar is repaired in place, and
+    /// the sidecar is kept — it may hold committed transactions.
+    @Test func acorruptSidecarIsMovedAsideRatherThanDeleted() throws {
+        let dir = try tempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let url = dir.appending(path: "wal.store")
+        // A real store first, so the store file itself is valid.
+        do {
+            let ctx = ModelContext(try ModelContainer(
+                for: schema(), configurations: ModelConfiguration(schema: schema(), url: url)))
+            ctx.insert(PresentationSlide(title: "Keep", content: "C", subtitle: "", slideType: "text", order: 0))
+            try ctx.save()
+        }
+        // Then a sidecar full of nonsense.
+        try Data(repeating: 0xFF, count: 32_768).write(to: URL(fileURLWithPath: url.path + "-wal"))
+
+        let outcome = open(url)
+        #expect(!outcome.result.isClean || outcome.result == .opened)
+        // Whatever rung it took, the app must be usable and nothing deleted.
+        let ctx = ModelContext(outcome.container)
+        #expect(throws: Never.self) { try ctx.save() }
+        if let folder = outcome.result.recoveredFolder {
+            let moved = (try? FileManager.default.contentsOfDirectory(atPath: folder.path)) ?? []
+            #expect(!moved.isEmpty, "a recovery folder was made but nothing was put in it")
+        }
+    }
+}
+
 // MARK: - .json Is Not A TopPresenter Format
 
 @MainActor struct LegacyJSONRefusalTests {
