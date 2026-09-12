@@ -288,6 +288,22 @@ nonisolated extension Notification.Name {
     /// poster did before and what any future one gets for free.
     static let changedKindsKey = "TopPresenter.changedKinds"
 
+    /// Announce a library change, naming what moved.
+    ///
+    /// Call this rather than posting `.libraryDidChange` bare. An un-named post
+    /// means "assume everything", and assuming everything means `SearchIndex`
+    /// re-walks the whole song library — three full-table fetches — because a
+    /// session was renamed or a photo was deleted. At 40k songs that walk is
+    /// seconds of store contention with the main thread.
+    /// nonisolated like the bare `post` it replaces — import and maintenance
+    /// call sites are off the main actor, and `NotificationCenter` is safe to
+    /// post from anywhere (`SearchIndex` observes on `.main`).
+    nonisolated static func postLibraryChange(_ kinds: ImportKind...) {
+        NotificationCenter.default.post(
+            name: .libraryDidChange, object: nil,
+            userInfo: [Notification.Name.changedKindsKey: kinds.map(\.rawValue)])
+    }
+
     // Content area toolbar actions
     static let importMedia = Notification.Name("TopPresenter.importMedia")
     static let addScheduleItem = Notification.Name("TopPresenter.addScheduleItem")

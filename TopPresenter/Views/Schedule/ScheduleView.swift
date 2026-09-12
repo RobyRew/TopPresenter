@@ -327,7 +327,7 @@ struct ScheduleView: View {
         }
         modelContext.delete(schedule)
         try? modelContext.save()
-        NotificationCenter.default.post(name: .libraryDidChange, object: nil)
+        Notification.Name.postLibraryChange(.session)
     }
 
     /// Present via THE one presenter (SessionRunner): jump when this schedule is

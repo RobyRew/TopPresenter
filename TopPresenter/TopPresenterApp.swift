@@ -22,6 +22,7 @@ struct TopPresenterApp: App {
     @State private var historyStore: HistoryStore
     /// Session-only song pins („Fixează sus") — app-global, clears on quit.
     @State private var pinStore = PinStore()
+    @State private var songPriority = SongPriorityStore.shared
     /// THE session runner — one live output ⇒ one running session, app-global.
     @State private var sessionRunner: SessionRunner
     /// Search/browse backbone: off-main-built projections + token index for the
@@ -94,6 +95,7 @@ struct TopPresenterApp: App {
                 .environment(videoPlayerService)
                 .environment(historyStore)
                 .environment(pinStore)
+                .environment(songPriority)
                 .environment(sessionRunner)
                 .environment(searchIndex)
                 .environment(libraryTasks)

@@ -414,8 +414,16 @@ struct BibleBooksGridPane: View {
 // MARK: - Bible Navigation Panel (Books & Chapters)
 struct BibleNavigationPanel: View {
     @Environment(LibraryManager.self) private var libraryManager
+    @Environment(\.modelContext) private var modelContext
     @AppStorage("showBookCategoryColors") private var showBookCategoryColors: Bool = true
     @AppStorage("showBookCategoryLabels") private var showBookCategoryLabels: Bool = true
+
+    /// bookNumber → chapter count, resolved once per module rather than by
+    /// faulting `book.chapters` per row (see `BibleNavigator.chapterCounts`).
+    private var chapterCounts: [Int: Int] {
+        guard let id = libraryManager.selectedBibleModule?.id else { return [:] }
+        return BibleNavigator.shared.chapterCounts(moduleID: id, in: modelContext)
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -471,21 +479,26 @@ struct BibleNavigationPanel: View {
     }
 
     private func bookRow(_ book: BibleBook) -> some View {
+        let chapters = chapterCounts[book.bookNumber] ?? 0
+        return bookRowBody(book, chapters: chapters)
+    }
+
+    private func bookRowBody(_ book: BibleBook, chapters: Int) -> some View {
         // Three layouts, richest first: ViewThatFits picks the first whose IDEAL
         // width fits the column, so the name is only shortened once it genuinely
         // has nowhere to go. Truncating ("Cântarea Cântă…") tells the operator
         // less than an abbreviation does in the same pixels.
         ViewThatFits(in: .horizontal) {
-            bookRowContent(book, label: book.displayName, showsCategoryLabel: true)
-            bookRowContent(book, label: book.displayName, showsCategoryLabel: false)
-            bookRowContent(book, label: book.displayAbbreviation, showsCategoryLabel: false)
+            bookRowContent(book, chapters: chapters, label: book.displayName, showsCategoryLabel: true)
+            bookRowContent(book, chapters: chapters, label: book.displayName, showsCategoryLabel: false)
+            bookRowContent(book, chapters: chapters, label: book.displayAbbreviation, showsCategoryLabel: false)
         }
         .tag(book.id)
         .contentShape(Rectangle())
         .help(book.displayName == book.name ? book.name : "\(book.displayName) · \(book.name)")
     }
 
-    private func bookRowContent(_ book: BibleBook, label: String, showsCategoryLabel: Bool) -> some View {
+    private func bookRowContent(_ book: BibleBook, chapters: Int, label: String, showsCategoryLabel: Bool) -> some View {
         let category = BibleBookCategory.from(bookNumber: book.bookNumber)
         return HStack(spacing: 8) {
             // Color indicator dot (conditional)
@@ -510,7 +523,7 @@ struct BibleNavigationPanel: View {
                     .padding(.vertical, 2)
                     .background(category.color.opacity(0.2), in: Capsule())
             }
-            Text("\(book.chapters.count)")
+            Text("\(chapters)")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: true, vertical: false)
@@ -522,6 +535,16 @@ struct BibleNavigationPanel: View {
 // MARK: - Bible Chapters Panel (shared by list & grid modes)
 struct BibleChaptersPanel: View {
     @Environment(LibraryManager.self) private var libraryManager
+    @Environment(\.modelContext) private var modelContext
+
+    /// Chapter count for the open book, from the per-module cache rather than a
+    /// `book.chapters` fault — the header is inside a `ViewThatFits`, so a
+    /// faulting read here ran three times per render.
+    private var chapterCount: Int {
+        guard let module = libraryManager.selectedBibleModule,
+              let book = libraryManager.selectedBook else { return 0 }
+        return BibleNavigator.shared.chapterCounts(moduleID: module.id, in: modelContext)[book.bookNumber] ?? 0
+    }
 
     /// nil = dense adaptive grid (grid mode's wide bottom pane); a number =
     /// exactly that many columns (list mode's narrow right column uses 2).
@@ -539,10 +562,10 @@ struct BibleChaptersPanel: View {
                 .lineLimit(1)
                 .fixedSize(horizontal: true, vertical: false)
             Spacer(minLength: 6)
-            if let book = libraryManager.selectedBook {
+            if libraryManager.selectedBook != nil {
                 Text(countStyle == .full
-                     ? String(localized: "\(book.chapters.count) capitole", comment: "Chapter count")
-                     : "\(book.chapters.count)")
+                     ? String(localized: "\(chapterCount) capitole", comment: "Chapter count")
+                     : "\(chapterCount)")
                     .font(.system(size: 10))
                     .foregroundStyle(.tertiary)
                     .lineLimit(1)

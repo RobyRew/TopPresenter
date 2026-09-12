@@ -3601,7 +3601,8 @@ struct PaletteSearchTests {
                        songbookName: "", collectionID: nil, collectionName: "", versionCount: 1,
                        hasMedia: false, verified: false, modifiedDate: .now,
                        firstLine: "", blob: searchFold("\(title) \(author) \(lyrics)"),
-                       songKey: HistoryStore.songKey(ccli: "", title: title, source: ""))
+                       songKey: HistoryStore.songKey(ccli: "", title: title, source: ""),
+                       sourceFormat: "", webHost: "")
     }
 
     private func verse(_ book: Int, _ bookName: String, _ chapter: Int, _ v: Int,
@@ -3618,7 +3619,8 @@ struct PaletteSearchTests {
                         verses: verses,
                         verseTokens: TokenIndex.build(blobs: verses.map(\.folded)),
                         media: [], sessions: [], books: books,
-                        presentCounts: presentCounts)
+                        presentCounts: presentCounts,
+                        priority: SongPriorityRules(isEnabled: false))
     }
 
     @Test func fuzzyPrefixToleratesTypos() {
@@ -5722,7 +5724,7 @@ struct SlideProviderTests {
                                    collectionID: nil, collectionName: "", versionCount: 1,
                                    hasMedia: false, verified: true, modifiedDate: .now,
                                    firstLine: "O, Doamne mare, când privesc eu lumea",
-                                   blob: "", songKey: "x")
+                                   blob: "", songKey: "x", sourceFormat: "", webHost: "")
         #expect(SongTokenProvider.projectionField("", entry: entry) == "O, Doamne mare, când privesc eu lumea")
         #expect(SongTokenProvider.projectionField("title", entry: entry) == "Ce mare ești Tu")
         #expect(SongTokenProvider.projectionField("author", entry: entry) == "Stuart Hine")
@@ -10290,5 +10292,540 @@ struct ThemeFolderScanTests {
     @Test func themeIsRegisteredAsADirectorySource() {
         #expect(ImportCatalog.directoryExtensions.contains("tptheme"),
                 "directoryExtensions = \(ImportCatalog.directoryExtensions.sorted())")
+    }
+}
+
+// MARK: - Song sections: kind + label
+
+@Suite("Song section kinds")
+struct SongSectionKindTests {
+
+    @Test func classifiesTheVocabularyImportersActuallyWrite() {
+        #expect(SongSectionKind.classify("verse") == .verse)
+        #expect(SongSectionKind.classify("Strofa 2") == .verse)
+        #expect(SongSectionKind.classify("Estrofa") == .verse)
+        #expect(SongSectionKind.classify("chorus") == .chorus)
+        #expect(SongSectionKind.classify("Refren") == .chorus)
+        #expect(SongSectionKind.classify("Estribillo") == .chorus)
+        #expect(SongSectionKind.classify("bridge") == .bridge)
+        #expect(SongSectionKind.classify("Punte") == .bridge)
+    }
+
+    /// The failure this ordering exists to prevent: "prechorus" contains
+    /// "chorus", so a naive contains-match files every pre-chorus as a chorus.
+    @Test func preChorusIsNotAChorus() {
+        #expect(SongSectionKind.classify("prechorus") == .prechorus)
+        #expect(SongSectionKind.classify("Pre-Chorus") == .prechorus)
+        #expect(SongSectionKind.classify("Pre-refren") == .prechorus)
+    }
+
+    /// Forcing an unrecognised kind into `.verse` would renumber the verses on
+    /// the projector, so anything unknown has to land in `.other`.
+    @Test func unknownWordsStayOther() {
+        #expect(SongSectionKind.classify("zzz") == .other)
+        #expect(SongSectionKind.classify("") == .other)
+    }
+
+    @Test func everyKindIsOfferedInTheEditorPicker() {
+        #expect(songSectionTypes.count == SongSectionKind.allCases.count)
+        #expect(songSectionTypes.first == "verse")
+    }
+}
+
+@Suite("Song section labels")
+@MainActor
+struct SongSectionLabelingTests {
+
+    /// The shape the operator asked for: a verse says where it is in the song.
+    @Test func versesAreNumberedAgainstTheVerseCount() {
+        let labels = SongSectionLabeling.labels(
+            forTypes: ["verse", "chorus", "verse", "chorus", "verse", "verse"])
+        #expect(labels[0] == "1/4")
+        #expect(labels[2] == "2/4")
+        #expect(labels[4] == "3/4")
+        #expect(labels[5] == "4/4")
+    }
+
+    /// Choruses are counted among CHORUSES, not among all sections — a song
+    /// with one chorus must not label it "1/1".
+    @Test func aSingleChorusIsNamedNotNumbered() {
+        let labels = SongSectionLabeling.labels(forTypes: ["verse", "chorus", "verse"])
+        #expect(labels[1] == SongSectionKind.chorus.localizedName)
+    }
+
+    @Test func twoChorusesAreNumbered() {
+        let labels = SongSectionLabeling.labels(forTypes: ["chorus", "chorus"])
+        #expect(labels[0] == "\(SongSectionKind.chorus.localizedName) 1")
+        #expect(labels[1] == "\(SongSectionKind.chorus.localizedName) 2")
+    }
+
+    /// A one-verse song has no position to report, so it gets the word.
+    @Test func aLoneVerseIsNamed() {
+        #expect(SongSectionLabeling.labels(forTypes: ["verse"]) == [SongSectionKind.verse.localizedName])
+    }
+}
+
+// MARK: - Creating a song by hand
+
+@Suite("Song creation")
+@MainActor
+struct SongFactoryTests {
+
+    private func context() throws -> ModelContext {
+        ModelContext(try ModelContainer(
+            for: Schema(versionedSchema: SchemaV2.self),
+            configurations: ModelConfiguration(isStoredInMemoryOnly: true)))
+    }
+
+    /// A created song must be immediately editable AND presentable: a version
+    /// with a section to type into, and a flattened verse so the presenter has
+    /// something to show before the first save.
+    @Test func aNewSongArrivesReadyToEdit() throws {
+        let ctx = try context()
+        let song = SongFactory.create(title: "Test", context: ctx)
+        #expect(song.title == "Test")
+        #expect(song.collection != nil)
+        #expect(song.versions.count == 1)
+        #expect(song.activeVersion?.sections.count == 1)
+        #expect(song.verses.count == 1)
+    }
+
+    /// `originalVersionID` drives `activeVersion`; leaving it empty would make
+    /// the song depend on relationship ordering, which SwiftData does not fix.
+    @Test func theCreatedVersionIsTheOriginal() throws {
+        let ctx = try context()
+        let song = SongFactory.create(context: ctx)
+        #expect(song.originalVersionID == song.versions.first?.id.uuidString)
+    }
+
+    /// Two songs share one collection — matched on `sourceFormat`, so renaming
+    /// it does not start a second one beside it.
+    @Test func songsShareOneCollectionEvenAfterItIsRenamed() throws {
+        let ctx = try context()
+        let first = SongFactory.create(context: ctx)
+        first.collection?.name = "Renamed by the operator"
+        let second = SongFactory.create(context: ctx)
+        #expect(first.collection?.id == second.collection?.id)
+        #expect(try ctx.fetchCount(FetchDescriptor<SongCollection>()) == 1)
+    }
+}
+
+// MARK: - Bible navigation by coordinate
+
+@Suite("Bible navigator")
+@MainActor
+struct BibleNavigatorTests {
+
+    /// Two books: book 1 has chapters 1-3, book 2 has chapters 1-2. Book 3 is
+    /// deliberately EMPTY — a partial module carries books with no text, and
+    /// stepping has to walk past them rather than land on nothing.
+    private func seed(_ ctx: ModelContext) -> UUID {
+        let module = BibleModule(name: "Nav", abbreviation: "NAV", sourceFormat: "test")
+        ctx.insert(module)
+        for (bookNumber, chapters) in [(1, 3), (2, 2), (3, 0), (4, 1)] {
+            let book = BibleBook(name: "B\(bookNumber)", bookNumber: bookNumber, testament: "OT")
+            book.module = module
+            // `1...0` traps before a `where` clause ever runs, and book 3 is
+            // deliberately empty — the range has to be built from a stride.
+            for c in stride(from: 1, through: chapters, by: 1) {
+                let chapter = BibleChapter(chapterNumber: c)
+                chapter.book = book
+                for v in 1...5 {
+                    let verse = BibleVerse(verseNumber: v, text: "B\(bookNumber) \(c):\(v)")
+                    verse.chapter = chapter
+                }
+            }
+        }
+        try? ctx.save()
+        return module.id
+    }
+
+    private func context() throws -> ModelContext {
+        ModelContext(try ModelContainer(
+            for: Schema(versionedSchema: SchemaV2.self),
+            configurations: ModelConfiguration(isStoredInMemoryOnly: true)))
+    }
+
+    @Test func resolvesAPassageWithItsVersesInOrder() throws {
+        let ctx = try context()
+        let moduleID = seed(ctx)
+        let nav = BibleNavigator()
+        let passage = try #require(nav.passage(moduleID: moduleID, bookNumber: 1, chapter: 2, in: ctx))
+        #expect(passage.book.bookNumber == 1)
+        #expect(passage.chapter.chapterNumber == 2)
+        #expect(passage.verses.map(\.verseNumber) == [1, 2, 3, 4, 5])
+    }
+
+    @Test func aCoordinateThatDoesNotExistResolvesToNothing() throws {
+        let ctx = try context()
+        let moduleID = seed(ctx)
+        let nav = BibleNavigator()
+        #expect(nav.passage(moduleID: moduleID, bookNumber: 1, chapter: 99, in: ctx) == nil)
+    }
+
+    @Test func stepsWithinABook() throws {
+        let ctx = try context()
+        let moduleID = seed(ctx)
+        let nav = BibleNavigator()
+        let next = nav.adjacentChapter(moduleID: moduleID, bookNumber: 1, chapter: 1,
+                                       direction: 1, in: ctx)
+        #expect(next?.bookNumber == 1)
+        #expect(next?.chapter == 2)
+    }
+
+    /// The live path used to stop dead at the last chapter of a book, so a
+    /// reading could not continue past it.
+    @Test func stepsIntoTheNextBook() throws {
+        let ctx = try context()
+        let moduleID = seed(ctx)
+        let nav = BibleNavigator()
+        let next = nav.adjacentChapter(moduleID: moduleID, bookNumber: 1, chapter: 3,
+                                       direction: 1, in: ctx)
+        #expect(next?.bookNumber == 2)
+        #expect(next?.chapter == 1)
+    }
+
+    @Test func steppingBackLandsOnTheLastChapterOfThePreviousBook() throws {
+        let ctx = try context()
+        let moduleID = seed(ctx)
+        let nav = BibleNavigator()
+        let prev = nav.adjacentChapter(moduleID: moduleID, bookNumber: 2, chapter: 1,
+                                       direction: -1, in: ctx)
+        #expect(prev?.bookNumber == 1)
+        #expect(prev?.chapter == 3)
+    }
+
+    /// Book 3 has no chapters at all; stepping forward from book 2 must reach
+    /// book 4 rather than returning a book with nothing to show.
+    @Test func walksPastABookWithNoChapters() throws {
+        let ctx = try context()
+        let moduleID = seed(ctx)
+        let nav = BibleNavigator()
+        let next = nav.adjacentChapter(moduleID: moduleID, bookNumber: 2, chapter: 2,
+                                       direction: 1, in: ctx)
+        #expect(next?.bookNumber == 4)
+        #expect(next?.chapter == 1)
+    }
+
+    @Test func stoppingAtTheEndsOfTheModule() throws {
+        let ctx = try context()
+        let moduleID = seed(ctx)
+        let nav = BibleNavigator()
+        #expect(nav.adjacentChapter(moduleID: moduleID, bookNumber: 1, chapter: 1,
+                                    direction: -1, in: ctx) == nil)
+        #expect(nav.adjacentChapter(moduleID: moduleID, bookNumber: 4, chapter: 1,
+                                    direction: 1, in: ctx) == nil)
+    }
+
+    /// What the book list renders per row. It read `book.chapters.count`, which
+    /// faults every chapter of every book on every render.
+    @Test func reportsChapterCountsPerBook() throws {
+        let ctx = try context()
+        let moduleID = seed(ctx)
+        let counts = BibleNavigator().chapterCounts(moduleID: moduleID, in: ctx)
+        #expect(counts[1] == 3)
+        #expect(counts[2] == 2)
+        #expect(counts[3] == 0)
+        #expect(counts[4] == 1)
+    }
+
+    @Test func findsAModuleByAbbreviationWhateverTheCase() throws {
+        let ctx = try context()
+        _ = seed(ctx)
+        let nav = BibleNavigator()
+        #expect(nav.module(abbreviation: "nav", in: ctx)?.abbreviation == "NAV")
+        #expect(nav.module(abbreviation: "NAV", in: ctx)?.abbreviation == "NAV")
+        #expect(nav.module(abbreviation: "nope", in: ctx) == nil)
+    }
+}
+
+// MARK: - One ranking for both search boxes
+
+@Suite("Song search ranking")
+struct SongSearchRankingTests {
+
+    private func entry(_ title: String, author: String = "", key: String = "") -> SongIndexEntry {
+        SongIndexEntry(id: UUID(), title: title, author: author, language: "",
+                       songNumber: "", songbookName: "", collectionID: nil,
+                       collectionName: "", versionCount: 1, hasMedia: false,
+                       verified: false, modifiedDate: .now, firstLine: "",
+                       blob: searchFold("\(title) \(author)"),
+                       songKey: key.isEmpty ? title : key,
+                       sourceFormat: "", webHost: "")
+    }
+
+    private func fixture() -> (songs: [SongIndexEntry], tokens: TokenIndex) {
+        let songs = [
+            entry("Mare este Domnul"),                       // title prefix
+            entry("Cât de mare"),                            // title contains
+            entry("Cântare nouă", author: "Mare, Ion"),      // author only
+        ]
+        return (songs, TokenIndex.build(blobs: songs.map(\.blob)))
+    }
+
+    /// Title matches outrank lyric/author matches, and a title PREFIX outranks a
+    /// title that merely contains the word.
+    @Test func titlePrefixOutranksTitleContainsOutranksContent() {
+        let f = fixture()
+        let ranked = PaletteSearch.rankedSongList(["mare"], songs: f.songs,
+                                                  tokens: f.tokens, presentCounts: [:])
+        #expect(ranked.map(\.title) == ["Mare este Domnul", "Cât de mare", "Cântare nouă"])
+    }
+
+    /// The Songs tab used to rank alphabetically, so the most-used song in the
+    /// church sat wherever its title happened to fall.
+    @Test func presentationHistoryBreaksTiesInsideABucket() {
+        let songs = [entry("Mare A", key: "a"), entry("Mare B", key: "b")]
+        let tokens = TokenIndex.build(blobs: songs.map(\.blob))
+        let ranked = PaletteSearch.rankedSongList(["mare"], songs: songs, tokens: tokens,
+                                                  presentCounts: ["b": 9])
+        #expect(ranked.map(\.title) == ["Mare B", "Mare A"])
+    }
+
+    /// Both boxes read the same function, so a query cannot rank one way in ⌘K
+    /// and another way in the Songs tab.
+    @Test func theListAndTheBucketsAgree() {
+        let f = fixture()
+        let buckets = PaletteSearch.songBuckets(["mare"], songs: f.songs,
+                                                tokens: f.tokens, presentCounts: [:])
+        let list = PaletteSearch.rankedSongList(["mare"], songs: f.songs,
+                                                tokens: f.tokens, presentCounts: [:])
+        #expect(list == buckets.prefix + buckets.titleHit + buckets.rest)
+    }
+}
+
+// MARK: - Operator-configured result priority
+
+@Suite("Song priority")
+struct SongPriorityTests {
+
+    private func entry(_ title: String, songbook: String = "", author: String = "",
+                       source: String = "", web: String = "", key: String = "") -> SongIndexEntry {
+        SongIndexEntry(id: UUID(), title: title, author: author, language: "",
+                       songNumber: "", songbookName: songbook, collectionID: nil,
+                       collectionName: "", versionCount: 1, hasMedia: false,
+                       verified: false, modifiedDate: .now, firstLine: "",
+                       blob: searchFold(title), songKey: key.isEmpty ? title : key,
+                       sourceFormat: source, webHost: web)
+    }
+
+    /// The ladder the operator described: from a hymnal, then with an author,
+    /// then written here, then off a website, then everything else.
+    @Test func theStandardLadderBandsInTheStatedOrder() {
+        let rules = SongPriorityRules.standard
+        #expect(rules.rank(entry("a", songbook: "Laudele Domnului")).band == 0)
+        #expect(rules.rank(entry("b", author: "Ion")).band == 1)
+        #expect(rules.rank(entry("c", source: SongFactory.manualSourceFormat)).band == 2)
+        #expect(rules.rank(entry("d", web: "cantaricrestine.ro")).band == 3)
+        #expect(rules.rank(entry("e")).band == 4, "a song matching nothing must land last")
+    }
+
+    /// Inside a band, the listed books come first in the order they were listed.
+    @Test func listedValuesOrderTheBand() {
+        let rules = SongPriorityRules(bands: [
+            SongPriorityBand(name: "Cărți", facet: .songbook,
+                             values: ["Laudele Domnului", "Pe drumul credinței"])
+        ])
+        #expect(rules.rank(entry("a", songbook: "Laudele Domnului")).position == 0)
+        #expect(rules.rank(entry("b", songbook: "Pe drumul credinței")).position == 1)
+        // Still in the band — just after everything named.
+        let other = rules.rank(entry("c", songbook: "Altă carte"))
+        #expect(other.band == 0)
+        #expect(other.position == 2)
+    }
+
+    /// Book names are typed by hand, so matching must survive diacritics and case.
+    @Test func valueMatchingIgnoresCaseAndDiacritics() {
+        let rules = SongPriorityRules(bands: [
+            SongPriorityBand(name: "Cărți", facet: .songbook, values: ["Pe drumul credinței"])
+        ])
+        #expect(rules.rank(entry("a", songbook: "PE DRUMUL CREDINTEI")).position == 0)
+    }
+
+    /// Every song has a `sourceFormat`, so "written here" can only work as a
+    /// band restricted to that one value — otherwise it would swallow the lot.
+    @Test func aRestrictedBandTakesOnlyItsOwnValues() {
+        let band = SongPriorityBand(name: "Scrise aici", facet: .source,
+                                    values: [SongFactory.manualSourceFormat],
+                                    restrictedToValues: true)
+        #expect(band.position(of: entry("a", source: SongFactory.manualSourceFormat)) == 0)
+        #expect(band.position(of: entry("b", source: "OpenSong")) == nil)
+    }
+
+    @Test func disabledBandsAreSkippedWithoutShiftingTheRest() {
+        var rules = SongPriorityRules.standard
+        rules.bands[0].isEnabled = false
+        #expect(rules.rank(entry("a", author: "Ion")).band == 0, "author moves up into the gap")
+        #expect(rules.rank(entry("b", songbook: "X")).band == 3,
+                "a hymnal song now falls through to the website band's position")
+    }
+
+    @Test func turningTheRulesOffFlattensEverything() {
+        var rules = SongPriorityRules.standard
+        rules.isEnabled = false
+        #expect(rules.rank(entry("a", songbook: "X")) == (0, 0))
+        #expect(rules.rank(entry("b")) == (0, 0))
+    }
+
+    /// Priority decides between equally relevant hits — it must not promote a
+    /// weaker match over a stronger one.
+    @Test func relevanceStillOutranksPriority() {
+        let songs = [
+            entry("Cântare mare", songbook: "Laudele Domnului"),  // title CONTAINS
+            entry("Mare este", source: "web"),                    // title PREFIX, no book
+        ]
+        let tokens = TokenIndex.build(blobs: songs.map(\.blob))
+        let ranked = PaletteSearch.rankedSongList(["mare"], songs: songs, tokens: tokens,
+                                                  presentCounts: [:],
+                                                  priority: .standard)
+        #expect(ranked.map(\.title) == ["Mare este", "Cântare mare"])
+    }
+
+    /// …but between two equally relevant hits, the operator's order wins.
+    @Test func priorityBreaksTiesInsideARelevanceBucket() {
+        let songs = [
+            entry("Mare A", source: "web"),
+            entry("Mare B", songbook: "Laudele Domnului"),
+        ]
+        let tokens = TokenIndex.build(blobs: songs.map(\.blob))
+        let ranked = PaletteSearch.rankedSongList(["mare"], songs: songs, tokens: tokens,
+                                                  presentCounts: [:], priority: .standard)
+        #expect(ranked.map(\.title) == ["Mare B", "Mare A"])
+    }
+
+    /// Priority is explicit configuration; popularity is inferred from history.
+    @Test func priorityOutranksPopularity() {
+        let songs = [
+            entry("Mare A", source: "web", key: "a"),
+            entry("Mare B", songbook: "Laudele Domnului", key: "b"),
+        ]
+        let tokens = TokenIndex.build(blobs: songs.map(\.blob))
+        let ranked = PaletteSearch.rankedSongList(["mare"], songs: songs, tokens: tokens,
+                                                  presentCounts: ["a": 99], priority: .standard)
+        #expect(ranked.map(\.title) == ["Mare B", "Mare A"])
+    }
+}
+
+@Suite("Song priority storage")
+@MainActor
+struct SongPriorityStoreTests {
+
+    @Test func rulesSurviveARelaunch() {
+        let defaults = makeTestDefaults()
+        let store = SongPriorityStore(defaults: defaults)
+        store.rules.bands.append(SongPriorityBand(name: "Al meu", facet: .language,
+                                                  values: ["ro"]))
+        let reopened = SongPriorityStore(defaults: defaults)
+        #expect(reopened.rules.bands.last?.name == "Al meu")
+        #expect(reopened.rules.bands.last?.values == ["ro"])
+    }
+
+    @Test func anEmptyStoreStartsOnTheStandardLadder() {
+        let store = SongPriorityStore(defaults: makeTestDefaults())
+        #expect(store.rules == .standard)
+    }
+
+    @Test func resetRestoresTheStandardLadder() {
+        let store = SongPriorityStore(defaults: makeTestDefaults())
+        store.rules.bands.removeAll()
+        store.resetToStandard()
+        #expect(store.rules == .standard)
+    }
+}
+
+// MARK: - Lines per slide actually splits
+
+@Suite("Song slide splitting")
+@MainActor
+struct SongSlideSplittingTests {
+
+    private func context() throws -> ModelContext {
+        ModelContext(try ModelContainer(
+            for: Schema(versionedSchema: SchemaV2.self),
+            configurations: ModelConfiguration(isStoredInMemoryOnly: true)))
+    }
+
+    /// One song, one verse of `lines` lines, plus the flattened SongVerse the
+    /// presenter panel used to step through.
+    private func song(lines: Int, in ctx: ModelContext) -> Song {
+        let song = Song(title: "Lung")
+        ctx.insert(song)
+        let version = SongVersion(name: "Original", order: 0)
+        version.song = song
+        song.originalVersionID = version.id.uuidString
+        let text = (1...lines).map { "Rândul \($0)" }
+        let section = SongSection(sectionKey: "v1", type: "verse", label: "Strofa 1",
+                                  order: 0, lines: text.map { SongLine(text: $0) })
+        section.version = version
+        ctx.insert(version)
+        // The flattened cache: ONE row for the whole section, never split.
+        let verse = SongVerse(label: section.label, verseType: section.type,
+                              text: text.joined(separator: "\n"), order: 0)
+        verse.song = song
+        try? ctx.save()
+        return song
+    }
+
+    @Test func aSectionLongerThanTheLimitBecomesSeveralSlides() throws {
+        let ctx = try context()
+        let s = song(lines: 12, in: ctx)
+        let slides = buildSongSlides(song: s, version: s.activeVersion, maxLines: 6,
+                                     bilingual: false, language: nil)
+        #expect(slides.count == 2)
+        #expect(slides.allSatisfy { $0.text.components(separatedBy: "\n").count <= 6 })
+        #expect(slides.allSatisfy { $0.total == 2 }, "every slide reports the same total")
+    }
+
+    @Test func anUnevenSectionPutsTheRemainderOnTheLastSlide() throws {
+        let ctx = try context()
+        let s = song(lines: 13, in: ctx)
+        let slides = buildSongSlides(song: s, version: s.activeVersion, maxLines: 6,
+                                     bilingual: false, language: nil)
+        #expect(slides.count == 3)
+        #expect(slides.last?.text.components(separatedBy: "\n").count == 1)
+    }
+
+    @Test func zeroMeansNeverSplit() throws {
+        let ctx = try context()
+        let s = song(lines: 12, in: ctx)
+        let slides = buildSongSlides(song: s, version: s.activeVersion, maxLines: 0,
+                                     bilingual: false, language: nil)
+        #expect(slides.count == 1)
+    }
+
+    /// THE regression this suite exists for.
+    ///
+    /// The presenter panel stepped `Song.sortedVerses` — one row per whole
+    /// section — while the filmstrip stepped `buildSongSlides`, which splits at
+    /// the lines-per-slide setting. So a twelve-line verse was two slides in the
+    /// library and one twelve-line slide on the projector, and the setting
+    /// silently did nothing where it mattered. Both now go through
+    /// `SongSlideCache`, so the counts cannot diverge again.
+    @Test func theFlattenedVerseCacheIsNotASlideSource() throws {
+        let ctx = try context()
+        let s = song(lines: 12, in: ctx)
+        #expect(s.sortedVerses.count == 1, "the cache holds one row for the whole section")
+        let slides = SongSlideCache.slides(for: s, version: s.activeVersion)
+        let limit = SongSlideCache.maxLines
+        let expected = limit > 0 ? Int(ceil(Double(12) / Double(limit))) : 1
+        #expect(slides.count == expected)
+        #expect(slides.count != s.sortedVerses.count || limit >= 12,
+                "with the default limit the two must differ — that was the bug")
+    }
+
+    /// The shared builder must agree with the pure function it wraps, or the
+    /// filmstrip and the projector drift apart again.
+    @Test func theSharedCacheMatchesTheBuilder() throws {
+        let ctx = try context()
+        let s = song(lines: 9, in: ctx)
+        let cached = SongSlideCache.slides(for: s, version: s.activeVersion)
+        let direct = buildSongSlides(
+            song: s, version: s.activeVersion, maxLines: SongSlideCache.maxLines,
+            bilingual: SongSlideCache.bilingual,
+            language: songBilingualLanguage(bilingual: SongSlideCache.bilingual,
+                                            version: s.activeVersion),
+            bracket: SongSlideCache.repeatBracket, countStyle: SongSlideCache.repeatCount)
+        #expect(cached.map(\.text) == direct.map(\.text))
+        #expect(cached.map(\.label) == direct.map(\.label))
     }
 }

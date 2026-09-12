@@ -29,8 +29,21 @@ final class LibraryManager {
     /// Cached sorted verses for the current chapter — avoids re-sorting on every access.
     private(set) var cachedSortedVerses: [BibleVerse] = []
 
+    /// Whether a chapter exists on either side of the open one.
+    ///
+    /// STORED, not computed. Answering it means reading `module.books` and each
+    /// candidate book's `chapters` — two to-many faults that materialise the
+    /// whole translation's spine. The preview panel asks four times per render
+    /// (button label, tint, disabled state, tooltip), so as computed properties
+    /// they re-faulted that spine on every frame. They depend only on which
+    /// chapter is open, so they are answered once, here, when that changes.
+    private(set) var canAdvanceToNextChapter = false
+    private(set) var canReturnToPreviousChapter = false
+
     private func refreshCachedVerses() {
         cachedSortedVerses = selectedChapter?.verses.sorted { $0.verseNumber < $1.verseNumber } ?? []
+        canAdvanceToNextChapter = hasChapter(direction: 1)
+        canReturnToPreviousChapter = hasChapter(direction: -1)
     }
 
     // MARK: - Dropping selections before a bulk delete
@@ -57,6 +70,7 @@ final class LibraryManager {
     /// Forget whatever song is open, including anything the editor is holding.
     func clearSongSelection() {
         songToEdit = nil
+        songEditIsNew = false
         songEditVersionID = nil
         songEditSectionKey = nil
         selectedSongVerse = nil
@@ -79,6 +93,11 @@ final class LibraryManager {
     /// When opening the editor from a specific slide, open this version and focus this section.
     var songEditVersionID: UUID?
     var songEditSectionKey: String?
+    /// The song in `songToEdit` was created by „Cântec nou" and has never been
+    /// saved by hand. Cancelling the editor DELETES it — reverting an empty song
+    /// to its empty snapshot would leave a blank row in the library, which is
+    /// how a cancelled creation silently becomes a permanent untitled song.
+    var songEditIsNew = false
 
     // Selected slide (version-aware; drives the sidebar preview + projection from the filmstrip).
     var songSlideText: String = ""
@@ -274,42 +293,23 @@ final class LibraryManager {
 
     // MARK: - Cross-Chapter Navigation
 
-    /// Whether there is a next chapter available (in the same book, or the next book).
-    var canAdvanceToNextChapter: Bool {
+    /// Whether a chapter exists on `direction`'s side of the open one — in the
+    /// same book, else in the neighbouring book.
+    ///
+    /// Called only from `refreshCachedVerses`, i.e. once per chapter change.
+    private func hasChapter(direction: Int) -> Bool {
         guard let chapter = selectedChapter, let book = chapter.book else { return false }
         let chapters = book.sortedChapters
-        if let idx = chapters.firstIndex(where: { $0.id == chapter.id }), idx + 1 < chapters.count {
-            return true
+        if let idx = chapters.firstIndex(where: { $0.id == chapter.id }) {
+            let next = idx + direction
+            if next >= 0, next < chapters.count { return true }
         }
-        // Check next book in the module
-        if let module = book.module {
-            let books = module.books.sorted { $0.bookNumber < $1.bookNumber }
-            if let bookIdx = books.firstIndex(where: { $0.id == book.id }),
-               bookIdx + 1 < books.count,
-               !books[bookIdx + 1].sortedChapters.isEmpty {
-                return true
-            }
-        }
-        return false
-    }
-
-    /// Whether there is a previous chapter available.
-    var canReturnToPreviousChapter: Bool {
-        guard let chapter = selectedChapter, let book = chapter.book else { return false }
-        let chapters = book.sortedChapters
-        if let idx = chapters.firstIndex(where: { $0.id == chapter.id }), idx - 1 >= 0 {
-            return true
-        }
-        // Check previous book
-        if let module = book.module {
-            let books = module.books.sorted { $0.bookNumber < $1.bookNumber }
-            if let bookIdx = books.firstIndex(where: { $0.id == book.id }),
-               bookIdx - 1 >= 0,
-               !books[bookIdx - 1].sortedChapters.isEmpty {
-                return true
-            }
-        }
-        return false
+        guard let module = book.module else { return false }
+        let books = module.books.sorted { $0.bookNumber < $1.bookNumber }
+        guard let bookIdx = books.firstIndex(where: { $0.id == book.id }) else { return false }
+        let neighbour = bookIdx + direction
+        guard neighbour >= 0, neighbour < books.count else { return false }
+        return !books[neighbour].chapters.isEmpty
     }
 
     /// Advance to the first verse of the next chapter (same book or next book).

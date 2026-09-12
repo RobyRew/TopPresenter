@@ -193,7 +193,7 @@ final class LibraryTaskRunner {
             )
             lastNote = String(localized: "\(outcome.deleted) deleted.", comment: "Delete result")
             progress.end()
-            NotificationCenter.default.post(name: .libraryDidChange, object: nil)
+            Notification.Name.postLibraryChange(.song)
         }
     }
 
@@ -213,7 +213,7 @@ final class LibraryTaskRunner {
                 ? String(localized: "All songs deleted.", comment: "Delete result")
                 : outcome.failures.joined(separator: "\n")
             progress.end()
-            NotificationCenter.default.post(name: .libraryDidChange, object: nil)
+            Notification.Name.postLibraryChange(.song)
             onFinish(outcome.failures.isEmpty)
         }
     }

@@ -749,8 +749,38 @@ struct VerseSlideControlsBar: View {
         }
     }
 
+    /// Every verse of the open chapter, for the strip under the preview.
+    ///
+    /// The reference box above says which verse is live; it cannot say what the
+    /// next press will show, which is the thing an operator reads ahead for.
+    private var galleryItems: [SlideGalleryStrip.Item] {
+        libraryManager.cachedSortedVerses.map { verse in
+            SlideGalleryStrip.Item(id: verse.id.uuidString,
+                                   label: "\(verse.verseNumber)",
+                                   text: verse.text)
+        }
+    }
+
+    /// Index of the FIRST selected verse — a multi-verse block marks its start.
+    private var galleryIndex: Int {
+        guard let first = libraryManager.selectedVerses.first else { return -1 }
+        return libraryManager.cachedSortedVerses.firstIndex { $0.id == first.id } ?? -1
+    }
+
+    private func showFromGallery(_ index: Int, present: Bool) {
+        let verses = libraryManager.cachedSortedVerses
+        guard verses.indices.contains(index) else { return }
+        libraryManager.selectVerse(verses[index])
+        if present || (isLive && pm.bibleLiveAnchor != nil) { presentSelection() }
+    }
+
     var body: some View {
         VStack(spacing: 6) {
+            SlideGalleryStrip(items: galleryItems,
+                              currentIndex: galleryIndex,
+                              onSelect: { showFromGallery($0, present: false) },
+                              onPresent: { showFromGallery($0, present: true) })
+
             // Selected verse reference (if any selected)
             if !libraryManager.selectedVerses.isEmpty {
                 HStack(spacing: 6) {

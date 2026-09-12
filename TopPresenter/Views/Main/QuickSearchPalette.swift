@@ -185,6 +185,7 @@ struct QuickSearchPalette: View {
     @Environment(VideoPlayerService.self) private var videoPlayerService
     @Environment(AppState.self) private var appState
     @Environment(HistoryStore.self) private var history
+    @Environment(PinStore.self) private var pinStore
 
     @Binding var isPresented: Bool
 
@@ -936,6 +937,18 @@ struct QuickSearchPalette: View {
 
     @ViewBuilder
     fileprivate func rowContextMenu(_ result: PaletteResult) -> some View {
+        // Pinning was only reachable from the Songs browser, so finding a song
+        // by search and wanting it to hand for the rest of the service meant
+        // finding it a second time in the list.
+        if let songID = pinnableSongID(result) {
+            Button { pinStore.togglePin(songID) } label: {
+                Label(pinStore.isPinned(songID)
+                        ? String(localized: "Anulează fixarea", comment: "Context menu — unpin song")
+                        : String(localized: "Fixează sus", comment: "Context menu — pin song for this session"),
+                      systemImage: pinStore.isPinned(songID) ? "pin.slash" : "pin")
+            }
+            Divider()
+        }
         if canAddToSession(result) {
             let schedules = recentSchedules()
             Menu {
@@ -957,6 +970,15 @@ struct QuickSearchPalette: View {
                 Label(String(localized: "Adaugă la sesiune", comment: "Context menu"),
                       systemImage: "text.badge.plus")
             }
+        }
+    }
+
+    /// The song a row stands for, when it stands for one.
+    private func pinnableSongID(_ result: PaletteResult) -> UUID? {
+        switch result {
+        case .song(let e): return e.id
+        case .recent(let r) where r.kind == "song": return UUID(uuidString: r.id)
+        default: return nil
         }
     }
 

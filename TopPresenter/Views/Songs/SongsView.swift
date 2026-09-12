@@ -27,6 +27,15 @@ struct SongsView: View {
     @State private var showDeleteConfirmation = false
     @State private var collectionToDelete: SongCollection?
 
+    /// Create an empty song and open the editor on it (see `SongFactory`).
+    private func createSong() {
+        let song = SongFactory.create(context: modelContext)
+        Notification.Name.postLibraryChange(.song)
+        libraryManager.selectSong(song)
+        libraryManager.songEditIsNew = true
+        libraryManager.songToEdit = song
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             if collections.isEmpty {
@@ -78,16 +87,31 @@ struct SongsView: View {
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
 
-            Button {
-                openImport()
-            } label: {
-                Label(
-                    String(localized: "Import Songs", comment: "Button"),
-                    systemImage: "plus.circle.fill"
-                )
+            HStack(spacing: 10) {
+                Button {
+                    openImport()
+                } label: {
+                    Label(
+                        String(localized: "Import Songs", comment: "Button"),
+                        systemImage: "square.and.arrow.down"
+                    )
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+
+                // Importing was the ONLY way in. A first song written by hand
+                // had to be typed into a file outside the app and imported.
+                Button {
+                    createSong()
+                } label: {
+                    Label(
+                        String(localized: "Cântec nou", comment: "Button — create a song"),
+                        systemImage: "plus"
+                    )
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.large)
             }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding()
@@ -101,7 +125,7 @@ struct SongsView: View {
         }
         modelContext.delete(collection)
         try? modelContext.save()
-        NotificationCenter.default.post(name: .libraryDidChange, object: nil)
+        Notification.Name.postLibraryChange(.song)
     }
 }
 
@@ -137,6 +161,7 @@ struct SongListPanel: View {
     @Environment(PresentationManager.self) private var presentationManager
     @Environment(PinStore.self) private var pinStore
     @Environment(SearchIndex.self) private var index
+    @Environment(SongPriorityStore.self) private var priority
     @Environment(LibraryTaskRunner.self) private var libraryTasks
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \SongCollection.name) private var collections: [SongCollection]
@@ -181,10 +206,61 @@ struct SongListPanel: View {
 
     private var availableLanguages: [String] { index.availableLanguages }
 
+    // MARK: Rendered rows — computed ONCE per input change, never in `body`
+    //
+    // `filtered` and `grouped` used to be computed properties. `body` read
+    // `filtered.isEmpty`, the toolbar read `filtered.count`, and the list read
+    // `grouped`, which read `filtered` again — three full passes over every song
+    // in the library plus a grouping pass, on EVERY render. Selecting a song
+    // re-rendered this panel, so at 40k songs picking one paid for four sweeps
+    // of the whole library before anything appeared.
+    //
+    // Now the sweep runs in `.task(id:)`, keyed on the things it actually
+    // depends on, and `body` renders stored results.
+
+    /// One rendered section: an A-Z initial / book / language, or the pin group.
+    struct SongGroup: Identifiable, Equatable {
+        let key: String
+        let songs: [SongIndexEntry]
+        var id: String { key }
+    }
+
+    /// Everything the sweep depends on. When this is unchanged the previous
+    /// result is still correct, whatever else re-rendered.
+    private struct ListInputs: Equatable {
+        let query: String
+        let sortKey: SongSortKey
+        let language: String
+        let collection: UUID?
+        let onlyWithMedia: Bool
+        let onlyVerified: Bool
+        let generation: Int
+        let pinned: Set<UUID>
+        let priority: SongPriorityRules
+    }
+
+    private var inputs: ListInputs {
+        ListInputs(query: query, sortKey: sortKey, language: languageFilter,
+                   collection: collectionFilter, onlyWithMedia: onlyWithMedia,
+                   onlyVerified: onlyVerified, generation: index.generation,
+                   pinned: pinStore.pinnedSongIDs, priority: priority.rules)
+    }
+
+    @State private var groups: [SongGroup] = []
+    @State private var matchCount = 0
+    /// The sweep has produced a result at least once. Without this the panel
+    /// renders its empty state on the very first frame — before `.task` has run —
+    /// so a full library flashes „Niciun cântec" every time the tab opens.
+    @State private var didSweep = false
+    /// The last song selected by clicking a row HERE. Selections that match it
+    /// must not scroll the list: centring the row the operator just clicked
+    /// yanks the list under the pointer.
+    @State private var locallySelected: UUID?
+
     /// PROJECTION-based filtering: candidates come from the token inverted index
     /// (O(µs) even at 60k songs), ordering comes from the per-generation sort
     /// cache — no SwiftData model is touched per keystroke or per row.
-    private var filtered: [SongIndexEntry] {
+    private func filter() -> [SongIndexEntry] {
         var tokens = searchTokens(query)
         // "verificat" / "✓" tokens act as the verified filter, like before.
         var mustBeVerified = onlyVerified
@@ -192,22 +268,46 @@ struct SongListPanel: View {
             if tok == "verificat" || tok == "✓" { mustBeVerified = true; return true }
             return false
         }
-        let hits = index.songTokens.match(queryTokens: tokens)   // nil = no text filter
-        if hits?.isEmpty == true { return [] }
 
+        func passes(_ e: SongIndexEntry) -> Bool {
+            if let id = collectionFilter, e.collectionID != id { return false }
+            if !languageFilter.isEmpty, e.language != languageFilter { return false }
+            if onlyWithMedia, !e.hasMedia { return false }
+            if mustBeVerified, !e.verified { return false }
+            return true
+        }
+
+        // A QUERY is answered by RELEVANCE, using the same ranking ⌘K uses:
+        // title-prefix, then title-contains, then lyrics/author, most-presented
+        // first inside each, with ⌘K's typo tolerance. This box used to do a
+        // bare AND-match and then render the results alphabetically, so the
+        // same words ranked differently depending on which search field they
+        // were typed into, and one typo returned nothing at all.
+        if !tokens.isEmpty {
+            return PaletteSearch.rankedSongList(tokens, songs: index.songs,
+                                                tokens: index.songTokens,
+                                                presentCounts: index.presentCounts,
+                                                priority: priority.rules)
+                .filter(passes)
+        }
+
+        // No query: this is a browser, and the chosen sort key orders it.
         let order = index.sortedOrder(for: sortKey)
         var out: [SongIndexEntry] = []
-        out.reserveCapacity(hits?.count ?? min(order.count, 4096))
+        out.reserveCapacity(min(order.count, 4096))
         for i in order {
-            if let hits, !hits.contains(i) { continue }
             let e = index.songs[Int(i)]
-            if let id = collectionFilter, e.collectionID != id { continue }
-            if !languageFilter.isEmpty, e.language != languageFilter { continue }
-            if onlyWithMedia, !e.hasMedia { continue }
-            if mustBeVerified, !e.verified { continue }
-            out.append(e)
+            if passes(e) { out.append(e) }
         }
         return out
+    }
+
+    /// Run the sweep and publish it.
+    private func rebuildRows() {
+        let entries = filter()
+        matchCount = entries.count
+        groups = group(entries)
+        didSweep = true
     }
 
     var body: some View {
@@ -221,7 +321,7 @@ struct SongListPanel: View {
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if filtered.isEmpty {
+            } else if didSweep && groups.isEmpty {
                 ContentUnavailableView(
                     String(localized: "Niciun cântec", comment: "Empty"),
                     systemImage: "magnifyingglass",
@@ -234,6 +334,10 @@ struct SongListPanel: View {
                 listView
             }
         }
+        // The ONE place the library sweep runs. `.task(id:)` fires on appear and
+        // whenever `inputs` differs — never because something unrelated
+        // re-rendered the panel.
+        .task(id: inputs) { rebuildRows() }
         .confirmDestructive(
             String(localized: "Delete Song", comment: "Alert title"),
             item: $songToDelete,
@@ -261,6 +365,21 @@ struct SongListPanel: View {
         }
     }
 
+    /// Create an empty song and open it in the editor.
+    ///
+    /// Until this existed the library could only be filled by importing a file:
+    /// `Song(...)` was called from `ImportService` and nowhere else.
+    private func createSong() {
+        let song = SongFactory.create(in: collections.first { $0.id == collectionFilter },
+                                      context: modelContext)
+        Notification.Name.postLibraryChange(.song)
+        libraryManager.selectSong(song)
+        libraryManager.songEditVersionID = nil
+        libraryManager.songEditSectionKey = nil
+        libraryManager.songEditIsNew = true
+        libraryManager.songToEdit = song
+    }
+
     /// Fetch the real @Model for an entry ON DEMAND (selection, menu actions).
     private func withSong(_ id: UUID, _ action: (Song) -> Void) {
         var d = FetchDescriptor<Song>(predicate: #Predicate { $0.id == id })
@@ -273,8 +392,13 @@ struct SongListPanel: View {
             query: queryBinding,
             placeholder: String(localized: "Caută cântece…", comment: "Search"),
             viewMode: viewMode,
-            count: String(localized: "\(filtered.count) cântece", comment: "Count")
+            count: String(localized: "\(matchCount) cântece", comment: "Count")
         ) {
+            LibraryHeaderButton(systemImage: "plus",
+                                help: String(localized: "Cântec nou", comment: "Tooltip — create a song"),
+                                prominent: true) {
+                createSong()
+            }
             // The filter menu is an ACTION, not a filter chip: it opens a sheet
             // of switches rather than toggling one thing.
             Menu {
@@ -356,12 +480,11 @@ struct SongListPanel: View {
     /// A-Z initial, book name, or language code.
     static let pinnedGroupKey = "\u{0}pinned"
 
-    /// `filtered` grouped by the active sort key (A-Z initial / book / language /
+    /// The filtered entries grouped by the active sort key (A-Z initial / book / language /
     /// artist initial). Empty key = a single ungrouped section (Recente). Order is
     /// preserved from `filtered`, which is already sorted. Pinned songs float into
     /// a single "Fixate" group prepended on top (they appear ONLY there).
-    private var grouped: [(key: String, songs: [SongIndexEntry])] {
-        let entries = filtered
+    private func group(_ entries: [SongIndexEntry]) -> [SongGroup] {
         var pinned: [SongIndexEntry] = []
         var rest: [SongIndexEntry] = []
         if pinStore.hasPins {
@@ -371,10 +494,13 @@ struct SongListPanel: View {
         } else {
             rest = entries
         }
-        var groups: [(key: String, songs: [SongIndexEntry])] = []
-        if !pinned.isEmpty { groups.append((Self.pinnedGroupKey, pinned)) }
-        if sortKey == .recent {
-            groups.append(("", rest))
+        var groups: [SongGroup] = []
+        if !pinned.isEmpty { groups.append(SongGroup(key: Self.pinnedGroupKey, songs: pinned)) }
+        // While SEARCHING the list is in relevance order, so A-Z (or book, or
+        // language) headings would scatter the best matches across the
+        // alphabet. One flat section keeps the ranking visible.
+        if sortKey == .recent || !searchTokens(query).isEmpty {
+            groups.append(SongGroup(key: "", songs: rest))
             return groups
         }
         func keyFor(_ e: SongIndexEntry) -> String {
@@ -393,7 +519,7 @@ struct SongListPanel: View {
             if map[k] == nil { order.append(k); map[k] = [] }
             map[k]?.append(e)
         }
-        return groups + order.map { ($0, map[$0] ?? []) }
+        return groups + order.map { SongGroup(key: $0, songs: map[$0] ?? []) }
     }
 
     /// First letter (diacritic-folded) for an A-Z heading; "#" for non-letters.
@@ -441,22 +567,29 @@ struct SongListPanel: View {
 
     private var songSelection: Binding<UUID?> {
         Binding(get: { libraryManager.selectedSong?.id },
-                set: { id in if let id { withSong(id) { libraryManager.selectSong($0) } } })
+                set: { id in
+                    guard let id else { return }
+                    locallySelected = id
+                    withSong(id) { libraryManager.selectSong($0) }
+                })
     }
 
     private var listView: some View {
-        List(selection: songSelection) {
-            ForEach(grouped, id: \.key) { group in
-                if group.key.isEmpty {
-                    ForEach(group.songs) { entry in songRow(entry).tag(entry.id) }
-                } else {
-                    Section {
-                        ForEach(group.songs) { entry in songRow(entry).tag(entry.id) }
-                    } header: { groupHeader(group.key) }
+        ScrollViewReader { proxy in
+            List(selection: songSelection) {
+                ForEach(groups) { group in
+                    if group.key.isEmpty {
+                        ForEach(group.songs) { entry in songRow(entry).tag(entry.id).id(entry.id) }
+                    } else {
+                        Section {
+                            ForEach(group.songs) { entry in songRow(entry).tag(entry.id).id(entry.id) }
+                        } header: { groupHeader(group.key) }
+                    }
                 }
             }
+            .listStyle(.inset)
+            .onChange(of: revealTarget) { _, id in reveal(id, with: proxy) }
         }
-        .listStyle(.inset)
     }
 
     private func songRow(_ entry: SongIndexEntry) -> some View {
@@ -475,11 +608,12 @@ struct SongListPanel: View {
     }
 
     private var gridView: some View {
+        ScrollViewReader { proxy in
         ScrollView {
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 164), spacing: 10)], spacing: 10, pinnedViews: [.sectionHeaders]) {
-                ForEach(grouped, id: \.key) { group in
+                ForEach(groups) { group in
                     Section {
-                        ForEach(group.songs) { song in gridCell(song) }
+                        ForEach(group.songs) { song in gridCell(song).id(song.id) }
                     } header: {
                         if !group.key.isEmpty {
                             groupHeader(group.key)
@@ -491,10 +625,43 @@ struct SongListPanel: View {
             }
             .padding(8)
         }
+        .onChange(of: revealTarget) { _, id in reveal(id, with: proxy) }
+        }
+    }
+
+    /// The song the list should bring into view: whatever is selected.
+    ///
+    /// ⌘K already switched to the Songs tab and selected the result, but the
+    /// list never moved — at 40k rows the selected song was thousands of rows
+    /// out of sight, so opening a search hit looked like nothing had happened.
+    private var revealTarget: UUID? { libraryManager.selectedSong?.id }
+
+    private func reveal(_ id: UUID?, with proxy: ScrollViewProxy) {
+        guard let id else { return }
+        // Selected by clicking a row in THIS list — it is already on screen.
+        guard id != locallySelected else { return }
+        // A song the current filter hides cannot be scrolled to. Clearing the
+        // browser's own query is the only way to show it, and is what the
+        // operator asked for by opening it — but only do it when it is actually
+        // missing, so an unrelated search survives.
+        if !groups.contains(where: { $0.songs.contains(where: { $0.id == id }) }) {
+            guard !query.isEmpty else { return }
+            libraryManager.songLibraryQuery = ""
+            // `groups` is rebuilt by the sweep task; scroll on the next pass.
+            Task { @MainActor in
+                await Task.yield()
+                withAnimation(.easeInOut(duration: 0.2)) { proxy.scrollTo(id, anchor: .center) }
+            }
+            return
+        }
+        withAnimation(.easeInOut(duration: 0.2)) { proxy.scrollTo(id, anchor: .center) }
     }
 
     private func gridCell(_ entry: SongIndexEntry) -> some View {
-        Button { withSong(entry.id) { libraryManager.selectSong($0) } } label: {
+        Button {
+            locallySelected = entry.id
+            withSong(entry.id) { libraryManager.selectSong($0) }
+        } label: {
             VStack(spacing: 0) {
                 SongThemeSlideView(text: entry.firstLine.isEmpty ? entry.title : entry.firstLine, fontSize: 8)
                     .frame(height: 62)
@@ -578,7 +745,7 @@ struct SongListPanel: View {
                 song.verified.toggle()
                 song.modifiedDate = .now
                 try? modelContext.save()
-                NotificationCenter.default.post(name: .libraryDidChange, object: nil)
+                Notification.Name.postLibraryChange(.song)
             }
         } label: {
             Label(entry.verified ? String(localized: "Scoate verificarea", comment: "Menu")
@@ -647,7 +814,7 @@ struct SongListPanel: View {
         }
         modelContext.delete(song)
         try? modelContext.save()
-        NotificationCenter.default.post(name: .libraryDidChange, object: nil)
+        Notification.Name.postLibraryChange(.song)
     }
 
     @ViewBuilder
@@ -698,7 +865,7 @@ struct SongDetailPanel: View {
             VStack(spacing: 0) {
                 header(song: song, version: version)
                 Divider()
-                SongSlideFilmstrip(song: song, version: version, maxLines: maxLines, bilingual: bilingual)
+                SongSlideFilmstrip(song: song, version: version)
             }
         } else {
             placeholder(icon: "music.note", text: String(localized: "Selectează un cântec", comment: "Placeholder"))
@@ -901,7 +1068,15 @@ struct SongDetailPanel: View {
 // MARK: - Song Slides (auto-split + filmstrip)
 
 struct SongSlide: Identifiable, Hashable {
-    let id = UUID()
+    /// Derived from the slide's PLACE in the song, not freshly minted.
+    ///
+    /// This was `let id = UUID()`, so every call to `buildSongSlides` produced
+    /// slides that `ForEach` read as entirely new rows — and the filmstrip built
+    /// its slides in a computed property, i.e. on every render. The visible
+    /// effect was every thumbnail being torn down and re-rendered whenever
+    /// anything on the screen changed. A section may appear more than once in an
+    /// arrangement, so the position is part of the identity, not just the key.
+    var id: String { "\(sectionKey)#\(index)" }
     let sectionKey: String
     let label: String
     let type: String
@@ -946,7 +1121,15 @@ func buildSongSlides(version: SongVersion, maxLines: Int, bilingual: Bool, langu
                      bracket: String = "none", countStyle: String = "none") -> [SongSlide] {
     // The version's own override wins over the global defaults.
     let (b, c) = resolveRepeat(versionStyle: version.repeatStyle, globalBracket: bracket, globalCount: countStyle)
-    let sections = version.arrangedSections.map { section -> (key: String, label: String, type: String, lines: [String], richLines: [SongLine]) in
+    let arranged = version.arrangedSections
+    // Section labels are written by whoever made the file, in that file's
+    // language, so a Romanian service could project "Chorus". These are derived
+    // from the section KIND in the app's language instead, and verses say where
+    // they are in the song („2/4").
+    let displayLabels = songSectionLabelsInAppLanguage
+        ? SongSectionLabeling.labels(forTypes: arranged.map(\.type))
+        : arranged.map(\.label)
+    let sections = zip(arranged, displayLabels).map { section, displayLabel -> (key: String, label: String, type: String, lines: [String], richLines: [SongLine]) in
         let source = section.lines
         var rendered = source.map { line -> String in
             if bilingual, let language, let t = line.translations[language], !t.isEmpty {
@@ -958,9 +1141,81 @@ func buildSongSlides(version: SongVersion, maxLines: Int, bilingual: Bool, langu
         // Rich lines carry the SAME repeat markers (positions shifted so chords stay
         // aligned). Counts match `rendered`, so the two chunk identically in splitToSlides.
         let rich = applyRepeatMarkerRich(source, count: section.repeatCount, bracket: b, countStyle: c)
-        return (section.sectionKey, section.label, section.type, rendered, rich)
+        return (section.sectionKey, displayLabel, section.type, rendered, rich)
     }
     return splitToSlides(sections, maxLines: maxLines)
+}
+
+/// The bilingual pairing language for a version — the first translation any of
+/// its lines carries. nil when bilingual is off or nothing is translated.
+@MainActor
+func songBilingualLanguage(bilingual: Bool, version: SongVersion?) -> String? {
+    guard bilingual, let version else { return nil }
+    for sec in version.sections {
+        for line in sec.lines {
+            if let lang = line.translations.keys.sorted().first { return lang }
+        }
+    }
+    return nil
+}
+
+/// THE slides for a song, under the operator's current settings — built once.
+///
+/// There were two notions of "a slide" and they disagreed. `buildSongSlides`
+/// splits a section at `song_maxLinesPerSlide`, and the filmstrip, ⌘K, the
+/// schedule and the session runner all went through it. The presenter panel did
+/// not: it stepped `Song.sortedVerses`, which is one row per whole SECTION,
+/// never split. So with the setting at 6 lines a twelve-line verse was two
+/// slides in the library and one twelve-line slide on the projector — the
+/// setting silently did nothing exactly where it mattered.
+///
+/// Memoised because the panel reads it from `body`; a hit is a dictionary
+/// lookup, and the stamp covers every input that can change the result.
+@MainActor
+enum SongSlideCache {
+    private struct Stamp: Equatable {
+        let song: UUID
+        let version: UUID?
+        let modified: Date
+        let maxLines: Int
+        let bilingual: Bool
+        let bracket: String
+        let countStyle: String
+    }
+
+    private static var cache: [UUID: (stamp: Stamp, slides: [SongSlide])] = [:]
+    /// Songs kept. A service touches a handful.
+    private static let cap = 16
+
+    static var maxLines: Int { UserDefaults.standard.object(forKey: "song_maxLinesPerSlide") as? Int ?? 6 }
+    static var bilingual: Bool { UserDefaults.standard.bool(forKey: "song_bilingual") }
+    static var repeatBracket: String { UserDefaults.standard.string(forKey: "song_repeatBracket") ?? "none" }
+    static var repeatCount: String { UserDefaults.standard.string(forKey: "song_repeatCount") ?? "times" }
+
+    static func slides(for song: Song, version: SongVersion?) -> [SongSlide] {
+        let stamp = Stamp(song: song.id, version: version?.id, modified: song.modifiedDate,
+                          maxLines: maxLines, bilingual: bilingual,
+                          bracket: repeatBracket, countStyle: repeatCount)
+        if let hit = cache[song.id], hit.stamp == stamp { return hit.slides }
+        let built = buildSongSlides(
+            song: song, version: version, maxLines: stamp.maxLines,
+            bilingual: stamp.bilingual,
+            language: songBilingualLanguage(bilingual: stamp.bilingual, version: version),
+            bracket: stamp.bracket, countStyle: stamp.countStyle)
+        if cache.count >= cap { cache.removeAll() }
+        cache[song.id] = (stamp, built)
+        return built
+    }
+}
+
+/// Whether section labels are shown in the APP's language rather than as the
+/// source file wrote them (Settings ▸ Cântece).
+///
+/// Read straight from `UserDefaults` because the slide builders are free
+/// functions called from services and session playback as well as from views,
+/// where there is no `@AppStorage` to read.
+@MainActor var songSectionLabelsInAppLanguage: Bool {
+    UserDefaults.standard.object(forKey: "song_sectionLabelsInAppLanguage") as? Bool ?? true
 }
 
 /// Build slides for a song. Uses the rich version when present; otherwise falls back to the
@@ -970,8 +1225,12 @@ func buildSongSlides(song: Song, version: SongVersion?, maxLines: Int, bilingual
     if let version, !version.sections.isEmpty {
         return buildSongSlides(version: version, maxLines: maxLines, bilingual: bilingual, language: language, bracket: bracket, countStyle: countStyle)
     }
-    let sections = song.sortedVerses.map { v -> (key: String, label: String, type: String, lines: [String], richLines: [SongLine]) in
-        (v.label, v.label, v.verseType, v.text.components(separatedBy: "\n"), [])
+    let verses = song.sortedVerses
+    let displayLabels = songSectionLabelsInAppLanguage
+        ? SongSectionLabeling.labels(forTypes: verses.map(\.verseType))
+        : verses.map(\.label)
+    let sections = zip(verses, displayLabels).map { v, displayLabel -> (key: String, label: String, type: String, lines: [String], richLines: [SongLine]) in
+        (v.label, displayLabel, v.verseType, v.text.components(separatedBy: "\n"), [])
     }
     return splitToSlides(sections, maxLines: maxLines)
 }
@@ -982,15 +1241,41 @@ func buildSongSlides(song: Song, version: SongVersion?, maxLines: Int, bilingual
 /// Returns `[]` when the version has no chords at all (the chord casetá stays empty).
 func richLines(forSlideText text: String, in version: SongVersion?) -> [SongLine] {
     guard let version else { return [] }
-    var byText: [String: [SongChord]] = [:]
-    for sec in version.sections {
-        for line in sec.lines where !line.chords.isEmpty {
-            byText[line.text.trimmingCharacters(in: .whitespaces)] = line.chords
-        }
-    }
+    let byText = SongChordIndex.map(for: version)
     guard !byText.isEmpty else { return [] }
     return text.components(separatedBy: "\n").map { raw in
         SongLine(text: raw, chords: byText[raw.trimmingCharacters(in: .whitespaces)] ?? [])
+    }
+}
+
+/// Lyric line → its chords, for one version, built once.
+///
+/// `richLines` used to build this map inline: every section of the version
+/// faulted, and every section's `linesJSON` decoded. `SongsPreviewPanel`
+/// calls it from a computed property its `body` reads, so the whole song was
+/// re-decoded on every render of the right-hand panel — including renders
+/// caused by something else entirely.
+///
+/// Keyed by version id and stamped with the song's `modifiedDate`, so an edit
+/// invalidates it and nothing else has to remember to.
+@MainActor
+enum SongChordIndex {
+    private static var cache: [UUID: (stamp: Date, map: [String: [SongChord]])] = [:]
+    /// Versions kept. Small: a service touches a handful of songs.
+    private static let cap = 32
+
+    static func map(for version: SongVersion) -> [String: [SongChord]] {
+        let stamp = version.song?.modifiedDate ?? .distantPast
+        if let hit = cache[version.id], hit.stamp == stamp { return hit.map }
+        var byText: [String: [SongChord]] = [:]
+        for sec in version.sections {
+            for line in sec.lines where !line.chords.isEmpty {
+                byText[line.text.trimmingCharacters(in: .whitespaces)] = line.chords
+            }
+        }
+        if cache.count >= cap { cache.removeAll() }
+        cache[version.id] = (stamp, byText)
+        return byText
     }
 }
 
@@ -1009,31 +1294,24 @@ func decoratedVerse(_ verse: SongVerse, version: SongVersion?, bracket: String, 
 struct SongSlideFilmstrip: View {
     let song: Song
     let version: SongVersion?
-    let maxLines: Int
-    let bilingual: Bool
 
     @Environment(LibraryManager.self) private var libraryManager
     @Environment(PresentationManager.self) private var presentationManager
     @Environment(\.modelContext) private var modelContext
-    @AppStorage("song_repeatBracket") private var repeatBracket = "none"
-    @AppStorage("song_repeatCount") private var repeatCount = "times"
     @State private var slideToDelete: SongSlide?
 
-    private var bilingualLanguage: String? {
-        guard bilingual else { return nil }
-        for sec in (version?.sections ?? []) {
-            for line in sec.lines {
-                if let lang = line.translations.keys.sorted().first { return lang }
-            }
-        }
-        return nil
-    }
-
-    private var slides: [SongSlide] {
-        buildSongSlides(song: song, version: version, maxLines: maxLines, bilingual: bilingual, language: bilingualLanguage, bracket: repeatBracket, countStyle: repeatCount)
-    }
+    /// THE slides, from the shared memoised builder — the same ones the
+    /// presenter panel steps and the projector shows. Built once per
+    /// song/version/setting change, not per render: `buildSongSlides` decodes
+    /// `linesJSON` for every section, and this is read from `body`.
+    private var slides: [SongSlide] { SongSlideCache.slides(for: song, version: version) }
 
     var body: some View {
+        content
+    }
+
+    @ViewBuilder
+    private var content: some View {
         if slides.isEmpty {
             ContentUnavailableView(
                 String(localized: "Niciun slide", comment: "Empty"),
@@ -1059,8 +1337,11 @@ struct SongSlideFilmstrip: View {
                             onDelete: { slideToDelete = slide }
                         )
                         // Double-tap projects; single-tap selects (updates the sidebar's rendered preview).
-                        .onTapGesture(count: 2) { project(slide) }
-                        .onTapGesture { select(slide) }
+                        // Stacked `.onTapGesture(count:)` makes AppKit wait out the
+                        // double-click interval before delivering the single tap,
+                        // so selecting a slide felt dead (AGENTS.md).
+                        .gesture(TapGesture(count: 2).onEnded { project(slide) })
+                        .simultaneousGesture(TapGesture().onEnded { select(slide) })
                         .contextMenu {
                             Button {
                                 project(slide)
@@ -1200,34 +1481,6 @@ struct SongSlideThumbnail: View {
 }
 
 // MARK: - Song Editor (visual editing of all stored content)
-
-let songSectionTypes = ["verse", "chorus", "bridge", "prechorus", "intro", "ending", "tag", "interlude", "other"]
-
-func songTypeColor(_ type: String) -> Color {
-    switch type {
-    case "chorus": return .orange
-    case "bridge": return .purple
-    case "prechorus": return .pink
-    case "intro", "ending": return .teal
-    case "tag": return .green
-    case "interlude": return .indigo
-    default: return .blue   // verse / other
-    }
-}
-
-func songTypeLabel(_ type: String) -> String {
-    switch type {
-    case "verse": return String(localized: "Strofă", comment: "Section type")
-    case "chorus": return String(localized: "Refren", comment: "Section type")
-    case "bridge": return String(localized: "Punte", comment: "Section type")
-    case "prechorus": return String(localized: "Pre-refren", comment: "Section type")
-    case "intro": return String(localized: "Intro", comment: "Section type")
-    case "ending": return String(localized: "Final", comment: "Section type")
-    case "tag": return String(localized: "Tag", comment: "Section type")
-    case "interlude": return String(localized: "Interludiu", comment: "Section type")
-    default: return String(localized: "Altul", comment: "Section type")
-    }
-}
 
 /// A theme-rendered slide: the song profile's background (image > color > global) with the
 /// theme text color — so previews/thumbnails look like the real output, not a plain box.
@@ -1370,6 +1623,10 @@ struct SongEditorSheet: View {
     /// diff for the change log on Gata.
     @State private var openSnapshot: String = ""
     @State private var showChangeLog = false
+    /// Captured on appear from `LibraryManager.songEditIsNew`. Cancel DELETES a
+    /// song that only exists because the editor was opened — reverting it to its
+    /// empty snapshot would leave an untitled row in the library instead.
+    @State private var isNew = false
     @AppStorage("song_repeatBracket") private var globalRepeatBracket = "none"
     @AppStorage("song_repeatCount") private var globalRepeatCount = "times"
 
@@ -1393,6 +1650,8 @@ struct SongEditorSheet: View {
         }
         .frame(minWidth: 900, idealWidth: 1020, minHeight: 660, idealHeight: 800)
         .onAppear {
+            isNew = libraryManager.songEditIsNew
+            libraryManager.songEditIsNew = false
             ensureVersion()
             if openSnapshot.isEmpty { openSnapshot = (try? ExportService.exportSongToTopPresenterJSON(song)) ?? "" }
         }
@@ -2040,6 +2299,10 @@ struct SongEditorSheet: View {
         // Append a coarse change-log entry if anything actually changed since open.
         recordEditLog()
         try? modelContext.save()
+        // The browser renders SearchIndex projections, so an edit that never
+        // announces itself shows the pre-edit title until something else
+        // happens to rebuild the index.
+        Notification.Name.postLibraryChange(.song)
     }
 
     /// Diff the open snapshot against the current song and append summaries to the
@@ -2065,10 +2328,28 @@ struct SongEditorSheet: View {
     /// two flags, cancelling stamped the song as just-edited and handed every
     /// arrangement a new UUID, breaking any session that pointed at one.
     private func revert() {
+        if isNew {
+            discardNewSong()
+            return
+        }
         guard let result = TopPresenterSongImporter.result(fromJSON: openSnapshot) else { return }
         ImportService.applyResult(result, to: song, modelContext: modelContext,
                                   preservesTimestamps: true, preservingVersionIDs: true)
         try? modelContext.save()
+    }
+
+    /// Throw away a song that was created to be edited and never kept.
+    ///
+    /// The selection is dropped BEFORE the delete: `LibraryManager` would
+    /// otherwise be holding a reference to a row that no longer exists.
+    private func discardNewSong() {
+        libraryManager.selectedSong = nil
+        libraryManager.selectedSongVersion = nil
+        libraryManager.selectedSongVerse = nil
+        libraryManager.songToEdit = nil
+        modelContext.delete(song)
+        try? modelContext.save()
+        Notification.Name.postLibraryChange(.song)
     }
 }
 

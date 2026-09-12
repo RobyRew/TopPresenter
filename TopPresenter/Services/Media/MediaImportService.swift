@@ -108,7 +108,7 @@ enum MediaImportService {
 
         if !outcome.imported.isEmpty {
             try? modelContext.save()
-            NotificationCenter.default.post(name: .libraryDidChange, object: nil)
+            Notification.Name.postLibraryChange(.media)
         }
         return outcome
     }

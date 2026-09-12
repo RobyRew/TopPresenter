@@ -36,6 +36,13 @@ nonisolated struct SongIndexEntry: Sendable, Identifiable, Equatable {
     let blob: String
     /// Stable history key (HistoryStore.songKey) — palette popularity ranking.
     let songKey: String
+    /// The collection's `sourceFormat` — how this song got here ("manual" for
+    /// one written in the app, an importer's name otherwise). Carried on the
+    /// projection so ranking never has to fault the collection per row.
+    let sourceFormat: String
+    /// Host of the page this song was scraped from, "" when it has none.
+    /// Distinguishes "from a website" from "typed in here" for ranking.
+    let webHost: String
 }
 
 nonisolated struct MediaIndexEntry: Sendable, Identifiable {
@@ -230,6 +237,8 @@ nonisolated struct PaletteSnapshot: Sendable {
     /// songKey → distinct presentation sessions (HistoryStore) — church
     /// staples rank above never-presented songs at equal match quality.
     let presentCounts: [String: Int]
+    /// The operator's band order (Settings ▸ Cântece ▸ Prioritate).
+    let priority: SongPriorityRules
 }
 
 /// One query's results, pre-ranked and capped — the palette renders this state
@@ -293,7 +302,7 @@ nonisolated enum PaletteSearch {
         guard !trimmed.isEmpty else { return .none }
         let toks = searchTokens(trimmed)
         let folded = searchFold(trimmed)
-        let songs = rankedSongs(toks, folded: toks.joined(separator: " "), in: s, carry: carry)
+        let songs = rankedSongs(toks, in: s, carry: carry)
         let verses = verseHits(folded, tokens: toks, in: s, carry: carry)
         let mediaAll = s.media.filter { $0.folded.contains(folded) }
         let sessionsAll = s.sessions.filter { $0.folded.contains(folded) }
@@ -326,32 +335,68 @@ nonisolated enum PaletteSearch {
         return result
     }
 
-    /// Splits song hits by WHERE they matched: title (prefix hits first, then
-    /// title-contains) vs. lyrics/author only. Inside each bucket: most-often
-    /// presented first (HistoryStore counts), then alphabetical.
-    private static func rankedSongs(
-        _ toks: [String], folded: String, in s: PaletteSnapshot, carry: Int
-    ) -> (title: [SongIndexEntry], titleTotal: Int, content: [SongIndexEntry], contentTotal: Int) {
-        guard !toks.isEmpty, let hits = matchTokens(toks, index: s.songTokens) else { return ([], 0, [], 0) }
+    /// Song hits in three relevance buckets: title-PREFIX, title-contains, and
+    /// matched only in lyrics/author. Inside each bucket: most-often presented
+    /// first (HistoryStore counts), then alphabetical.
+    ///
+    /// Shared with the Songs library browser, whose own search used to be a bare
+    /// AND-match rendered in alphabetical order — no typo tolerance, no
+    /// relevance, no popularity — so the same query ranked differently depending
+    /// on which search box it was typed into.
+    static func songBuckets(
+        _ toks: [String], songs: [SongIndexEntry], tokens: TokenIndex,
+        presentCounts: [String: Int], priority: SongPriorityRules = SongPriorityRules(isEnabled: false)
+    ) -> (prefix: [SongIndexEntry], titleHit: [SongIndexEntry], rest: [SongIndexEntry]) {
+        guard !toks.isEmpty, let hits = matchTokens(toks, index: tokens) else { return ([], [], []) }
+        let folded = toks.joined(separator: " ")
         var prefix: [SongIndexEntry] = [], titleHit: [SongIndexEntry] = [], rest: [SongIndexEntry] = []
         for i in hits {
-            let e = s.songs[Int(i)]
+            let e = songs[Int(i)]
             let t = searchFold(e.title)
             if t.hasPrefix(folded) { prefix.append(e) }
             else if toks.allSatisfy({ t.contains($0) }) { titleHit.append(e) }
             else { rest.append(e) }
         }
-        let byPopularity: (SongIndexEntry, SongIndexEntry) -> Bool = { a, b in
-            let pa = s.presentCounts[a.songKey] ?? 0
-            let pb = s.presentCounts[b.songKey] ?? 0
+        // Inside a relevance bucket: the operator's explicit band order first,
+        // then how often the church has actually presented it, then the title.
+        // Priority outranks popularity because one is configured and the other
+        // is inferred — an operator who says "hymnal songs first" means it.
+        let order: (SongIndexEntry, SongIndexEntry) -> Bool = { a, b in
+            let ra = priority.rank(a), rb = priority.rank(b)
+            if ra.band != rb.band { return ra.band < rb.band }
+            if ra.position != rb.position { return ra.position < rb.position }
+            let pa = presentCounts[a.songKey] ?? 0
+            let pb = presentCounts[b.songKey] ?? 0
             if pa != pb { return pa > pb }
             return a.title < b.title
         }
-        prefix.sort(by: byPopularity)
-        titleHit.sort(by: byPopularity)
-        rest.sort(by: byPopularity)
-        return (Array((prefix + titleHit).prefix(carry)), prefix.count + titleHit.count,
-                Array(rest.prefix(carry)), rest.count)
+        prefix.sort(by: order)
+        titleHit.sort(by: order)
+        rest.sort(by: order)
+        return (prefix, titleHit, rest)
+    }
+
+    /// The same ranking as one ordered list — what a single-kind result list
+    /// (the Songs tab) renders.
+    static func rankedSongList(_ toks: [String], songs: [SongIndexEntry], tokens: TokenIndex,
+                               presentCounts: [String: Int],
+                               priority: SongPriorityRules = SongPriorityRules(isEnabled: false)
+    ) -> [SongIndexEntry] {
+        let b = songBuckets(toks, songs: songs, tokens: tokens,
+                            presentCounts: presentCounts, priority: priority)
+        return b.prefix + b.titleHit + b.rest
+    }
+
+    /// Splits song hits by WHERE they matched: title (prefix hits first, then
+    /// title-contains) vs. lyrics/author only.
+    private static func rankedSongs(
+        _ toks: [String], in s: PaletteSnapshot, carry: Int
+    ) -> (title: [SongIndexEntry], titleTotal: Int, content: [SongIndexEntry], contentTotal: Int) {
+        let b = songBuckets(toks, songs: s.songs, tokens: s.songTokens,
+                            presentCounts: s.presentCounts, priority: s.priority)
+        let title = b.prefix + b.titleHit
+        return (Array(title.prefix(carry)), title.count,
+                Array(b.rest.prefix(carry)), b.rest.count)
     }
 
     /// A query token naming a Bible book → scope hint ("isus fapte" = Isus in
@@ -489,7 +534,9 @@ actor SearchIndexBuilder {
                     firstLine: firstLines[song.id] ?? "",
                     blob: searchFold(blobSource),
                     songKey: HistoryStore.songKey(ccli: song.ccliNumber, title: song.title,
-                                                  source: song.collection?.sourceFormat ?? "")
+                                                  source: song.collection?.sourceFormat ?? ""),
+                    sourceFormat: song.collection?.sourceFormat ?? "",
+                    webHost: song.webURL?.host() ?? ""
                 ))
             }
         }
@@ -701,7 +748,8 @@ final class SearchIndex {
         PaletteSnapshot(songs: songs, songTokens: songTokens,
                         verses: verses, verseTokens: verseTokens,
                         media: media, sessions: sessions, books: books,
-                        presentCounts: presentCounts)
+                        presentCounts: presentCounts,
+                        priority: SongPriorityStore.shared.rules)
     }
 
     /// Point the verse index at a translation. Resolution order:

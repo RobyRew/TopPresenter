@@ -4056,19 +4056,39 @@ final class PresentationManager {
     @discardableResult
     func stepBibleAnchor(direction: Int, context: ModelContext) -> Bool {
         guard let anchor = bibleLiveAnchor else { return false }
-        let wanted = anchor.translation.lowercased()
-        let modules = (try? context.fetch(FetchDescriptor<BibleModule>())) ?? []
-        guard let module = modules.first(where: { $0.abbreviation.lowercased() == wanted }),
-              let book = module.books.first(where: { $0.bookNumber == anchor.bookNumber })
-        else { return false }
+        // Coordinates in, objects out. This used to fetch every module, fault
+        // `module.books`, sort every chapter of the book and then sort its
+        // verses — per ←/→ press. `BibleNavigator` fetches the one chapter it
+        // needs with its verses prefetched, and caches it by coordinate, so
+        // stepping inside a chapter touches the store zero times.
+        let nav = BibleNavigator.shared
+        guard let module = nav.module(abbreviation: anchor.translation, in: context) else { return false }
+        let moduleID = module.id
+        guard var here = nav.passage(moduleID: moduleID, bookNumber: anchor.bookNumber,
+                                     chapter: anchor.chapter, in: context) else { return false }
 
-        let chapters = book.chapters.sorted { $0.chapterNumber < $1.chapterNumber }
-        guard let chapterIdx = chapters.firstIndex(where: { $0.chapterNumber == anchor.chapter }) else { return false }
         let block = max(anchor.verseEnd - anchor.verseStart + 1, 1)
-
-        var targetChapter = chapters[chapterIdx]
-        var verses = targetChapter.verses.sorted { $0.verseNumber < $1.verseNumber }
+        var verses = here.verses
         guard let startIdx = verses.firstIndex(where: { $0.verseNumber >= anchor.verseStart }) else { return false }
+
+        /// Move to the chapter on `direction`'s side.
+        ///
+        /// Crossing into the neighbouring BOOK is deliberate: the browse path
+        /// (`LibraryManager.advanceToNextChapter`) has always done it, and the
+        /// live path stopping dead at the last chapter of a book is why a
+        /// reading could not continue across one.
+        func cross(_ direction: Int) -> Bool {
+            guard let next = nav.adjacentChapter(moduleID: moduleID, bookNumber: here.book.bookNumber,
+                                                 chapter: here.chapter.chapterNumber,
+                                                 direction: direction, in: context),
+                  let passage = nav.passage(moduleID: moduleID, bookNumber: next.bookNumber,
+                                            chapter: next.chapter, in: context),
+                  !passage.verses.isEmpty
+            else { return false }
+            here = passage
+            verses = passage.verses
+            return true
+        }
 
         var newStart: Int
         switch direction {
@@ -4077,23 +4097,25 @@ final class PresentationManager {
         case let d where d > 0:
             newStart = startIdx + block
             if newStart >= verses.count {
-                guard chapterIdx + 1 < chapters.count else { return false }
-                targetChapter = chapters[chapterIdx + 1]
-                verses = targetChapter.verses.sorted { $0.verseNumber < $1.verseNumber }
+                guard cross(1) else { return false }
                 newStart = 0
             }
         default:
             newStart = startIdx - block
             if newStart < 0 {
-                guard chapterIdx > 0 else { return false }
-                targetChapter = chapters[chapterIdx - 1]
-                verses = targetChapter.verses.sorted { $0.verseNumber < $1.verseNumber }
+                guard cross(-1) else { return false }
                 newStart = max(verses.count - block, 0)
             }
         }
         guard !verses.isEmpty, newStart >= 0, newStart < verses.count else { return false }
         let slice = Array(verses[newStart ..< min(newStart + block, verses.count)])
         guard let first = slice.first, let last = slice.last else { return false }
+
+        let book = here.book
+        let targetChapter = here.chapter
+        // Warm the neighbours so the NEXT press is already resolved.
+        nav.prefetchNeighbours(moduleID: moduleID, bookNumber: book.bookNumber,
+                               chapter: targetChapter.chapterNumber, in: context)
 
         // Text: same multi-verse settings as the Bible panel (theme-driven).
         let mv = bibleMultiVerse

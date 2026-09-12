@@ -240,7 +240,7 @@ struct MediaView: View {
         }
         modelContext.delete(item)
         try? modelContext.save()
-        NotificationCenter.default.post(name: .libraryDidChange, object: nil)
+        Notification.Name.postLibraryChange(.media)
     }
 }
 

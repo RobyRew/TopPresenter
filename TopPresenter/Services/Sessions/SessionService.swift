@@ -53,7 +53,7 @@ enum SessionService {
         let schedule = ServiceSchedule(name: trimmed.isEmpty ? fallback : trimmed, date: date)
         context.insert(schedule)
         try? context.save()
-        NotificationCenter.default.post(name: .libraryDidChange, object: nil)
+        Notification.Name.postLibraryChange(.session)
         return schedule
     }
 

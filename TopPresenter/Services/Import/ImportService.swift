@@ -1006,7 +1006,7 @@ final class ImportService {
 
         if result.collection != nil {
             try? modelContext.save()
-            NotificationCenter.default.post(name: .libraryDidChange, object: nil)
+            Notification.Name.postLibraryChange(.song)
         }
         progressHandler?(1.0, String(localized: "Gata!", comment: "Import progress"))
         return result
@@ -1235,7 +1235,7 @@ final class ImportService {
         // A batch posts this ONCE when it finishes. Per song it is both wasteful
         // and a lie: the library has not settled until the import has.
         if run == nil {
-            NotificationCenter.default.post(name: .libraryDidChange, object: nil)
+            Notification.Name.postLibraryChange(.song)
         }
     }
 
@@ -1431,7 +1431,7 @@ final class ImportService {
         )
         song.modifiedDate = .now
         try? modelContext.save()
-        NotificationCenter.default.post(name: .libraryDidChange, object: nil)
+        Notification.Name.postLibraryChange(.song)
     }
 
     /// Auto-stamp „Date proprii pentru versiune" on versions whose imported

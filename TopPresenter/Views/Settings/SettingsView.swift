@@ -44,6 +44,7 @@ struct SettingsContentView: View {
             ]),
             .init(id: "content", title: String(localized: "Conținut", comment: "Settings group"), tabs: [
                 .init(id: "bible", label: String(localized: "Biblie", comment: "Settings tab"), icon: "book.closed"),
+                .init(id: "songs", label: String(localized: "Cântece", comment: "Settings tab"), icon: "music.note.list"),
                 .init(id: "importExport", label: String(localized: "Import / Export", comment: "Settings tab"), icon: "square.and.arrow.down"),
             ]),
         ]
@@ -159,6 +160,7 @@ struct SettingsContentView: View {
                 Group {
                     switch tab {
                     case "bible": BibleSettingsTab()
+                    case "songs": SongsSettingsTab()
                     case "importExport": ImportExportSettingsTab()
                     case "projection": ProjectionSettingsTab()
                     case "updates": UpdatesSettingsTab()

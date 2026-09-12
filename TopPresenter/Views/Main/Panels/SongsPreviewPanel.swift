@@ -24,9 +24,14 @@ struct SongsPreviewPanel: View {
             return .init(text: t, reference: title, subtitle: libraryManager.songSlideLabel,
                          lines: richLines(forSlideText: t, in: libraryManager.selectedSongVersion))
         }
-        if let v = libraryManager.selectedSongVerse {
-            let d = decoratedVerse(v, version: libraryManager.selectedSongVersion, bracket: repeatBracket, countStyle: repeatCount)
-            return .init(text: d.text, reference: title, subtitle: v.label, lines: d.lines)
+        // Nothing picked yet: show the song's FIRST slide, split the same way
+        // the projector will split it. Falling back to a raw `SongVerse` showed
+        // a whole unsplit section, so the preview disagreed with the output.
+        if let song = libraryManager.selectedSong,
+           let first = SongSlideCache.slides(
+               for: song,
+               version: libraryManager.selectedSongVersion ?? song.activeVersion).first {
+            return .init(text: first.text, reference: title, subtitle: first.label, lines: first.lines)
         }
         return .init(text: "", reference: title, subtitle: "")
     }
@@ -80,37 +85,72 @@ struct SongsPreviewPanel: View {
 }
 
 // MARK: - Song Verse Controls Bar
-/// Navigation for song verse sections (chorus, verse 1, verse 2, etc.)
+/// Navigation for a song's SLIDES — the same slides the filmstrip and the
+/// projector use, split at `song_maxLinesPerSlide`.
+///
+/// This used to step `Song.sortedVerses`, one row per whole section. That is
+/// what made the lines-per-slide setting look broken: it split the filmstrip
+/// but not the thing the operator actually drives during a service.
 struct SongVerseControlsBar: View {
     @Environment(PresentationManager.self) private var pm
     @Environment(LibraryManager.self) private var libraryManager
-    @AppStorage("song_repeatBracket") private var repeatBracket = "none"
-    @AppStorage("song_repeatCount") private var repeatCount = "times"
 
     private var isLive: Bool {
         pm.liveContent.isLive && !pm.isBlackScreen
     }
 
-    /// A verse projected with repeat markers (text + chords) for the live path.
-    private func decorated(_ verse: SongVerse) -> (text: String, lines: [SongLine]) {
-        decoratedVerse(verse, version: libraryManager.selectedSongVersion, bracket: repeatBracket, countStyle: repeatCount)
-    }
-
     private var currentSong: Song? { libraryManager.selectedSong }
-    private var currentVerse: SongVerse? { libraryManager.selectedSongVerse }
 
-    private var sortedVerses: [SongVerse] {
-        currentSong?.sortedVerses ?? []
+    private var slides: [SongSlide] {
+        guard let song = currentSong else { return [] }
+        return SongSlideCache.slides(for: song,
+                                     version: libraryManager.selectedSongVersion ?? song.activeVersion)
     }
 
-    private var currentIndex: Int? {
-        guard let verse = currentVerse else { return nil }
-        return sortedVerses.firstIndex(where: { $0.id == verse.id })
+    /// Which slide is selected. Matched on content first — an edit can change
+    /// how many slides a section makes, so a stored index alone can drift onto
+    /// the wrong one — then falling back to the stored index, clamped.
+    private var currentIndex: Int {
+        let all = slides
+        guard !all.isEmpty else { return -1 }
+        if !libraryManager.songSlideText.isEmpty,
+           let i = all.firstIndex(where: { $0.text == libraryManager.songSlideText
+                                        && $0.label == libraryManager.songSlideLabel }) {
+            return i
+        }
+        return min(max(libraryManager.songSlideIndex, 0), all.count - 1)
+    }
+
+    private var galleryItems: [SlideGalleryStrip.Item] {
+        slides.map { SlideGalleryStrip.Item(id: $0.id, label: $0.label, text: $0.text) }
+    }
+
+    /// Select a slide, and follow it live when the output is already showing
+    /// this song. `present` forces it live regardless.
+    private func show(_ index: Int, present: Bool) {
+        let all = slides
+        guard all.indices.contains(index), let song = currentSong else { return }
+        let slide = all[index]
+        libraryManager.selectSongSlide(text: slide.text, label: slide.label,
+                                       index: index, count: slide.total)
+        guard present || isLive else { return }
+        pm.showSongVerse(
+            text: slide.text, title: song.title, verseLabel: slide.label,
+            slideIndex: index, slideCount: slide.total,
+            song: song, version: libraryManager.selectedSongVersion,
+            sectionType: slide.type, lines: slide.lines)
     }
 
     var body: some View {
         VStack(spacing: 6) {
-            // Current song + verse info
+            // What the next press will put on screen. The preview card above
+            // shows one slide, so without this the operator could see what is
+            // live but not what comes after it.
+            SlideGalleryStrip(items: galleryItems,
+                              currentIndex: currentIndex,
+                              onSelect: { show($0, present: false) },
+                              onPresent: { show($0, present: true) })
+
             if let song = currentSong {
                 HStack(spacing: 6) {
                     Image(systemName: "music.note")
@@ -124,22 +164,27 @@ struct SongVerseControlsBar: View {
 
                     Spacer()
 
-                    if let verse = currentVerse {
-                        Text(verse.label)
+                    let all = slides
+                    if all.indices.contains(currentIndex) {
+                        Text(all[currentIndex].label)
                             .font(.caption2)
                             .foregroundStyle(.white)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
                             .background(appAccent, in: Capsule())
+                        // How far through the song this is — the operator's cue
+                        // that a long verse is now two presses, not one.
+                        Text("\(currentIndex + 1)/\(all.count)")
+                            .font(.caption2.monospacedDigit())
+                            .foregroundStyle(.secondary)
                     }
                 }
             }
 
             // Main controls row
             HStack(spacing: 8) {
-                // ← Previous verse section
                 Button {
-                    navigateVerse(direction: -1)
+                    navigate(direction: -1)
                 } label: {
                     Image(systemName: "chevron.left")
                         .font(.body.weight(.semibold))
@@ -149,9 +194,8 @@ struct SongVerseControlsBar: View {
                 .disabled(!canNavigate(direction: -1))
                 .keyboardShortcut(.leftArrow, modifiers: [])
 
-                // Show (explicit) — projects the selected slide/verse
                 Button {
-                    showCurrent()
+                    show(currentIndex, present: true)
                 } label: {
                     Label(String(localized: "Show", comment: "Control button"), systemImage: "play.fill")
                         .font(.body.weight(.semibold))
@@ -161,9 +205,8 @@ struct SongVerseControlsBar: View {
                 .buttonStyle(.borderedProminent)
                 .tint(appAccent)
                 .keyboardShortcut(.return, modifiers: [])
-                .disabled(currentVerse == nil && libraryManager.songSlideText.isEmpty)
+                .disabled(currentIndex < 0)
 
-                // Hide (explicit) — blanks the output
                 Button {
                     pm.clearOutput()
                 } label: {
@@ -176,9 +219,8 @@ struct SongVerseControlsBar: View {
                 .tint(.orange)
                 .disabled(!isLive)
 
-                // → Next verse section
                 Button {
-                    navigateVerse(direction: 1)
+                    navigate(direction: 1)
                 } label: {
                     Image(systemName: "chevron.right")
                         .font(.body.weight(.semibold))
@@ -189,39 +231,21 @@ struct SongVerseControlsBar: View {
                 .keyboardShortcut(.rightArrow, modifiers: [])
             }
 
-            // Verse section quick-jump tabs
-            if sortedVerses.count > 1 {
+            // Quick-jump tabs, one per slide
+            let all = slides
+            if all.count > 1 {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 4) {
-                        ForEach(sortedVerses) { verse in
-                            Button {
-                                libraryManager.selectSongVerse(verse)
-                                if isLive, let song = currentSong {
-                                    let d = decorated(verse)
-                                    pm.showSongVerse(
-                                        text: d.text,
-                                        title: song.title,
-                                        verseLabel: verse.label,
-                                        slideIndex: sortedVerses.firstIndex(where: { $0.id == verse.id }) ?? 0,
-                                        slideCount: sortedVerses.count,
-                                        song: song, version: libraryManager.selectedSongVersion,
-                                        lines: d.lines
-                                    )
-                                }
-                            } label: {
-                                Text(verse.label)
+                        ForEach(Array(all.enumerated()), id: \.element.id) { idx, slide in
+                            Button { show(idx, present: isLive) } label: {
+                                Text(slide.label)
                                     .font(.caption2)
                                     .padding(.horizontal, 8)
                                     .padding(.vertical, 4)
-                                    .background(
-                                        currentVerse?.id == verse.id
-                                            ? appAccent
-                                            : Color.secondary.opacity(0.15),
-                                        in: RoundedRectangle(cornerRadius: 5)
-                                    )
-                                    .foregroundStyle(
-                                        currentVerse?.id == verse.id ? .white : .primary
-                                    )
+                                    .background(idx == currentIndex ? appAccent
+                                                                    : Color.secondary.opacity(0.15),
+                                                in: RoundedRectangle(cornerRadius: 5))
+                                    .foregroundStyle(idx == currentIndex ? .white : .primary)
                             }
                             .buttonStyle(.plain)
                         }
@@ -231,48 +255,16 @@ struct SongVerseControlsBar: View {
         }
     }
 
-    private func showCurrent() {
-        guard let song = currentSong else { return }
-        if !libraryManager.songSlideText.isEmpty {
-            pm.showSongVerse(
-                text: libraryManager.songSlideText, title: song.title,
-                verseLabel: libraryManager.songSlideLabel,
-                slideIndex: libraryManager.songSlideIndex, slideCount: libraryManager.songSlideCount,
-                song: song, version: libraryManager.selectedSongVersion,
-                lines: richLines(forSlideText: libraryManager.songSlideText, in: libraryManager.selectedSongVersion)
-            )
-        } else if let verse = currentVerse {
-            let d = decorated(verse)
-            pm.showSongVerse(
-                text: d.text, title: song.title, verseLabel: verse.label,
-                slideIndex: currentIndex ?? 0, slideCount: sortedVerses.count,
-                song: song, version: libraryManager.selectedSongVersion,
-                lines: d.lines
-            )
-        }
-    }
-
     private func canNavigate(direction: Int) -> Bool {
-        guard let idx = currentIndex else { return false }
-        let newIdx = idx + direction
-        return newIdx >= 0 && newIdx < sortedVerses.count
+        let idx = currentIndex
+        guard idx >= 0 else { return false }
+        let next = idx + direction
+        return next >= 0 && next < slides.count
     }
 
-    private func navigateVerse(direction: Int) {
-        let wasLive = isLive
-        guard let idx = currentIndex else { return }
-        let newIdx = idx + direction
-        guard newIdx >= 0, newIdx < sortedVerses.count else { return }
-        let verse = sortedVerses[newIdx]
-        libraryManager.selectSongVerse(verse)
-        if wasLive, let song = currentSong {
-            let d = decorated(verse)
-            pm.showSongVerse(
-                text: d.text, title: song.title, verseLabel: verse.label,
-                slideIndex: newIdx, slideCount: sortedVerses.count,
-                song: song, version: libraryManager.selectedSongVersion,
-                lines: d.lines
-            )
-        }
+    private func navigate(direction: Int) {
+        let idx = currentIndex
+        guard idx >= 0 else { return }
+        show(idx + direction, present: false)
     }
 }
