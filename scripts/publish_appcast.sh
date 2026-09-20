@@ -16,7 +16,8 @@
 #   NOTES          release notes (plain text / HTML)
 #   SPARKLE_PRIVATE_KEY   the EdDSA private key (secret)
 #   SPARKLE_VERSION       Sparkle tools version to fetch (default 2.9.3)
-#   MAX_ITEMS             keep at most N items in the appcast (default 40)
+#   MIN_OS                sparkle:minimumSystemVersion for this item (e.g. 15.7)
+#   MAX_ITEMS_PER_CHANNEL keep at most N items PER CHANNEL (default 10)
 #
 set -euo pipefail
 
@@ -25,7 +26,8 @@ set -euo pipefail
 CHANNEL="${CHANNEL:-}"
 NOTES="${NOTES:-}"
 SPARKLE_VERSION="${SPARKLE_VERSION:-2.9.3}"
-MAX_ITEMS="${MAX_ITEMS:-40}"
+MAX_ITEMS_PER_CHANNEL="${MAX_ITEMS_PER_CHANNEL:-10}"
+MIN_OS="${MIN_OS:-}"
 
 # 1) Fetch Sparkle CLI tools (sign_update) matching the framework version.
 curl -sL "https://github.com/sparkle-project/Sparkle/releases/download/${SPARKLE_VERSION}/Sparkle-${SPARKLE_VERSION}.tar.xz" -o sparkle.tar.xz
@@ -47,7 +49,7 @@ curl -sfL "$FEED_URL" -o site/appcast.xml || rm -f site/appcast.xml
 # 4) Insert/replace this version's <item> at the top of the channel.
 ED_SIG="$ED_SIG" LENGTH="$LENGTH" DOWNLOAD_URL="$DOWNLOAD_URL" \
 SHORT_VERSION="$SHORT_VERSION" BUILD_VERSION="$BUILD_VERSION" CHANNEL="$CHANNEL" \
-NOTES="$NOTES" MAX_ITEMS="$MAX_ITEMS" APPCAST="site/appcast.xml" \
+NOTES="$NOTES" MAX_ITEMS_PER_CHANNEL="$MAX_ITEMS_PER_CHANNEL" MIN_OS="$MIN_OS" APPCAST="site/appcast.xml" \
 python3 "$(dirname "$0")/appcast_upsert.py"
 
 # 5) A tiny landing page so the Pages root isn't a 404.

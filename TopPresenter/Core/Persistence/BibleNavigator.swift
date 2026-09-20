@@ -138,16 +138,22 @@ final class BibleNavigator {
 
     /// How many chapters each book of a module has, keyed by book number.
     ///
-    /// The book list shows this count per row, and `book.chapters.count` is a
-    /// to-many fault: one query per book, per render, and `ViewThatFits` asks
-    /// three times per row. Here it is two queries for the whole module — the
-    /// books, then their chapters in one batch — cached until Bibles change.
+    /// The book list shows this count per row. Measured on a real library, the
+    /// first version of this prefetched every chapter OBJECT of every book to
+    /// count them — 89 ms cold against 23 ms for the `book.chapters.count`
+    /// faults it replaced, because a to-many `.count` is a COUNT(*) that never
+    /// materialises rows. This is that same COUNT(*), one per book, on the
+    /// indexed relationship; the win over the original is that it runs ONCE
+    /// per module rather than per row per render (×3 for `ViewThatFits`).
     func chapterCounts(moduleID: UUID, in context: ModelContext) -> [Int: Int] {
         if let hit = chapterCounts[moduleID] { return hit }
-        var d = FetchDescriptor<BibleBook>(predicate: #Predicate { $0.module?.id == moduleID })
-        d.relationshipKeyPathsForPrefetching = [\.chapters]
+        let books = FetchDescriptor<BibleBook>(predicate: #Predicate { $0.module?.id == moduleID })
         var counts: [Int: Int] = [:]
-        for book in (try? context.fetch(d)) ?? [] { counts[book.bookNumber] = book.chapters.count }
+        // `chapters.count` on a to-many is a COUNT(*) on the foreign key —
+        // 22 ms cold for a whole module. A `fetchCount` with a `book?.id ==`
+        // predicate looked equivalent and measured 252 ms: it joins through
+        // the book's UUID column instead of the indexed relationship.
+        for book in (try? context.fetch(books)) ?? [] { counts[book.bookNumber] = book.chapters.count }
         chapterCounts[moduleID] = counts
         return counts
     }

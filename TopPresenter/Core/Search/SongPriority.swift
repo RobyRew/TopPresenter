@@ -58,9 +58,18 @@ nonisolated struct SongPriorityBand: Codable, Sendable, Equatable, Identifiable 
     var restrictedToValues: Bool = false
 
     /// Where `entry` sits in this band, or nil when it does not belong.
+    ///
+    /// Folding happens only when there are listed values to compare against:
+    /// three of the four standard bands list none, and folding their facet
+    /// value anyway was three string folds per hit per keystroke — 60 000 of
+    /// them for one common query on a 40k library.
     func position(of entry: SongIndexEntry) -> Int? {
         let value = facet.value(of: entry)
         guard !value.isEmpty else { return nil }
+        if values.isEmpty { return restrictedToValues ? nil : 0 }
+        // Exact match first — the internal marker values ("manual") and most
+        // book names hit here without any folding.
+        if let idx = values.firstIndex(of: value) { return idx }
         let folded = searchFold(value)
         if let idx = values.firstIndex(where: { searchFold($0) == folded }) { return idx }
         return restrictedToValues ? nil : values.count
@@ -82,6 +91,13 @@ nonisolated struct SongPriorityRules: Codable, Sendable, Equatable {
             if let position = band.position(of: entry) { return (i, position) }
         }
         return (active.count, 0)
+    }
+
+    /// One `Int32` that orders the way `(band, position)` does — band in the
+    /// high half, position clamped into the low half. The rank table stores
+    /// these, and the ranker compares them with a single integer comparison.
+    static func pack(_ r: (band: Int, position: Int)) -> Int32 {
+        Int32(min(r.band, 0x7FFF)) << 16 | Int32(min(r.position, 0xFFFF))
     }
 
     /// Fixed ids for the four default bands.

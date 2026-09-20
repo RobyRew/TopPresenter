@@ -30,7 +30,7 @@ struct SongsView: View {
     /// Create an empty song and open the editor on it (see `SongFactory`).
     private func createSong() {
         let song = SongFactory.create(context: modelContext)
-        Notification.Name.postLibraryChange(.song)
+        Notification.Name.postSongChange([song.id])
         libraryManager.selectSong(song)
         libraryManager.songEditIsNew = true
         libraryManager.songToEdit = song
@@ -287,7 +287,8 @@ struct SongListPanel: View {
             return PaletteSearch.rankedSongList(tokens, songs: index.songs,
                                                 tokens: index.songTokens,
                                                 presentCounts: index.presentCounts,
-                                                priority: priority.rules)
+                                                priority: priority.rules,
+                                                ranks: index.rankTable(for: priority.rules))
                 .filter(passes)
         }
 
@@ -372,7 +373,7 @@ struct SongListPanel: View {
     private func createSong() {
         let song = SongFactory.create(in: collections.first { $0.id == collectionFilter },
                                       context: modelContext)
-        Notification.Name.postLibraryChange(.song)
+        Notification.Name.postSongChange([song.id])
         libraryManager.selectSong(song)
         libraryManager.songEditVersionID = nil
         libraryManager.songEditSectionKey = nil
@@ -745,7 +746,7 @@ struct SongListPanel: View {
                 song.verified.toggle()
                 song.modifiedDate = .now
                 try? modelContext.save()
-                Notification.Name.postLibraryChange(.song)
+                Notification.Name.postSongChange([song.id])
             }
         } label: {
             Label(entry.verified ? String(localized: "Scoate verificarea", comment: "Menu")
@@ -759,9 +760,7 @@ struct SongListPanel: View {
                     withSong(entry.id) { song in
                         song.collection = target
                         try? modelContext.save()
-                        NotificationCenter.default.post(
-                            name: .libraryDidChange, object: nil,
-                            userInfo: [Notification.Name.changedKindsKey: [ImportKind.song.rawValue]])
+                        Notification.Name.postSongChange([song.id])
                     }
                 }
             }
@@ -2301,8 +2300,9 @@ struct SongEditorSheet: View {
         try? modelContext.save()
         // The browser renders SearchIndex projections, so an edit that never
         // announces itself shows the pre-edit title until something else
-        // happens to rebuild the index.
-        Notification.Name.postLibraryChange(.song)
+        // happens to rebuild the index. Named, so ONE entry is re-projected
+        // rather than the whole library.
+        Notification.Name.postSongChange([song.id])
     }
 
     /// Diff the open snapshot against the current song and append summaries to the

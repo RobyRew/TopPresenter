@@ -13,6 +13,41 @@ import Foundation
 import Combine
 import Sparkle
 
+/// Which releases the updater is allowed to offer.
+///
+/// Stored, not held in memory: the beta opt-in used to live in a plain `var` on
+/// the Sparkle delegate, so every launch came back on the stable channel. Every
+/// item the feed had ever published was on the beta channel, so the app checked,
+/// found nothing it was allowed to see, and reported "up to date" — with a
+/// newer build sitting in the feed the whole time.
+enum UpdateChannel: String, CaseIterable, Identifiable, Sendable {
+    case stable, beta
+    var id: String { rawValue }
+
+    static let defaultsKey = "updateChannel"
+
+    var localizedName: String {
+        switch self {
+        case .stable: return String(localized: "Stabil", comment: "Update channel")
+        case .beta:   return String(localized: "Beta", comment: "Update channel")
+        }
+    }
+
+    /// The Sparkle channels this choice may draw from. Stable items carry no
+    /// channel at all, which is why the stable set is empty rather than
+    /// `["stable"]`; beta sees both.
+    var sparkleChannels: Set<String> {
+        switch self {
+        case .stable: return []
+        case .beta:   return ["beta"]
+        }
+    }
+
+    static func load(from defaults: UserDefaults = .standard) -> UpdateChannel {
+        defaults.string(forKey: defaultsKey).flatMap(UpdateChannel.init(rawValue:)) ?? .stable
+    }
+}
+
 @MainActor
 final class UpdateController: ObservableObject {
     /// Mirrors the updater so the "Check for Updates…" menu item enables/disables.
@@ -67,10 +102,17 @@ final class UpdateController: ObservableObject {
     }
     var lastUpdateCheckDate: Date? { updater.lastUpdateCheckDate }
 
-    /// Opt into the beta channel (else stable only).
-    var useBetaChannel: Bool {
-        get { delegate.useBetaChannel }
-        set { delegate.useBetaChannel = newValue }
+    /// The channel the operator chose. Persisted; the delegate reads it on
+    /// every check, so a change takes effect at the next check without a
+    /// restart.
+    var channel: UpdateChannel {
+        get { delegate.channel }
+        set {
+            guard newValue != delegate.channel else { return }
+            delegate.channel = newValue
+            UserDefaults.standard.set(newValue.rawValue, forKey: UpdateChannel.defaultsKey)
+            objectWillChange.send()
+        }
     }
 
     /// Install a SPECIFIC version (reinstall / downgrade): force Sparkle to pick that
@@ -90,12 +132,13 @@ private final class UpdaterDelegate: NSObject, SPUUpdaterDelegate {
     // isolation checking, so guard the state explicitly — otherwise a check can
     // read a half-written channel/target and pick the wrong appcast item.
     private let lock = NSLock()
-    private var _useBetaChannel = false
+    /// Seeded from UserDefaults so the choice survives a relaunch.
+    private var _channel: UpdateChannel = UpdateChannel.load()
     private var _targetVersion: String?
 
-    var useBetaChannel: Bool {
-        get { lock.withLock { _useBetaChannel } }
-        set { lock.withLock { _useBetaChannel = newValue } }
+    var channel: UpdateChannel {
+        get { lock.withLock { _channel } }
+        set { lock.withLock { _channel = newValue } }
     }
     var targetVersion: String? {
         get { lock.withLock { _targetVersion } }
@@ -103,7 +146,7 @@ private final class UpdaterDelegate: NSObject, SPUUpdaterDelegate {
     }
 
     func allowedChannels(for updater: SPUUpdater) -> Set<String> {
-        useBetaChannel ? ["beta"] : []
+        channel.sparkleChannels
     }
 
     func versionComparator(for updater: SPUUpdater) -> (any SUVersionComparison)? {

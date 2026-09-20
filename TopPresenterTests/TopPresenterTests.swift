@@ -3602,7 +3602,7 @@ struct PaletteSearchTests {
                        hasMedia: false, verified: false, modifiedDate: .now,
                        firstLine: "", blob: searchFold("\(title) \(author) \(lyrics)"),
                        songKey: HistoryStore.songKey(ccli: "", title: title, source: ""),
-                       sourceFormat: "", webHost: "")
+                       sourceFormat: "", webHost: "", foldedTitle: searchFold(title))
     }
 
     private func verse(_ book: Int, _ bookName: String, _ chapter: Int, _ v: Int,
@@ -3620,7 +3620,7 @@ struct PaletteSearchTests {
                         verseTokens: TokenIndex.build(blobs: verses.map(\.folded)),
                         media: [], sessions: [], books: books,
                         presentCounts: presentCounts,
-                        priority: SongPriorityRules(isEnabled: false))
+                        priority: SongPriorityRules(isEnabled: false), ranks: [])
     }
 
     @Test func fuzzyPrefixToleratesTypos() {
@@ -5724,7 +5724,8 @@ struct SlideProviderTests {
                                    collectionID: nil, collectionName: "", versionCount: 1,
                                    hasMedia: false, verified: true, modifiedDate: .now,
                                    firstLine: "O, Doamne mare, când privesc eu lumea",
-                                   blob: "", songKey: "x", sourceFormat: "", webHost: "")
+                                   blob: "", songKey: "x", sourceFormat: "", webHost: "",
+                                   foldedTitle: searchFold("Ce mare ești Tu"))
         #expect(SongTokenProvider.projectionField("", entry: entry) == "O, Doamne mare, când privesc eu lumea")
         #expect(SongTokenProvider.projectionField("title", entry: entry) == "Ce mare ești Tu")
         #expect(SongTokenProvider.projectionField("author", entry: entry) == "Stuart Hine")
@@ -10551,7 +10552,7 @@ struct SongSearchRankingTests {
                        verified: false, modifiedDate: .now, firstLine: "",
                        blob: searchFold("\(title) \(author)"),
                        songKey: key.isEmpty ? title : key,
-                       sourceFormat: "", webHost: "")
+                       sourceFormat: "", webHost: "", foldedTitle: searchFold(title))
     }
 
     private func fixture() -> (songs: [SongIndexEntry], tokens: TokenIndex) {
@@ -10606,7 +10607,7 @@ struct SongPriorityTests {
                        collectionName: "", versionCount: 1, hasMedia: false,
                        verified: false, modifiedDate: .now, firstLine: "",
                        blob: searchFold(title), songKey: key.isEmpty ? title : key,
-                       sourceFormat: source, webHost: web)
+                       sourceFormat: source, webHost: web, foldedTitle: searchFold(title))
     }
 
     /// The ladder the operator described: from a hymnal, then with an author,
@@ -10827,5 +10828,112 @@ struct SongSlideSplittingTests {
             bracket: SongSlideCache.repeatBracket, countStyle: SongSlideCache.repeatCount)
         #expect(cached.map(\.text) == direct.map(\.text))
         #expect(cached.map(\.label) == direct.map(\.label))
+    }
+}
+
+// MARK: - Incremental token index
+
+@Suite("Token index — incremental replace")
+struct TokenIndexIncrementalTests {
+
+    private let blobs = [
+        searchFold("Mare este Domnul, mare și minunat"),
+        searchFold("Isus, lumina lumii"),
+        searchFold("Cântare nouă pentru Domnul"),
+    ]
+
+    /// The invariant everything else rests on: swapping one entry's tokens must
+    /// land on EXACTLY the index a full rebuild over the edited blobs produces.
+    /// If these ever differ, search results depend on whether the operator
+    /// edited a song or restarted the app.
+    @Test func replacingOneEntryEqualsAFullRebuild() {
+        let index = TokenIndex.build(blobs: blobs)
+        var edited = blobs
+        edited[1] = searchFold("Isus, Păstorul cel bun")     // drops "lumina lumii", adds "pastorul cel bun"
+        let incremental = index.replacing(entry: 1, oldBlob: blobs[1], newBlob: edited[1])
+        let full = TokenIndex.build(blobs: edited)
+        #expect(incremental.tokens == full.tokens)
+        #expect(incremental.postings == full.postings)
+    }
+
+    @Test func appendingANewEntryEqualsAFullRebuild() {
+        let index = TokenIndex.build(blobs: blobs)
+        let added = searchFold("Aleluia, slavă Ție")
+        let incremental = index.replacing(entry: Int32(blobs.count), oldBlob: "", newBlob: added)
+        let full = TokenIndex.build(blobs: blobs + [added])
+        #expect(incremental.tokens == full.tokens)
+        #expect(incremental.postings == full.postings)
+    }
+
+    /// A token that only this entry used must disappear from the table, not
+    /// linger with an empty posting list.
+    @Test func removingTheLastUseOfATokenDropsIt() {
+        let index = TokenIndex.build(blobs: blobs)
+        #expect(index.candidates(exact: "lumina") == [1])
+        let after = index.replacing(entry: 1, oldBlob: blobs[1], newBlob: searchFold("Isus"))
+        #expect(after.candidates(exact: "lumina").isEmpty)
+        #expect(!after.tokens.contains("lumina"))
+        #expect(after.candidates(exact: "isus") == [1], "the kept token still finds the entry")
+    }
+
+    @Test func anUnchangedBlobIsANoOp() {
+        let index = TokenIndex.build(blobs: blobs)
+        let same = index.replacing(entry: 0, oldBlob: blobs[0], newBlob: blobs[0])
+        #expect(same.tokens == index.tokens)
+        #expect(same.postings == index.postings)
+    }
+
+    /// Postings must stay ascending — `build` leaves them that way and the
+    /// intersection logic in `match` does not sort.
+    @Test func postingsStaySortedAfterAnInsertInTheMiddle() {
+        let index = TokenIndex.build(blobs: blobs)
+        // Give entry 1 the word "domnul", which entries 0 and 2 already have.
+        let after = index.replacing(entry: 1, oldBlob: blobs[1],
+                                    newBlob: searchFold("Isus, Domnul lumii"))
+        let i = after.tokens.firstIndex(of: "domnul")!
+        #expect(after.postings[i] == [0, 1, 2])
+    }
+
+    /// The tokeniser used for the swap must be the one `build` uses, or a
+    /// single-letter rule difference silently desynchronises the two paths.
+    @Test func theSwapTokeniserMatchesBuild() {
+        let blob = searchFold("A 5 ab abc")     // "a" dropped (single letter), "5" kept (digit)
+        #expect(TokenIndex.tokens(in: blob) == ["5", "ab", "abc"])
+        let built = TokenIndex.build(blobs: [blob])
+        #expect(Set(built.tokens) == TokenIndex.tokens(in: blob))
+    }
+}
+
+@Suite("Song projection — one path")
+@MainActor
+struct SongProjectionTests {
+    private func context() throws -> ModelContext {
+        ModelContext(try ModelContainer(
+            for: Schema(versionedSchema: SchemaV2.self),
+            configurations: ModelConfiguration(isStoredInMemoryOnly: true)))
+    }
+
+    /// `buildSong(id:)` (the incremental path) and `buildSongs()` (the full
+    /// path) must agree on every field for the same song, or an edited song
+    /// ranks differently until the next restart.
+    @Test func theSingleSongProjectionMatchesTheFullBuild() async throws {
+        let container = try ModelContainer(
+            for: Schema(versionedSchema: SchemaV2.self),
+            configurations: ModelConfiguration(isStoredInMemoryOnly: true))
+        let ctx = ModelContext(container)
+        let book = Songbook(name: "Laudele Domnului")
+        ctx.insert(book)
+        let song = SongFactory.create(title: "Mare este Domnul", context: ctx)
+        song.author = "Ion"
+        song.songbook = book
+        song.language = "ro"
+        song.verified = true
+        try ctx.save()
+
+        let builder = SearchIndexBuilder(modelContainer: container)
+        let full = await builder.buildSongs().entries.first { $0.id == song.id }
+        let single = await builder.buildSong(id: song.id)
+        #expect(full != nil && single != nil)
+        #expect(full == single)
     }
 }

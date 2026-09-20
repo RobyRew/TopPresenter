@@ -25,8 +25,8 @@ struct UpdatesSettingsTab: View {
     private var autoDownload: Binding<Bool> {
         Binding(get: { updater.automaticallyDownloadsUpdates }, set: { updater.automaticallyDownloadsUpdates = $0 })
     }
-    private var beta: Binding<Bool> {
-        Binding(get: { updater.useBetaChannel }, set: { updater.useBetaChannel = $0 })
+    private var channel: Binding<UpdateChannel> {
+        Binding(get: { updater.channel }, set: { updater.channel = $0 })
     }
     private var interval: Binding<TimeInterval> {
         Binding(get: { updater.updateCheckInterval }, set: { updater.updateCheckInterval = $0 })
@@ -57,7 +57,23 @@ struct UpdatesSettingsTab: View {
                 .disabled(!autoCheck.wrappedValue)
                 Toggle(String(localized: "Descarcă și instalează automat", comment: "Setting"), isOn: autoDownload)
                     .disabled(!autoCheck.wrappedValue)
-                Toggle(String(localized: "Include versiuni beta", comment: "Setting"), isOn: beta)
+                // A choice between two things, not an opt-in: an operator who
+                // wants stable builds only should be able to SEE that that is
+                // what they have. The picker names the channel; the checkbox
+                // only ever named the exception.
+                Picker(String(localized: "Canal de actualizări", comment: "Setting — update channel"),
+                       selection: channel) {
+                    ForEach(UpdateChannel.allCases) { c in
+                        Text(c.localizedName).tag(c)
+                    }
+                }
+                .pickerStyle(.segmented)
+                Text(channel.wrappedValue == .beta
+                     ? String(localized: "Primești și versiunile beta — mai noi, mai puțin testate. Poți reveni oricând la Stabil.",
+                              comment: "Setting hint — beta channel")
+                     : String(localized: "Primești doar versiunile stabile.",
+                              comment: "Setting hint — stable channel"))
+                    .font(.caption).foregroundStyle(.secondary)
             } header: {
                 Text(String(localized: "Actualizări automate", comment: "Section"))
             } footer: {

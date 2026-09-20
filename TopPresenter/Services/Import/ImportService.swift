@@ -1431,7 +1431,7 @@ final class ImportService {
         )
         song.modifiedDate = .now
         try? modelContext.save()
-        Notification.Name.postLibraryChange(.song)
+        Notification.Name.postSongChange([song.id])
     }
 
     /// Auto-stamp „Date proprii pentru versiune" on versions whose imported

@@ -1,13 +1,38 @@
 name: Build & Release
 
+# Three paths, one build:
+#
+#   push to main / any PR   → build + unit tests. Nothing is published.
+#   push to beta            → build + tests, then a BETA release: the tag
+#                             v<version>-beta.N is created here (N counts up
+#                             per <version>), the release is a GitHub
+#                             pre-release with its OWN immutable assets, and
+#                             the Sparkle feed gets an item on the "beta"
+#                             channel.
+#   tag v<version>          → build + tests, then the STABLE release for that
+#                             version and a feed item on no channel (Sparkle's
+#                             stable). The tag must equal the project's
+#                             MARKETING_VERSION, or the build fails.
+#
+# What this replaced, and why: every push to main used to publish a "rolling
+# alpha" — one tag, moved to each commit, one release overwritten in place,
+# one asset URL rewritten every time. The Sparkle feed kept the last 40 items,
+# all pointing at that single URL with the signature and length of bytes that
+# no longer existed. Every entry but the newest was a dead link that Sparkle
+# reported as "improperly signed", and every one was on the beta channel — so
+# the default (stable) channel had nothing in it at all, and a fresh install
+# checking for updates was told it was up to date while build 125 sat in the
+# feed. Releases here are immutable and named; the feed is pruned per channel.
+
 on:
   push:
-    branches: [main]
+    branches: [main, beta]
     tags: ['v*']
   pull_request:
-    branches: [main]
+    branches: [main, beta]
 
-# Cancel in-progress runs for the same branch
+# One run per ref at a time. Two quick pushes to `beta` would otherwise race
+# for the same beta number.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -20,21 +45,25 @@ env:
   # (SWIFT_DEFAULT_ACTOR_ISOLATION, approachable concurrency) — never build the
   # release with a different major Xcode than the one used for development.
   XCODE_VERSION: '26.3'
+  FEED_URL: https://robyrew.github.io/TopPresenter/appcast.xml
 
 jobs:
   build:
     name: Build & Package
     runs-on: macos-26
-    timeout-minutes: 40
+    timeout-minutes: 45
     outputs:
-      version: ${{ steps.package.outputs.VERSION }}
-      build: ${{ steps.package.outputs.BUILD }}
-      prerelease_tag: ${{ steps.package.outputs.PRERELEASE_TAG }}
-      prerelease_version: ${{ steps.package.outputs.PRERELEASE_VERSION }}
+      kind: ${{ steps.version.outputs.KIND }}
+      version: ${{ steps.version.outputs.VERSION }}
+      tag: ${{ steps.version.outputs.TAG }}
+      build: ${{ github.run_number }}
+      min_os: ${{ steps.version.outputs.MIN_OS }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          fetch-depth: 0   # beta numbering counts existing tags
 
       - name: Select Xcode
         run: |
@@ -51,15 +80,64 @@ jobs:
         # percentages drift away from the catalog.
         run: python3 scripts/i18n_coverage.py --check
 
+      - name: Decide what this run is
+        id: version
+        run: |
+          # The project's MARKETING_VERSION is the version being worked on.
+          BASE=$(sed -n 's/^[[:space:]]*MARKETING_VERSION = \([^;]*\);.*/\1/p' "$PRODUCT_NAME.xcodeproj/project.pbxproj" | head -1)
+          MIN_OS=$(sed -n 's/^[[:space:]]*MACOSX_DEPLOYMENT_TARGET = \([^;]*\);.*/\1/p' "$PRODUCT_NAME.xcodeproj/project.pbxproj" | head -1)
+          [ -n "$BASE" ] || { echo "::error::MARKETING_VERSION not found in the project"; exit 1; }
+          echo "project version: $BASE   min macOS: $MIN_OS"
+
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            TAGV="${GITHUB_REF_NAME#v}"
+            if [[ "$TAGV" == *-* ]]; then
+              echo "::error::Tags are for STABLE releases only (v$BASE). Betas come from pushing the beta branch."
+              exit 1
+            fi
+            if [[ "$TAGV" != "$BASE" ]]; then
+              echo "::error::Tag $GITHUB_REF_NAME does not match the project's MARKETING_VERSION ($BASE). Bump the project first, or tag v$BASE."
+              exit 1
+            fi
+            KIND=stable
+            VERSION="$BASE"
+            TAG="$GITHUB_REF_NAME"
+          elif [[ "$GITHUB_REF" == refs/heads/beta && "$GITHUB_EVENT_NAME" == push ]]; then
+            KIND=beta
+            # Next beta number for THIS base version: one past the highest
+            # existing v<base>-beta.N. Counting instead of max would reuse a
+            # number after a tag is deleted.
+            git fetch --tags --force --quiet
+            LAST=$(git tag -l "v${BASE}-beta.*" | sed -n "s/^v${BASE}-beta\.\([0-9]*\)$/\1/p" | sort -n | tail -1)
+            N=$(( ${LAST:-0} + 1 ))
+            VERSION="${BASE}-beta.${N}"
+            TAG="v${VERSION}"
+          else
+            KIND=ci
+            VERSION="${BASE}-ci.${GITHUB_RUN_NUMBER}"
+            TAG=""
+          fi
+          echo "kind=$KIND version=$VERSION tag=$TAG"
+          {
+            echo "KIND=$KIND"
+            echo "VERSION=$VERSION"
+            echo "TAG=$TAG"
+            echo "MIN_OS=$MIN_OS"
+          } | tee -a "$GITHUB_OUTPUT" >> "$GITHUB_ENV"
+
       - name: Resolve dependencies
         run: xcodebuild -resolvePackageDependencies -scheme "$SCHEME" -project "$PRODUCT_NAME.xcodeproj"
 
       - name: Build
         run: |
-          # Monotonic CFBundleVersion so Sparkle can tell releases apart (the project's
-          # CURRENT_PROJECT_VERSION is a fixed 1). Ad-hoc code signing ("-") so the app's
-          # entitlements (sandbox + Sparkle XPC) apply with no Apple certs; the bundle is
-          # uniformly RE-signed below so every nested binary carries the same identity.
+          # MARKETING_VERSION carries the full string (1.0.1-beta.3) so the
+          # About box, the Versions list and the feed all say the same thing —
+          # the bundle used to say 1.0.0 inside a release named 1.0.0-beta.1.
+          # CURRENT_PROJECT_VERSION is the run number: monotonic across every
+          # branch and tag, which is what Sparkle actually compares.
+          # Ad-hoc code signing ("-") so the app's entitlements (sandbox +
+          # Sparkle XPC) apply with no Apple certs; the bundle is uniformly
+          # RE-signed below so every nested binary carries the same identity.
           xcodebuild \
             -scheme "$SCHEME" \
             -project "$PRODUCT_NAME.xcodeproj" \
@@ -71,6 +149,7 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=YES \
             DEVELOPMENT_TEAM="" \
+            MARKETING_VERSION="$VERSION" \
             CURRENT_PROJECT_VERSION=${{ github.run_number }} \
             clean build
 
@@ -115,43 +194,22 @@ jobs:
             codesign -dv "$bin" 2>&1 | grep -E 'Signature|TeamIdentifier' | sed "s|^|$(basename "$bin"): |"
           done
 
+      - name: Check the bundle says what the release will say
+        run: |
+          APP="build/Build/Products/Release/$PRODUCT_NAME.app"
+          GOT=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$APP/Contents/Info.plist")
+          BUILD=$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$APP/Contents/Info.plist")
+          echo "bundle: $GOT ($BUILD)"
+          [ "$GOT" = "$VERSION" ] || { echo "::error::bundle version $GOT ≠ $VERSION"; exit 1; }
+          [ "$BUILD" = "${{ github.run_number }}" ] || { echo "::error::bundle build $BUILD ≠ run ${{ github.run_number }}"; exit 1; }
+
       - name: Package app
-        id: package
         run: |
           APP_PATH="build/Build/Products/Release/$PRODUCT_NAME.app"
-          if [ ! -d "$APP_PATH" ]; then
-            echo "❌ App not found at $APP_PATH"
-            find build -name "*.app" -type d
-            exit 1
-          fi
+          test -d "$APP_PATH" || { echo "❌ App not found at $APP_PATH"; find build -name "*.app" -type d; exit 1; }
 
-          # Get version info
-          VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$APP_PATH/Contents/Info.plist" 2>/dev/null || echo "1.0")
-          BUILD=$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$APP_PATH/Contents/Info.plist" 2>/dev/null || echo "1")
-
-          # ONE rolling alpha, not one per commit.
-          #
-          # This counted existing tags and incremented, so every push to main
-          # left a permanent release behind — 72 of them accumulated before
-          # anyone looked, and deleting them by hand only bought an hour. The
-          # tag is fixed now (`v<version>-alpha`) and the release is overwritten
-          # in place, so "the latest build of main" is always exactly one entry.
-          #
-          # The build number still climbs (CFBundleVersion, from the run number)
-          # which is what Sparkle actually compares, so auto-update keeps
-          # working across overwrites.
-          git fetch --tags --force --quiet
-
-          echo "VERSION=$VERSION" >> $GITHUB_ENV
-          echo "BUILD=$BUILD" >> $GITHUB_ENV
-          echo "PRERELEASE_VERSION=$VERSION-alpha" >> $GITHUB_ENV
-          echo "PRERELEASE_TAG=v$VERSION-alpha" >> $GITHUB_ENV
-          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
-          echo "BUILD=$BUILD" >> $GITHUB_OUTPUT
-          echo "PRERELEASE_VERSION=$VERSION-alpha" >> $GITHUB_OUTPUT
-          echo "PRERELEASE_TAG=v$VERSION-alpha" >> $GITHUB_OUTPUT
-
-          # Create ZIP
+          # Assets are named by the FULL version so every release has its own
+          # files; the feed's enclosure URLs are therefore immutable.
           cd "build/Build/Products/Release"
           ditto -c -k --keepParent "$PRODUCT_NAME.app" "$PRODUCT_NAME-$VERSION.zip"
           mv "$PRODUCT_NAME-$VERSION.zip" "$GITHUB_WORKSPACE/"
@@ -195,9 +253,7 @@ jobs:
           if [ -z "$FANCY_OK" ]; then
             echo "⚠️ create-dmg failed 3× — falling back to plain hdiutil DMG"
             rm -f "$DMG"
-            hdiutil create -volname "$PRODUCT_NAME" \
-              -srcfolder "$PRODUCT_NAME.app" \
-              -ov -format UDZO "$DMG"
+            hdiutil create -volname "$PRODUCT_NAME" -srcfolder "$PRODUCT_NAME.app" -ov -format UDZO "$DMG"
           fi
 
           # Verify the DMG mounts and carries the installer layout.
@@ -221,186 +277,28 @@ jobs:
             TopPresenter-*.dmg
           retention-days: 30
 
-  # Unique pre-release on every push to main
-  pre-release:
-    name: Pre-release (Alpha)
-    needs: build
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    runs-on: macos-26
-    permissions:
-      contents: write
-      pages: write        # deploy the appcast to Pages (no gh-pages branch)
-      id-token: write     # required by actions/deploy-pages
-    environment:
-      name: github-pages
-    env:
-      # Empty until you add the repo secret — the appcast steps then no-op (CI stays green).
-      SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
-
-    steps:
-      - name: Checkout (for appcast scripts)
-        uses: actions/checkout@v7
-
-      - name: Download artifact
-        uses: actions/download-artifact@v8
-        with:
-          pattern: TopPresenter-*
-          merge-multiple: true
-
-      - name: Get short SHA
-        run: echo "SHORT_SHA=${GITHUB_SHA::7}" >> $GITHUB_ENV
-
-      # The rolling tag has to MOVE, and the release action will not move one it
-      # did not create. Without this the release keeps updating its assets while
-      # its tag still points at whatever commit first created it — the download
-      # is right and the "source code" links are a lie.
-      - name: Move the rolling alpha tag to this commit
-        env:
-          TAG: ${{ needs.build.outputs.prerelease_tag }}
-        run: |
-          git tag -f "$TAG" "$GITHUB_SHA"
-          git push -f origin "refs/tags/$TAG"
-
-      - name: Create alpha pre-release
-        uses: softprops/action-gh-release@v3
-        with:
-          tag_name: ${{ needs.build.outputs.prerelease_tag }}
-          name: "TopPresenter ${{ needs.build.outputs.prerelease_version }}"
-          prerelease: true
-          # No generated notes on a rolling release: they would be the diff since
-          # the tag, and the tag is always the previous push.
-          generate_release_notes: false
-          body: |
-            ### ⚡ Latest build of `main`
-
-            This release is **overwritten on every push**. It is always the tip
-            of `main`, never a fixed point in history — if you need a build that
-            stays put, use a tagged beta or stable release.
-
-            **Version:** `${{ needs.build.outputs.prerelease_version }}` (build ${{ needs.build.outputs.build }})
-            **Commit:** `${{ github.sha }}`
-            **Built:** ${{ github.event.head_commit.timestamp }}
-
-            > ⚠️ This is an unsigned build. To open on macOS:
-            > Right-click the app → Open → Open (bypass Gatekeeper).
-            > Or run: `xattr -cr TopPresenter.app`
-
-            ---
-            **Commit message:** ${{ github.event.head_commit.message }}
-          files: |
-            TopPresenter-*.zip
-            TopPresenter-*.dmg
-
-      - name: Build signed appcast (beta channel)
-        if: ${{ env.SPARKLE_PRIVATE_KEY != '' }}
-        env:
-          ZIP: TopPresenter-${{ needs.build.outputs.version }}.zip
-          DOWNLOAD_URL: https://github.com/${{ github.repository }}/releases/download/${{ needs.build.outputs.prerelease_tag }}/TopPresenter-${{ needs.build.outputs.version }}.zip
-          SHORT_VERSION: ${{ needs.build.outputs.prerelease_version }}
-          BUILD_VERSION: ${{ github.run_number }}
-          CHANNEL: beta
-          FEED_URL: https://robyrew.github.io/TopPresenter/appcast.xml
-          NOTES: ${{ github.event.head_commit.message }}
-        run: |
-          chmod +x scripts/publish_appcast.sh
-          scripts/publish_appcast.sh
-
-      - name: Setup Pages
-        if: ${{ env.SPARKLE_PRIVATE_KEY != '' }}
-        uses: actions/configure-pages@v6
-
-      - name: Upload appcast artifact
-        if: ${{ env.SPARKLE_PRIVATE_KEY != '' }}
-        uses: actions/upload-pages-artifact@v5
-        with:
-          path: site
-
-      - name: Deploy appcast to Pages
-        if: ${{ env.SPARKLE_PRIVATE_KEY != '' }}
-        uses: actions/deploy-pages@v5
-
-  # Named beta on a v*-beta.N tag (v0.1.0-beta.1, v0.1.0-beta.2, …).
-  #
-  # The repo had exactly two paths — an automatic alpha on every push to main,
-  # and a stable release on a tag with no `-` — so there was no way to publish a
-  # beta at all: a `-beta.` tag built and then matched neither job, producing
-  # artifacts nobody could download. A beta is a DELIBERATE, named build, which
-  # is what distinguishes it from the alpha that every push already emits.
-  #
-  # Same appcast channel as alpha ("beta"), so existing beta-channel subscribers
-  # are offered it without any client change.
-  # Publishing the release and deploying the appcast are SEPARATE jobs on
-  # purpose. The `github-pages` environment only permits the `main` and
-  # `gh-pages` branches, so a job claiming it from a TAG is rejected at the gate
-  # before a single step runs:
-  #
-  #   Tag "v0.1.0-beta.1" is not allowed to deploy to github-pages due to
-  #   environment protection rules.
-  #
-  # With both in one job that took the release down with it. Split, the beta
-  # always publishes, and only the Sparkle feed update depends on the repo
-  # allowing tag deployments (Settings → Environments → github-pages →
-  # Deployment branches and tags → add a `v*` tag rule).
+  # ---------------------------------------------------------------- BETA
+  # Publishing the release and deploying the feed are one job here. The
+  # `github-pages` environment must permit the `beta` BRANCH (Settings →
+  # Environments → github-pages → Deployment branches and tags), because this
+  # job runs from the branch push, before its tag exists. The rule was added
+  # alongside this workflow; if it is ever removed the job is rejected at the
+  # gate before a step runs, and no beta is published at all.
   beta:
     name: Beta Release
     needs: build
-    if: startsWith(github.ref, 'refs/tags/v') && contains(github.ref_name, '-beta.')
+    if: needs.build.outputs.kind == 'beta'
     runs-on: macos-26
     permissions:
       contents: write
-
-    steps:
-      - name: Download artifact
-        uses: actions/download-artifact@v8
-        with:
-          pattern: TopPresenter-*
-          merge-multiple: true
-
-      - name: Derive version from the tag
-        # The TAG is the source of truth for a beta's name — the counter cannot
-        # be inferred the way the alpha's is.
-        run: echo "BETA_VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_ENV
-
-      - name: Create beta pre-release
-        uses: softprops/action-gh-release@v3
-        with:
-          tag_name: ${{ github.ref_name }}
-          name: "TopPresenter ${{ env.BETA_VERSION }}"
-          prerelease: true
-          generate_release_notes: true
-          body: |
-            ### 🧪 Beta
-
-            **Version:** `${{ env.BETA_VERSION }}`
-            **Tag:** `${{ github.ref_name }}`
-            **Commit:** `${{ github.sha }}`
-
-            A deliberate beta build, not the automatic alpha that every push to
-            `main` produces. Offered to the **beta** update channel.
-
-            > ⚠️ This is an unsigned build. To open on macOS:
-            > Right-click the app → Open → Open (bypass Gatekeeper).
-            > Or run: `xattr -cr TopPresenter.app`
-          files: |
-            TopPresenter-*.zip
-            TopPresenter-*.dmg
-
-  # Offers the beta to Sparkle's beta channel. Needs the `github-pages`
-  # environment to permit tag deployments — until it does, THIS job fails while
-  # the release above still publishes, which is the failure mode we want.
-  beta-appcast:
-    name: Beta Appcast
-    needs: [build, beta]
-    if: startsWith(github.ref, 'refs/tags/v') && contains(github.ref_name, '-beta.')
-    runs-on: macos-26
-    permissions:
-      contents: read
       pages: write
       id-token: write
     environment:
       name: github-pages
     env:
       SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+      VERSION: ${{ needs.build.outputs.version }}
+      TAG: ${{ needs.build.outputs.tag }}
 
     steps:
       - name: Checkout (for appcast scripts)
@@ -412,19 +310,45 @@ jobs:
           pattern: TopPresenter-*
           merge-multiple: true
 
-      - name: Derive version from the tag
-        run: echo "BETA_VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_ENV
+      - name: Create the beta tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "$TAG" "$GITHUB_SHA" -m "TopPresenter $VERSION"
+          git push origin "refs/tags/$TAG"
+
+      - name: Create beta pre-release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ env.TAG }}
+          name: "TopPresenter ${{ env.VERSION }}"
+          prerelease: true
+          generate_release_notes: true
+          body: |
+            ### 🧪 Beta ${{ env.VERSION }}
+
+            **Build:** ${{ needs.build.outputs.build }} · **Commit:** `${{ github.sha }}`
+
+            Offered to the **Beta** update channel (Settings ▸ Actualizări ▸ Canal).
+            Stable users are not offered betas.
+
+            > ⚠️ This is an unsigned build. To open on macOS:
+            > Right-click the app → Open → Open (bypass Gatekeeper).
+            > Or run: `xattr -cr TopPresenter.app`
+          files: |
+            TopPresenter-*.zip
+            TopPresenter-*.dmg
 
       - name: Build signed appcast (beta channel)
         if: ${{ env.SPARKLE_PRIVATE_KEY != '' }}
         env:
-          ZIP: TopPresenter-${{ needs.build.outputs.version }}.zip
-          DOWNLOAD_URL: https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/TopPresenter-${{ needs.build.outputs.version }}.zip
-          SHORT_VERSION: ${{ env.BETA_VERSION }}
-          BUILD_VERSION: ${{ github.run_number }}
+          ZIP: TopPresenter-${{ env.VERSION }}.zip
+          DOWNLOAD_URL: https://github.com/${{ github.repository }}/releases/download/${{ env.TAG }}/TopPresenter-${{ env.VERSION }}.zip
+          SHORT_VERSION: ${{ env.VERSION }}
+          BUILD_VERSION: ${{ needs.build.outputs.build }}
           CHANNEL: beta
-          FEED_URL: https://robyrew.github.io/TopPresenter/appcast.xml
-          NOTES: "Beta ${{ env.BETA_VERSION }}"
+          MIN_OS: ${{ needs.build.outputs.min_os }}
+          NOTES: "Beta ${{ env.VERSION }}"
         run: |
           chmod +x scripts/publish_appcast.sh
           scripts/publish_appcast.sh
@@ -443,26 +367,21 @@ jobs:
         if: ${{ env.SPARKLE_PRIVATE_KEY != '' }}
         uses: actions/deploy-pages@v5
 
-  # Stable release on final version tags (v1.0.0, v1.1.0, etc.)
-  #
-  # NOTE: this job has the SAME environment problem the beta job just hit — it
-  # claims `github-pages` and only ever runs from a tag, so the first stable
-  # release will be rejected at the gate unless a `v*` tag rule is added to the
-  # environment. It has never fired (every tag so far is a pre-release), so the
-  # bug has stayed invisible.
+  # ---------------------------------------------------------------- STABLE
   release:
     name: Stable Release
     needs: build
-    if: startsWith(github.ref, 'refs/tags/v') && !contains(github.ref_name, '-')
+    if: needs.build.outputs.kind == 'stable'
     runs-on: macos-26
     permissions:
       contents: write
-      pages: write        # deploy the appcast to Pages (no gh-pages branch)
-      id-token: write     # required by actions/deploy-pages
+      pages: write
+      id-token: write
     environment:
       name: github-pages
     env:
       SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+      VERSION: ${{ needs.build.outputs.version }}
 
     steps:
       - name: Checkout (for appcast scripts)
@@ -477,10 +396,13 @@ jobs:
       - name: Create stable release
         uses: softprops/action-gh-release@v3
         with:
-          name: "TopPresenter ${{ github.ref_name }}"
+          name: "TopPresenter ${{ env.VERSION }}"
           generate_release_notes: true
+          make_latest: true
           body: |
-            ### 🎉 TopPresenter ${{ github.ref_name }}
+            ### 🎉 TopPresenter ${{ env.VERSION }}
+
+            **Build:** ${{ needs.build.outputs.build }} · **Commit:** `${{ github.sha }}`
 
             > ⚠️ This is an unsigned build. To open on macOS:
             > Right-click the app → Open → Open (bypass Gatekeeper).
@@ -492,12 +414,13 @@ jobs:
       - name: Build signed appcast (stable channel)
         if: ${{ env.SPARKLE_PRIVATE_KEY != '' }}
         env:
-          ZIP: TopPresenter-${{ needs.build.outputs.version }}.zip
-          DOWNLOAD_URL: https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/TopPresenter-${{ needs.build.outputs.version }}.zip
-          SHORT_VERSION: ${{ needs.build.outputs.version }}
-          BUILD_VERSION: ${{ github.run_number }}
+          ZIP: TopPresenter-${{ env.VERSION }}.zip
+          DOWNLOAD_URL: https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/TopPresenter-${{ env.VERSION }}.zip
+          SHORT_VERSION: ${{ env.VERSION }}
+          BUILD_VERSION: ${{ needs.build.outputs.build }}
           CHANNEL: ""
-          FEED_URL: https://robyrew.github.io/TopPresenter/appcast.xml
+          MIN_OS: ${{ needs.build.outputs.min_os }}
+          NOTES: "TopPresenter ${{ env.VERSION }}"
         run: |
           chmod +x scripts/publish_appcast.sh
           scripts/publish_appcast.sh

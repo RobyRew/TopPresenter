@@ -251,7 +251,7 @@ Contributions welcome — see below.
 
 <!-- i18n-coverage:start -->
 
-**1370 translatable strings.** Regenerated on every commit — do not edit by hand.
+**1375 translatable strings.** Regenerated on every commit — do not edit by hand.
 
 | | Language | Progress | Done |
 |---|---|---|---|

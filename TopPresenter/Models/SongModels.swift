@@ -229,8 +229,15 @@ final class Song {
 
     /// Best-effort web link captured from `_extensions` — scrapers store the song's
     /// source page URL (e.g. `_extensions.melodia.url`). nil when none is present.
-    var webURL: URL? {
-        guard let data = extensionsJSON.data(using: .utf8),
+    var webURL: URL? { Song.webURL(inExtensionsJSON: extensionsJSON) }
+
+    /// The same lookup over a raw `extensionsJSON` string — the search index
+    /// builds its projection from column values without instantiating a
+    /// `Song`, and must classify "from a website" the way the model does.
+    nonisolated static func webURL(inExtensionsJSON json: String) -> URL? {
+        // The cheap test first: 40k parses of "{}" per index build add up.
+        guard json.contains("http"),
+              let data = json.data(using: .utf8),
               let obj = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else { return nil }
         func find(_ any: Any) -> String? {
             if let dict = any as? [String: Any] {

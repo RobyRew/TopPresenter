@@ -304,6 +304,23 @@ nonisolated extension Notification.Name {
             userInfo: [Notification.Name.changedKindsKey: kinds.map(\.rawValue)])
     }
 
+    /// `userInfo` key: the `UUID`s of the songs a `.song` change touched.
+    static let changedSongIDsKey = "TopPresenter.changedSongIDs"
+
+    /// Announce a change to SPECIFIC songs — an edit, a verified toggle, a move
+    /// between collections, a creation.
+    ///
+    /// Naming the songs is what lets `SearchIndex` update those entries in
+    /// place rather than re-walk the library. Use `postLibraryChange(.song)`
+    /// for anything that cannot name them (an import batch, a bulk delete) and
+    /// the index falls back to the full rebuild.
+    nonisolated static func postSongChange(_ ids: [UUID]) {
+        NotificationCenter.default.post(
+            name: .libraryDidChange, object: nil,
+            userInfo: [Notification.Name.changedKindsKey: [ImportKind.song.rawValue],
+                       Notification.Name.changedSongIDsKey: ids])
+    }
+
     // Content area toolbar actions
     static let importMedia = Notification.Name("TopPresenter.importMedia")
     static let addScheduleItem = Notification.Name("TopPresenter.addScheduleItem")
