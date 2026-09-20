@@ -52,6 +52,10 @@ jobs:
     name: Build & Package
     runs-on: macos-26
     timeout-minutes: 45
+    env:
+      # Exposed at job level so steps can gate on it: the `secrets` context is
+      # not available inside a step's `if`, `env` is. Empty on forks and PRs.
+      MACOS_CERTIFICATE_P12: ${{ secrets.MACOS_CERTIFICATE_P12 }}
     outputs:
       kind: ${{ steps.version.outputs.KIND }}
       version: ${{ steps.version.outputs.VERSION }}
@@ -188,9 +192,8 @@ jobs:
       # MACOS_SIGNING_IDENTITY ("Developer ID Application: Name (TEAMID)"),
       # APPLE_ID, APPLE_TEAM_ID, APPLE_APP_PASSWORD (app-specific password).
       - name: Import Developer ID certificate
-        if: ${{ secrets.MACOS_CERTIFICATE_P12 != '' }}
+        if: ${{ env.MACOS_CERTIFICATE_P12 != '' }}
         env:
-          MACOS_CERTIFICATE_P12: ${{ secrets.MACOS_CERTIFICATE_P12 }}
           MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
         run: |
           KEYCHAIN="$RUNNER_TEMP/signing.keychain-db"
@@ -208,7 +211,6 @@ jobs:
 
       - name: Sign uniformly (inside-out) & verify
         env:
-          MACOS_CERTIFICATE_P12: ${{ secrets.MACOS_CERTIFICATE_P12 }}
           MACOS_SIGNING_IDENTITY: ${{ secrets.MACOS_SIGNING_IDENTITY }}
         run: |
           # DYLD kills the app if the process and a mapped framework carry DIFFERENT
@@ -323,9 +325,8 @@ jobs:
           hdiutil detach "$MOUNT"
 
       - name: Notarise and staple
-        if: ${{ secrets.MACOS_CERTIFICATE_P12 != '' }}
+        if: ${{ env.MACOS_CERTIFICATE_P12 != '' }}
         env:
-          MACOS_CERTIFICATE_P12: ${{ secrets.MACOS_CERTIFICATE_P12 }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
