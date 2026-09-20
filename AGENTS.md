@@ -15,7 +15,7 @@
 | **Xcode** | 26.3 (17C529) — CI builds on macos-26 with the SAME version; never let CI drift to an older major (it silently ignores Swift-6-era build settings) |
 | **Repo** | https://github.com/RobyRew/TopPresenter |
 | **License** | Apache 2.0 (see `LICENSE` + `NOTICE`) |
-| **Current version** | `0.0.1` (pre-release; bumped to `1.0.0` only when explicitly asked) |
+| **Current version** | `1.0.0` — the line is `1.0.x`; betas are `1.0.x-beta.N` from the `beta` branch |
 | **Author** | Cosmin Calin / RobyRew |
 
 ---
@@ -441,17 +441,19 @@ Same pattern — conform to `SongImporter`, add to `SupportedSongFormat`, regist
 ### DMG installer UI (v10.13)
 The CI DMG is the classic drag-to-Applications window: committed background `Packaging/dmg-background.tiff` (hi-dpi; regenerate via `swift Packaging/generate-dmg-background.swift` + the `tiffutil -cathidpicheck` line in its header) + `create-dmg` with window 660×420, icon size 128, app at (165,190), `--app-drop-link` at (495,190), volume icon from the app bundle. Geometry in the workflow and the generator MUST stay in sync. create-dmg is AppleScript/Finder-driven → the workflow retries 3× and falls back to a plain `hdiutil` DMG (release never dies over cosmetics); a mount-verify step asserts app + Applications link + `.background`.
 
-### Pre-releases (alpha)
-- Every push to `main` triggers the `pre-release` job in `.github/workflows/build-and-release.yml`
-- Tag format: `v{MARKETING_VERSION}-alpha.{GITHUB_RUN_NUMBER}` (e.g. `v0.0.1-alpha.7`)
-- Each prerelease is **unique** — old ones are never deleted or overwritten
-- Pre-release series: `0.0.1`, `0.0.2`, `0.1.0`, …
+### Versions (v1.1)
+- `MARKETING_VERSION` in `project.pbxproj` is the version being worked on. The line is `1.0.x`: after each stable release bump the patch (`1.0.0` → `1.0.1`) on `main` and merge `main` into `beta`.
+- There is NO alpha. A push to `main` builds and tests and publishes nothing. The rolling `v<ver>-alpha` release is history (see the measured section above for what it did to the update feed).
 
-### Stable releases (manual)
-1. Bump `MARKETING_VERSION` in `TopPresenter.xcodeproj/project.pbxproj` to the final version (e.g. `1.0.0`)
-2. Commit and push
-3. Tag and push: `git tag v1.0.0 && git push origin v1.0.0`
-4. The `release` job fires only for tags that **do not contain `-`** (e.g. `v1.0.0` qualifies; `v0.0.1-alpha.7` does not)
+### Betas — push the `beta` branch
+- `git push origin beta` → CI derives `N` = highest existing `v<MARKETING_VERSION>-beta.N` + 1, builds with `MARKETING_VERSION=<ver>-beta.N`, creates the tag, publishes a GitHub pre-release with assets named by the full version, and adds a feed item on the `beta` channel.
+- Never create a `-beta.` tag by hand: the workflow refuses tags containing `-`.
+
+### Stable releases — tag `main`
+1. `MARKETING_VERSION` must already be the version you are releasing (the build fails if the tag disagrees).
+2. `git tag v1.0.0 && git push origin v1.0.0`
+3. The `release` job publishes the GitHub release (marked latest) and a feed item with no channel, which every install sees.
+4. Then bump `MARKETING_VERSION` to the next patch on `main`.
 
 ### Build (unsigned, for CI)
 ```bash
