@@ -166,16 +166,70 @@ jobs:
             DEVELOPMENT_TEAM="" \
             test
 
-      - name: Re-sign uniformly (ad-hoc, inside-out) & verify
+      # Signing. Two modes, decided by whether the Developer ID secrets exist:
+      #
+      #   secrets present → Developer ID Application, hardened runtime, secure
+      #                     timestamp, then notarised and stapled below.
+      #   secrets absent  → ad-hoc ("-"), exactly as before. Forks and PRs
+      #                     land here.
+      #
+      # Why this matters beyond Gatekeeper: an ad-hoc signature has no Team ID
+      # and no certificate chain, and every Network-Extension firewall keys on
+      # exactly that. Measured on the developer's Mac with Little Snitch: the
+      # installed app's update check hung 60 s and failed with "The request
+      # timed out" while the extension logged "Could not find app info … No
+      # current verdict available" at the same millisecond. curl on the same
+      # machine fetched the feed instantly. That is the "autoupdater doesn't
+      # work" report in its entirety — the feed, the channel and Sparkle were
+      # all fine — and it reproduces for every user behind such a firewall
+      # until the app carries a real signature.
+      #
+      # Secrets: MACOS_CERTIFICATE_P12 (base64 .p12), MACOS_CERTIFICATE_PASSWORD,
+      # MACOS_SIGNING_IDENTITY ("Developer ID Application: Name (TEAMID)"),
+      # APPLE_ID, APPLE_TEAM_ID, APPLE_APP_PASSWORD (app-specific password).
+      - name: Import Developer ID certificate
+        if: ${{ secrets.MACOS_CERTIFICATE_P12 != '' }}
+        env:
+          MACOS_CERTIFICATE_P12: ${{ secrets.MACOS_CERTIFICATE_P12 }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+        run: |
+          KEYCHAIN="$RUNNER_TEMP/signing.keychain-db"
+          KEYCHAIN_PASSWORD="$(uuidgen)"
+          echo "$MACOS_CERTIFICATE_P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security import "$RUNNER_TEMP/cert.p12" -P "$MACOS_CERTIFICATE_PASSWORD" \
+            -A -t cert -f pkcs12 -k "$KEYCHAIN"
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security list-keychain -d user -s "$KEYCHAIN" login.keychain
+          rm -f "$RUNNER_TEMP/cert.p12"
+          security find-identity -v -p codesigning "$KEYCHAIN"
+
+      - name: Sign uniformly (inside-out) & verify
+        env:
+          MACOS_CERTIFICATE_P12: ${{ secrets.MACOS_CERTIFICATE_P12 }}
+          MACOS_SIGNING_IDENTITY: ${{ secrets.MACOS_SIGNING_IDENTITY }}
         run: |
           # DYLD kills the app if the process and a mapped framework carry DIFFERENT
           # Team IDs ("code signature not valid ... different Team IDs"). Guarantee
-          # uniformity: re-sign every nested Sparkle binary and then the app itself
-          # with the SAME ad-hoc identity, inside-out. No --options runtime here:
-          # hardened runtime + ad-hoc (team-less) signatures = library validation
-          # rejects the frameworks; plain ad-hoc launches everywhere.
+          # uniformity: sign every nested Sparkle binary and then the app itself
+          # with the SAME identity, inside-out.
           APP="build/Build/Products/Release/$PRODUCT_NAME.app"
           SPK="$APP/Contents/Frameworks/Sparkle.framework"
+          if [ -n "$MACOS_CERTIFICATE_P12" ] && [ -n "$MACOS_SIGNING_IDENTITY" ]; then
+            IDENTITY="$MACOS_SIGNING_IDENTITY"
+            # Hardened runtime + timestamp are what notarisation requires. With a
+            # team-ful identity on every nested binary, library validation passes.
+            OPTS=(--options runtime --timestamp)
+            echo "signing with: $IDENTITY"
+          else
+            IDENTITY="-"
+            # No --options runtime for ad-hoc: hardened runtime + team-less
+            # signatures = library validation rejects the frameworks.
+            OPTS=()
+            echo "signing ad-hoc (no Developer ID secrets)"
+          fi
           for target in \
             "$SPK/Versions/B/XPCServices/Downloader.xpc" \
             "$SPK/Versions/B/XPCServices/Installer.xpc" \
@@ -183,13 +237,13 @@ jobs:
             "$SPK/Versions/B/Updater.app" \
             "$SPK"; do
             if [ -e "$target" ]; then
-              codesign --force --sign - --preserve-metadata=entitlements "$target"
+              codesign --force --sign "$IDENTITY" "${OPTS[@]}" --preserve-metadata=entitlements "$target"
             fi
           done
-          codesign --force --sign - --preserve-metadata=entitlements "$APP"
+          codesign --force --sign "$IDENTITY" "${OPTS[@]}" --preserve-metadata=entitlements "$APP"
           echo "── verify ──"
           codesign --verify --deep --strict --verbose=2 "$APP"
-          echo "── identities (must ALL be adhoc, no TeamIdentifier) ──"
+          echo "── identities (must all match) ──"
           for bin in "$APP" "$SPK" "$SPK/Versions/B/Autoupdate" "$SPK/Versions/B/Updater.app"; do
             codesign -dv "$bin" 2>&1 | grep -E 'Signature|TeamIdentifier' | sed "s|^|$(basename "$bin"): |"
           done
@@ -268,6 +322,30 @@ jobs:
           fi
           hdiutil detach "$MOUNT"
 
+      - name: Notarise and staple
+        if: ${{ secrets.MACOS_CERTIFICATE_P12 != '' }}
+        env:
+          MACOS_CERTIFICATE_P12: ${{ secrets.MACOS_CERTIFICATE_P12 }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        run: |
+          # The zip is what Sparkle installs and the DMG is what people
+          # download; both are submitted, the app inside is stapled, and the
+          # zip is rebuilt from the stapled app so the ticket travels with it.
+          APP="build/Build/Products/Release/$PRODUCT_NAME.app"
+          ZIP="$PRODUCT_NAME-$VERSION.zip"
+          DMG="$PRODUCT_NAME-$VERSION.dmg"
+          xcrun notarytool submit "$ZIP" --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" \
+            --password "$APPLE_APP_PASSWORD" --wait
+          xcrun stapler staple "$APP"
+          rm -f "$ZIP"
+          ( cd "build/Build/Products/Release" && ditto -c -k --keepParent "$PRODUCT_NAME.app" "$GITHUB_WORKSPACE/$ZIP" )
+          xcrun notarytool submit "$DMG" --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" \
+            --password "$APPLE_APP_PASSWORD" --wait
+          xcrun stapler staple "$DMG"
+          spctl --assess --type execute --verbose=2 "$APP"
+
       - name: Upload artifact
         uses: actions/upload-artifact@v7
         with:
@@ -332,9 +410,9 @@ jobs:
             Offered to the **Beta** update channel (Settings ▸ Actualizări ▸ Canal).
             Stable users are not offered betas.
 
-            > ⚠️ This is an unsigned build. To open on macOS:
-            > Right-click the app → Open → Open (bypass Gatekeeper).
-            > Or run: `xattr -cr TopPresenter.app`
+            > If this build is unsigned (no Developer ID configured in CI), macOS will
+            > refuse to open it on first launch: right-click the app → Open → Open,
+            > or run `xattr -cr TopPresenter.app`.
           files: |
             TopPresenter-*.zip
             TopPresenter-*.dmg
@@ -404,9 +482,9 @@ jobs:
 
             **Build:** ${{ needs.build.outputs.build }} · **Commit:** `${{ github.sha }}`
 
-            > ⚠️ This is an unsigned build. To open on macOS:
-            > Right-click the app → Open → Open (bypass Gatekeeper).
-            > Or run: `xattr -cr TopPresenter.app`
+            > If this build is unsigned (no Developer ID configured in CI), macOS will
+            > refuse to open it on first launch: right-click the app → Open → Open,
+            > or run `xattr -cr TopPresenter.app`.
           files: |
             TopPresenter-*.zip
             TopPresenter-*.dmg
