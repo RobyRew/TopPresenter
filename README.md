@@ -266,7 +266,7 @@ Contributions welcome — see below.
 
 Six document types are registered with macOS, each with its own Finder icon and openable by double-click: `.tpbible` `.tpsong` `.tpsongcollection` `.tpslides` `.tpschedule` `.tptheme`. They are all JSON underneath, so you can read, diff and edit them with ordinary tools.
 
-The app updates itself, with an opt-in beta channel.
+The app updates itself. Settings ▸ Actualizări has a **Stable / Beta** channel switch: Stable receives only numbered releases; Beta also receives the `-beta.N` builds that precede them. The choice is remembered.
 
 </details>
 
@@ -286,6 +286,18 @@ The app updates itself, with an opt-in beta channel.
 ---
 
 ## Contributing
+
+### Releases
+
+Three paths, one workflow (`.github/workflows/build-and-release.yml`):
+
+| Push… | Produces |
+|---|---|
+| to `main`, or a PR | a build and the unit tests. Nothing is published. |
+| to `beta` | **`v<version>-beta.N`** — the next N for the project's version — as a GitHub pre-release with its own assets, offered to the Beta channel |
+| a tag `v<version>` | the **stable release** for that version, offered to everyone. The tag must equal `MARKETING_VERSION` in the project or the build fails |
+
+`<version>` is `MARKETING_VERSION` in the Xcode project. After a stable release, bump it (`1.0.0` → `1.0.1`) on `main`; from then on `beta` produces `1.0.1-beta.1`, `1.0.1-beta.2`, … until `v1.0.1` is tagged. Every release keeps its own download URL forever — the update feed never points at a file that has been replaced.
 
 <details>
 <summary><b>Building from source</b></summary>
