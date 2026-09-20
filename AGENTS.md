@@ -15,7 +15,7 @@
 | **Xcode** | 26.3 (17C529) — CI builds on macos-26 with the SAME version; never let CI drift to an older major (it silently ignores Swift-6-era build settings) |
 | **Repo** | https://github.com/RobyRew/TopPresenter |
 | **License** | Apache 2.0 (see `LICENSE` + `NOTICE`) |
-| **Current version** | `1.0.0` — the line is `1.0.x`; betas are `1.0.x-beta.N` from the `beta` branch |
+| **Current version** | `1.0.1` (next; `1.0.0` released 2026-09-20) — the line is `1.0.x`; betas are `1.0.x-beta.N` from the `beta` branch |
 | **Author** | Cosmin Calin / RobyRew |
 
 ---
